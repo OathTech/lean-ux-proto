@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.RequestScalarReadbackClaims
+import Leanux.Proofs.WG.Config.ScalarCommandExpectationClaims
 import Leanux.Proofs.WG.Config.GetterScalarOtherClaims
 import Leanux.Proofs.WG.Config.RequestKeyScalarClaims
 import Leanux.Proofs.WG.Config.KeyScalarClaims
@@ -3651,5 +3653,81 @@ theorem original_peer_command_scalar_classification (cs : Ledger) (loans : Reser
       (fun s=>Index.View.ConfigurationInput cs loans s ∧ s.wg.device=some before)
       (fun _ s=>CommandEffect attrs before (GetterScalar.observation s)) :=
   GetterScalar.Other.original_command cs loans attrs before
+
+open GetterScalar RequestOrder GetterScalar.Expectation Queues.RxCredits in
+/-- The actual arbitrary mixed request retains source-selected scalar actions for its completed peer prefix, with any justified expected map at the completed key-stage exit; later Stops retain only that completed-prefix endpoint. -/
+theorem original_mixed_scalar_receipt_prefix (cs : Ledger) (loans : Reservations) (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (OwnerConfiguration.ProjectedEntry cs loans)
+      (fun initial outcome=>∃result:Inspection,result.outcome=outcome ∧
+        Certificate attrs initial result ∧
+        ∀key∈result.receipts,key.kind=.keyStage→∀expected:Map,
+          Agrees expected (observation key.after)→
+          ∃finish actions,WgLinks.Chain key.after.wg (peerReceipts result.receipts) finish ∧
+            ReceiptSteps (peerReceipts result.receipts) actions ∧
+            Agrees (fold expected actions) (values finish.device)) :=
+  GetterScalar.Expectation.original_request_scalar_prefix cs loans attrs
+
+
+open GetterScalar RequestOrder GetterScalar.Expectation Queues.RxCredits in
+/-- Every normal arbitrary mixed request reaching the key stage derives its surviving scalar cells from the original entry and its actual ordered peer-command effects. -/
+theorem original_mixed_scalar_final (cs : Ledger) (loans : Reservations) (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (OwnerConfiguration.ProjectedEntry cs loans)
+      (fun initial outcome=>∃result:Inspection,result.outcome=outcome ∧
+        Certificate attrs initial result ∧
+        ∀ret final,result.outcome=.ok (ret,final)→
+          ∀key∈result.receipts,key.kind=.keyStage→
+            ∃actions,ReceiptSteps (peerReceipts result.receipts) actions ∧
+              Agrees (fold (observation initial) actions) (observation final)) :=
+  GetterScalar.Expectation.original_request_final_scalars cs loans attrs
+
+
+open GetterScalar RequestOrder GetterScalar.Expectation in
+/-- Each scalar action is tied to the same completed receipt and original peer-attribute position, including actual selected full peers or birth cursor and allocation stamp. -/
+theorem original_mixed_scalar_action_position (attrs : DeviceAttrs) (initial : Campaign2.Snapshot)
+    (result : Inspection) (certificate : Certificate attrs initial result)
+    (actions : List Action) (steps : ReceiptSteps (peerReceipts result.receipts) actions)
+    (i : Nat) (r : Receipt) (selected : (peerReceipts result.receipts)[i]?=some r) :
+    ∃p action,(attrs.peers.getD [])[i]?=some (.attrs p) ∧ actions[i]?=some action ∧
+      GetterScalar.Expectation.Matches p r.result r.before action ∧
+      GetterScalar.Expectation.Step action (observation r.before) (observation r.after) :=
+  GetterScalar.Expectation.certificate_action_position attrs initial result certificate actions steps i r selected
+
+
+open GetterScalar RequestOrder RequestOrder.FinalHeader GetterScalar.Expectation Configuration in
+/-- The actual mixed setter/getter reads the same normal final state whose surviving tracked scalars follow the original entry and ordered source effects; header, private bytes, JSON, socket and cursor are exact under the stated static getter bounds. -/
+theorem original_mixed_scalar_getter (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (shape : DeviceAddressShape attrs)
+    (initial : Campaign2.Snapshot) (inspected : Inspection)
+    (certificate : Certificate attrs initial inspected)
+    (pre : OwnerConfiguration.ProjectedEntry cs loans initial)
+    (ret : Int) (middle : Campaign2.Snapshot) (normal : inspected.outcome=.ok (ret,middle))
+    (r : Receipt) (member : r∈inspected.receipts) (kind : r.kind=.keyStage)
+    (before : Device) (first : initial.wg.device=some before)
+    (selected : ClaimView.selectsDevice initial before)
+    (d : Device) (present : middle.wg.device=some d)
+    (ready : MixedPageReady d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true})
+    (headerFits : devicePrefixSpace d ≤ NLMSG_GOODSIZE)
+    (cursorData : MixedPlanCursorData d
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready))
+    (idle : initial.wg.nlSock7.cbRunning=false) (emptyQueue : initial.wg.nlSock7.queue=[])
+    (within : mixedPageReceiveCount
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready) ≤ 4096)
+    (outcome : Campaign2.Outcome (Int × Except Int Lean.Json))
+    (matched : ReadbackMatches attrs d initial inspected outcome) :
+    (∃actions,ReceiptSteps (peerReceipts inspected.receipts) actions ∧
+      Agrees (fold (observation initial) actions) (observation middle)) ∧
+    (let pages := mixedPages d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready
+    Fields attrs before d ∧ PortSelected attrs before d.incomingPort ∧
+      d.staticIdentity.staticPrivate=requestedPrivate attrs before ∧
+      ∃ final,outcome=.ok ((ret,.ok (mixedGetterJson d (routingReadPeer d) (routingReadNode d))),final) ∧
+        final.wg.device=some (mixedPagesDevice d pages) ∧
+        final.wg.nlSock7=socketReadbackFinal initial.wg.nlSock7 d ∧
+        CursorHeld d (mixedPagesDevice d pages) none) :=
+  GetterScalar.Expectation.certificate_mixed_scalar_readback cs loans attrs shape initial inspected certificate pre ret middle normal r member kind before first selected d present ready headerFits cursorData idle emptyQueue within outcome matched
 
 end Leanux.Proofs.WG.Config
