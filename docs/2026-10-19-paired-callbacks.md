@@ -68,3 +68,22 @@ KILLED banner, timeout or sandbox denial occurred. Inherited dependency lint
 warnings remain visible; the new modules emit no warnings. The first
 successful callback build checked the current complete proof and reported no
 sorry axiom; failed intermediate elaborations are not counted as proofs.
+
+### PC callback calibration, 18:00 UTC
+
+The full `pc_image_contract` and ambient-decoder `pc_contract` now build with
+only standard axioms, over unchanged `KcovReady .pc`. This includes every
+preemption/mode early return, conditional metadata reads, capacity boundary,
+64-bit increment wrap and potentially aliased stores. `bh_contract` likewise
+transports the first image proof. `ServiceDecoderAgreement` is the explicit
+literal-decoder premise; it does not assert callback behavior.
+
+This callback took approximately eleven additional elapsed minutes and 329
+function-specific lines, with 70 lines of new reusable memory/arithmetic facts
+and 47 lines of decoder transport. The comparison store tail is already proved
+using the same framing mechanism. All wrappers and consumers remain open.
+`capped lake build CallbackContracts CallbackCmp binary-callbacks` passed; the
+same generated suite passed again. New modules have no lint warnings. The
+ordinary intermediate elaboration failures primarily concerned numeric
+normalization, instruction-state unification and conditional-branch arithmetic;
+no counterexample or new readiness restriction was introduced.

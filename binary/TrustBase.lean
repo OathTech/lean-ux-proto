@@ -51,6 +51,11 @@ def pinnedFetch (pc : Int64) : Option Decoded :=
 def AnchoredDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
   ∀ pc instruction, Image.fetch pc = some instruction → fetch pc = some instruction
 
+/-- Literal instructions and lengths of the five shared index services.
+Their behavior is proved from these terms, rather than assumed separately. -/
+def ServiceDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, ServiceImage.fetch pc=some instruction → fetch pc=some instruction
+
 /-- Sequential paired removal uses the same pinned ELF interpretation, with
 its separately generated literal instruction range. -/
 def IndexRemoveDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
