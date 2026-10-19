@@ -24,12 +24,12 @@ private theorem slot_stored (g : PrefixM LifetimeEvent α) (original : Leanux.M 
   CurrentSlots.observed _ _ (Appends.focus _ _ _) (RxHistory.mixed_erases erase)
     (CurrentSlots.product_store_preserves frame)
 
-/-- These are the nine actual scheduler atoms, including its copied trial.
+/-- These are the ten actual scheduler atoms, including its copied trial.
 No universal contract over arbitrary observers is assumed. -/
 theorem atoms (initial : Ledger) (loans : Reservations) (before : List RxHistory.Event) :
     RxHistory.SchedulerSource.AtomContracts (Inv initial loans before) OwnerChecks.Safe (fun {_} g => g) := by
   have account := HolderScheduler.atoms initial loans before
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     have frame : SameProductStore (monadLift a : Leanux.M α) :=
       fun _ => productAmbient_spec a _ (fun _ _ hi => hi)
@@ -70,6 +70,9 @@ theorem atoms (initial : Ledger) (loans : Reservations) (before : List RxHistory
     exact join _ (account.occupancy a)
       ((pinned_const _private.Leanux.Proofs.WG.Origins.OwnerEnvironment.«0».Leanux.Proofs.WG.OwnerEnvironment.occupancy) a)
       (slot_stored _ _ (activationOccupancyPrefix_erases a) (activationOccupancy_sameKernel a))
+  · exact join _ account.refills
+      (pinned_const _private.Leanux.Proofs.WG.Origins.OwnerEnvironment.«0».Leanux.Proofs.WG.OwnerEnvironment.refills)
+      (slot_stored _ _ activationRefillsPrefix_erases activationRefills_sameKernel)
   · intro next
     exact join _ (account.pending next)
       ((pinned_const _private.Leanux.Proofs.WG.Origins.OwnerEnvironment.«0».Leanux.Proofs.WG.OwnerEnvironment.pending) next)

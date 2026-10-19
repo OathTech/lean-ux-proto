@@ -94,15 +94,16 @@ theorem activationIterLogged_erases (a : Activation) : Erases (activationIterLog
 
 def activationRunLogged (a : Activation) : GhostM Unit := do
   let occupancy ← liftM (Activation.occupancy a)
+  let refills ← liftM Activation.refills
   let mut act := a
-  for _ in [0:occupancy + 1] do
+  for _ in [0:occupancy + refills + 1] do
     match ← activationIterLogged act with
     | .ended => _ ← hidden (.sectionStop act.worker); return
     | .continued => act := { act with iterations := act.iterations + 1 }
     | .yielded =>
       modifyAmbient fun s => { s with suspended := s.suspended ++ [{ act with iterations := act.iterations + 1 }] }
       return
-  invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run"
+  invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})"
 
 theorem activationRunLogged_erases (a : Activation) : Erases (activationRunLogged a) (Env.Activation.run a) := by
   unfold activationRunLogged Env.Activation.run
@@ -114,9 +115,9 @@ def dispatchActivationLogged (w : Worker) : GhostM Bool := do
   let d ← getDev
   let mut pid : Option Nat := none
   match w with
-  | .encryptWorker => if d.encryptQueue.empty then return false
-  | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.empty then return false
+  | .encryptWorker => if !(← liftM (Env.pendingDevice w !d.encryptQueue.empty)) then return false
+  | .decryptWorker => if !(← liftM (Env.pendingDevice w !d.decryptQueue.empty)) then return false
+  | .receiveWorker => if !(← liftM (Env.pendingDevice w !d.handshakeQueue.empty)) then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← peekUnit .txWorker with
@@ -140,11 +141,12 @@ def scheduleLogged (stack : Option Worker := none) : GhostM Unit := do
   for _ in [0:(← recordBudget)] do
     if (← getAmbient).hidden.isNone then
       let d ← getDev
+      let pending := (← getAmbient).pendingWork
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.empty
-        | .decryptWorker => !d.decryptQueue.empty
-        | .encryptWorker => !d.encryptQueue.empty
+        | .receiveWorker => !d.handshakeQueue.empty || pending.contains w.index
+        | .decryptWorker => !d.decryptQueue.empty || pending.contains w.index
+        | .encryptWorker => !d.encryptQueue.empty || pending.contains w.index
         | _ => !d.txWorkQueue.isEmpty
       let some w := next | return
       if !(← dispatchActivationLogged w) then invariant s!"{w.symbol} has work but was not dispatched"

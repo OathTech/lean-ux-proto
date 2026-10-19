@@ -306,6 +306,7 @@ private theorem placeholder_support (j : UInt64) :
 private theorem drained_material (what : String) (qs : List Bool) :
     ProductRetainsCall (Env.requireDrained what qs) := by
   unfold Env.requireDrained
+  simp only [pendingDeviceUnits]
   support_material
 
 private theorem idleDevice_material : ProductRetainsCall Env.requireIdleDevice := by

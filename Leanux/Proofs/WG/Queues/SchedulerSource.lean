@@ -46,24 +46,25 @@ def iterationWith {E : Type} (old : {α : Type} → Obs α → PrefixM E α)
 def runWith {E : Type} (old : {α : Type} → Obs α → PrefixM E α)
     (iteration : Activation → PrefixM E IterResult) (a : Activation) : PrefixM E Unit := do
   let occupancy ← old (mixed (activationOccupancyPrefix a))
+  let refills ← old (mixed activationRefillsPrefix)
   let mut act := a
-  for _ in [0:occupancy + 1] do
+  for _ in [0:occupancy + refills + 1] do
     match ← iteration act with
     | .ended => _ ← liftPrefix (hidden (.sectionStop act.worker)); return
     | .continued => act := {act with iterations := act.iterations + 1}
     | .yielded =>
       liftPrefix (modifyAmbient fun s => {s with suspended := s.suspended ++ [{act with iterations := act.iterations + 1}]})
       return
-  liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run")
+  liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})")
 
 def dispatchWith {E : Type} (old : {α : Type} → Obs α → PrefixM E α)
     (run : Activation → PrefixM E Unit) (worker : Worker) : PrefixM E Bool := do
   let d ← liftPrefix (liftWG getDev)
   let mut pid : Option Nat := none
   match worker with
-  | .encryptWorker => if d.encryptQueue.empty then return false
-  | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.empty then return false
+  | .encryptWorker => if !(← liftPrefix (Env.pendingDevice worker !d.encryptQueue.empty)) then return false
+  | .decryptWorker => if !(← liftPrefix (Env.pendingDevice worker !d.decryptQueue.empty)) then return false
+  | .receiveWorker => if !(← liftPrefix (Env.pendingDevice worker !d.handshakeQueue.empty)) then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← liftPrefix (peekUnit .txWorker) with
@@ -83,11 +84,12 @@ def scheduleWith {E : Type} (old : {α : Type} → Obs α → PrefixM E α)
   for _ in [0:(← liftPrefix recordBudget)] do
     if (← liftPrefix getAmbient).hidden.isNone then
       let d ← liftPrefix (liftWG getDev)
+      let pending := (← liftPrefix getAmbient).pendingWork
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.empty
-        | .decryptWorker => !d.decryptQueue.empty
-        | .encryptWorker => !d.encryptQueue.empty
+        | .receiveWorker => !d.handshakeQueue.empty || pending.contains w.index
+        | .decryptWorker => !d.decryptQueue.empty || pending.contains w.index
+        | .encryptWorker => !d.encryptQueue.empty || pending.contains w.index
         | _ => !d.txWorkQueue.isEmpty
       let some w := next | return
       if !(← dispatch w) then liftPrefix (invariant s!"{w.symbol} has work but was not dispatched")

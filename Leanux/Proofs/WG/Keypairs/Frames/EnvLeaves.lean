@@ -4,6 +4,7 @@ import Leanux.Env
 import Leanux.Proofs.Framing.Stack
 import Leanux.Proofs.Framing.WGData
 import Leanux.Proofs.Framing.Batch
+import Leanux.Proofs.Framing.BatchRefills
 import Leanux.Proofs.Framing.EnvLeaves
 import Leanux.Proofs.WG.Keypairs.SnapshotRules
 import Leanux.Proofs.WG.Keypairs.OrdinaryProduct
@@ -244,6 +245,15 @@ theorem activationHasWork_spec (P : Snapshot → Prop) (a : Activation) :
 
 theorem activationOccupancy_sameSnapshot (a : Activation) : Framing.SameView (fun w : World => snapshot w.wg) (Env.Activation.occupancy a) :=
   productStore_snapshot (Framing.activationOccupancy_sameKernel a)
+
+/-- The refill allowance only reads queue and record inputs. -/
+theorem activationRefills_sameSnapshot :
+    Framing.SameView (fun w : World => snapshot w.wg) Env.Activation.refills :=
+  productStore_snapshot Framing.activationRefills_sameKernel
+
+theorem pendingDevice_sameSnapshot (worker : Worker) (queued : Bool) :
+    Framing.SameView (fun w : World => snapshot w.wg) (Env.pendingDevice worker queued) :=
+  productStore_snapshot (Framing.pendingDevice_sameKernel worker queued)
 
 /-- The trial executes on a copy; its returned World is discarded. -/
 theorem activationConsistent_sameSnapshot (a : Activation) : Framing.SameView (fun w : World => snapshot w.wg) (Env.Activation.consistent a) :=

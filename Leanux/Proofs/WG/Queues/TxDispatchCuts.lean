@@ -9,9 +9,9 @@ def begin (worker : Worker) : Leanux.M (Option Activation) := do
   let d ← getDev
   let mut pid : Option Nat := none
   match worker with
-  | .encryptWorker => if d.encryptQueue.empty then return none
-  | .decryptWorker => if d.decryptQueue.empty then return none
-  | .receiveWorker => if d.handshakeQueue.empty then return none
+  | .encryptWorker => if !(← Env.pendingDevice worker !d.encryptQueue.empty) then return none
+  | .decryptWorker => if !(← Env.pendingDevice worker !d.decryptQueue.empty) then return none
+  | .receiveWorker => if !(← Env.pendingDevice worker !d.handshakeQueue.empty) then return none
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return none
     let p ← match ← peekUnit .txWorker with
@@ -52,16 +52,19 @@ def body (state : Option Unit × Activation) : Leanux.M (ForInStep (Option Unit 
 
 def run (a : Activation) : Leanux.M Unit := do
   let occupancy ← Env.Activation.occupancy a
-  let result ← forIn [0:occupancy+1] (none,a) (fun _ state=>body state)
+  let refills ← Env.Activation.refills
+  let result ← forIn [0:occupancy+refills+1] (none,a) (fun _ state=>body state)
   match result.1 with
   | some value=>return value
-  | none=>invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run"
+  | none=>invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})"
 
 theorem run_factor (a : Activation) : Env.Activation.run a=run a := by
   unfold Env.Activation.run run body
   dsimp only
   apply RxCredits.bind_congr_source (m:=Leanux.M)
   intro occupancy
+  apply RxCredits.bind_congr_source (m:=Leanux.M)
+  intro refills
   congr 1
   funext i state
   rcases i with ⟨option,act⟩

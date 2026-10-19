@@ -62,6 +62,9 @@ macro "routing_env_steps " initial:term : tactic => `(tactic| first
      exact native_mixed $initial _ _ (getPeerMixed_erases _)
        (ProjectedRetainsRoutingCall.of_same (getPeer_routing _)))
   | (routing_env_at getTxSkbPrefix; exact txGetter $initial _)
+  | (routing_env_at activationRefillsPrefix
+     exact mixed_store $initial _ _ activationRefillsPrefix_erases activationRefills_sameKernel)
+  | (routing_env_at Env.pendingDevice; exact store $initial _ (pendingDevice_sameKernel _ _))
   | (routing_env_at activationOccupancyPrefix
      exact mixed_store $initial _ _ (activationOccupancyPrefix_erases _) (activationOccupancy_sameKernel _))
   | (routing_env_at activationHasWorkPrefix

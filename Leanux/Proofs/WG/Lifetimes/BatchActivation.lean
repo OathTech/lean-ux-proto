@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Lifetimes.BatchRefills
 import Leanux.Proofs.WG.Lifetimes.BatchNapi
 import Leanux.Proofs.WG.Lifetimes.EncryptWorker
 import Leanux.Proofs.WG.Lifetimes.TxWorker
@@ -241,20 +242,22 @@ theorem activationIterPrefix_allocation (a : Activation) :
 
 def activationRunPrefix (a : Activation) : PrefixM LifetimeEvent Unit := do
   let occupancy ← activationOccupancyPrefix a
+  let refills ← activationRefillsPrefix
   let mut act := a
-  for _ in [0:occupancy + 1] do
+  for _ in [0:occupancy + refills + 1] do
     match ← activationIterPrefix act with
     | .ended => _ ← liftPrefix (hidden (.sectionStop act.worker)); return
     | .continued => act := {act with iterations := act.iterations + 1}
     | .yielded =>
       liftPrefix (modifyAmbient fun s => {s with suspended := s.suspended ++ [{act with iterations := act.iterations + 1}]})
       return
-  liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run")
+  liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})")
 
 theorem activationRunPrefix_erases (a : Activation) :
     ErasesPrefix (activationRunPrefix a) (Env.Activation.run a) := by
   unfold activationRunPrefix Env.Activation.run
   repeat' first
+    | with_reducible exact activationRefillsPrefix_erases
     | with_reducible exact activationOccupancyPrefix_erases _
     | with_reducible exact activationIterPrefix_erases _
     | with_reducible exact liftWGObserver_erases (erasesStatePrefix_lift _)
@@ -269,6 +272,7 @@ theorem activationRunPrefix_allocation (a : Activation) :
     PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe (activationRunPrefix a) := by
   unfold activationRunPrefix
   repeat' first
+    | with_reducible exact activationRefillsPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient)
     | with_reducible exact activationOccupancyPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) _
     | with_reducible exact activationIterPrefix_allocation _
     | with_reducible exact ProductAmbientContracts.drop ((ProductAmbientContracts.ofNative allocationAmbient).ambient (fun _ => True) (AmbientM.hidden _))

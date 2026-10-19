@@ -21,23 +21,24 @@ theorem pendingNapi_kernel (next : Option Nat) : SameProductStore (Lifetimes.pen
 
 def run (iteration : Activation → PrefixM Event IterResult) (a : Activation) : PrefixM Event Unit := do
   let occupancy ← liftPrefix (Env.Activation.occupancy a)
+  let refills ← liftPrefix Env.Activation.refills
   let mut act := a
-  for _ in [0:occupancy + 1] do
+  for _ in [0:occupancy + refills + 1] do
     match ← iteration act with
     | .ended => _ ← liftPrefix (hidden (.sectionStop act.worker)); return
     | .continued => act := {act with iterations := act.iterations + 1}
     | .yielded =>
       liftPrefix (modifyAmbient fun s => {s with suspended := s.suspended ++ [{act with iterations := act.iterations + 1}]})
       return
-  liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run")
+  liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})")
 
 def dispatch (iteration : Activation → PrefixM Event IterResult) (worker : Worker) : PrefixM Event Bool := do
   let d ← liftPrefix (liftWG getDev)
   let mut pid : Option Nat := none
   match worker with
-  | .encryptWorker => if d.encryptQueue.empty then return false
-  | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.empty then return false
+  | .encryptWorker => if !(← liftPrefix (Env.pendingDevice worker !d.encryptQueue.empty)) then return false
+  | .decryptWorker => if !(← liftPrefix (Env.pendingDevice worker !d.decryptQueue.empty)) then return false
+  | .receiveWorker => if !(← liftPrefix (Env.pendingDevice worker !d.handshakeQueue.empty)) then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← liftPrefix (peekUnit .txWorker) with
@@ -55,11 +56,12 @@ def schedule (iteration : Activation → PrefixM Event IterResult) (napi : Prefi
   for _ in [0:(← liftPrefix recordBudget)] do
     if (← liftPrefix getAmbient).hidden.isNone then
       let d ← liftPrefix (liftWG getDev)
+      let pending := (← liftPrefix getAmbient).pendingWork
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.empty
-        | .decryptWorker => !d.decryptQueue.empty
-        | .encryptWorker => !d.encryptQueue.empty
+        | .receiveWorker => !d.handshakeQueue.empty || pending.contains w.index
+        | .decryptWorker => !d.decryptQueue.empty || pending.contains w.index
+        | .encryptWorker => !d.encryptQueue.empty || pending.contains w.index
         | _ => !d.txWorkQueue.isEmpty
       let some w := next | return
       if !(← dispatch iteration w) then liftPrefix (invariant s!"{w.symbol} has work but was not dispatched")
@@ -146,6 +148,7 @@ theorem run_preserves (hs : ∀ h w, I h w → S h)
   unfold run
   repeat' first
     | exact hi _
+    | (batch_lift_head Env.Activation.refills; exact viewLiftPrefix_preserves productStoreView hs hk activationRefills_sameKernel)
     | (batch_lift_head Env.Activation.occupancy; exact viewLiftPrefix_preserves productStoreView hs hk (occupancy_kernel _))
     | (first | batch_lift_head hidden | batch_lift_head invariant | batch_lift_head modifyAmbient
        exact ambient _)
@@ -174,6 +177,7 @@ theorem dispatch_preserves (hs : ∀ h w, I h w → S h)
   apply PrefixEnsures.preserves
   unfold dispatch
   repeat' first
+    | (batch_lift_head Env.pendingDevice; exact viewLiftPrefix_preserves productStoreView hs hk (pendingDevice_sameKernel _ _))
     | (maintenance_head run; exact run_preserves hs hk iteration hi _)
     | (batch_lift_head liftWG
        first

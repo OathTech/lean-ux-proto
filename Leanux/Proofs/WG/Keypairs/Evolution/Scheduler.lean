@@ -120,6 +120,8 @@ macro "scheduler_worker_step" : tactic => `(tactic|
   first
     | (evolves_head runWorkerLogged; refine runWorkerLogged_evolves _ _ ?_)
     | (ordinary_head Env.condResched; exact SameView.ordinary (condResched_sameSnapshot _))
+    | (ordinary_head Env.Activation.refills; exact SameView.ordinary activationRefills_sameSnapshot)
+    | (ordinary_head Env.pendingDevice; exact SameView.ordinary (pendingDevice_sameSnapshot _ _))
     | (ordinary_head Env.Activation.occupancy; exact SameView.ordinary (activationOccupancy_sameSnapshot _))
     | (ordinary_head Env.Activation.hasWork; exact SameView.ordinary (activationHasWork_sameSnapshot _))
     | (ordinary_head List.filterM;

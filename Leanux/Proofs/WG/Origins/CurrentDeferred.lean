@@ -90,19 +90,7 @@ private theorem drained (what : String) (queues : List Bool) :
     CurrentChecks.Preserves (RxHistory.mixed (requireDrainedPrefix what queues)) := by
   apply (pinned_const _private.Leanux.Proofs.WG.Origins.CurrentEnvironment.«0».Leanux.Proofs.WG.CurrentEnvironment.mixed_store)
     _ _ (requireDrainedPrefix_erases _ _)
-  have tail : SameProductStore (do
-      let d ← (liftWG getDev : Leanux.M Device)
-      if d.peers.toList.any (fun x => x.2.napiScheduled) then
-        invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)") := by
-    apply SameView.bind (liftWG_sameProductStore getDev getDev_sameWGStore)
-    intro d
-    split
-    · intro initial; exact productAmbient_spec (AmbientM.invariant _) _ (fun _ _ hi => hi)
-    · exact SameView.pure _ _
-  unfold Env.requireDrained
-  by_cases h : queues.any id = true <;> simp only [h,↓reduceIte]
-  · exact SameView.bind (fun initial => productAmbient_spec (AmbientM.unsupported _) _ (fun _ _ hi => hi)) (fun _ => tail)
-  · exact tail
+  exact requireDrained_sameKernel what queues
 
 macro "deferred_steps" : tactic => `(tactic| first
   | (current_env_at Env.deliverSent; exact store _ deliverSent_sameKernel)

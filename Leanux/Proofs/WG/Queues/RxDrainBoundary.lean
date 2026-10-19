@@ -8,6 +8,9 @@ namespace Leanux.Proofs.WG.Queues.RxCredits
 open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.Logged Lifetimes Std.Do
 
 private theorem readWG (s : World) : (getWG : Leanux.M WGWorld).run s = .ok (s.wg, s) := rfl
+private theorem readPending (s : World) :
+    (pendingDeviceUnits : Leanux.M (List Worker)).run s =
+      .ok (s.ambient.pendingWork.filterMap (fun i => Worker.all.find? (·.index == i)), s) := rfl
 private theorem readDev (s : World) : (monadLift getDev : Leanux.M Device).run s =
       match s.wg.dev with
       | none => .error (.invariant "no WireGuard device in this trace's fixture")
@@ -48,16 +51,22 @@ theorem requireDrained_normal (what : String) (queues : List Bool) (w v : World)
   split at run
   · cases run
   · rename_i quiet
-    simp only [StateT.run_bind, readDev] at run
-    cases hd : w.wg.dev with
-    | none => simp [hd] at run
-    | some d =>
-      simp only [hd, CounterWindow.except_ok_bind] at run
-      split at run
-      · cases run
-      · rename_i cold
-        have same : v = w := (congrArg Prod.snd (Except.ok.inj run)).symm
-        exact ⟨same, Bool.eq_false_iff.mpr quiet, d, rfl, Bool.eq_false_iff.mpr cold⟩
+    simp only [StateT.run_bind, readPending, CounterWindow.except_ok_bind] at run
+    cases pending : w.ambient.pendingWork.filterMap (fun i => Worker.all.find? (·.index == i)) with
+    | cons worker rest =>
+      simp only [pending] at run
+      cases run
+    | nil =>
+      simp only [pending, StateT.run_bind, readDev] at run
+      cases hd : w.wg.dev with
+      | none => simp [hd] at run
+      | some d =>
+        simp only [hd, CounterWindow.except_ok_bind] at run
+        split at run
+        · cases run
+        · rename_i cold
+          have same : v = w := (congrArg Prod.snd (Except.ok.inj run)).symm
+          exact ⟨same, Bool.eq_false_iff.mpr quiet, d, rfl, Bool.eq_false_iff.mpr cold⟩
 
 /-- The actual idle-device return discharges the stable-drain tests. It
 cannot silently abandon a funded, queued receive carrier. -/

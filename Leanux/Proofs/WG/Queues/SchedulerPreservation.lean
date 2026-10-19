@@ -19,6 +19,7 @@ structure AtomContracts {E : Type} (I : List E → World → Prop) (S : List E �
   work : ∀ f : List PeerId → List PeerId, PrefixPreserves I S
     (old (mixed (liftWGObserver (liftWGPrefix (modifyDev fun d => {d with txWorkQueue := f d.txWorkQueue})))))
   occupancy : ∀ a, PrefixPreserves I S (old (mixed (activationOccupancyPrefix a)))
+  refills : PrefixPreserves I S (old (mixed activationRefillsPrefix))
   pending : ∀ next, PrefixPreserves I S (old (mixed (pendingNapiPrefix next)))
   hasWork : ∀ a, PrefixPreserves I S (old (mixed (activationHasWorkPrefix a)))
   trial : PrefixPreserves I S (old (audit consistentFilterAudit))
@@ -45,7 +46,7 @@ theorem AtomContracts.of_routing (old : {α : Type} → Obs α → PrefixM E α)
       PrefixPreserves I S (old (mixed (liftWGObserver g))) :=
     ho _ (liftWG a) (Appends.focus _ _ _) (mixed_erases (liftWGObserver_erases erases))
       (RetainsRoutingCall.liftWG (ProjectedRetainsRoutingCall.of_same frame))
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
   · intro α a
     exact stored _ _ (erasesPrefix_lift _)
       (fun _ => productAmbient_spec a _ (fun _ _ hi => hi))
@@ -63,6 +64,7 @@ theorem AtomContracts.of_routing (old : {α : Type} → Obs α → PrefixM E α)
     exact native _ _ (erasesStatePrefix_lift _) (modifyDev_routing _ (fun _ => rfl))
   · intro a
     exact stored _ _ (activationOccupancyPrefix_erases a) (activationOccupancy_sameKernel a)
+  · exact stored _ _ activationRefillsPrefix_erases activationRefills_sameKernel
   · intro next
     exact stored _ _ (pendingNapiPrefix_erases next) (SourceScheduler.pendingNapi_kernel next)
   · intro a
@@ -163,6 +165,7 @@ theorem iteration_preserves
     | dsimp (config := {failIfUnchanged := true}) only
 
 macro "scheduler_raw_steps" safe:ident store:ident : tactic => `(tactic| first
+  | (scheduler_preserve_at Env.pendingDevice; exact raw $safe $store _ (pendingDevice_sameKernel _ _))
   | (scheduler_preserve_at getDev; exact raw $safe $store _ (liftWG_sameProductStore getDev getDev_sameWGStore))
   | (scheduler_preserve_at hidden; exact ambient $safe $store (AmbientM.hidden _))
   | (scheduler_preserve_at invariant; exact ambient $safe $store (AmbientM.invariant _))
@@ -193,6 +196,7 @@ theorem run_preserves (safe : ∀ h w, I h w → S h)
     PrefixPreserves I S (runWith old iteration a) := by
   unfold runWith
   repeat' first
+    | (scheduler_preserve_at activationRefillsPrefix; exact atoms.refills)
     | (scheduler_preserve_at activationOccupancyPrefix; exact atoms.occupancy _)
     | (scheduler_preserve_at iteration; exact hi _)
     | scheduler_raw_steps safe store

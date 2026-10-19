@@ -20,11 +20,12 @@ def schedule (stack : Option Worker := none) : Obs Unit := do
   for _ in [0:(← liftPrefix recordBudget)] do
     if (← liftPrefix getAmbient).hidden.isNone then
       let d ← liftPrefix (liftWG getDev)
+      let pending := (← liftPrefix getAmbient).pendingWork
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.empty
-        | .decryptWorker => !d.decryptQueue.empty
-        | .encryptWorker => !d.encryptQueue.empty
+        | .receiveWorker => !d.handshakeQueue.empty || pending.contains w.index
+        | .decryptWorker => !d.decryptQueue.empty || pending.contains w.index
+        | .encryptWorker => !d.encryptQueue.empty || pending.contains w.index
         | _ => !d.txWorkQueue.isEmpty
       let some w := next | return
       if !(← dispatch w) then liftPrefix (invariant s!"{w.symbol} has work but was not dispatched")

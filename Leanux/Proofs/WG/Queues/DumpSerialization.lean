@@ -48,6 +48,13 @@ private theorem result_stop (msg : String) (Q : α → Prop) :
   change Except.error _ = Except.ok _ at run
   cases run
 
+private theorem result_unsupported (msg : String) (Q : α → Prop) :
+    Hoare (unsupported msg : WG.M α) (fun _ => True) (fun r _ => Q r) := by
+  apply (hoare_iff_run_ambient _ _ _).mpr
+  intro w a r v b _ run
+  change Except.error _ = Except.ok _ at run
+  cases run
+
 private theorem result_ite (p : Prop) [Decidable p] (a b : WG.M α) (Q : α → Prop)
     (ha : p → Hoare a (fun _ => True) (fun r _ => Q r))
     (hb : ¬p → Hoare b (fun _ => True) (fun r _ => Q r)) :
@@ -72,8 +79,14 @@ macro "cursor_basic" : tactic => `(tactic|
     | (packet_hoare_head Pure.pure
        apply result_pure
        rfl)
+    | (packet_hoare_head Leanux.unsupported
+       exact result_unsupported _ _)
     | (packet_hoare_head Leanux.invariant
        exact result_stop _ _)
+    | (packet_bind_head Leanux.unsupported
+       apply (hoare_iff_run_ambient _ _ _).mpr
+       intro w a r v b hi run
+       cases run)
     | (packet_hoare_head Bind.bind
        fail_if_success (packet_bind_head ForIn.forIn)
        apply result_step

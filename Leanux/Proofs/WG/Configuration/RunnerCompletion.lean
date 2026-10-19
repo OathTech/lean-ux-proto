@@ -28,6 +28,10 @@ def runnerTailObserved (trace : Trace)
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
     if let a :: _ := w.ambient.suspended then
       throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
+    if w.ambient.hidden.isSome then
+      if let i :: _ := w.ambient.pendingWork then
+        let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+        throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
     if w.wg.netRxRaised then
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w
@@ -98,6 +102,10 @@ def sourceRunnerTail (trace : Trace)
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
     if let a :: _ := w.ambient.suspended then
       throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
+    if w.ambient.hidden.isSome then
+      if let i :: _ := w.ambient.pendingWork then
+        let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+        throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
     if w.wg.netRxRaised then
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w
@@ -267,12 +275,18 @@ private theorem except_project_bind {ε α β γ : Type} (a : Except ε α)
     (a >>= f).map p = a >>= g := by
   cases a <;> simp_all [bind, Except.bind, Except.map]
 
+private theorem except_throw_bind {ε α β : Type} (e : ε) (f : α → Except ε β) :
+    ((throw e : Except ε α) >>= f) = throw e := rfl
+
+private theorem except_map_throw {ε α β : Type} (e : ε) (f : α → β) :
+    (throw e : Except ε α).map f = throw e := rfl
+
 /-- The extra World is the source accumulator, with no alteration of the
 original JSON result or indexed Stop. -/
 theorem sourceRunner_json (trace : Trace) (placeholders : Bool) :
     (sourceRunner trace placeholders).map Prod.fst =
       Runner.executeTrace trace placeholders := by
-  unfold sourceRunner sourceRunnerTail Runner.executeTrace
+  unfold sourceRunner Runner.executeTrace
   by_cases hp : trace.seccompPrefill > 0
   all_goals simp only [hp, ↓reduceIte]
   all_goals cases Env.seccompPrefill trace.seccompPrefill ({} : SeccompWorld) (initialTasks trace.rlimit trace.foreign trace.stepped trace.seccompChild)
@@ -283,5 +297,10 @@ theorem sourceRunner_json (trace : Trace) (placeholders : Bool) :
     | maintenance_intro
     | dsimp (config := {failIfUnchanged := true}) only
     | (split <;> try simp_all only)
+    | unfold sourceRunnerTail
+  all_goals
+    simp only [except_throw_bind, except_map_throw]
+    rename_i boot_error
+    rw [boot_error]
 
 end Leanux.Proofs.WG.Configuration

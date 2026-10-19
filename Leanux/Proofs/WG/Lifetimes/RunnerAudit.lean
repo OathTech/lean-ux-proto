@@ -28,6 +28,10 @@ def runnerAuditTail (trace : Trace) (initialWorld : World) : PrefixOuter AuditEv
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
     if let a :: _ := w.ambient.suspended then
       throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
+    if w.ambient.hidden.isSome then
+      if let i :: _ := w.ambient.pendingWork then
+        let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+        throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
     if w.wg.netRxRaised then
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w
@@ -96,6 +100,10 @@ private def runnerAuditSourceTail (trace : Trace) (initialWorld : World) : Excep
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
     if let a :: _ := w.ambient.suspended then
       throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
+    if w.ambient.hidden.isSome then
+      if let i :: _ := w.ambient.pendingWork then
+        let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+        throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
     if w.wg.netRxRaised then
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w

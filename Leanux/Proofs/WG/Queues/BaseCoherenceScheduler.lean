@@ -14,7 +14,7 @@ private theorem mixed_structure (initial) (g : PrefixM LifetimeEvent α) (a : Le
 
 theorem scheduler_atoms (initial) : RxHistory.SchedulerSource.AtomContracts
     (fun _ w => view w.wg=initial) (fun _ => True) (fun {_} g => g) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     exact mixed_structure initial _ _ (erasesPrefix_lift _)
       (fun _ => productAmbient_spec a _ (fun _ _ hi => hi))
@@ -41,6 +41,7 @@ theorem scheduler_atoms (initial) : RxHistory.SchedulerSource.AtomContracts
     base_rx_step s
   · intro a
     exact mixed_structure initial _ _ (activationOccupancyPrefix_erases a) (activationOccupancy_sameKernel a)
+  · exact mixed_structure initial _ _ activationRefillsPrefix_erases activationRefills_sameKernel
   · intro next
     exact mixed_structure initial _ _ (pendingNapiPrefix_erases next) (SourceScheduler.pendingNapi_kernel next)
   · intro a

@@ -35,13 +35,8 @@ theorem requireNoCryptWork_spec (P : Snapshot → Prop)  :
     ⦃⇓? _ w => ⌜P (snapshot w.wg)⌝⦄ := (requireNoCryptWork_sameSnapshot ).wp P
 
 theorem requireDrained_sameSnapshot (what : String) (queues : List Bool) :
-    SameView (fun w : World => snapshot w.wg) (Env.requireDrained what queues) := by
-  have ambient {α : Type} (a : AmbientM α) :
-      SameView (fun w : World => snapshot w.wg) (monadLift a : Leanux.M α) :=
-    fun initial => productAmbient_spec a
-      (fun w => snapshot w.wg = initial) (fun _ _ h => h)
-  have device : SameView (fun w : World => snapshot w.wg) (monadLift getDev : Leanux.M Device) := nativeSnapshot getDev_sameSnapshot
-  env_operation_source [Env.requireDrained, unsupported, invariant] using [device, ambient]
+    SameView (fun w : World => snapshot w.wg) (Env.requireDrained what queues) :=
+  productStoreSnapshot (Framing.requireDrained_sameKernel what queues)
 
 theorem requireDrained_spec (P : Snapshot → Prop) (what : String) (queues : List Bool) :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ Env.requireDrained what queues
