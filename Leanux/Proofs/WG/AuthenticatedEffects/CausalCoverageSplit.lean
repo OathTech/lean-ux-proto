@@ -22,18 +22,18 @@ theorem flow_ite (before after : List (CausalScope.Token Cause)) (p : Prop) [Dec
   · exact ha hp
   · exact hb hp
 
-theorem enter_checked (cause : Cause) (frames : List (CausalScope.Token Cause)) :
+theorem enter_checked (cause : Cause) (other : Other cause) (frames : List (CausalScope.Token Cause)) :
     PrefixEnsures (fun h (_ : World) => Inv frames h) Safe (CausalScope.enterPrefix Event.scope cause)
       (fun index h (_ : World) => Inv (⟨index,cause⟩ :: frames) h) := by
   intro w h ready
-  have pushed := ready.enter ⟨h.length,cause⟩
+  have pushed := ready.enter ⟨h.length,cause⟩ other
   exact ⟨[.scope (.entered ⟨h.length,cause⟩)],rfl,pushed.1,pushed⟩
 
-theorem enter_bind (cause : Cause) (next : Nat → PrefixM Event α)
+theorem enter_bind (cause : Cause) (other : Other cause) (next : Nat → PrefixM Event α)
     (before after : List (CausalScope.Token Cause))
     (tail : ∀ index, Flow (⟨index,cause⟩ :: before) after (next index)) :
     Flow before after (CausalScope.enterPrefix Event.scope cause >>= next) :=
-  PrefixEnsures.bind (enter_checked cause before) tail
+  PrefixEnsures.bind (enter_checked cause other before) tail
 
 theorem leave_checked (index : Nat) (cause : Cause) (frames : List (CausalScope.Token Cause)) :
     Flow (⟨index,cause⟩ :: frames) frames (CausalScope.leavePrefix Event.scope index) := by

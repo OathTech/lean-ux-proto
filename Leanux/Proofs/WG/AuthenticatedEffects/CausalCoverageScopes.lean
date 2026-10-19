@@ -6,12 +6,12 @@ is granted a context by this contract. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Coverage
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
-theorem state_scope (cause : Cause) (body : WGPrefix Event α) (covered : StateGuarded body) :
+theorem state_scope (cause : Cause) (other : Other cause) (body : WGPrefix Event α) (covered : StateGuarded body) :
     StateClosed (CausalScope.scope Event.scope cause body) := by
   intro frames w a h ready
   let token : CausalScope.Token Cause := ⟨h.length,cause⟩
   let entered := h ++ [.scope (.entered token)]
-  have entry : Inv (token :: frames) entered := ready.enter token
+  have entry : Inv (token :: frames) entered := ready.enter token other
   obtain ⟨suffix,grown,safe,normal⟩ := covered (token :: frames) (by simp) w a entered entry
   change (runWGPrefix body w a entered).2 = entered ++ suffix at grown
   change Safe (runWGPrefix body w a entered).2 at safe
@@ -37,13 +37,13 @@ theorem state_scope (cause : Cause) (body : WGPrefix Event α) (covered : StateG
       exact ⟨.scope (.entered token) :: (suffix ++ [.scope (.exited h.length)]),
         by simp only [grown,entered,List.append_assoc,List.cons_append,List.nil_append],exited.1,exited⟩
 
-theorem product_scope (cause : Cause) (body : CausalScope.Token Cause → PrefixM Event α)
+theorem product_scope (cause : Cause) (other : Other cause) (body : CausalScope.Token Cause → PrefixM Event α)
     (covered : ∀ token, ProductGuarded (body token)) :
     ProductClosed (CausalScope.prefixScope Event.scope cause body) := by
   intro frames w h ready
   let token : CausalScope.Token Cause := ⟨h.length,cause⟩
   let entered := h ++ [.scope (.entered token)]
-  have entry : Inv (token :: frames) entered := ready.enter token
+  have entry : Inv (token :: frames) entered := ready.enter token other
   obtain ⟨suffix,grown,safe,normal⟩ := covered token (token :: frames) (by simp) w entered entry
   have equation := CausalScope.prefix_run Event.scope cause body w h
   cases run : runPrefix (body token) w entered with

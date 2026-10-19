@@ -9,6 +9,16 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity HandshakeSecurity Or
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
+open Lean Meta Elab Tactic in
+elab "coverage_handshake_callback " wanted:ident : tactic => withMainContext do
+  let target := (← instantiateMVars (← getMainTarget)).consumeMData
+  unless target.isAppOf ``StateAt do throwError "not a state coverage contract"
+  let arguments := target.getAppArgs
+  unless arguments.size > 0 do throwError "missing callback"
+  let action := arguments.back!.consumeMData.headBeta
+  let callback ← getFVarId wanted
+  unless action.getAppFn == .fvar callback do throwError "different callback"
+
 private theorem callback (kind : HandshakeCausal.Kind) (pid : PeerId) (body : WGPrefix Event α)
     (preserves : StateAt frames body) : StateAt frames
     (HandshakeWorker.callback (Event.old ∘ Journal.Event.handshake) kind pid body) :=
@@ -33,16 +43,16 @@ private theorem after_mac
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
     HandshakeWorker.observedOps]
   repeat' first
-    | (coverage_head CausalScope.scope; apply state_scope; intro frames live)
+    | (coverage_head CausalScope.scope; apply state_scope (.handshake _ _) True.intro; intro frames live)
     | (coverage_head receiptWGObserved; apply state_receipt)
     | (coverage_head HandshakeWorker.callback; apply callback)
     | (coverage_head HandshakeWorker.old; exact old _)
     | (coverage_head TimerEffects.derivedWith; exact derived _ (by assumption))
     | (coverage_head TimerEffects.traversalWith; exact traversal _ (by assumption))
-    | exact hs _ _ (by assumption)
-    | exact hk _ _ (by assumption)
+    | (coverage_handshake_callback session; exact hs _ _ (by assumption))
+    | (coverage_handshake_callback keepalive; exact hk _ _ (by assumption))
     | (intro r impossible; exact impossible.elim)
-    | trivial
+    | (first | rfl | exact True.intro)
     | coverage_state_step
 
 private theorem receive

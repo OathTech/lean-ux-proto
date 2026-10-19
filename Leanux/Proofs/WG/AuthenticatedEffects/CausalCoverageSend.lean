@@ -30,7 +30,7 @@ private theorem flushed_body (pid : PeerId) (live : frames ≠ []) : StateAt fra
 
 theorem flushed_send (pid : PeerId) : StateAt frames (flushedSend pid) := by
   intro w a h ready
-  exact state_scope (.sendWork pid (CausalSources.sendEntry pid w)) _
+  exact state_scope (.sendWork pid (CausalSources.sendEntry pid w)) True.intro _
     (fun _ live => flushed_body pid live) frames w a h ready
 
 theorem send_worker : ProductAt frames (Driver.sendWorkerObserved hooks) := by

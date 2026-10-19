@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.StagedOriginFrames
+import Leanux.Proofs.WG.TransmitSecurity.StagedRestoreOrigins
 import Leanux.Proofs.WG.TransmitSecurity.StagedAdmission
 import Leanux.Proofs.WG.TransmitSecurity.StagedTrim
 import Leanux.Proofs.WG.TransmitSecurity.StagedKeepaliveFinal
@@ -52,6 +52,39 @@ Actual key-allocation identity, reservation, packet and wire nonce are joined.
 Full transmit authorization and occurrence conservation remain separate. -/
 namespace Leanux.Proofs.WG.TransmitSecurity
 open Leanux Leanux.WG Leanux.Proofs.Logged
+
+/-- Security: the actual routing receipt appends fresh packet positions to the
+certified surviving staged queue. The explicit entry carrier remains required
+until full initialized transport is proved; this is not disposition coverage. -/
+theorem native_routing_preserves_staged_origins (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    Staged.Origins.StateSafe (AuthenticatedEffects.CausalJournal.state (Journal.front family addr packets mtu)) :=
+  Staged.Origins.routing_observed family addr packets mtu
+
+/-- Security: keepalive preparation introduces one source-labelled occurrence
+only on successful native allocation into an empty staged queue. The source
+carrier at entry is explicit; causal authorization is a separate result. -/
+theorem native_keepalive_preserves_staged_origins (pid : PeerId) :
+    Staged.Origins.StateSafe (AuthenticatedEffects.CausalJournal.keepalivePrepare pid) :=
+  Staged.Origins.keepalive_observed pid
+
+/-- Security: current-key selection retains every saved plaintext occurrence's
+prior source position while clearing its actual peer queue. This local native
+contract assumes the staged-origin carrier at entry. -/
+theorem native_selection_retains_staged_origins (pid : PeerId) :
+    StatePrefixEnsures (fun h w _ => Staged.Origins.Carrier h w) Staged.Origins.Safe
+      (AuthenticatedEffects.CausalJournal.state (Journal.selection pid))
+      (fun value h w _ => Staged.Origins.Carrier h w ∧ ∀ peer key,
+        value = some (peer,key) → Staged.Origins.Saved h pid peer w) :=
+  Staged.Origins.selection_observed pid
+
+/-- Security: native restoration preserves the selected batch's original source
+occurrences. It assumes the saved batch and empty peer queue at this source cut;
+restoration itself creates no new plaintext occurrence or disposition. -/
+theorem native_restore_retains_staged_origins (pid : PeerId) (peer : Peer) (r : WGRunWitness Unit)
+    (valid : r.Valid (HandshakeSecurity.NonceRejection.restore pid peer.staged))
+    (before : Staged.Origins.Inv history r.before)
+    (saved : Staged.Origins.Saved history pid peer r.before) : Staged.Origins.Inv history r.after :=
+  Staged.Origins.restore_origin pid peer r valid before saved
 
 /-- Security: every actual TX completion entry has a selected head allocated
 in its strict preceding final journal. Delayed completion effects therefore

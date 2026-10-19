@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkPublicationCoverage
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkTransfers
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkStep
 import Leanux.Proofs.WG.RetirementSecurity.TxReleasePrefix
 import Leanux.Proofs.WG.RetirementSecurity.CreateRefusalArms
 import Leanux.Proofs.WG.RetirementSecurity.TxCoverageInitialized
@@ -2555,5 +2558,80 @@ theorem original_tx_release_total (items : List SkbId) (unique : items.Nodup)
   obtain ⟨v,run⟩:=TxReleasePrefix.total items unique resident a
   exact ⟨v,run,(hoare_iff_run_ambient _ _ _).mp
     (Queues.TxDisposition.freeList_absent items) w a () v a True.intro run⟩
+
+/-- A normally completed native TX publication leaves its selected owner's
+worker queued, for DEAD and CRYPTED alike. The actual packet and key-derived
+owner reads are retained; equating that owner to an earlier enqueue caller is
+a separate initialized binding obligation. -/
+theorem original_tx_publication_schedules (items : List SkbId) (state : PacketState)
+    (a b : Ambient) (run : ((enqueuePerPeerTx items state).run w).run a=.ok (((),v),b)) :
+    ∃first packet u c pid t e,
+      items.head?=some first ∧
+      ((getTxSkb first).run w).run a=.ok ((packet,u),c) ∧
+      ((IndexOwner.peerDeref (.keypair packet.keypair)).run u).run c=.ok ((pid,t),e) ∧
+      pid∈TxWork.queued v :=
+  TxWork.publication_member items state a b run
+
+/-- A normal TX worker step that ends its loop has an empty peer queue or
+an uncrypted head; it cannot finish with a ready head left unsent. This native
+guard fact permits terminal tail batches behind the uncrypted head and makes
+no fairness claim about when encryption or the next worker runs. -/
+theorem original_tx_worker_end_head (pid : PeerId) (a b : Ambient)
+    (run : ((txStep pid).run w).run a=.ok ((false,v),b)) :
+    txQueueContents v pid=[] ∨ ∃items id packet,
+      (txQueueContents v pid).head?=some items ∧ items.head?=some id ∧
+      Queues.TxDisposition.txPackets v id=some packet ∧ packet.state=.uncrypted :=
+  TxWork.ended_head pid a b run
+
+/-- An actual active TX worker preserves the reverse work obligation while
+it consumes a terminal head. Only that active actor may justify a newly exposed
+terminal head. The incoming physical inventory and work carrier are explicit
+local premises until their scheduling transport is initialized. -/
+theorem original_tx_active_work_coverage (before : TxWork.Obligations crypt tx w)
+    (inventory : TxInventory locals w) (active : pid∈tx) (a b : Ambient)
+    (run : ((txStep pid).run w).run a=.ok ((result,v),b)) :
+    TxWork.Obligations crypt tx v :=
+  before.step inventory active a b run
+
+/-- A native false TX step permits removing its active actor without leaving
+an uncovered ready head. Queued and other active actors remain available; no
+fairness or termination bound is inferred from this local source transition. -/
+theorem original_tx_end_discharges_actor (before : TxWork.Obligations crypt (pid::tx) w)
+    (inventory : TxInventory locals w) (a b : Ambient)
+    (run : ((txStep pid).run w).run a=.ok ((false,v),b)) :
+    TxWork.Obligations crypt tx v :=
+  before.end_actor inventory a b run
+
+/-- Native dispatch transfers a pending TX head obligation to its selected
+active actor instead of silently discarding it with the work-queue entry. This
+is the actual queue-erasure cut, with initialized caller coverage still separate. -/
+theorem original_tx_dispatch_keeps_obligation (before : TxWork.Obligations crypt tx w)
+    (pid : PeerId) (a b : Ambient)
+    (run : ((modifyDev fun d=>{d with txWorkQueue:=d.txWorkQueue.erase pid}).run w).run a=
+      .ok (((),v),b)) : TxWork.Obligations crypt (pid::tx) v :=
+  before.dispatch pid a b run
+
+/-- Actual TX admission preserves reverse service coverage and establishes
+the new batch's service: a successful ring insertion is pending there, while
+EPIPE retains its actual pending DEAD-publication continuation. Peer refusal
+adds no owning queue. Initialization of the incoming local carrier is separate. -/
+theorem original_tx_admission_service (before : TxWork.Obligations crypt tx w)
+    (inventory : TxInventory (⟨.unpublished,pid,items⟩::locals) w)
+    (physical : Queues.TxDisposition.LiveFrontier.Physical w) (device : w.dev=some d)
+    (a b : Ambient)
+    (run : ((enqueuePerDeviceAndPeer pid items).run w).run a=.ok ((ret,v),b)) :
+    TxWork.Obligations (TxWork.publicationPending ret items crypt) tx v :=
+  before.admission inventory physical device a b run
+
+/-- A completed native DEAD or CRYPTED publication replaces its explicit
+in-flight service obligation with the guarded owner's queued TX actor. Actual
+peer-queue separation identifies that owner; mutable key owner words are not
+assumed immutable. The input work carrier remains an explicit local premise. -/
+theorem original_tx_publication_service (before : TxWork.Obligations (items::crypt) tx w)
+    (inventory : TxInventory locals w) (state : PacketState) (terminal : state≠.uncrypted)
+    (a b : Ambient)
+    (run : ((enqueuePerPeerTx items state).run w).run a=.ok (((),v),b)) :
+    TxWork.Obligations crypt tx v :=
+  before.publish inventory state terminal a b run
 
 end Leanux.Proofs.WG.RetirementSecurity

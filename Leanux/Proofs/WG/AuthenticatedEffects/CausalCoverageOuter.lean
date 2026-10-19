@@ -94,6 +94,6 @@ theorem initialized (trace : Runner.Trace) (placeholders : Bool) :
     (fun h _ => Inv [] h)
     Safe (fun _ _ ready => ready.1)
     (fun _ _ _ _ ready => ready) (Driver.syscallObserved hooks)
-    (fun call => syscall (frames := []) call) trace placeholders (fun _ _ => ⟨Safe.empty,rfl⟩)
+    (fun call => syscall (frames := []) call) trace placeholders (fun _ _ => ⟨Safe.empty,rfl,by intro token member; cases member⟩)
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Coverage

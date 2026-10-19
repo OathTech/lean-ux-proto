@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.HandshakeSecurity.StaleInitiationContinuation
+import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionHistory
+import Leanux.Proofs.WG.HandshakeSecurity.StaleInitiationInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalSessionInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorkerEntry
@@ -1557,5 +1560,68 @@ theorem initialized_responder_encryption_requires_confirmation (H1 : H1Responder
     (responder : r.cipher.keyRead.value.iAmTheInitiator = false) :
     r.Valid ∧ ReceiveMaterial.PriorAllocationConfirmation pre r.cipher.keyRead.value.internalId :=
   ReceiveMaterial.final_encryption H1 trace placeholders pre post r position responder
+
+/-- Security: a stale initiation in the initialized final journal is refused,
+restores all peer records and emits no packet. Staleness refers to the original
+parser's authenticated timestamp and actual retained-peer read; the named C2
+native exchange frame packages remain visible. -/
+theorem initialized_stale_initiation_refused (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event) (msg : Key)
+    (r : WGRunWitness (Option PeerId))
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.exchange (.consumeInitiation msg r) :: post)
+    (stale : StaleInitiation.Stale msg r.before r.ambientBefore) :
+    r.value = none ∧ Framing.PeerBorrow.view r.after = Framing.PeerBorrow.view r.before ∧
+      r.after.sent = r.before.sent :=
+  StaleInitiation.initialized_refusal facts config traffic trace placeholders pre post msg r position stale
+
+/-- Security: the initialized stale initiation returns at the original handler's
+refusal arm, before response creation or any session/timer suffix. The native
+load/MAC consumer-entry relation is explicit; no erased observer histories are
+identified to obtain that relation. -/
+theorem initialized_stale_initiation_no_response (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event) (msg : Key)
+    (r : WGRunWitness (Option PeerId))
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.exchange (.consumeInitiation msg r) :: post)
+    (stale : StaleInitiation.Stale msg r.before r.ambientBefore) (src : SkbSource)
+    (loaded : Bool) (entry : Ambient) (kind : messageType msg = MESSAGE_HANDSHAKE_INITIATION)
+    (ambient : r.ambientBefore = AuthenticatedEffects.initiationConsumerEntry loaded entry) :
+    ((Cookies.afterMac msg src loaded (AuthenticatedEffects.authenticatedMac loaded)).run r.before).run entry =
+      .ok (((),r.after),CounterWindow.record r.ambientAfter .hsInitNoPeer true) ∧
+      Framing.PeerBorrow.view r.after = Framing.PeerBorrow.view r.before ∧
+      r.after.sent = r.before.sent :=
+  StaleInitiation.initialized_no_response facts config traffic trace placeholders pre post msg r
+    position stale src loaded entry kind ambient
+
+/-- Security: the initialized stale initiation selects the exact native
+continuation that returns without response, session installation or timers.
+The continuation starts at this receipt's actual after-state and ambient;
+no earlier load/MAC ambient or reachability premise is needed. -/
+theorem initialized_stale_initiation_continuation (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event) (msg : Key)
+    (r : WGRunWitness (Option PeerId))
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.exchange (.consumeInitiation msg r) :: post)
+    (stale : StaleInitiation.Stale msg r.before r.ambientBefore) (src : SkbSource) :
+    ((StaleInitiation.afterConsumer msg src r.value).run r.after).run r.ambientAfter =
+      .ok (((),r.after),CounterWindow.record r.ambientAfter .hsInitNoPeer true) :=
+  StaleInitiation.initialized_continuation facts config traffic trace placeholders
+    pre post msg r position stale src
+
+/-- Security: the original inner confirmation consumes a pending allocation
+and records it once before any later receive Stop. This is the local source
+contract with its pending-history carrier explicit; initialized uniqueness is
+not asserted by this statement. -/
+theorem native_pending_confirmation_distinct (H1 : H1PendingPromotionEdges)
+    (pid : PeerId) (kid : KeypairId) :
+    PendingPromotion.Observed (Responder.DriverCuts.confirmation pid kid) :=
+  PendingPromotion.confirmation_observed H1 pid kid
 
 end Leanux.Proofs.WG.HandshakeSecurity

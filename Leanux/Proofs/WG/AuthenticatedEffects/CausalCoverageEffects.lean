@@ -87,7 +87,7 @@ theorem keepalive (pid : PeerId) (live : frames ≠ []) : StateAt frames (Driver
   unfold Driver.keepaliveObserved
   repeat' first
     | (coverage_head Driver.Hooks.keepalivePrepare; exact state_receipt _ (state_lift _) _
-        (fun _ => rfl) (fun _ impossible => impossible.elim))
+        (fun _ => rfl) (fun _ _ => live))
     | (coverage_head Driver.stagingObserved; exact staging _ live)
     | coverage_state_step
 

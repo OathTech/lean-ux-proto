@@ -50,7 +50,7 @@ theorem timer_enter_checked (d : Device) (j : UInt64) (pid : PeerId) (timer : Pe
   intro w h ready
   let selected : Event := .old (.timerSelected ⟨d,j,pid,timer,entry,w⟩)
   have kept : Inv frames (h ++ [selected]) := ready.emit rfl (fun impossible => impossible.elim)
-  have pushed := kept.enter ⟨(h ++ [selected]).length,.timer j pid timer entry⟩
+  have pushed := kept.enter ⟨(h ++ [selected]).length,.timer j pid timer entry⟩ True.intro
   refine ⟨[selected,.scope (.entered ⟨(h ++ [selected]).length,.timer j pid timer entry⟩)],?_,pushed.1,pushed⟩
   change (runPrefix (TimerDispatch.scope (Event.old ∘ TransmitSecurity.Journal.Event.timerSelected)
     d j pid timer entry (CausalScope.enterPrefix Event.scope (.timer j pid timer entry))) w h).2 = _

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsSockets
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeFreshInitialized
@@ -1318,11 +1319,69 @@ theorem initialized_causal_scopes_are_well_formed
 in the initialized final journal has a nonempty current lexical context at its
 own position, including before a later Stop. Actual poll, timer, fixture,
 handshake, completion and work scopes discharge the source caller obligations;
-an arbitrary native invocation is not granted a context. Authentication and the
-backward causal-root proof for that context remain separate obligations. -/
+an arbitrary native invocation is not granted a context. A receive candidate
+also carries its own accepted replay; authorization through delayed parents
+remains the separate backward causal-root obligation. -/
 theorem initialized_delayed_effects_and_allocations_have_context
     (trace : Runner.Trace) (placeholders : Bool) :
     CausalJournal.Coverage.Safe (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 :=
   CausalJournal.Coverage.initialized trace placeholders
+
+/-- Security: a timer arm, handshake-work append or TX allocation under a
+receive candidate is authorized by that candidate's own successful native
+replay check and earlier AEAD publication in the same initialized execution.
+The check precedes protected effects even if a later operation stops. -/
+theorem initialized_protected_candidate_has_own_authenticated_receive
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event) (event : CausalJournal.Event)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 = before ++ event :: after)
+    (relevant : CausalJournal.Coverage.Protected event) (index : Nat) (skb : SkbId) (packet : RxPacket)
+    (current : CausalScope.current CausalJournal.scope? before = .ok (some ⟨index,.candidate skb packet⟩)) :
+    ∃ start receipt rest,
+      before = start ++ [CausalJournal.Coverage.candidate index skb packet,
+        CausalJournal.Coverage.replay receipt] ++ rest ∧
+      index = start.length ∧ receipt.skb = skb ∧ receipt.packet = packet ∧ receipt.run.value = true ∧
+      TransportReplay.Certified
+        ((start ++ [CausalJournal.Coverage.candidate index skb packet]).filterMap CausalJournal.StackOrigins.origin?) receipt :=
+  CausalJournal.Coverage.candidate_authenticated trace placeholders before after event position relevant index skb packet current
+
+/-- Security: every timer arm, handshake-work append and TX allocation in the
+initialized final execution has a finite causal explanation ending at a fixture
+operation or its own authenticated packet. Delayed timers, queued work and TX
+completions inherit exact strictly earlier native occurrences; numeric identity
+or a scope label cannot terminate the authentication argument. This statement
+covers those recorded effects; all emitted datagrams and refusal-state silence
+remain separate obligations. -/
+theorem initialized_protected_effects_have_fixture_or_authenticated_roots
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event) (effect : CausalJournal.Event)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 = before ++ effect :: after)
+    (relevant : CausalJournal.Coverage.Protected effect) : CausalJournal.Roots.Rooted before :=
+  CausalJournal.Roots.initialized trace placeholders before after effect position relevant
+
+/-- Security: every actual transport socket receipt has an initialized fixture
+or authenticated causal root, and any datagram it emitted has the observed peer
+endpoint, bytes and traffic class. Later Stop preserves the receipt and cause.
+Handshake and cookie sends are separate source families. -/
+theorem initialized_transport_socket_has_authorized_root
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event) (receipt : TransmitSecurity.Completion.SocketReceipt)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      before ++ .old (.socket receipt) :: after) :
+    CausalJournal.Roots.Rooted before ∧ receipt.Valid ∧
+      SocketEmission receipt.endpoint receipt.packet.value.bytes receipt.packet.value.ds
+        receipt.socket.before.wg.sent receipt.socket.after.wg.sent :=
+  CausalJournal.Roots.socket trace placeholders before after receipt position
+
+/-- Security: native keepalive preparation inherits its actual fixture or
+accepted-packet causal root. Empty packet contents alone supply no authority. -/
+theorem initialized_keepalive_preparation_has_authorized_root
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event) (pid : PeerId) (receipt : WGRunWitness Bool)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      before ++ .keepalivePrepared pid receipt :: after) :
+    CausalJournal.Roots.Rooted before ∧
+      receipt.Valid (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid) :=
+  CausalJournal.Roots.keepalive trace placeholders before after pid receipt position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

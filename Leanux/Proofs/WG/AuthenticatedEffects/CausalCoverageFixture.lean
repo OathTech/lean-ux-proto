@@ -11,7 +11,7 @@ theorem fixture (trigger : FixtureEffects.Trigger) (body : WGPrefix Event α) (s
     StateAt frames (FixtureEffects.runWith (Driver.fixtureOps hooks) trigger body) := by
   change StateAt frames (FixtureEffects.runWith (FixtureEffects.scopeHooks Event.scope CausalSources.Cause.fixture) trigger body)
   rw [FixtureEffects.run_scope]
-  exact state_scope (.fixture trigger) body safe frames
+  exact state_scope (.fixture trigger) True.intro body safe frames
 
 theorem fixture_transmit (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     StateAt frames (FixtureEffects.runWith (Driver.fixtureOps hooks) (.transmit family addr packets mtu)
