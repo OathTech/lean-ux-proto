@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedOrdinaryCleanupInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerRetirementInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSchedulerPointInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDrainPointInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptLoopInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTransmitResidualInitialized
@@ -2063,6 +2066,143 @@ theorem initialized_routed_overflow_receipt_accounted {packets : List WG.Packet}
       (Transmit.Front.Residual.overflowHistory pid u v c b (Transmit.inputHistory caller.input caller.events))
       ledger [] [] (caller.updated v b).wg :=
   caller.overflow_accounted selected trim
+
+end
+
+
+section
+open AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Leanux.Runner Queues.RxCredits AuthenticatedEffects AuthenticatedEffects.CausalJournal
+open AllocatedObligation AllocatedObligation.CompletionBatch ScheduledSource
+
+/-- Security: every ordinary cleanup erase in the original initialized worker consumes its
+existing terminal debt and preserves complete accounting at the native cut.
+The exact remaining frees and reference release stay attached to the runner;
+no eventual worker success is assumed. -/
+theorem initialized_ordinary_cleanup_interiors
+    (entry : TxEntry trace placeholders operationIndex pid world history)
+    (selected : runPrefix (workerSelection pid) world history=(.ok (some ⟨items,head,true⟩,u),middle))
+    (completed : runPrefix (CompletionEffects.completeScoped Event.scope
+      CausalSources.Cause.completion completionOps pid items) u middle=(.ok ((),freeWorld),freeHistory)) :
+    ∃ initial, ∃ context : CompletionBatch.Context, context.pid=pid ∧ context.locals=[] ∧ context.items=items ∧
+      context.initialLedger=initial ∧
+      ∃ ledger debts final last,
+        SendSettlements context initial [] ledger debts ∧
+        CleanupPath context ledger items debts freeWorld freeHistory final last ∧
+        ∀ done skb rest, items=done++skb::rest →
+          ∃ cutWorld cutHistory cutDebts generation nextWorld,
+            OrdinaryCleanup.Interval context ledger cutDebts skb rest cutWorld cutHistory generation nextWorld ∧
+            ∀ phase : CleanupPrimitive.Phase,
+              runPrefix (OrdinaryCleanup.workerPrefix pid done skb phase) world history=
+                (.ok ((),nextWorld),CleanupPrimitive.current phase cutWorld skb cutHistory) ∧
+              CompleteConsequences.Cut (CleanupPrimitive.current phase cutWorld skb cutHistory) ledger
+                (forgetFreedCell cutHistory generation skb cutDebts)
+                (⟨.selected,context.pid,rest⟩ :: context.locals) nextWorld.wg ∧
+              runPrefixOuter (Queues.RoutingJoint.executeTraceWith (Driver.syscallObserved hooks)
+                (fun result w=>(result,w)) trace placeholders) [] =
+                runPrefixOuter (entry.resume nextWorld (do
+                  OrdinaryCleanup.due phase cutWorld skb
+                  freeLoop cleanupOps rest
+                  CompletionBatch.release cleanupOps pid head.keypair))
+                  (CleanupPrimitive.current phase cutWorld skb cutHistory) :=
+  entry.cleanup_interiors selected completed
+
+end
+
+section
+open AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open EncryptionPacket EncryptionInterior CompleteCarrier
+
+/-- Security: the initialized encryption loop has an ordered source decomposition with the
+same packet ledger on successful and stopped paths. DEAD ends that original
+loop without visiting the remaining packets. -/
+theorem initialized_encryption_loop_execution
+    (entry : EncryptionRun.Entry trace placeholders operationIndex (some items) world history)
+    (captured : runPrefix (headPrefix items) world history=(.ok ((headId,head),u),middle)) :
+    ∃ ledger, Accounted middle ledger [] [] u.wg ∧
+      Execution headId head ledger [] [] items .crypted u middle
+        (runPrefix (loop headId head items .crypted) u middle).1
+        (runPrefix (loop headId head items .crypted) u middle).2 :=
+  entry.loop_execution captured
+
+end
+
+section
+open AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Leanux.Runner Queues.RxCredits AuthenticatedEffects.CausalJournal
+open EncryptionPacket EncryptionInterior
+variable {state : PacketState}
+
+/-- Security: each actual publication read, check, head write and scheduling cut preserves
+the original batch account and exact initialized continuation. Failures
+retain their actual prefix; successful cuts retain the enclosing callback
+receipt and release child. -/
+theorem initialized_encryption_publication_interiors
+    (entry : EncryptionRun.Entry trace placeholders operationIndex (some items) world history)
+    (captured : runPrefix (headPrefix items) world history=(.ok ((headId,head),u),middle))
+    (walked : runPrefix (loop headId head items .crypted) u middle=(.ok (state,g),after)) :
+    ∃ ledger v, PublicationPath items world history ledger [] [] headId head state v after ∧
+      ∀ site : PublicationSite,
+        (∃ reason last, runPrefix (publicationPrefixAt site items state) v after=(.error reason,last) ∧
+          runPrefix (ops.publish items state) v after=(.error reason,last)) ∨
+        ∃ first pid next last, PublicationPoint site items state ledger [] [] v after first pid next last ∧
+          CompleteConsequences.Cut last ledger [] [] next.wg ∧
+          runPrefixOuter (Queues.RoutingJoint.executeTraceWith (Driver.syscallObserved hooks)
+            (fun result w=>(result,w)) trace placeholders) [] =
+            runPrefixOuter (entry.resume next (EncryptionRun.returned world items (do
+              publicationTailAt site first pid state
+              pure true))) last :=
+  entry.publication_interiors captured walked
+
+end
+
+section
+open AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open PeerRetirement
+
+/-- Security: final peer release charges the exact original staged ticket cohort once and
+settles it at its own counted receipt. The erased pre-receipt world retains
+a pending obligation, rather than an assertion that its queue still exists. -/
+theorem initialized_routed_release_settlement
+    (caller : RoutedTransmit.Caller trace placeholders operationIndex world history)
+    (selected : Transmit.Front.Selected caller.input (Transmit.inputHistory caller.input caller.events)
+      caller.entered.wg caller.entered.ambient (.release (some pid) code) u c)
+    (device : u.dev=some d) (resident : d.peers[pid]?=some p)
+    (tested : (testAmbient p.refcount).run (entryClock c)=.ok (true,b))
+    (quiet : queued p=false) :
+    ∃ ledger,
+      let original := Transmit.inputHistory caller.input caller.events
+      let tickets := cohort ledger pid p d
+      let final := finalWorld pid p d u
+      let clock := indexClock pid d b
+      ((HandshakeSecurity.StagedDisposal.releaseCut (some pid)).run u).run c=
+        .ok ((some (pid,p),final),clock) ∧
+      Staged.Origins.Aligned
+        (Staged.Origins.Born original d.ifindex pid p.internalId) tickets p.staged ∧
+      Staged.stagedAt final pid=none ∧
+      Staged.dropped final=some (d.txDropped+tickets.length) ∧
+      CompleteCarrier.Accounted (original++[releaseEvent (some pid) (some (pid,p)) u final c clock])
+        (Staged.Obligations.settle tickets (.counted original.length .finalRelease) ledger) [] [] final :=
+  caller.release_settlement selected device resident tested quiet
+
+end
+
+section
+open AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Scheduler.Points
+variable {native inside : ChildPoints} {Good : Scheduler.Points.History → World → Prop}
+
+/-- Security: fixed scheduler points reached from the existing initialized callers satisfy
+the supplied account or pending-interval property and retain source-
+constructed remainders. Committed iteration and NAPI interior contracts
+remain named assumptions; this is not complete T2 coverage. -/
+theorem initialized_scheduler_source_points_conditional
+    (entry : ScheduledSource.Entry trace placeholders operationIndex world history)
+    (carrierGood : ∀ h w, CompleteProduct.Carrier h w → Good h w)
+    (children : ChildContracts native inside Good) :
+    Covered native Good (scheduleShape none) world history ∧
+      Remainders children (scheduleShape none) world history :=
+  entry.source_points carrierGood children
 
 end
 
