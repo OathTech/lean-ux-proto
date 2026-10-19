@@ -2,7 +2,7 @@
 
 ## Progress
 
-Current checkpoint: source-79 `8d9bfbca` is fully validated over main `3f3879e0`, merged at `adc57aca`. The inherited C1 carry (`74b03922`, `0c8f59fb`, `7a189c9e`) remains separate from C3 repair `38efba22` and the combined source-point integration. T2 remains open; the other five outcomes retain their stated boundaries.
+Current checkpoint: source-80 `0fc64409` is fully validated over main `3f3879e0`, merged at `adc57aca`. The inherited C1 carry (`74b03922`, `0c8f59fb`, `7a189c9e`) remains separate from C3 repair `38efba22` and the combined source-point integration. T2 remains open; the other five outcomes retain their stated boundaries.
 
 [AGENT 2026-10-18] Work begins on `proofs/campaign-3` at `783510e8`, under
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
@@ -73,7 +73,7 @@ performed. The separate C3 commit `38efba22` repairs twenty-six campaign
 modules and passes the 4181-job root build. Its native source paths retain
 both occupancy and refill reads, pending-device selection, section-start
 pending-bit clearing and the new completion guards. No security outcome
-statement changes. Combined C3 validation passes at source-79 `8d9bfbca`, including all eleven source-78 helpers and forty-seven saved handoff modules. T2's initialized native-cut obligation remains open.
+statement changes. Combined C3 validation passes at source-79 `8d9bfbca`, including all eleven source-78 helpers and forty-seven saved handoff modules. T2's initialized native-cut obligation remains open. Preparation and its initialized worker connection are subsequently closed at source-80 `0fc64409`; the remaining caller graph is still open.
 
 ## C3-F1: invalidation and clearing do not cancel previously admitted encryption
 
@@ -423,7 +423,7 @@ families remain open. No mirror defect was identified.
 
 ## Validation
 
-Source-79 `8d9bfbca` combines the separate C3 carry with the eleven source-78 helpers and forty-seven staging, timer and prepare handoff modules. All are connected to the root build. Staging reserve/repayment/queue phases retain the original account and continuation; canonical timer callbacks retain purge and zero-key intervals; prepare retains RX residency and cached-peer obligations. Its canonical frame premise, deeper staging/timer children and the remaining caller contracts are still explicit. T2 remains open. The combined tree passes 4239 build jobs, the gate's 1563 terminal declarations across thirteen roots, 774 standard-or-empty public-declaration queries over the 85-module delta, fresh aggregate kernel replay (exit 0) and all twelve counterexample recipes (exit 0). All 4192 frozen proof hashes match. Main and mirror are unchanged, and all fifty validated inherited carry paths are unchanged. C3's proved claims are now current over mirror `3f3879e0`, with their named assumptions and boundaries retained. No differential result is added by this proof-only checkpoint. The mirror's inherited Env deprecation is outside this scope.
+Source-80 `0fc64409` derives the complete preparation frame from the actual getters, RX residency and cached publication peer. Every fixed preparation point retains the same ledger and its original continuation, including writes before their access receipts; both outer history projections are carried into the shared hook. The initialized receive scheduler now derives its prepare contract and retains six explicit deeper families: receive staging, routed transmit, IPv6 receive, encryption, peer transmit and handshake. Finer native-atom interiors and the other caller/interval work remain open; T2 is not complete. The seven-module delta passes the 4243-job root build, the 1563-declaration gate across thirteen roots, all 43 standard-or-empty public-declaration queries, fresh aggregate kernel replay (exit 0) and all twelve counterexample recipes (exit 0). All 4196 frozen proof hashes match. Main, mirror and all fifty validated inherited carry paths are unchanged. Development elaboration and history-normalization failures were repaired before these passing checks; no mirror finding arose. No differential result is added by this proof-only checkpoint. The inherited Env deprecation remains outside scope.
 
 Reproduce the proof and model checks from the campaign worktree:
 
