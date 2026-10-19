@@ -181,5 +181,10 @@ source finding.
    continuation. Partial allocation aliases and fixed publication, send and
    DEAD-cleanup intervals retain local provenance. Complete initialized
    internal-cut composition and remaining silent intervals are still open.
+   Source-65 `f2a9731f` connects original return-callback prefixes and the
+   post-transmit crypt/send entries to initialization. Concrete staging
+   derives its own allocation preconditions; send-loop and ordered DEAD
+   cleanup boundaries retain exact local cuts. These additional connections
+   still do not close finding 2.
 
 No mirror change or narrower T2 outcome is adopted.
