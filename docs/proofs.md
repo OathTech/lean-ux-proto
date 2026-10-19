@@ -107,6 +107,8 @@ Source-67 `7e1ea08f` connects the original initialized routed front, its pre-rec
 
 Source-68 `f11eadfe` connects the original selected return callback and post-transmit send drain to send-worker entries and their nested scheduler iterations. Direct encrypt activations and TX crypt-ahead retain the actual selected poll item, intervening softirq state, initialized encryption entry and original continuation; TX entries from both scheduler callers retain matched failure accounts. These are concrete entry bridges, not exhaustive native-interior coverage. Validation: 3904 build jobs, 1534 terminal declarations, 77 standard-or-empty public theorem queries across 16 new modules, fresh root replay and twelve recipes; all 3857 frozen hashes match. The 916 inherited proof files, main and mirror are unchanged.
 
+Source-69 `2443f3be` connects the initialized routed front to its actual pre-release/trim/splice selection state. Every completed send-list prefix, including prefixes of successful calls, now retains its remaining-batch account, original completion-scope continuation and selected-worker packet capture on the same settlement chain. The combined root passes 3911 jobs and 38 focused standard-or-empty queries across seven new modules. These intermediate helpers do not close native-interior coverage; the last aggregate gate, fresh replay and twelve-recipe checkpoint remains source-68 `f11eadfe`.
+
 
 ## Current register
 

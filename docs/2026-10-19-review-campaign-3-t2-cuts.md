@@ -203,5 +203,11 @@ source finding.
    replay and twelve recipes pass. This extends the initialized entry
    coverage; successful interior coverage and other native caller roots
    remain open, so finding 2 remains open.
+   Source-69 `2443f3be` derives the initialized front selection account and
+   every actual completed send-list prefix, including successful calls,
+   through the original completion scope and selected worker. Its combined
+   build and 38 focused queries pass; aggregate validation remains at
+   `f11eadfe`. These are further concrete source points, not closure of the
+   universal interior obligation.
 
 No mirror change or narrower T2 outcome is adopted.
