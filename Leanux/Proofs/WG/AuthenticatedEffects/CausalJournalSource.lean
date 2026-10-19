@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeEffectsNatural
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalSourceMetadata
 import Leanux.Proofs.WG.AuthenticatedEffects.SendEffectsSource
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeJointWorker
+import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSenderOps
 
 /-! One final extension of the existing combined journal on the same native
 Driver spine. The old event type is embedded intact. Causal scope metadata is
@@ -21,6 +22,8 @@ inductive Event where
   | armed (value : TimerEffects.Arm Context)
   | queued (value : TimerEffects.Queued Context)
   | exchange (value : HandshakeSecurity.Exchange.Event)
+  | protocolSocket (receipt : ProtocolSocket.Receipt Context)
+  | cookieSocket (receipt : CookieSocket.Receipt)
 
 def old? : Event → Option Journal.Event
   | .old value => some value
@@ -65,12 +68,14 @@ def handshake (session : PeerId → WGPrefix Event Bool)
     HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
       (HandshakeSecurity.ExchangeJoint.receiveOps Event.exchange
         (HandshakeEffects.withEffects
-          (HandshakeWorker.observedOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac)
+          (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac
+            Event.protocolSocket scope? Event.cookieSocket)
           (Event.old ∘ Journal.Event.handshake) effects))
 
 def flushedSend (pid : PeerId) : WGPrefix Event Unit :=
   SendEffects.flushed Event.scope
-    (HandshakeSecurity.ExchangeJoint.sendOps Event.exchange SendEffects.native) effects pid
+    (HandshakeSecurity.ExchangeJoint.sendOps Event.exchange
+      (ProtocolSender.sendOps Event.protocolSocket scope?)) effects pid
 
 def transmit (pid : PeerId) : PrefixM Event Bool :=
   CompletionEffects.observedStep (Event.old ∘ Journal.completionEvent) completion?

@@ -1,4 +1,7 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsSockets
+import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSocketReceipts
+import Leanux.Proofs.WG.AuthenticatedEffects.CookieSocketSource
+import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSenderOther
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeFreshInitialized
@@ -1383,5 +1386,43 @@ theorem initialized_keepalive_preparation_has_authorized_root
     CausalJournal.Roots.Rooted before ∧
       receipt.Valid (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid) :=
   CausalJournal.Roots.keepalive trace placeholders before after pid receipt position
+
+/-- Security: a valid protocol socket receipt records at most one datagram
+with its actual endpoint, bytes and traffic class. The receipt is emitted at the
+native socket return before later buffer accounting can Stop. This is a local
+source result; initialized causal authorization is a separate composition. -/
+theorem protocol_socket_receipt_has_native_egress
+    {receipt : ProtocolSocket.Receipt Context} (valid : receipt.Valid) :
+    SocketEmission receipt.args.endpoint receipt.args.bytes receipt.args.ds
+      receipt.run.before.sent receipt.run.after.sent := valid.emission
+
+/-- Security: the original cookie-send observer retains at most one actual
+64-byte source-bound datagram receipt, including through later Stop. MAC/load
+qualification is retained as separate caller evidence, not assumed from this
+local cookie-sender contract. -/
+theorem cookie_socket_observer_has_bounded_source_bound_egress
+    (record : CookieSocket.Receipt → E) (mac : HandshakeMac)
+    (msg : List UInt8) (src : SkbSource) (w : WGWorld) (a : Ambient) (history : List E) :
+    ∃ suffix, (runWGPrefix (CookieSocket.observed record mac msg src) w a history).2 = history ++ suffix ∧
+      suffix.length ≤ 1 ∧ ∀ event ∈ suffix, ∃ receipt,
+        event = record receipt ∧ receipt.Valid ∧ receipt.mac = mac ∧
+          receipt.input = msg ∧ receipt.source = src :=
+  CookieSocket.observed_receipts record mac msg src w a history
+
+/-- Security: every handshake protocol socket call in the initialized final
+journal inherits an actual fixture or authenticated root, through the exact
+queued-work occurrence or accepted handshake callback. Its native endpoint,
+bytes and datagram bound survive a Stop in later accounting. Cookie replies
+remain the separate qualified exception. -/
+theorem initialized_protocol_socket_has_authorized_root
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event) (receipt : ProtocolSocket.Receipt CausalJournal.Context)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      before ++ .protocolSocket receipt :: after) :
+    CausalJournal.Roots.Rooted before ∧ receipt.Valid ∧
+      receipt.cause = CausalScope.current CausalJournal.scope? before ∧
+      SocketEmission receipt.args.endpoint receipt.args.bytes receipt.args.ds
+        receipt.run.before.sent receipt.run.after.sent :=
+  CausalJournal.Roots.protocol_socket trace placeholders before after receipt position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

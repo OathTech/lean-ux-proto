@@ -11,6 +11,15 @@ theorem current_quiet (body : Context → WGPrefix Event α)
   intro w a h hi
   exact safe (CausalScope.current scope? h) w a h hi
 
+theorem protocol_send (pid : PeerId) (bytes : List UInt8) :
+    Driver.StateHistorySafe Safe (ProtocolSocket.observed Event.protocolSocket scope? pid bytes) :=
+  ProtocolSocket.observed_history Safe Event.protocolSocket scope?
+    (fun _ _ _ hi _ => hi.emit _ rfl) pid bytes
+
+theorem cookie_send (mac : HandshakeMac) (msg : List UInt8) (src : SkbSource) :
+    Driver.StateHistorySafe Safe (CookieSocket.observed Event.cookieSocket mac msg src) :=
+  CookieSocket.observed_history Safe Event.cookieSocket mac msg src (fun _ _ hi _ => hi.emit _ rfl)
+
 theorem effects_safe : Driver.EffectsHistory Safe effects where
   step := Driver.History.state_lift
   arm := fun _ _ _ _ => current_quiet _ (fun _ =>

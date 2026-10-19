@@ -11,7 +11,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Coverage
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
 def Protected : Event → Prop
-  | .armed _ | .queued _ | .old (.allocated _ _) | .old (.socket _) | .keepalivePrepared _ _ => True
+  | .armed _ | .queued _ | .old (.allocated _ _) | .old (.socket _) | .keepalivePrepared _ _ | .protocolSocket _ => True
   | _ => False
 
 def Present (history : List Event) : Prop :=

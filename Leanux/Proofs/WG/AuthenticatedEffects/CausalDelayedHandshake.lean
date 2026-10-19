@@ -37,6 +37,16 @@ private theorem old_response (mac : HandshakeMac) : StateSafe
   old _ _ (HandshakeCausal.response_erases mac)
     (state_framed _ (consumeResponse_retained mac.input) (SendWorkCauses.response_frame mac.input))
 
+theorem protocol_send (pid : PeerId) (bytes : List UInt8) :
+    StateSafe (ProtocolSocket.observed Event.protocolSocket scope? pid bytes) :=
+  observed_native _ _ (ProtocolSocket.observed_erases _ _ _ _) (ProtocolSocket.observed_appends _ _ _ _)
+    (state_framed _ (sendBufferToPeer_retained pid bytes) (SendWorkCauses.send_frame pid bytes))
+
+theorem cookie_send (mac : HandshakeMac) (msg : List UInt8) (src : SkbSource) :
+    StateSafe (CookieSocket.observed Event.cookieSocket mac msg src) :=
+  observed_native _ _ (CookieSocket.observed_erases _ _ _ _) (CookieSocket.observed_appends _ _ _ _)
+    (state_framed _ (cookieSend_retained msg src) (SendWorkCauses.cookie_send_frame msg src))
+
 open Lean Meta Elab Tactic in
 elab "causal_delayed_old_head " wanted:ident : tactic => withMainContext do
   let target := (← instantiateMVars (← getMainTarget)).consumeMData
@@ -57,6 +67,8 @@ elab "causal_delayed_function " wanted:term : tactic => withMainContext do
   unless action.getAppFn == expected do throwError "different supplied callback"
 
 macro "causal_delayed_handshake_native" : tactic => `(tactic| first
+  | (causal_delayed_head ProtocolSocket.observed; exact protocol_send _ _)
+  | (causal_delayed_head CookieSocket.observed; exact cookie_send _ _ _)
   | (causal_delayed_native_head createResponse; exact state_framed _ (createResponse_retained _) (SendWorkCauses.response_create_frame _))
   | (causal_delayed_native_head addMacToPacket; exact state_framed _ (addMac_retained _ _) (SendWorkCauses.mac_frame _ _))
   | (causal_delayed_native_head sendBufferToPeer; exact state_framed _ (sendBufferToPeer_retained _ _) (SendWorkCauses.send_frame _ _))
@@ -78,12 +90,12 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (HandshakeWorker.observedOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-              handshake? session keepalive mac)
+            (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
+              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    HandshakeWorker.observedOps]
+    ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
     | (causal_delayed_head CausalScope.scope; apply state_scope)
     | (causal_delayed_head receiptWGObserved; apply state_receipt)
@@ -105,8 +117,8 @@ private theorem receive
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (HandshakeWorker.observedOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-              handshake? session keepalive mac)
+            (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
+              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src) := by
   unfold HandshakeWorker.receiveWith
   repeat' first

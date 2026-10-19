@@ -9,10 +9,12 @@ set_option maxRecDepth 4096
 
 private theorem send_body (pid : PeerId) : StateSafe
     (SendExchange.workerWith (SendEffects.withEffects
-      (ExchangeJoint.sendOps Event.exchange SendEffects.native) effects) pid) := by
+      (ExchangeJoint.sendOps Event.exchange (ProtocolSender.sendOps Event.protocolSocket scope?)) effects) pid) := by
   unfold SendExchange.workerWith SendExchange.sendWith
-  simp only [SendEffects.withEffects,ExchangeJoint.sendOps,SendEffects.native]
+  simp only [SendEffects.withEffects,ExchangeJoint.sendOps,ProtocolSender.sendOps,SendEffects.native]
   repeat' first
+    | (scope_balance_head ProtocolSocket.observed; exact protocol_send _ _)
+    | (scope_balance_head CookieSocket.observed; exact cookie_send _ _ _)
     | (scope_balance_head receiptWGObserved; exact state_receipt _ (state_lift _) _ (fun _ => rfl))
     | (scope_balance_head TimerEffects.traversalWith; exact traversal _)
     | (scope_balance_head TimerEffects.initiatedWith; exact initiated _)
@@ -20,9 +22,11 @@ private theorem send_body (pid : PeerId) : StateSafe
 
 private theorem flushed_body (pid : PeerId) : StateSafe
     (SendExchange.flushedWith liftWGPrefix (SendExchange.workerWith
-      (SendEffects.withEffects (ExchangeJoint.sendOps Event.exchange SendEffects.native) effects)) pid) := by
+      (SendEffects.withEffects (ExchangeJoint.sendOps Event.exchange (ProtocolSender.sendOps Event.protocolSocket scope?)) effects)) pid) := by
   unfold SendExchange.flushedWith SendExchange.afterTakeWith
   repeat' first
+    | (scope_balance_head ProtocolSocket.observed; exact protocol_send _ _)
+    | (scope_balance_head CookieSocket.observed; exact cookie_send _ _ _)
     | (scope_balance_head SendExchange.workerWith; exact send_body _)
     | scope_state_step
 

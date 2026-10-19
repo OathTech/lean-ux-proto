@@ -31,13 +31,17 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
   intro mac
   apply HandshakeEffects.scopeOps_projects cut? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
   apply receive_projects
-  exact HandshakeEffects.effects_other (Event.old ∘ Journal.Event.handshake) handshake? cut?
+  have base := HandshakeEffects.effects_other (Event.old ∘ Journal.Event.handshake) handshake? cut?
     (fun _ => rfl) effects effects_projects sg st kg kt hs hk mac
+  have protocol := ProtocolSender.receive_other cut?
+    (Event.old ∘ Journal.Event.handshake) handshake? (fun _ => rfl)
+    sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
+  exact {base with send := protocol.send, cookie := protocol.cookie}
 
 theorem flushed_projects (pid : PeerId) :
     StateProjectsPrefix cut? id (flushedSend pid) (Responder.DriverCuts.hooks.flushedSend pid) := by
   apply SendEffects.flushed_native_projects cut? Event.scope (fun _ => rfl) ?_ effects_projects pid
-  refine {SendEffects.native_projects cut? with create := ?_}
+  refine {ProtocolSender.send_projects cut? Event.protocolSocket scope? (fun _ => rfl) with create := ?_}
   intro actor
   exact Exchange.receipt_ignored cut? _ _ _ (Driver.Projection.state_lift cut? _) (fun _ => rfl)
 

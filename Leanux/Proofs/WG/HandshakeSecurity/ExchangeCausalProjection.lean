@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSenderOther
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeJointWorker
 import Leanux.Proofs.WG.TransmitSecurity.JournalResponderProjection
@@ -49,14 +50,19 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
   intro mac
   apply HandshakeEffects.scopeOps_projects exchange? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
   apply ExchangeJoint.receive_native exchange? Event.exchange (fun _ => rfl)
-  exact HandshakeEffects.effects_other (Event.old ∘ Journal.Event.handshake) handshake? exchange?
+  have base := HandshakeEffects.effects_other (Event.old ∘ Journal.Event.handshake) handshake? exchange?
     (fun _ => rfl) effects effects_projects sg st kg kt hs hk mac
+  have protocol := ProtocolSender.receive_other exchange?
+    (Event.old ∘ Journal.Event.handshake) handshake? (fun _ => rfl)
+    sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
+  exact {base with send := protocol.send, cookie := protocol.cookie}
 
 theorem flushed_projects (pid : PeerId) :
     StateProjectsPrefix exchange? id (flushedSend pid) (ExchangeDriver.flushed pid) := by
   have project := SendEffects.flushed_projects exchange? Event.scope (fun _ => rfl)
     (ExchangeJoint.send_projects exchange? Event.exchange id (fun _ => rfl)
-      SendEffects.native SendEffects.native (SendEffects.native_projects exchange?)) effects_projects pid
+      (ProtocolSender.sendOps Event.protocolSocket scope?) SendEffects.native
+      (ProtocolSender.send_projects exchange? Event.protocolSocket scope? (fun _ => rfl))) effects_projects pid
   have neutral : SendEffects.withEffects
       (ExchangeJoint.sendOps id (SendEffects.native : SendExchange.Ops (WGPrefix Exchange.Event)))
       TimerEffects.lifted = ExchangeDriver.sendOps := by

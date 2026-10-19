@@ -39,6 +39,8 @@ theorem initialized_replays (trace : Runner.Trace) (placeholders : Bool) :
   | queued value => cases recorded
   | exchange value => cases recorded
   | keepalivePrepared pid run => cases recorded
+  | protocolSocket receipt => cases recorded
+  | cookieSocket receipt => cases recorded
 
 /-- Each initialized stack-input scope inherits its own accepted receive,
 including held GRO packets. The successful replay and AEAD publication belong

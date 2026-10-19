@@ -11,13 +11,15 @@ def Checked (pre : List Event) : Event → Prop
   | .keepalivePrepared pid receipt => receipt.Valid (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid)
   | .armed receipt => receipt.Valid ∧ receipt.cause = CausalScope.current scope? pre
   | .queued receipt => receipt.Valid ∧ receipt.cause = CausalScope.current scope? pre
+  | .protocolSocket receipt => receipt.Valid ∧ receipt.cause = CausalScope.current scope? pre
+  | .cookieSocket receipt => receipt.Valid
   | _ => True
 
 def Safe (history : List Event) : Prop :=
   ∀ pre event post, history = pre ++ event :: post → Checked pre event
 
 def Unchecked : Event → Prop
-  | .armed _ | .queued _ | .keepalivePrepared _ _ => False
+  | .armed _ | .queued _ | .keepalivePrepared _ _ | .protocolSocket _ | .cookieSocket _ => False
   | _ => True
 
 theorem Safe.empty : Safe [] := by
@@ -199,5 +201,14 @@ theorem derived (pid : PeerId) : Driver.StateHistorySafe Safe (TimerEffects.deri
 theorem initiated (pid : PeerId) : Driver.StateHistorySafe Safe (TimerEffects.initiatedWith effects pid) := by
   unfold TimerEffects.initiatedWith
   repeat' effect_history_step effects_safe
+
+theorem protocol_send (pid : PeerId) (bytes : List UInt8) :
+    Driver.StateHistorySafe Safe (ProtocolSocket.observed Event.protocolSocket scope? pid bytes) :=
+  ProtocolSocket.observed_history Safe Event.protocolSocket scope?
+    (fun _ _ _ hi valid => hi.emit ⟨valid,rfl⟩) pid bytes
+
+theorem cookie_send (mac : HandshakeMac) (msg : List UInt8) (src : SkbSource) :
+    Driver.StateHistorySafe Safe (CookieSocket.observed Event.cookieSocket mac msg src) :=
+  CookieSocket.observed_history Safe Event.cookieSocket mac msg src (fun _ _ hi valid => hi.emit valid)
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Receipts

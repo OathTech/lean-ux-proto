@@ -99,4 +99,17 @@ theorem transmit_front (family addr : Nat) (packets : List Packet) (mtu : Nat)
     | (coverage_head Driver.stagingObserved; exact staging _ live)
     | coverage_state_step
 
+theorem protocol_send (pid : PeerId) (bytes : List UInt8) (live : frames ≠ []) :
+    StateAt frames (ProtocolSocket.observed Event.protocolSocket scope? pid bytes) := by
+  unfold ProtocolSocket.observed ProtocolSocket.bufferWith
+  repeat' first
+    | (coverage_head CausalEffects.atCurrent; exact state_current _ (fun _ =>
+        state_receipt _ (state_lift _) _ (fun _ => rfl) (fun _ _ => live)))
+    | coverage_state_step
+
+theorem cookie_send (mac : HandshakeMac) (msg : List UInt8) (src : SkbSource) :
+    StateAt frames (CookieSocket.observed Event.cookieSocket mac msg src) :=
+  state_focus (fun datagram => Event.cookieSocket ⟨mac,msg,src,datagram⟩) (fun _ => none)
+    (fun _ => rfl) (fun _ impossible => impossible.elim) _
+
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Coverage

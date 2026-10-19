@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkActors
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkPoll
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPublicationCoverage
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkTransfers
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkStep
@@ -2633,5 +2635,61 @@ theorem original_tx_publication_service (before : TxWork.Obligations (items::cry
     (run : ((enqueuePerPeerTx items state).run w).run a=.ok (((),v),b)) :
     TxWork.Obligations crypt tx v :=
   before.publish inventory state terminal a b run
+
+/-- The complete original allocation/create suffix establishes service for
+its admitted TX batch and retains every earlier queued obligation, including
+EPIPE publication and native refusal cleanup. Packet freshness and the physical
+ring are explicit campaign-1 inputs; initialized caller coverage remains open. -/
+theorem original_tx_allocate_create_service (before : TxWork.Obligations crypt tx w)
+    (inventory : TxInventory locals w) (bounded : Packets.Inv w)
+    (physical : Queues.TxDisposition.LiveFrontier.Physical w) (device : w.dev=some d)
+    (pid : PeerId) (packets : List DataPacket) (a b : Ambient)
+    (run : ((do let items←packets.mapM newTxSkb; createData pid items).run w).run a=
+      .ok (((),v),b)) : TxWork.Obligations crypt tx v :=
+  before.allocate_create inventory bounded physical device pid packets a b run
+
+/-- Native encrypt polling moves its actual returned ring entry into the
+selected continuation's service obligations. Removing the ring alias does not
+lose the owning batch or justify disposal; the real callback and publication
+must still transport that selected continuation. -/
+theorem original_encrypt_poll_service (before : TxWork.Obligations crypt tx w)
+    (physical : Queues.TxDisposition.LiveFrontier.Physical w) (a b : Ambient)
+    (run : (Queues.TxRing.pollSource.run w).run a=.ok ((out,v),b)) :
+    TxWork.Obligations (out.toList++crypt) tx v :=
+  before.poll physical a b run
+
+/-- A normal selected encryption tail retains its service obligation through
+the real byte loop, then discharges it at actual DEAD/CRYPTED publication. It
+cannot return normally with an unserved selected batch. Physical queue inventory
+and the incoming selected continuation remain visible local premises. -/
+theorem original_encrypt_tail_service
+    (before : TxWork.Obligations (item.toList++crypt) tx w.wg)
+    (inventory : TxInventory locals w.wg)
+    (run : (Queues.RxWorkers.encryptStepTailSource item).run w=.ok (result,v)) :
+    TxWork.Obligations crypt tx v.wg :=
+  before.encrypt_tail inventory run
+
+/-- Yield stores a live TX actor's head obligation in the actual suspended
+Activation record. The obligation remains pending even after its native work
+queue entry has been removed by dispatch. Whole activation-loop transport is
+separate from this exact source mutation. -/
+theorem original_tx_suspend_service
+    (before : TxWork.Obligations crypt ((TxWork.actor act).toList++TxWork.actors w.ambient.suspended) w.wg)
+    (run : (modifyAmbient fun s=>{s with suspended:=s.suspended++[{act with iterations:=act.iterations+1}]} :
+      Leanux.M Unit).run w=.ok ((),v)) :
+    TxWork.Obligations crypt (TxWork.actors v.ambient.suspended) v.wg :=
+  TxWork.suspend before run
+
+/-- Resume transfers the selected suspended actor's head obligation back to
+the actual active caller. Filtering matching suspended records cannot silently
+remove that service, including repeated equal records. Initialized scheduler
+selection remains a distinct caller obligation. -/
+theorem original_tx_resume_service
+    (before : TxWork.Obligations crypt (TxWork.actors w.ambient.suspended) w.wg)
+    (act : Activation)
+    (run : (modifyAmbient fun s=>{s with suspended:=s.suspended.filter (· != act)} : Leanux.M Unit).run w=
+      .ok ((),v)) :
+    TxWork.Obligations crypt ((TxWork.actor act).toList++TxWork.actors v.ambient.suspended) v.wg :=
+  TxWork.resume before act run
 
 end Leanux.Proofs.WG.RetirementSecurity

@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionNapi
+import Leanux.Proofs.WG.HandshakeSecurity.HandshakeReplayOutcome
+import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionNativeFrames
 import Leanux.Proofs.WG.HandshakeSecurity.StaleInitiationContinuation
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionHistory
 import Leanux.Proofs.WG.HandshakeSecurity.StaleInitiationInitialized
@@ -1623,5 +1626,92 @@ theorem native_pending_confirmation_distinct (H1 : H1PendingPromotionEdges)
     (pid : PeerId) (kid : KeypairId) :
     PendingPromotion.Observed (Responder.DriverCuts.confirmation pid kid) :=
   PendingPromotion.confirmation_observed H1 pid kid
+
+
+open AuthenticatedEffects.CausalJournal ReplayOutcome in
+/-- Security: two accepted native responses for the same peer belong to strictly
+different created-initiation epochs in the final causal journal. Named C2
+source frame packages remain explicit; no reachability or history premise is
+assumed. -/
+theorem initialized_final_response_consumed_once (facts : H1DriverSourceFacts) (config : H1ConfigurationTagFrames)
+    (traffic : H1TrafficTagFrames) (trace : Runner.Trace) (placeholders : Bool)
+    (pre between post : List Event) (first second : Key)
+    (r s : WGRunWitness (Option PeerId)) (pid : PeerId)
+    (position : journal trace placeholders = pre ++ Event.exchange (.consumeResponse first r) ::
+      between ++ Event.exchange (.consumeResponse second s) :: post)
+    (accepted₁ : r.value = some pid) (accepted₂ : s.value = some pid) :
+    ∃ epoch₁ epoch₂, Exchange.ResponseAt (pre.filterMap exchange?) pid epoch₁ ∧
+      Exchange.ResponseAt ((pre ++ Event.exchange (.consumeResponse first r) :: between).filterMap exchange?)
+        pid epoch₂ ∧ epoch₁ < epoch₂ :=
+  ReplayOutcome.response_once facts config traffic trace placeholders pre between post first second r s pid position accepted₁ accepted₂
+
+open AuthenticatedEffects.CausalJournal ReplayOutcome in
+/-- Security: a consumed native exchange cannot install a second session. Two
+successful final-journal session receipts for one peer have strictly different
+exchange epochs, including receipts before a later Stop. -/
+theorem initialized_final_exchange_installed_once (facts : H1DriverSourceFacts) (config : H1ConfigurationTagFrames)
+    (traffic : H1TrafficTagFrames) (trace : Runner.Trace) (placeholders : Bool)
+    (pre between post : List Event) (r s : WGRunWitness Bool) (pid : PeerId)
+    (position : journal trace placeholders = pre ++ Event.exchange (.session pid r) ::
+      between ++ Event.exchange (.session pid s) :: post)
+    (accepted₁ : r.value = true) (accepted₂ : s.value = true) :
+    ∃ epoch₁ epoch₂, Exchange.InstallAt (pre.filterMap exchange?) pid epoch₁ ∧
+      Exchange.InstallAt ((pre ++ Event.exchange (.session pid r) :: between).filterMap exchange?)
+        pid epoch₂ ∧ epoch₁ < epoch₂ :=
+  ReplayOutcome.installed_once facts config traffic trace placeholders pre between post r s pid position accepted₁ accepted₂
+
+open AuthenticatedEffects.CausalJournal ReplayOutcome in
+/-- Security: one successful session for an actual earlier exchange creates
+exactly one native allocation, installs it in the role-selected slot, and
+clears its handshake while preserving other peers' tags. All facts use the
+same initialized final-journal receipt; named C2 operational contracts remain
+visible. -/
+theorem initialized_final_session_allocation_and_exchange (facts : H1DriverSourceFacts) (config : H1ConfigurationTagFrames)
+    (traffic : H1TrafficTagFrames) (edges : H1ResponderCurrentEdges)
+    (rotation : H1SessionPlacement) (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Event) (pid : PeerId) (r : WGRunWitness Bool)
+    (position : journal trace placeholders = pre ++ Event.exchange (.session pid r) :: post)
+    (success : r.value = true) : Installed pre pid r :=
+  ReplayOutcome.session facts config traffic edges rotation trace placeholders pre post pid r position success
+
+open AuthenticatedEffects.CausalJournal ReplayOutcome in
+/-- Security: a failed native session allocation installs nothing and retains the
+handshake for retry because its complete WireGuard state is unchanged. The
+receipt belongs to the initialized final journal; observing an exchange does
+not assert successful installation. -/
+theorem initialized_final_session_failure_unchanged (facts : H1DriverSourceFacts) (config : H1ConfigurationTagFrames)
+    (traffic : H1TrafficTagFrames) (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Event) (pid : PeerId) (r : WGRunWitness Bool)
+    (position : journal trace placeholders = pre ++ Event.exchange (.session pid r) :: post)
+    (refused : r.value = false) : r.after = r.before :=
+  ReplayOutcome.refused_session facts config traffic trace placeholders pre post pid r position refused
+
+/-- Security: the actual receive consumes its pending promotion ticket before
+its staging and delivery suffix; every later Stop retains the already distinct
+confirmation history. The local entry carrier and cited C2 frames remain
+explicit until initialized driver closure. -/
+theorem native_receive_pending_confirmation_distinct (edges : H1PendingPromotionEdges)
+    (quiet : H1PendingQuietFrames) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
+    PendingPromotion.Observed (TransmitSecurity.Driver.consumeObserved
+      Responder.DriverCuts.hooks pid pkt ep) :=
+  PendingPromotion.consume edges quiet pid pkt ep
+
+/-- Security: native handshake processing retains consumed promotion tickets
+while sessions introduce only fresh pending tickets. The same shared source
+records session receipts, and its local entry carrier stays explicit. -/
+theorem native_handshake_pending_confirmation_distinct (edges : H1PendingPromotionEdges)
+    (quiet : H1PendingQuietFrames) (frames : H1PendingHandshakeFrames) :
+    PendingPromotion.Observed (TransmitSecurity.Driver.handshakeObserved Responder.DriverCuts.hooks) :=
+  PendingPromotion.handshake edges quiet frames
+
+/-- Security: both native receive polling and its IPv4 reply callbacks preserve
+pending-ticket distinctness at each inner confirmation, including a later Stop.
+The pending entry carrier and named local C2 frames are explicit. -/
+theorem native_poll_pending_confirmation_distinct (edges : H1PendingPromotionEdges)
+    (quiet : H1PendingQuietFrames) (frames : H1PendingPollFrames)
+    (stackFrames : H1PendingStackFrames) (pid : PeerId) (budget : Nat) :
+    PendingPromotion.ProductPreserves
+      (TransmitSecurity.Driver.nativePollObserved Responder.DriverCuts.hooks pid budget) :=
+  PendingPromotion.native_poll edges quiet frames stackFrames pid budget
 
 end Leanux.Proofs.WG.HandshakeSecurity

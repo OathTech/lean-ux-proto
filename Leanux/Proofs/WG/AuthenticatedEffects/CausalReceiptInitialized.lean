@@ -92,4 +92,15 @@ theorem initialized_queue (trace : Runner.Trace) (placeholders : Bool)
     receipt.Valid ∧ receipt.cause = CausalScope.current scope? pre :=
   initialized trace placeholders pre (.queued receipt) post position
 
+theorem initialized_protocol_socket (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Event) (receipt : ProtocolSocket.Receipt Context)
+    (position : (runPrefixOuter (execute trace placeholders) []).2 = pre ++ Event.protocolSocket receipt :: post) :
+    receipt.Valid ∧ receipt.cause = CausalScope.current scope? pre :=
+  initialized trace placeholders pre (.protocolSocket receipt) post position
+
+theorem initialized_cookie_socket (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Event) (receipt : CookieSocket.Receipt)
+    (position : (runPrefixOuter (execute trace placeholders) []).2 = pre ++ Event.cookieSocket receipt :: post) :
+    receipt.Valid := initialized trace placeholders pre (.cookieSocket receipt) post position
+
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Receipts

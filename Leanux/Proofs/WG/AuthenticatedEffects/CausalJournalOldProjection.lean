@@ -28,16 +28,19 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
   rw [HandshakeWorker.observed_factor]
   apply HandshakeEffects.worker_projects old? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
   intro mac
-  exact HandshakeSecurity.ExchangeJoint.receive_ignored old? Event.exchange (fun _ => rfl) _ _
-    (HandshakeEffects.effects_natural old? (Event.old ∘ Journal.Event.handshake) handshake?
-      Journal.Event.handshake Journal.handshake? (fun _ => rfl) (fun _ => rfl)
-      effects effects_projects sg st kg kt hs hk mac)
+  apply HandshakeSecurity.ExchangeJoint.receive_ignored old? Event.exchange (fun _ => rfl)
+  have base := ProtocolSender.receive_projects old? (Event.old ∘ Journal.Event.handshake) handshake?
+    Journal.Event.handshake Journal.handshake? (fun _ => rfl) (fun _ => rfl)
+    sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
+  have projected := HandshakeEffects.withEffects_projects old? (Event.old ∘ Journal.Event.handshake)
+    Journal.Event.handshake (fun _ => rfl) _ _ effects TimerEffects.lifted base effects_projects
+  rwa [HandshakeEffects.withEffects_neutral] at projected
 
 theorem flushed_projects (pid : PeerId) :
     StateProjectsPrefix old? id (flushedSend pid) (Journal.hooks.flushedSend pid) :=
   SendEffects.flushed_native_projects old? Event.scope (fun _ => rfl)
     (HandshakeSecurity.ExchangeJoint.send_ignored old? Event.exchange (fun _ => rfl) _ _
-      (SendEffects.native_projects old?)) effects_projects pid
+      (ProtocolSender.send_projects old? Event.protocolSocket scope? (fun _ => rfl))) effects_projects pid
 
 theorem transmit_projects (pid : PeerId) :
     ProjectsPrefix old? id (transmit pid) (Journal.transmit pid) :=

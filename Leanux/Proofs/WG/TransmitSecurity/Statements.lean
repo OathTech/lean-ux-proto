@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.StagedRestoreOrigins
+import Leanux.Proofs.WG.TransmitSecurity.StagedSourceOrigins
 import Leanux.Proofs.WG.TransmitSecurity.StagedAdmission
 import Leanux.Proofs.WG.TransmitSecurity.StagedTrim
 import Leanux.Proofs.WG.TransmitSecurity.StagedKeepaliveFinal
@@ -52,6 +52,31 @@ Actual key-allocation identity, reservation, packet and wire nonce are joined.
 Full transmit authorization and occurrence conservation remain separate. -/
 namespace Leanux.Proofs.WG.TransmitSecurity
 open Leanux Leanux.WG Leanux.Proofs.Logged
+
+/-- Security: the complete native staging path preserves every surviving
+staged plaintext's source and retains the selected batch's original positions
+when its queue is cleared. Rejection restores the original occurrences; allocation and queue
+publication do not invent staged plaintext. The entry carrier is explicit;
+initialized routing authorization and terminal conservation remain separate. -/
+theorem native_staging_preserves_staged_origins (pid : PeerId) :
+    Staged.Origins.StateSafe (Driver.stagingObserved AuthenticatedEffects.CausalJournal.hooks pid) :=
+  Staged.Origins.staging_observed pid
+
+/-- Security: one complete transmit invocation transports the actual route
+admission through selection, nonce refusal, allocation and publication while
+retaining staged origins. This assumes the entry carrier and does not assert
+that every admitted occurrence has already reached a terminal disposition. -/
+theorem native_transmit_preserves_staged_origins (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    Staged.Origins.StateSafe
+      (Driver.transmitObserved AuthenticatedEffects.CausalJournal.hooks family addr packets mtu) :=
+  Staged.Origins.transmit_observed family addr packets mtu
+
+/-- Security: keepalive staging preserves its canonical preparation origin
+through the same complete send path as routed plaintext. Its entry carrier is
+explicit, and causal authorization comes from the independent effect result. -/
+theorem native_keepalive_send_preserves_staged_origins (pid : PeerId) :
+    Staged.Origins.StateSafe (Driver.keepaliveObserved AuthenticatedEffects.CausalJournal.hooks pid) :=
+  Staged.Origins.keepalive_observed_source pid
 
 /-- Security: the actual routing receipt appends fresh packet positions to the
 certified surviving staged queue. The explicit entry carrier remains required

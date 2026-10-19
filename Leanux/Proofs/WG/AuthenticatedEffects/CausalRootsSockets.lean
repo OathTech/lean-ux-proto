@@ -2,10 +2,10 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsInitialized
 import Leanux.Proofs.WG.TransmitSecurity.JournalSocketHistory
 import Leanux.Proofs.WG.TransmitSecurity.CompletionEmission
 
-/-! Actual transport socket receipts and keepalive preparations inherit the
-initialized causal explanation on their own final-journal occurrence. Socket
-validity binds any emitted bytes to the observed peer endpoint and native call;
-this does not yet claim that handshake/cookie sends are in this receipt family. -/
+/-! Transport and handshake socket receipts and keepalive preparations inherit
+the initialized causal explanation at their own final-journal occurrence.
+Socket validity binds emitted bytes to the observed endpoint and native call.
+Cookie replies retain their separate exception and qualification obligation. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Roots
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity
 
@@ -45,5 +45,15 @@ theorem keepalive (trace : Runner.Trace) (placeholders : Bool)
     Rooted before ∧ receipt.Valid (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid) :=
   ⟨initialized trace placeholders before after (.keepalivePrepared pid receipt) position True.intro,
     Receipts.initialized_keepalive trace placeholders before after pid receipt position⟩
+
+theorem protocol_socket (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List Event) (receipt : ProtocolSocket.Receipt Context)
+    (position : (runPrefixOuter (execute trace placeholders) []).2 = before ++ .protocolSocket receipt :: after) :
+    Rooted before ∧ receipt.Valid ∧ receipt.cause = CausalScope.current scope? before ∧
+      SocketEmission receipt.args.endpoint receipt.args.bytes receipt.args.ds
+        receipt.run.before.sent receipt.run.after.sent := by
+  obtain ⟨valid,current⟩ := Receipts.initialized_protocol_socket trace placeholders before after receipt position
+  exact ⟨initialized trace placeholders before after (.protocolSocket receipt) position True.intro,
+    valid,current,valid.emission⟩
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Roots

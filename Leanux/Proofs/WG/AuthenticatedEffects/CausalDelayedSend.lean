@@ -26,9 +26,9 @@ private theorem create (pid : PeerId) : StateSafe (liftWGPrefix (createInitiatio
 
 private theorem send_body (pid : PeerId) : StateSafe
     (SendExchange.workerWith (SendEffects.withEffects
-      (ExchangeJoint.sendOps Event.exchange SendEffects.native) effects) pid) := by
+      (ExchangeJoint.sendOps Event.exchange (ProtocolSender.sendOps Event.protocolSocket scope?)) effects) pid) := by
   unfold SendExchange.workerWith SendExchange.sendWith
-  simp only [SendEffects.withEffects,ExchangeJoint.sendOps,SendEffects.native]
+  simp only [SendEffects.withEffects,ExchangeJoint.sendOps,ProtocolSender.sendOps,SendEffects.native]
   repeat' first
     | (causal_delayed_head receiptWGObserved; apply state_receipt)
     | (causal_delayed_native_head createInitiation; exact create _)
@@ -95,11 +95,11 @@ private theorem taken_front (pid : PeerId) : StateSafe (takenFrontWith liftWGPre
 
 private theorem after_take (pid : PeerId) : StateSafe
     (SendExchange.afterTakeWith liftWGPrefix (SendExchange.workerWith
-      (SendEffects.withEffects (ExchangeJoint.sendOps Event.exchange SendEffects.native) effects)) pid) := by
+      (SendEffects.withEffects (ExchangeJoint.sendOps Event.exchange (ProtocolSender.sendOps Event.protocolSocket scope?)) effects)) pid) := by
   have factor : SendExchange.afterTakeWith liftWGPrefix (SendExchange.workerWith
-      (SendEffects.withEffects (ExchangeJoint.sendOps Event.exchange SendEffects.native) effects)) pid =
+      (SendEffects.withEffects (ExchangeJoint.sendOps Event.exchange (ProtocolSender.sendOps Event.protocolSocket scope?)) effects)) pid =
       (do takenFrontWith liftWGPrefix pid
-          SendExchange.workerWith (SendEffects.withEffects (ExchangeJoint.sendOps Event.exchange SendEffects.native) effects) pid
+          SendExchange.workerWith (SendEffects.withEffects (ExchangeJoint.sendOps Event.exchange (ProtocolSender.sendOps Event.protocolSocket scope?)) effects) pid
           discard <| liftWGPrefix (hidden (.sectionStop .sendWorker))) := by
     simp only [SendExchange.afterTakeWith,takenFrontWith,Functor.discard,map_const,
       Function.comp_apply,Function.const,map_eq_pure_bind,bind_assoc]

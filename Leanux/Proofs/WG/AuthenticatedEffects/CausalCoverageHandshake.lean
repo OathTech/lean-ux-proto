@@ -37,12 +37,14 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (HandshakeWorker.observedOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac)
+            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    HandshakeWorker.observedOps]
+    ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
+    | (coverage_head ProtocolSocket.observed; exact protocol_send _ _ (by assumption))
+    | (coverage_head CookieSocket.observed; exact cookie_send _ _ _)
     | (coverage_head CausalScope.scope; apply state_scope (.handshake _ _) True.intro; intro frames live)
     | (coverage_head receiptWGObserved; apply state_receipt)
     | (coverage_head HandshakeWorker.callback; apply callback)
@@ -62,10 +64,12 @@ private theorem receive
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (HandshakeWorker.observedOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac)
+            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
   unfold HandshakeWorker.receiveWith
   repeat' first
+    | (coverage_head ProtocolSocket.observed; exact protocol_send _ _ (by assumption))
+    | (coverage_head CookieSocket.observed; exact cookie_send _ _ _)
     | (coverage_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)
     | (coverage_head captureWGRun; exact state_capture _ (state_lift _))
     | coverage_state_step
@@ -76,6 +80,8 @@ theorem handshake
     StateAt frames (CausalJournal.handshake session keepalive) := by
   unfold CausalJournal.handshake HandshakeWorker.observedWith HandshakeWorker.workerWith
   repeat' first
+    | (coverage_head ProtocolSocket.observed; exact protocol_send _ _ (by assumption))
+    | (coverage_head CookieSocket.observed; exact cookie_send _ _ _)
     | (coverage_head HandshakeWorker.receiveWith; exact receive session keepalive hs hk _ _)
     | coverage_state_step
 

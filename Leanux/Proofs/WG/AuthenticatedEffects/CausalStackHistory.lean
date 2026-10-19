@@ -128,4 +128,13 @@ theorem derived (pid : PeerId) : Driver.StateHistorySafe Safe (TimerEffects.deri
     (fun _ => Driver.History.state_pure _)
 
 
+theorem protocol_send (pid : PeerId) (bytes : List UInt8) :
+    Driver.StateHistorySafe Safe (ProtocolSocket.observed Event.protocolSocket scope? pid bytes) :=
+  ProtocolSocket.observed_history Safe Event.protocolSocket scope?
+    (fun _ _ _ hi _ => hi.emit _ rfl) pid bytes
+
+theorem cookie_send (mac : HandshakeMac) (msg : List UInt8) (src : SkbSource) :
+    Driver.StateHistorySafe Safe (CookieSocket.observed Event.cookieSocket mac msg src) :=
+  CookieSocket.observed_history Safe Event.cookieSocket mac msg src (fun _ _ hi _ => hi.emit _ rfl)
+
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.StackOrigins

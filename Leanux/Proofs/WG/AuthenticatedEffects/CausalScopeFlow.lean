@@ -67,6 +67,16 @@ theorem state_current (body : Context → WGPrefix Event α) (safe : ∀ context
   intro frames w a history ready
   exact safe (CausalScope.current scope? history) frames w a history ready
 
+theorem protocol_send (pid : PeerId) (bytes : List UInt8) :
+    StateSafe (ProtocolSocket.observed Event.protocolSocket scope? pid bytes) :=
+  CausalScope.state_balanced_frame scope? _ (ProtocolSocket.observed_appends _ _ _ _)
+    (ProtocolSocket.observed_frame scope? _ (fun _ => rfl) scope? pid bytes)
+
+theorem cookie_send (mac : HandshakeMac) (msg : List UInt8) (src : SkbSource) :
+    StateSafe (CookieSocket.observed Event.cookieSocket mac msg src) :=
+  CausalScope.state_balanced_frame scope? _ (CookieSocket.observed_appends _ _ _ _)
+    (CookieSocket.observed_frame scope? _ (fun _ => rfl) mac msg src)
+
 theorem product_lift (body : Leanux.M α) : ProductSafe (liftPrefix body) := CausalScope.product_balanced_lift scope? body
 theorem product_pure (value : α) : ProductSafe (pure value) := CausalScope.product_balanced_pure scope? value
 theorem product_bind {body : PrefixM Event α} {next : α → PrefixM Event β}
