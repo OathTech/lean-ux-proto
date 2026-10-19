@@ -12,6 +12,8 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 def requireDrainedPrefix (what : String) (queues : List Bool) : PrefixM LifetimeEvent Unit := do
   if queues.any id then
     liftPrefix (unsupported s!"work {what} outlived the guest's wait (its records would be missing)")
+  if let w :: _ ← liftPrefix pendingDeviceUnits then
+    liftPrefix (unsupported s!"{w.symbol} is pending at the end of the wait (the dispatch its requeue causes has no section in the records)")
   let d ← liftWGObserver (liftWGPrefix getDev)
   if ← liftWGObserver (savedPeerAny (·.napiScheduled) d.peers.toList) then
     liftPrefix (invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)")
@@ -28,6 +30,8 @@ theorem requireDrainedPrefix_erases (what : String) (queues : List Bool) :
     ErasesPrefix (requireDrainedPrefix what queues) (Env.requireDrained what queues) := by
   unfold requireDrainedPrefix Env.requireDrained
   repeat' first
+    | contradiction
+    | maintenance_impossible_match
     | with_reducible apply erasesPrefix_bind_pure (by simpa only [liftWG_pure] using liftWGObserver_erases (savedPeerAny_erases _ _))
     | exact liftWGObserver_erases (erasesStatePrefix_lift _)
     | exact erasesPrefix_lift _
@@ -35,6 +39,7 @@ theorem requireDrainedPrefix_erases (what : String) (queues : List Bool) :
     | with_reducible apply erasesPrefix_bind
     | (with_reducible split)
     | (with_reducible intro x; try dsimp only)
+  all_goals grind only
 
 theorem requireIdleDevicePrefix_erases :
     ErasesPrefix requireIdleDevicePrefix Env.requireIdleDevice := by
@@ -64,9 +69,21 @@ theorem requireDrainedPrefix_allocation (what : String) (queues : List Bool) :
     split
     · exact c.invariant (fun _ => True) _
     · exact c.pure (fun _ => True) _
+  have checked : PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe (do
+      if let w :: _ ← liftPrefix pendingDeviceUnits then
+        liftPrefix (unsupported s!"{w.symbol} is pending at the end of the wait (the dispatch its requeue causes has no section in the records)")
+      let d ← liftWGObserver (liftWGPrefix getDev)
+      if ← liftWGObserver (savedPeerAny (·.napiScheduled) d.peers.toList) then
+        liftPrefix (invariant "a NAPI poll pending after the decrypt worker (its ring poll runs the softirq)")) := by
+    apply PrefixPreserves.bind (ProductAmbientContracts.drop (c.ambient (fun _ => True) AmbientM.pendingDeviceUnits))
+    intro workers
+    cases workers with
+    | nil => exact tail
+    | cons worker rest =>
+      exact PrefixPreserves.bind (ProductAmbientContracts.drop (c.ambient (fun _ => True) (AmbientM.unsupported _))) (fun _ => tail)
   split
-  · exact PrefixPreserves.bind (ProductAmbientContracts.drop (c.ambient (fun _ => True) (AmbientM.unsupported _))) (fun _ => tail)
-  · exact tail
+  · exact PrefixPreserves.bind (ProductAmbientContracts.drop (c.ambient (fun _ => True) (AmbientM.unsupported _))) (fun _ => checked)
+  · exact checked
 
 theorem requireIdleDevicePrefix_allocation :
     PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe requireIdleDevicePrefix := by

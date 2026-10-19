@@ -62,6 +62,12 @@ private theorem occupancy (a : Activation) :
     ((pinned_const _private.Leanux.Proofs.WG.Origins.OwnerEnvironment.«0».Leanux.Proofs.WG.OwnerEnvironment.occupancy) a)
     (activationOccupancyPrefix_erases a) (activationOccupancy_sameKernel a)
 
+private theorem refills :
+    Preserves (RxHistory.mixed activationRefillsPrefix) :=
+  mixed_store _ _
+    (pinned_const _private.Leanux.Proofs.WG.Origins.OwnerEnvironment.«0».Leanux.Proofs.WG.OwnerEnvironment.refills)
+    activationRefillsPrefix_erases activationRefills_sameKernel
+
 private theorem hasWork (a : Activation) :
     Preserves (RxHistory.mixed (activationHasWorkPrefix a)) :=
   mixed_store _ _
@@ -95,6 +101,8 @@ macro "publication_env_steps" : tactic => `(tactic| first
   | (current_env_at HistoryAdapters.receiveIteration; exact receiveIteration)
   | (current_env_at getPeerMixed; exact peer _)
   | (current_env_at getTxSkbPrefix; exact packet _)
+  | (current_env_at activationRefillsPrefix; exact refills)
+  | (current_env_at Env.pendingDevice; exact lift_store _ (pendingDevice_sameKernel _ _))
   | (current_env_at activationOccupancyPrefix; exact occupancy _)
   | (current_env_at activationHasWorkPrefix; exact hasWork _)
   | (current_env_at pendingNapiPrefix; exact pendingNapi _)

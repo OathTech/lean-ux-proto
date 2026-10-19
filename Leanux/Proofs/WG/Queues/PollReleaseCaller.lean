@@ -196,7 +196,7 @@ theorem encryptIteration : Preserves base RxHistory.encryptIteration :=
 
 private theorem schedulerAtoms : RxHistory.SchedulerSource.AtomContracts
     (Inv base) OwnerChecks.Safe (fun {_} a=>a) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     exact mixed _ ((pinned_const _private.Leanux.Proofs.WG.Origins.OwnerEnvironment.«0».Leanux.Proofs.WG.OwnerEnvironment.mixed_lift)
       _ (fun initial=>productAmbient_spec a _ (fun _ _ hi=>hi)))
@@ -210,6 +210,7 @@ private theorem schedulerAtoms : RxHistory.SchedulerSource.AtomContracts
     exact mixed _ ((pinned_const _private.Leanux.Proofs.WG.Origins.OwnerEnvironment.«0».Leanux.Proofs.WG.OwnerEnvironment.work) f)
   · intro a
     exact mixed _ ((pinned_const _private.Leanux.Proofs.WG.Origins.OwnerEnvironment.«0».Leanux.Proofs.WG.OwnerEnvironment.occupancy) a)
+  · exact mixed _ (pinned_const _private.Leanux.Proofs.WG.Origins.OwnerEnvironment.«0».Leanux.Proofs.WG.OwnerEnvironment.refills)
   · intro next
     exact mixed _ ((pinned_const _private.Leanux.Proofs.WG.Origins.OwnerEnvironment.«0».Leanux.Proofs.WG.OwnerEnvironment.pending) next)
   · intro a

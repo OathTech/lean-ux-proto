@@ -85,6 +85,12 @@ private theorem occupancy (a : Activation) :
     (activationOccupancyPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) a)
     (activationOccupancy_sameKernel a)
 
+private theorem refills :
+    OwnerChecks.Preserves (RxHistory.mixed activationRefillsPrefix) :=
+  mixed_store _ _ activationRefillsPrefix_erases
+    (activationRefillsPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient))
+    activationRefills_sameKernel
+
 private theorem hasWork (a : Activation) :
     OwnerChecks.Preserves (RxHistory.mixed (activationHasWorkPrefix a)) :=
   mixed_store _ _ (activationHasWorkPrefix_erases a)
@@ -113,6 +119,8 @@ macro "owner_env_steps" : tactic => `(tactic| first
   | (current_env_at HistoryAdapters.receiveIteration; exact OwnerHandshake.receiveIteration)
   | (current_env_at getPeerMixed; exact peer _)
   | (current_env_at getTxSkbPrefix; exact packet _)
+  | (current_env_at activationRefillsPrefix; exact refills)
+  | (current_env_at Env.pendingDevice; exact lift_store _ (pendingDevice_sameKernel _ _))
   | (current_env_at activationOccupancyPrefix; exact occupancy _)
   | (current_env_at activationHasWorkPrefix; exact hasWork _)
   | (current_env_at pendingNapiPrefix; exact pending _)

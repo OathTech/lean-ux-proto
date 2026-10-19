@@ -87,6 +87,8 @@ theorem ordinary_runAt_floor_wp {a : Leanux.M α} (ha : ProductOrdinaryAction a)
     rcases hr with ⟨rfl, rfl⟩
     exact ⟨((Lifetimes.ProjectedAction.iff_run _ _ _).mp ha w _ _ he).preserves hp.1, hp.2⟩
 
+-- The additional pending-work refusal expands the literal runner WP.
+set_option maxHeartbeats 4000000 in
 theorem executeTraceLogged_floor_wp
     (calls : ∀ call, Evolves (syscallLogged call))
     (trace : Trace) (placeholders : Bool) :

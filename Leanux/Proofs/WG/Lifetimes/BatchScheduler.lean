@@ -14,9 +14,9 @@ def dispatchPrefix (worker : Worker) : PrefixM LifetimeEvent Bool := do
   let d ← liftWGObserver (liftWGPrefix getDev)
   let mut pid : Option Nat := none
   match worker with
-  | .encryptWorker => if d.encryptQueue.empty then return false
-  | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.empty then return false
+  | .encryptWorker => if !(← liftPrefix (Env.pendingDevice worker !d.encryptQueue.empty)) then return false
+  | .decryptWorker => if !(← liftPrefix (Env.pendingDevice worker !d.decryptQueue.empty)) then return false
+  | .receiveWorker => if !(← liftPrefix (Env.pendingDevice worker !d.handshakeQueue.empty)) then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← liftPrefix (peekUnit .txWorker) with
@@ -46,6 +46,7 @@ theorem dispatchPrefix_allocation (worker : Worker) :
     PrefixPreserves (fun h w => AllocationInv h w.wg) LifetimeEvent.Safe (dispatchPrefix worker) := by
   unfold dispatchPrefix
   repeat' first
+    | with_reducible exact ProductAmbientContracts.drop ((ProductAmbientContracts.ofNative allocationAmbient).store (fun _ => True) _ (pendingDevice_sameKernel _ _))
     | with_reducible exact activationRunPrefix_allocation _
     | with_reducible exact (txWorkQueueErase_allocation _).liftWGObserver
     | with_reducible exact ProductAmbientContracts.drop ((ProductAmbientContracts.ofNative allocationAmbient).nativeStore (fun _ => True) getDev getDev_sameWGStore)
@@ -102,11 +103,12 @@ def schedulePrefix (stack : Option Worker := none) : PrefixM LifetimeEvent Unit 
   for _ in [0:(← liftPrefix recordBudget)] do
     if (← liftPrefix getAmbient).hidden.isNone then
       let d ← liftWGObserver (liftWGPrefix getDev)
+      let pending := (← liftPrefix getAmbient).pendingWork
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.empty
-        | .decryptWorker => !d.decryptQueue.empty
-        | .encryptWorker => !d.encryptQueue.empty
+        | .receiveWorker => !d.handshakeQueue.empty || pending.contains w.index
+        | .decryptWorker => !d.decryptQueue.empty || pending.contains w.index
+        | .encryptWorker => !d.encryptQueue.empty || pending.contains w.index
         | _ => !d.txWorkQueue.isEmpty
       let some w := next | return
       if !(← dispatchPrefix w) then liftPrefix (invariant s!"{w.symbol} has work but was not dispatched")
@@ -138,11 +140,12 @@ def scheduleWithPending (stack : Option Worker := none) : Leanux.M Unit := do
   for _ in [0:(← recordBudget)] do
     if (← getAmbient).hidden.isNone then
       let d ← getDev
+      let pending := (← getAmbient).pendingWork
       let next := [Worker.receiveWorker, .decryptWorker, .encryptWorker, .txWorker].find? fun w =>
         match w with
-        | .receiveWorker => !d.handshakeQueue.empty
-        | .decryptWorker => !d.decryptQueue.empty
-        | .encryptWorker => !d.encryptQueue.empty
+        | .receiveWorker => !d.handshakeQueue.empty || pending.contains w.index
+        | .decryptWorker => !d.decryptQueue.empty || pending.contains w.index
+        | .encryptWorker => !d.encryptQueue.empty || pending.contains w.index
         | _ => !d.txWorkQueue.isEmpty
       let some w := next | return
       if !(← Env.dispatch w) then invariant s!"{w.symbol} has work but was not dispatched"

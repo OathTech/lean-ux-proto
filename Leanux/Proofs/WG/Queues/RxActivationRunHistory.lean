@@ -41,20 +41,22 @@ theorem boundaryLift_kernel (a : Leanux.M α) (ha : SameProductStore a) :
 
 def activationRun (a : Activation) : Obs Unit := do
   let occupancy ← mixed (activationOccupancyPrefix a)
+  let refills ← mixed activationRefillsPrefix
   let mut act := a
-  for _ in [0:occupancy + 1] do
+  for _ in [0:occupancy + refills + 1] do
     match ← activationIteration act with
     | .ended => _ ← liftPrefix (hidden (.sectionStop act.worker)); return
     | .continued => act := {act with iterations := act.iterations + 1}
     | .yielded =>
       liftPrefix (modifyAmbient fun s => {s with suspended := s.suspended ++ [{act with iterations := act.iterations + 1}]})
       return
-  liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run")
+  liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})")
 
 theorem activationRun_erases (a : Activation) :
     ErasesPrefix (activationRun a) (Env.Activation.run a) := by
   unfold activationRun Env.Activation.run
   repeat' first
+    | with_reducible exact mixed_erases (activationRefillsPrefix_erases)
     | with_reducible exact mixed_erases (activationOccupancyPrefix_erases _)
     | with_reducible exact activationIteration_erases _
     | with_reducible exact erasesPrefix_lift _
@@ -68,6 +70,7 @@ theorem activationRun_preserves (a : Activation) :
     PrefixPreserves BoundaryInv BoundarySafe (activationRun a) := by
   unfold activationRun
   repeat' first
+    | with_reducible exact mixed_preserves (activationRefillsPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient))
     | with_reducible exact mixed_preserves (activationOccupancyPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) _)
     | with_reducible exact activationIteration_preserves _
     | with_reducible exact boundaryLift_kernel _ (by intro initial; exact productAmbient_spec (AmbientM.hidden _) _ (fun _ _ hi => hi))
@@ -88,10 +91,12 @@ theorem activationRun_projects (a : Activation) :
       (fun _ => True) (modify f))
   unfold activationRun activationRunPrefix
   repeat' first
+    | with_reducible exact mixed_projects (activationRefillsPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient))
     | with_reducible exact mixed_projects (activationOccupancyPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) _)
     | with_reducible exact activationIteration_projects _
     | with_reducible exact projectsFocus_lift _
     | with_reducible exact projectsFocus_pure _
+    | with_reducible exact activationRefillsPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient)
     | with_reducible exact activationOccupancyPrefix_preserves (ProductAmbientContracts.ofNative allocationAmbient) _
     | with_reducible exact activationIterPrefix_allocation _
     | with_reducible exact ProductAmbientContracts.drop ((ProductAmbientContracts.ofNative allocationAmbient).ambient (fun _ => True) (AmbientM.hidden _))
@@ -111,9 +116,9 @@ def dispatch (worker : Worker) : Obs Bool := do
   let d ← liftPrefix (liftWG getDev)
   let mut pid : Option Nat := none
   match worker with
-  | .encryptWorker => if d.encryptQueue.empty then return false
-  | .decryptWorker => if d.decryptQueue.empty then return false
-  | .receiveWorker => if d.handshakeQueue.empty then return false
+  | .encryptWorker => if !(← liftPrefix (Env.pendingDevice worker !d.encryptQueue.empty)) then return false
+  | .decryptWorker => if !(← liftPrefix (Env.pendingDevice worker !d.decryptQueue.empty)) then return false
+  | .receiveWorker => if !(← liftPrefix (Env.pendingDevice worker !d.handshakeQueue.empty)) then return false
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return false
     let p ← match ← liftPrefix (peekUnit .txWorker) with
@@ -148,6 +153,7 @@ theorem dispatch_preserves (worker : Worker) : PrefixPreserves BoundaryInv Bound
     (boundaryLift_kernel _ (liftWG_sameProductStore getDev getDev_sameWGStore))
   intro d
   repeat' first
+    | with_reducible exact boundaryLift_kernel _ (pendingDevice_sameKernel _ _)
     | with_reducible exact activationRun_preserves _
     | with_reducible exact mixed_preserves (txWorkQueueErase_allocation _).liftWGObserver.preserves
     | with_reducible exact PrefixPreserves.pure (fun _ _ hi => hi.safe) _
@@ -174,6 +180,7 @@ theorem dispatch_projects (worker : Worker) :
       | with_reducible exact mixed_projects (txWorkQueueErase_allocation _).liftWGObserver.preserves
       | with_reducible exact projectsFocus_lift _
       | with_reducible exact projectsFocus_pure _
+      | with_reducible exact ProductAmbientContracts.drop ((ProductAmbientContracts.ofNative allocationAmbient).store (fun _ => True) _ (pendingDevice_sameKernel _ _))
       | with_reducible exact activationRunPrefix_allocation _
       | with_reducible exact (txWorkQueueErase_allocation _).liftWGObserver.preserves
       | with_reducible exact PrefixPreserves.pure (fun _ _ hi => hi.safe) _

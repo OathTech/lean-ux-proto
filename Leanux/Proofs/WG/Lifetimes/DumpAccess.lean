@@ -84,6 +84,9 @@ def deviceDumpTailPrefix (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb)
   let mut nextCursor := ctx.nextPeer
   let mut skb := skb0
   let nestStart := skb
+  let (fail, s) := skb.put (nlaTotal 0); skb := s
+  if ← rxBranch .dumpNoPeersNest fail then
+    liftWGPrefix (unsupported "the peers nest does not fit a fresh chunk (unreachable)")
   let ret : Int := 0
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]

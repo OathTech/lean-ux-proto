@@ -35,9 +35,6 @@ def deviceDumpHeaderSource (d : Device) (ctx : DumpCtx) (prevSeq0 : Nat) (skb0 :
       if ← branch .dumpPutPublic fail then unsupported "the device part does not fit a fresh chunk (unreachable)"
       device := device ++ [("private_key", toJson (hexKey identity.staticPrivate)),
         ("public_key", toJson (hexKey identity.staticPublic))]
-  -- peers_nest = nla_nest_start(skb, WGDEVICE_A_PEERS)
-  let (fail, s) := skb.put (nlaTotal 0); skb := s
-  if ← branch .dumpNoPeersNest fail then unsupported "the peers nest does not fit a fresh chunk (unreachable)"
   return (skb, flags, device)
 
 def deviceDumpTailSource (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb)
@@ -47,6 +44,9 @@ def deviceDumpTailSource (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb)
   let mut nextCursor := ctx.nextPeer
   let mut skb := skb0
   let nestStart := skb
+  -- peers_nest = nla_nest_start(skb, WGDEVICE_A_PEERS)
+  let (fail, s) := skb.put (nlaTotal 0); skb := s
+  if ← branch .dumpNoPeersNest fail then unsupported "the peers nest does not fit a fresh chunk (unreachable)"
   let ret : Int := 0
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]

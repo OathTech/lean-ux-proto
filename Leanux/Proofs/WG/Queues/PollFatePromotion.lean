@@ -164,7 +164,7 @@ theorem encryptIteration : Preserves base RxHistory.encryptIteration :=
 
 private theorem schedulerAtoms : RxHistory.SchedulerSource.AtomContracts
     (fun h (_ : World)=>Inv base h) (fun _=>True) (fun {_} a=>a) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   all_goals intros; first | exact mixed _ | exact audit _
 
 theorem cryptAhead (pid : PeerId) : Preserves base (RxHistory.cryptAhead pid) := by

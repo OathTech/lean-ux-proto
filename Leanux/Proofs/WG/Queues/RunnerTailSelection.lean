@@ -135,6 +135,7 @@ macro "runner_selection_steps" queries:ident chosen:ident effects:ident : tactic
 macro "runner_quiet_selection" : tactic =>
   `(tactic|
     (repeat' first
+    | contradiction
     | (runner_selection_head pure; exact certified_pure _ _)
     | (runner_selection_head stopped; exact certified_stopped _)
     | (runner_selection_head bind; apply certified_bind)
@@ -148,6 +149,8 @@ macro "runner_quiet_selection" : tactic =>
     | dsimp (config := {failIfUnchanged := true}) only
     | split))
 
+-- The pending-work cases enlarge the generated computational certificate.
+set_option maxHeartbeats 1600000 in
 def afterCall (op : Operation) (state : RunnerOperation.State) (ret : Int) (w : World) :
     Selection (ConservationRunner.afterCallCertified op state ret w).rule := by
   unfold ConservationRunner.afterCallCertified
@@ -157,11 +160,11 @@ def afterCall (op : Operation) (state : RunnerOperation.State) (ret : Int) (w : 
   rcases ambient with ⟨env,timing,envCalls,steps,extraOut,hidden,placeholders,
     placeholderCount,suspended,units,pending,sections,netSection,steer,arm,fired,armed,steered⟩
   cases hidden with
-  | none=>cases suspended <;> runner_quiet_selection
+  | none=>cases suspended <;> cases pending <;> runner_quiet_selection
   | some records=>
     cases records with
-    | nil=>cases suspended <;> runner_quiet_selection
-    | cons record rest=>cases suspended <;> runner_quiet_selection
+    | nil=>cases suspended <;> cases pending <;> runner_quiet_selection
+    | cons record rest=>cases suspended <;> cases pending <;> runner_quiet_selection
 
 /-- Its first query is exactly the existing syscall query at this accumulator. -/
 def operation (call : Syscall→RxHistory.Obs Int)

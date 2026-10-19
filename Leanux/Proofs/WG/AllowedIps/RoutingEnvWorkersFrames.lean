@@ -1,3 +1,4 @@
+import Leanux.Proofs.Framing.BatchRefills
 import Leanux.Proofs.WG.AllowedIps.RoutingSchedulerFrames
 import Leanux.Proofs.WG.AllowedIps.RoutingNapiFrames
 import Leanux.Proofs.Framing.EnvLeaves
@@ -128,27 +129,10 @@ theorem requireNoCryptWork_routing : SameView (fun w : World => routingView w.wg
     (fun w => routingView w.wg) (fun _ => rfl)
 
 theorem requireDrained_routing (what : String) (queues : List Bool) :
-    SameView (fun w : World => routingView w.wg) (Env.requireDrained what queues) := by
-  intro s
-  change Preserves (fun w : World => routingView w.wg = s) (Env.requireDrained what queues)
-  have ambient {α : Type} (a : AmbientM α) :
-      Preserves (fun w : World => routingView w.wg = s) (monadLift a : Leanux.M α) :=
-    productAmbient_spec a _ (fun _ _ h => h)
-  have dev := productGetDev_spec (fun store => store.2.2.2.dev.map routingState = s)
-  unfold Env.requireDrained
-  split
-  · apply preserves_bind (ambient (AmbientM.unsupported _))
-    intro _
-    apply preserves_bind dev
-    intro d
-    split
-    · exact ambient (AmbientM.invariant _)
-    · exact preserves_pure _
-  · apply preserves_bind dev
-    intro d
-    split
-    · exact ambient (AmbientM.invariant _)
-    · exact preserves_pure _
+    SameView (fun w : World => routingView w.wg) (Env.requireDrained what queues) :=
+  (requireDrained_sameKernel what queues).of_factor
+    (fun store : ProductStore43 => store.2.2.2.dev.map routingState)
+    (fun w => routingView w.wg) (fun _ => rfl)
 
 theorem runCryptWorkers_routing : ProductRetainsRoutingCall Env.runCryptWorkers := by
   intro s

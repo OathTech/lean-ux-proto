@@ -19,6 +19,14 @@ private theorem occupancy (a : Activation) :
   exact HolderEncrypt.mixed_at _ _ (activationOccupancyPrefix_erases a)
     (fun _ => HolderEncrypt.product_store_boundary (activationOccupancy_sameKernel a)) hi (Prod.ext run rfl)
 
+private theorem refills :
+    PrefixPreserves (HolderNapi.At initial loans before) (fun _ => True)
+      (RxHistory.mixed activationRefillsPrefix) := by
+  apply NapiCarrier.normal_spec (Appends.focus _ _ _)
+  intro w h x v hi run
+  exact HolderEncrypt.mixed_at _ _ activationRefillsPrefix_erases
+    (fun _ => HolderEncrypt.product_store_boundary activationRefills_sameKernel) hi (Prod.ext run rfl)
+
 private theorem with_pure (P : Prop) {action : RxHistory.Obs α}
     (keeps : P → PrefixPreserves (HolderNapi.At initial loans before) (fun _ => True) action) :
     PrefixEnsures (fun h w => P ∧ HolderNapi.At initial loans before h w) (fun _ => True) action
@@ -30,8 +38,8 @@ private theorem with_pure (P : Prop) {action : RxHistory.Obs α}
   | error e => trivial
   | ok out => exact ⟨hi.1,by simpa only [run] using post⟩
 
-/-- The occupancy-derived bound and the exact activation accumulator are the
-ones in the original observer. -/
+/-- The occupancy-plus-refills bound and the exact activation accumulator are
+the ones in the original observer. -/
 theorem activationRun_preserves (initial : Ledger) (loans : Reservations)
     (before : List RxHistory.Event) (a : Activation) (worker : a.worker = .txWorker) :
     PrefixPreserves (HolderNapi.At initial loans before) (fun _ => True) (RxHistory.activationRun a) := by
@@ -45,6 +53,8 @@ theorem activationRun_preserves (initial : Ledger) (loans : Reservations)
   unfold RxHistory.activationRun
   apply PrefixPreserves.bind (occupancy a)
   intro count
+  apply PrefixPreserves.bind refills
+  intro refillCount
   apply PrefixEnsures.preserves
   apply PrefixEnsures.bind (Q := I)
   · refine PrefixEnsures.consequence

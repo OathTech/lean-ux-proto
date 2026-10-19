@@ -70,7 +70,7 @@ private theorem stored (g : PrefixM LifetimeEvent α) (original : Leanux.M α)
 The consistency probe executes copied Worlds, retaining only its real marker. -/
 theorem atoms (initial : Ledger) (loans : Reservations) (before : List RxHistory.Event) :
     RxHistory.SchedulerSource.AtomContracts (Inv initial loans before) (fun _ => True) (fun {_} g => g) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     exact stored _ _ (erasesPrefix_lift _) (fun _ => productAmbient_spec a _ (fun _ _ hi => hi))
   · intro α e
@@ -94,6 +94,7 @@ theorem atoms (initial : Ledger) (loans : Reservations) (before : List RxHistory
         (RxRing.modifyDev_cell _ (fun _ => rfl) (fun _ => rfl)) (fun _ _ _ h => h))
   · intro a
     exact stored _ _ (activationOccupancyPrefix_erases a) (activationOccupancy_sameKernel a)
+  · exact stored _ _ activationRefillsPrefix_erases activationRefills_sameKernel
   · intro next
     exact stored _ _ (pendingNapiPrefix_erases next) (SourceScheduler.pendingNapi_kernel next)
   · intro a
@@ -241,6 +242,8 @@ theorem run_nonreceive (initial : Ledger) (loans : Reservations) (before : List 
   unfold RxHistory.activationRun
   apply PrefixPreserves.bind ((atoms initial loans before).occupancy a)
   intro count
+  apply PrefixPreserves.bind (atoms initial loans before).refills
+  intro refillCount
   apply PrefixEnsures.preserves
   apply PrefixEnsures.bind (Q := I)
   · refine PrefixEnsures.consequence

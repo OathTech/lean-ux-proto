@@ -24,7 +24,7 @@ private theorem stored (g : PrefixM LifetimeEvent α) (original : Leanux.M α)
   mixed g original erase (product_store frame)
 
 theorem atoms : RxHistory.SchedulerSource.AtomContracts Inv (fun _=>True) (fun {_} g=>g) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     exact stored _ _ (erasesPrefix_lift _) (fun _=>productAmbient_spec a _ (fun _ _ hi=>hi))
   · intro α e
@@ -47,6 +47,7 @@ theorem atoms : RxHistory.SchedulerSource.AtomContracts Inv (fun _=>True) (fun {
         (modify_live (fun d=>{d with txWorkQueue:=f d.txWorkQueue}) (fun _=>rfl) (fun _=>rfl)))
   · intro a
     exact stored _ _ (activationOccupancyPrefix_erases a) (activationOccupancy_sameKernel a)
+  · exact stored _ _ activationRefillsPrefix_erases activationRefills_sameKernel
   · intro next
     exact stored _ _ (pendingNapiPrefix_erases next) (SourceScheduler.pendingNapi_kernel next)
   · intro a

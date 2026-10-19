@@ -191,7 +191,7 @@ theorem advance_at (ticks : Nat) :
 private theorem drained_source (what : String) (queues : List Bool) :
     Preserves (fun w : World => Boundary cs loans w.wg) (Env.requireDrained what queues) := by
   unfold Env.requireDrained
-  simp (config := {zeta := false}) only [unsupported,invariant]
+  simp (config := {zeta := false}) only [unsupported,invariant,pendingDeviceUnits]
   repeat' first
     | (allocation_release_lift_from WG.M
        exact stored _ (liftWG_sameProductStore getDev getDev_sameWGStore))

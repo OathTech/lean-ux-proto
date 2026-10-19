@@ -121,6 +121,8 @@ def walkSource (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb) :
   let mut nextCursor := ctx.nextPeer
   let mut skb := skb0
   let nestStart := skb
+  let (fail, s) := skb.put (nlaTotal 0); skb := s
+  if ← branch .dumpNoPeersNest fail then unsupported "the peers nest does not fit a fresh chunk (unreachable)"
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]
   let cursorDead : WG.M Bool := do
@@ -179,7 +181,7 @@ theorem tail_factor (d : Device) (ctx : DumpCtx) (skb : NlSkb)
     deviceDumpTailSource d ctx skb flags device = (do
       let (ctx,nextCursor,skb,done,peers) ← walkSource d ctx skb
       finishSource d.deviceUpdateGen ctx nextCursor skb flags device done peers) := by
-  simp only [deviceDumpTailSource,walkSource,finishSource,replaceSource,bind_assoc,pure_bind,(pinned_const _private.Leanux.Proofs.WG.NetlinkDump.DeviceSource.«0».Leanux.Proofs.WG.NetlinkDump.source_if_bind)]
+  simp only [deviceDumpTailSource,walkSource,finishSource,replaceSource,bind_assoc,pure_bind,(pinned_const _private.Leanux.Proofs.WG.NetlinkDump.DeviceSource.«0».Leanux.Proofs.WG.NetlinkDump.source_if_bind), (pinned_const _private.Leanux.Proofs.WG.NetlinkDump.DeviceSource.«0».Leanux.Proofs.WG.NetlinkDump.source_unsupported_bind_wg)]
   repeat' first
     | rfl
     | (apply (pinned_const _private.Leanux.Proofs.WG.NetlinkDump.DeviceSource.«0».Leanux.Proofs.WG.NetlinkDump.source_bind_congr); intro x)
@@ -252,6 +254,7 @@ theorem walk_frame (d : Device) (ctx : DumpCtx) (skb : NlSkb) :
     | (dump_kernel_head requireNotPending; exact SameView.pure _ _)
     | (dump_kernel_head branch; intro initial; exact hoare_liftAmbient (AmbientM.branch _ _) (fun g => g=initial))
     | (dump_kernel_head invariant; intro initial; exact hoare_liftAmbient (AmbientM.invariant _) (fun g => g=initial))
+    | (dump_kernel_head unsupported; intro initial; exact hoare_liftAmbient (AmbientM.unsupported _) (fun g => g=initial))
     | (dump_kernel_head WG.orM; unfold WG.orM)
     | (dump_kernel_head WG.andM; unfold WG.andM)
     | dump_kernel_step

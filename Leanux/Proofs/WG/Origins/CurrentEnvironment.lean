@@ -207,6 +207,9 @@ macro "current_env_steps" : tactic => `(tactic| first
      apply native_mixed _ _ (getTxSkbPrefix_erases _)
      · support_native_material
      · intro history; unfold getTxSkb; current_skb_step history)
+  | (current_env_at activationRefillsPrefix
+     exact mixed_store _ _ activationRefillsPrefix_erases activationRefills_sameKernel)
+  | (current_env_at Env.pendingDevice; exact lift_store _ (pendingDevice_sameKernel _ _))
   | (current_env_at activationOccupancyPrefix
      exact mixed_store _ _ (activationOccupancyPrefix_erases _) (activationOccupancy_sameKernel _))
   | (current_env_at activationHasWorkPrefix

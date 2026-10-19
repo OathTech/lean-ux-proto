@@ -85,13 +85,18 @@ theorem afterCall_world {E : Type} (op : Operation) (state : RunnerOperation.Sta
     | nil =>
       cases suspended : world.ambient.suspended with
       | nil =>
-        cases raised : world.wg.netRxRaised <;>
-          simp only [hidden,suspended,raised,Bool.false_eq_true,↓reduceIte] at rest
-        · obtain ⟨branches,l,branchRun,rest⟩ := RunnerOperation.bind_normal rest
-          obtain ⟨fired,m,firedRun,rest⟩ := RunnerOperation.bind_normal rest
+        cases pending : world.ambient.pendingWork with
+        | nil =>
+          cases raised : world.wg.netRxRaised <;>
+            simp only [hidden,suspended,pending,raised,Bool.false_eq_true,↓reduceIte] at rest
+          · obtain ⟨branches,l,branchRun,rest⟩ := RunnerOperation.bind_normal rest
+            obtain ⟨fired,m,firedRun,rest⟩ := RunnerOperation.bind_normal rest
+            cases rest
+            exact ⟨_,rfl,unchanged⟩
+          · cases rest
+        | cons worker workers =>
+          simp only [hidden,suspended,pending] at rest
           cases rest
-          exact ⟨_,rfl,unchanged⟩
-        · cases rest
       | cons head tail => simp only [hidden,suspended,runPrefixOuter_bind] at rest; cases rest
     | cons head tail => simp only [hidden,runPrefixOuter_bind] at rest; cases rest
 
