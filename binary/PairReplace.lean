@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairRemove
 
 namespace Binary.Pair.Replace
@@ -16,7 +17,7 @@ def callBoundary (n : Names) (o : Offsets) (c : CommonBitsCoverage.Context)
   let new ← addressOf n (.keypair kid)
   unless s.pc.toBitVec.toNat==entry && s.data.regs.rsi.toNat==old &&
       s.data.regs.rdx.toNat==new do throw "replace.call.entry-arguments"
-  let some d := w.k.wg | throw "replace.call.device"
+  let some d := w.wg.dev | throw "replace.call.device"
   if d.indexTable.any (·.owner==.handshake pid) then
     if d.indexTable.any (·.owner==.keypair kid) then throw "replace.call.new-linked"
     let kind ← (word s.data.dmem "replace.new.kind" (new+o.kind) 4).mapError DecodeError.message
@@ -28,7 +29,7 @@ def callBoundary (n : Names) (o : Offsets) (c : CommonBitsCoverage.Context)
 def fixture (input : ProbeInput) (w : World) : Except String Session := do
   let s ← Remove.fixture input w
   let mut m := s.binary.state.data.dmem
-  let some d := w.k.wg | throw "replace fixture: no device"
+  let some d := w.wg.dev | throw "replace fixture: no device"
   for (owner,a) in s.names.owners do
     unless d.indexTable.any (·.owner==owner) do
       let kind := match owner with | .handshake _ => 1 | .keypair _ => 2
@@ -51,7 +52,7 @@ def invoke (input : ProbeInput) (seed : UInt64) (s : Session) (pid : PeerId)
     (some fun t => match TrustBase.KcovPlan .pc t with
       | none => .error "replace coverage callback inputs are missing"
       | some writes => .ok (!writes.isEmpty))
-  let (answer,world) ← (indexReplaceHandshake pid kid).run s.world |>.mapError Stop.message
+  let (answer,world) ← (Source.indexReplaceHandshake pid kid).run s.world |>.mapError Stop.message
   Remove.assertAt s.names input.offsets r.state.data.dmem world
   unless r.state.pc.toBitVec.toNat==stopAddr && r.state.data.regs.rsp.toNat==stackAddr+8 do
     throw "replace return: PC/stack"

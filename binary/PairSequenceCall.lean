@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairSequenceFrame
 
 namespace Binary.Pair.Sequence
@@ -28,7 +29,7 @@ theorem call_checked (fetch : Int64 → Option Decoded)
       Eventually (instructionStep fetch) (Post n o c base ra current entry answer finalWorld) entry := by
   cases call with
   | lookup query kinds =>
-    change ((WG.indexLookup kinds query).run w >>= fun p => .ok (.lookup p.1,p.2))=.ok (answer,finalWorld) at accepted
+    change ((Source.indexLookup kinds query).run w >>= fun p => .ok (.lookup p.1,p.2))=.ok (answer,finalWorld) at accepted
     obtain ⟨⟨value,world⟩,run,equal⟩ := bind_ok accepted
     have equal : (Answer.lookup value,world)=(answer,finalWorld) := Except.ok.inj equal
     cases equal
@@ -44,7 +45,7 @@ theorem call_checked (fetch : Int64 → Option Decoded)
       lookup_frame frame⟩
   | remove owner =>
     obtain ⟨address,named⟩ := admissible
-    change ((WG.indexRemove owner).run w >>= fun p => .ok (.remove,p.2))=.ok (answer,finalWorld) at accepted
+    change ((Source.indexRemove owner).run w >>= fun p => .ok (.remove,p.2))=.ok (answer,finalWorld) at accepted
     obtain ⟨⟨value,world⟩,run,equal⟩ := bind_ok accepted
     cases value
     have equal : (Answer.remove,world)=(answer,finalWorld) := Except.ok.inj equal
@@ -61,7 +62,7 @@ theorem call_checked (fetch : Int64 → Option Decoded)
         mutator_frame (by omega : 4≤13) frame⟩
   | replace pid kid =>
     obtain ⟨⟨old,oldAddress⟩,⟨new,newAddress⟩,fresh⟩ := admissible
-    change ((WG.indexReplaceHandshake pid kid).run w >>= fun p => .ok (.replace p.1,p.2))=.ok (answer,finalWorld) at accepted
+    change ((Source.indexReplaceHandshake pid kid).run w >>= fun p => .ok (.replace p.1,p.2))=.ok (answer,finalWorld) at accepted
     obtain ⟨⟨value,world⟩,run,equal⟩ := bind_ok accepted
     have equal : (Answer.replace value,world)=(answer,finalWorld) := Except.ok.inj equal
     cases equal

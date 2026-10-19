@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairIndexCallMemory
 
 namespace Binary.Pair.Insert

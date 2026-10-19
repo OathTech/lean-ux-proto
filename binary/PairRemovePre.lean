@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairIndexAssert
 import PairIndexGeometry
 
@@ -24,7 +25,7 @@ theorem addressOf_ok {n : Names} {owner : IndexOwner} {base : Nat}
     simpa only [←eq,←ownerEq] using member
 
 theorem pre_facts {n o c s w owner ra} (pre : Pre n o c s w owner ra) :
-    ∃ d base, w.k.wg=some d ∧ Corresponds n o s.data.dmem d ∧ storageCheck n o=true ∧
+    ∃ d base, w.wg.dev=some d ∧ Corresponds n o s.data.dmem d ∧ storageCheck n o=true ∧
       ownership n o s.data.dmem=.ok (targetOwnership d) ∧ (owner,base) ∈ n.owners ∧
       s.pc.toBitVec.toNat=entry ∧ s.data.regs.rsi.toNat=base ∧ CallFacts n o c s ra 4 := by
   unfold Pre callBoundary at pre

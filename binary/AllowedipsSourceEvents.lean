@@ -1,3 +1,4 @@
+import SourceAdapter
 import AllowedipsSourceBody
 import AllowedipsLoopSetup
 
@@ -39,7 +40,7 @@ theorem nodeBody_run (bits key id : Nat) (previous : Option NodeId) (node : AipN
     (selected : selectStep (nodeView w) bits key (none,some id,previous) = some step) :
     ((nodeBody bits key id previous).run history).run w =
       .ok ((step,history ++ bodyPoints bits key node w),bodyWorld bits key node w) := by
-  cases device : w.k.wg with
+  cases device : w.wg.dev with
   | none => simp [nodeView,device] at present
   | some dev =>
     have nodeGet : dev.nodes.get? id = some node := by simpa only [nodeView,device,Option.bind_some] using present
@@ -55,8 +56,8 @@ theorem nodeBody_run (bits key id : Nat) (previous : Option NodeId) (node : AipN
     all_goals try omega
     all_goals try cases selected
     all_goals
-      simp [nodeBody,StateT.run_lift,StateT.run_bind,StateT.run_pure,getNode,getDev,getK,
-        device,nodeAt,prefixMatches_run,branchLogged,mark,branch,choose,AipNode.bitAt,invariant,
+      simp [nodeBody,StateT.run_lift,StateT.run_bind,StateT.run_pure,Source.getNode_eq,Source.getDev_eq,
+        device,nodeAt,prefixMatches_run,MirrorHistory.branch_run,choose,AipNode.bitAt,invariant,
         bodyPoints,bodyWorld,bodyChoices,records,choicePoints,LookupMirror.record,
         records_steps,except_ok_bind,except_pure,except_map,throw_run,except_error_bind,
         mismatch,hasPeer,full,invalid,child,List.append_assoc,←Nat.not_lt]
@@ -104,7 +105,7 @@ theorem bodyPoints_yield (bits key : Nat) (node : AipNode) (w : World) (acc : Ac
   simp [bodyChoices,AllowedipsLoop.common_value,AllowedipsLoop.stepSignature,matching,List.append_assoc]
 
 theorem bodyWorld_kernel (bits key : Nat) (node : AipNode) (w : World) :
-    (bodyWorld bits key node w).k = w.k := by
+    (bodyWorld bits key node w).wg = w.wg := by
   simp only [bodyWorld,records_kernel]
 
 theorem bodyWorld_rx (bits key : Nat) (node : AipNode) (w : World) :

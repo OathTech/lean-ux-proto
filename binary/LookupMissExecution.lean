@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupClearFinish
 import LookupCutFrames
 import LookupMissSource
@@ -17,7 +18,7 @@ theorem miss_execution (fetch : Int64 → Option Decoded)
     (pre : Pre_lookup c coverage preempt ra ⟨s, Image.Lookup.entry⟩ world)
     (focused : c.focus.owner = none)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
     Eventually (historyStep fetch) (fun final =>
       Returned ⟨s, Image.Lookup.entry⟩ final.machine ra ∧ final.machine.data.regs.rax = 0 ∧ answer = none ∧
       ∃ v points source,

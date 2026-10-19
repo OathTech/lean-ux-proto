@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsert
 import PairMutatorCapture
 import PairRandomRun
@@ -75,7 +76,7 @@ def run (input : ProbeInput) (snapshot : Snapshot) (privateState : PrivateState)
   unless (← input.trace.getObjValAs? String "id")==snapshot.trace &&
       snapshot.completedOperations.toList==List.range snapshot.operation do throw "capture.insert.provenance"
   let template ← replayRecordedPrefix input.trace input.operation
-  let some d := template.k.wg | throw "capture.insert.device"
+  let some d := template.wg.dev | throw "capture.insert.device"
   let initial ← snapshot.initial.registers.state (← Capture.loadMemory snapshot.initial.blocks)
   -- A cheap independent endpoint control for the newly represented IF bit.
   -- Its empty byte list isolates flag comparison; the real run compares all bytes.
@@ -103,7 +104,7 @@ def run (input : ProbeInput) (snapshot : Snapshot) (privateState : PrivateState)
   for (record,service) in records.zip snapshot.randomServices.toList do
     let (value,rest) ← Insert.draw [record]
     unless rest.isEmpty && value==service.returned.registers.rax do throw "capture.insert.draw-value"
-  let world := {world with hidden := some records}
+  let world := {world with ambient := {world.ambient with hidden := some records}}
   let mut coverage := #[]
   for i in [:snapshot.initial.coverageUsed] do
     coverage := coverage.push (← readNat initial (frame.coverage+8*(i+1)) 8)

@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairReplaceAdequacy
 
 namespace Binary.Pair.Replace
@@ -14,7 +15,7 @@ theorem replace_simulation (fetch : Int64 → Option Decoded)
     {n o c initial w pid kid ra answer final} (environment : SerializedEnvironment onlineCPUs externalActions)
     (access : ReturningCallPermissions fetch permissions initial ra)
     (checked : Pre n o c initial w pid kid ra)
-    (accepted : (WG.indexReplaceHandshake pid kid).run w=.ok (answer,final)) :
+    (accepted : (Source.indexReplaceHandshake pid kid).run w=.ok (answer,final)) :
     Eventually (historyStep fetch) (fun t => Post n o c initial ra answer final t.machine ∧
       ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
       RunEnvironment fetch permissions onlineCPUs externalActions t.history) ⟨initial,[initial]⟩ := by

@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairLookupOwnership
 import PairLookupReadiness
 import PairIndexKinds
@@ -19,7 +20,7 @@ def Writes (n : Names) (o : Offsets) (coverage : Context) (initial : MachineStat
 def Post (n : Names) (o : Offsets) (coverage : Context) (initial : MachineState)
     (ra : UInt64) (answer : Option (IndexOwner×PeerId)) (finalWorld : World) (final : MachineState) : Prop :=
   Returned initial final ra ∧ Result n initial final answer ∧
-  (∃ d, finalWorld.k.wg=some d ∧ Corresponds n o final.data.dmem d ∧
+  (∃ d, finalWorld.wg.dev=some d ∧ Corresponds n o final.data.dmem d ∧
     Remove.ownership n o final.data.dmem=.ok (Remove.targetOwnership d)) ∧
   (∀ b, (phase coverage b).CoverageAt final.data.dmem) ∧
   load32 final.data.dmem preemptCountAddress=some coverage.preempt ∧
@@ -52,7 +53,7 @@ theorem lookup_checked (fetch : Int64 → Option Decoded)
     (traceConstCmp1 : TraceConstCmp1Contract fetch) (bhEnable : BhEnableContract fetch)
     {n o coverage initial w query kinds ra answer finalWorld}
     (checked : Pre n o coverage initial w query kinds ra)
-    (accepted : (WG.indexLookup kinds query).run w=.ok (answer,finalWorld)) :
+    (accepted : (Source.indexLookup kinds query).run w=.ok (answer,finalWorld)) :
     Eventually (instructionStep fetch) (Post n o coverage initial ra answer finalWorld) initial := by
   obtain ⟨d,facts⟩ := pre_facts checked
   let c := callConfig n w d query kinds

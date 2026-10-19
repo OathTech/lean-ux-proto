@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairCallFacts
 import PairTrieReadProof
 import PairLocalsProof
@@ -73,7 +74,7 @@ theorem callCount_bytes {names w d root bits key o m}
   simpa only [interpretation_of_mem fields.peerIds named,fields.layout.2.2.2.2.2.2.2.2,BitVec.ofNat_add] using inside
 
 theorem callRelated {names w d root bits key o s}
-    (device : w.k.wg = some d) (related : Corresponds names o s.data.dmem d)
+    (device : w.wg.dev = some d) (related : Corresponds names o s.data.dmem d)
     (heapOk : heap (target d) [d.peerAllowedips.root4,d.peerAllowedips.root6] = .ok ())
     (input : callInput names o s.data.dmem root bits key = .ok ()) :
     R (callConfig names w d root bits key) [s] [LookupObservation.call "lookup" s] s w := by

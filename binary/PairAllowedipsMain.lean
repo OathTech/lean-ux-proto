@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairAllowedips
 
 open Lean Leanux Leanux.WG Binary.Pair.Trie
@@ -11,7 +12,7 @@ def expectReject (label clause : String) (check : Except String Unit) : Except S
 
 def runCase (input : AllowedipsProbe.Input) (label : String) (w : World)
     (root : Option NodeId) (width key : Nat) (calls : Nat := 1) : Except String Json := do
-  let some d := w.k.wg | throw "missing device"
+  let some d := w.wg.dev | throw "missing device"
   let names := makeNames d
   let memory ← AllowedipsProbe.materialize d input.offsets key width input.preempt input.entryPreempt
   let mut outcomes := #[]
@@ -36,14 +37,14 @@ def withNodes (w : World) (d : Device) (width : Nat) (nodes : List (NodeId × Ai
   let device := {d with nodes, peerAllowedips := {
     root4 := if width == 32 then root else none
     root6 := if width == 128 then root else none}}
-  {w with k := {w.k with wg := some device}}
+  {w with wg := {w.wg with dev := some device}}
 
 def suite (input : AllowedipsProbe.Input) : Except String Json := do
   let trace ← Leanux.Runner.parseTrace input.trace
   let some (.wgXmit family key _ _) := trace.ops[input.operation]? | throw "expected wg_xmit"
   let prior ← replayRecordedPrefix input.trace input.operation
-  let w := {prior with steps := #[], hidden := some [], netRxSection := 0, netRxSections := 0}
-  let some d := w.k.wg | throw "prefix device missing"
+  let w := {prior with ambient := {prior.ambient with steps := #[], hidden := some [], netRxSection := 0, netRxSections := 0}}
+  let some d := w.wg.dev | throw "prefix device missing"
   let width := if family == 4 then 32 else 128
   let root := if width == 32 then d.peerAllowedips.root4 else d.peerAllowedips.root6
   let some (pid, peer) := d.peers.toList.head? | throw "prefix has no peer"
@@ -74,8 +75,8 @@ def suite (input : AllowedipsProbe.Input) : Except String Json := do
   -- high-word differences. IPv4 exercises the 32-bit path.
   if width == 128 then
     cases := cases.push (← runCase input "synthetic/ipv6-low-word-mismatch" fullWorld (some 0) width (key ^^^ 2^32))
-  let some fd := fullWorld.k.wg | throw "full fixture device missing"
-  let dead := {fullWorld with k := {fullWorld.k with wg := some {fd with peers := fd.peers.insert pid {peer with refcount := 0}}}}
+  let some fd := fullWorld.wg.dev | throw "full fixture device missing"
+  let dead := {fullWorld with wg := {fullWorld.wg with dev := some {fd with peers := fd.peers.insert pid {peer with refcount := 0}}}}
   let refusal ← expectReject "dying-peer-is-explicit-refusal" "lookup retry after a dying peer"
     ((runCase input "synthetic/dead-peer" dead (some 0) width key).map (fun _ => ()))
   let names := makeNames fd

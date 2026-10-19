@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairTrieFields
 import PairAllowedips
 
@@ -67,10 +68,10 @@ theorem heap_edges {s : State} {roots : List (Option Nat)} (ok : heap s roots = 
 
 theorem assertAt_ok {names : Names} {o : AllowedipsProbe.Offsets}
     {m : DataMem} {w : World} (ok : assertAt names o m w = .ok ()) :
-    ∃ d, w.k.wg = some d ∧ Corresponds names o m d ∧
+    ∃ d, w.wg.dev = some d ∧ Corresponds names o m d ∧
       heap (target d) [d.peerAllowedips.root4,d.peerAllowedips.root6] = .ok () := by
   unfold assertAt at ok
-  cases device : w.k.wg with
+  cases device : w.wg.dev with
   | none => rw [device] at ok; cases ok
   | some d =>
     rw [device] at ok

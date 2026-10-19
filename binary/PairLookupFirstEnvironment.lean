@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairLookupFirstAdequacy
 
 namespace Binary.Pair.IndexLookup
@@ -13,7 +14,7 @@ theorem lookup_first_return (fetch : Int64 → Option Decoded)
     {n o c initial w query kinds ra answer final} (environment : SerializedEnvironment onlineCPUs externalActions)
     (access : FirstReturnCallPermissions fetch permissions initial ra)
     (checked : Pre n o c initial w query kinds ra)
-    (accepted : (WG.indexLookup kinds query).run w=.ok (answer,final)) :
+    (accepted : (Source.indexLookup kinds query).run w=.ok (answer,final)) :
     Eventually (historyStep fetch) (fun t => Post n o c initial ra answer final t.machine ∧
       ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
       BeforeOuterReturn initial ra t.history ∧

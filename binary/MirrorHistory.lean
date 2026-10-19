@@ -1,3 +1,4 @@
+import SourceAdapter
 import MirrorPeer
 
 namespace Binary.MirrorHistory
@@ -144,7 +145,7 @@ def count (old : Nat) : Logged Bool := do
 theorem count_erases (old : Nat) : Erases (count old) (refcountIncNotZero old) := by
   intro history world
   by_cases zero : old = 0 <;> by_cases wraps : old + 1 ≥ 2^31 <;>
-    simp [count, refcountIncNotZero, branchCmpLogged, branchLogged, mark,
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, count, refcountIncNotZero, branchCmpLogged, branchLogged, mark,
       branchCmp, branch, unsupported, erase, zero, wraps] <;> rfl
 
 #print axioms branchCmp_run
@@ -153,16 +154,17 @@ theorem count_erases (old : Nat) : Erases (count old) (refcountIncNotZero old) :
 def peerGet (peer : Option PeerId) : Logged (Option PeerId) := do
   if ← branchLogged .peerGetMaybeZeroNull peer.isNone then return none
   let some pid := peer | StateT.lift (invariant "unreachable")
-  StateT.lift (requireNotPending pid "a reference count the handshake worker also changes")
-  let p ← StateT.lift (getPeer pid)
+  StateT.lift (Source.requireNotPending pid "a reference count the handshake worker also changes")
+  let p ← StateT.lift (Source.getPeer pid)
   let live ← count p.refcount
   if ← branchLogged .peerGetMaybeZeroDead !live then return none
-  StateT.lift (setPeer pid {p with refcount := p.refcount + 1})
+  StateT.lift (Source.setPeer pid {p with refcount := p.refcount + 1})
   return some pid
 
 theorem peerGet_erases (peer : Option PeerId) :
-    Erases (peerGet peer) (peerGetMaybeZero peer) := by
-  unfold peerGet peerGetMaybeZero
+    Erases (peerGet peer) (Source.peerGetMaybeZero peer) := by
+  unfold peerGet Source.peerGetMaybeZero WG.peerGetMaybeZero
+  simp only [Source.liftWG_bind, Source.liftWG_branch, Source.liftWG_pure, apply_ite]
   apply erases_bind (branch_erases _ _)
   intro null
   cases null with
@@ -171,10 +173,12 @@ theorem peerGet_erases (peer : Option PeerId) :
     cases peer with
     | none => exact erases_lift _
     | some pid =>
+      simp only [Bool.false_eq_true, ↓reduceIte, Source.liftWG_bind, Source.liftWG_branch, Source.liftWG_pure, apply_ite]
       apply erases_bind (erases_lift _)
       intro _
       apply erases_bind (erases_lift _)
       intro p
+      simp only [Source.liftWG_refcountIncNotZero]
       apply erases_bind (count_erases _)
       intro live
       apply erases_bind (branch_erases _ _)
@@ -222,9 +226,9 @@ def finish (a : LookupMirror.Acc) : Logged (Option (IndexOwner × PeerId)) := do
   if !stopped then _ ← branchLogged .idxWalk false
   if ← branchLogged .idxFound entry.isSome then
     let some e := entry | StateT.lift (invariant "unreachable")
-    let word ← StateT.lift e.owner.peerWord
+    let word ← StateT.lift (Source.peerWord e.owner)
     let peer ← called "wg_peer_get_maybe_zero" (peerGet word)
-    StateT.lift (e.owner.setPeerWord peer)
+    StateT.lift (Source.setPeerWord e.owner peer)
     if ← branchLogged .idxPeerAlive peer.isSome then
       let some pid := peer | StateT.lift (invariant "unreachable")
       return some (e.owner, pid)
@@ -267,12 +271,12 @@ theorem finish_erases (a : LookupMirror.Acc) :
 
 def lookup (kinds : List IndexKind) (index : Nat) : Logged (Option (IndexOwner × PeerId)) :=
   called "wg_index_hashtable_lookup" do
-    let es ← StateT.lift (indexBucket index)
+    let es ← StateT.lift (Source.indexBucket index)
     let a ← forIn es (none, false) (body kinds index)
     finish a
 
 theorem lookup_erases (kinds : List IndexKind) (index : Nat) :
-    Erases (lookup kinds index) (indexLookup kinds index) := by
+    Erases (lookup kinds index) (Source.indexLookup kinds index) := by
   rw [LookupMirror.indexLookup_eq]
   apply called_erases
   apply erases_bind (erases_lift _)
@@ -324,8 +328,9 @@ theorem loop_run (kinds : List IndexKind) (index : Nat)
   | nil => rfl
   | cons e es ih =>
     cases hm : (e.index == index) <;> cases ht : (kinds.contains e.kind) <;>
-      simp [List.forIn_cons, body, scan, branchLogged, mark, branch,
-        LookupMirror.record, hm, ht, StateT.run_bind, ih] <;> rfl
+      simp [List.forIn_cons, body, scan, branchLogged, mark,
+        LookupMirror.record, hm, ht, StateT.run_bind, StateT.run_lift, ih] <;> rfl
+
 
 #print axioms loop_run
 

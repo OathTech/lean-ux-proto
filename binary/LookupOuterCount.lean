@@ -1,3 +1,4 @@
+import SourceAdapter
 import MirrorPeerPoints
 
 namespace Binary.LookupOuterCount
@@ -77,7 +78,7 @@ theorem keeps_count (old : Nat) : Keeps (count old) := by
   intro history w answer points w' run
   have erased := count_erases old history w
   rw [run] at erased
-  have actual : (refcountIncNotZero old).run w = .ok (answer,w') := erased.symm
+  have actual : (refcountIncNotZero old : M Bool).run w = .ok (answer,w') := erased.symm
   have small := PeerMirror.accepted_count_bound old w w' answer actual
   rw [count_run_logged old history w small] at run
   cases run
@@ -158,7 +159,7 @@ theorem keeps_finish (a : LookupMirror.Acc) : Keeps (finish a) := by
 
 theorem lookup_body_keeps (kinds : List IndexKind) (index : Nat) :
     Keeps (do
-      let es ← StateT.lift (indexBucket index)
+      let es ← StateT.lift (Source.indexBucket index)
       let a ← forIn es (none,false) (body kinds index)
       finish a) := by
   apply keeps_bind (keeps_lift _); intro es
@@ -170,7 +171,7 @@ theorem lookup_total (kinds : List IndexKind) (index : Nat)
     (accepted : ((lookup kinds index).run []).run world = .ok ((answer,points),final)) :
     total points = 1 := by
   let action : Logged (Option (IndexOwner × PeerId)) := do
-    let es ← StateT.lift (indexBucket index)
+    let es ← StateT.lift (Source.indexBucket index)
     let a ← forIn es (none,false) (body kinds index)
     finish a
   change ((called "wg_index_hashtable_lookup" action).run []).run world = _ at accepted

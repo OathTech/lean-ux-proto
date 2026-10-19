@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupResultHistory
 
 namespace Binary.OwnerWord
@@ -77,12 +78,12 @@ theorem pending_observed (rxSection : Nat) (s : MachineData) (af : Bool) :
     This says nothing about the other whole-World components. -/
 theorem handshake_result_at (peers : PeerId → BitVec 64) (keypairs : KeypairId → BitVec 64)
     (w : World) (device : Device) (id : PeerId) (peer : Peer) (word : Option PeerId)
-    (hasDevice : w.k.wg = some device) (hasPeer : device.peers.get? id = some peer)
+    (hasDevice : w.wg.dev = some device) (hasPeer : device.peers.get? id = some peer)
     (s : MachineData) (location : s.regs.rbx.toBitVec = address peers keypairs (.handshake id))
     (result : s.regs.rax.toBitVec = pointer peers word)
     (af : Bool) (q : MachineState) (member : q ∈ LookupHistory.resultStates s af) :
-    ∃ w' device', ((IndexOwner.handshake id).setPeerWord word).run w = .ok ((), w') ∧
-      w'.k.wg = some device' ∧ At peers keypairs q.data.dmem device' (.handshake id) := by
+    ∃ w' device', (Source.setPeerWord (.handshake id) word).run w = .ok ((), w') ∧
+      w'.wg.dev = some device' ∧ At peers keypairs q.data.dmem device' (.handshake id) := by
   refine ⟨_, _, set_handshake_run w device id peer word hasDevice hasPeer, rfl, ?_⟩
   rw [LookupHistory.resultStates_memory s af q member]
   change At peers keypairs (s.dmem.storeInt s.regs.rbx.toBitVec 8 s.regs.rax.toBitVec.toInt) _ _
@@ -91,12 +92,12 @@ theorem handshake_result_at (peers : PeerId → BitVec 64) (keypairs : KeypairId
 
 theorem keypair_result_at (peers : PeerId → BitVec 64) (keypairs : KeypairId → BitVec 64)
     (w : World) (device : Device) (id : KeypairId) (kp : Keypair) (word : Option PeerId)
-    (hasDevice : w.k.wg = some device) (hasKeypair : device.keypairs.get? id = some kp)
+    (hasDevice : w.wg.dev = some device) (hasKeypair : device.keypairs.get? id = some kp)
     (s : MachineData) (location : s.regs.rbx.toBitVec = address peers keypairs (.keypair id))
     (result : s.regs.rax.toBitVec = pointer peers word)
     (af : Bool) (q : MachineState) (member : q ∈ LookupHistory.resultStates s af) :
-    ∃ w' device', ((IndexOwner.keypair id).setPeerWord word).run w = .ok ((), w') ∧
-      w'.k.wg = some device' ∧ At peers keypairs q.data.dmem device' (.keypair id) := by
+    ∃ w' device', (Source.setPeerWord (.keypair id) word).run w = .ok ((), w') ∧
+      w'.wg.dev = some device' ∧ At peers keypairs q.data.dmem device' (.keypair id) := by
   refine ⟨_, _, set_keypair_run w device id kp word hasDevice hasKeypair, rfl, ?_⟩
   rw [LookupHistory.resultStates_memory s af q member]
   change At peers keypairs (s.dmem.storeInt s.regs.rbx.toBitVec 8 s.regs.rax.toBitVec.toInt) _ _

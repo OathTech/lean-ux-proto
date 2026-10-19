@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairLookupFootprint
 import PairLookupCoverage
 
@@ -13,7 +14,7 @@ theorem outputNeeded_iff (v : View) : outputNeeded v=true ↔ LookupOutputNeeded
 
 structure CallFacts (n : Names) (o : Offsets) (coverage : Context) (s : MachineState)
     (w : World) (d : Device) (query : Nat) (kinds : List IndexKind) (ra : UInt64) : Prop where
-  device : w.k.wg=some d
+  device : w.wg.dev=some d
   related : Corresponds n o s.data.dmem d
   storage : storageCheck n o=true
   owners : Remove.ownership n o s.data.dmem=.ok (Remove.targetOwnership d)

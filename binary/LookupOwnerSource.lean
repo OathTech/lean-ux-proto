@@ -1,3 +1,4 @@
+import SourceAdapter
 import OwnerStore
 import LookupPeerSource
 
@@ -10,10 +11,10 @@ theorem owner_set_project (c : Config) (world : World) (v : View)
     (owner : IndexOwner) (old word : Option PeerId)
     (projected : project c world = some v) (focused : c.focus.owner = some owner)
     (oldWord : v.ownerWord = some old) :
-    ∃ final, (owner.setPeerWord word).run world = .ok ((), final) ∧
+    ∃ final, (Source.setPeerWord owner word).run world = .ok ((), final) ∧
       project c final = some {v with ownerWord := some word} ∧
       final.steps = world.steps ∧ final.netRxSection = world.netRxSection := by
-  cases hasDevice : world.k.wg with
+  cases hasDevice : world.wg.dev with
   | none => simp [project, hasDevice] at projected
   | some device =>
     have selectedWord : OwnerWord.value device owner = some old := by

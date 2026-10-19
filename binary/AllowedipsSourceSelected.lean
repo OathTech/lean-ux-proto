@@ -1,10 +1,11 @@
+import SourceAdapter
 import AllowedipsSourceFrames
 
 namespace Binary.AllowedipsSource
 open Leanux Leanux.WG MirrorHistory LookupSourceFrame
 
 def searchPrefix (root : Option NodeId) (bits key : Nat) : Logged (Option NodeId) := do
-  swapEndian bits
+  AllowedipsSource.swapEndian bits
   let node ← findNode root bits key
   _ ← branchLogged .lookupFound node.isSome
   return node
@@ -18,7 +19,7 @@ def searchSuffix (node : Option NodeId) : Logged (Option PeerId) := do
   match node with
   | none => return none
   | some id =>
-    let n ← StateT.lift (getNode id)
+    let n ← StateT.lift (Source.getNode id)
     let peer ← called "wg_peer_get_maybe_zero" (peerGet n.peer)
     afterPeer peer
 
@@ -32,8 +33,8 @@ theorem lookup_split (root : Option NodeId) (bits key : Nat) :
   funext node
   cases node <;> rfl
 
-theorem frames_searchPrefix (project : Kernel → σ) (root : Option NodeId) (bits key : Nat) :
-    Frames (fun w => project w.k) (searchPrefix root bits key) := by
+theorem frames_searchPrefix (project : WGWorld → σ) (root : Option NodeId) (bits key : Nat) :
+    Frames (fun w => project w.wg) (searchPrefix root bits key) := by
   unfold searchPrefix
   apply frames_bind (frames_swapEndian project bits)
   intro _
@@ -45,17 +46,17 @@ theorem frames_searchPrefix (project : Kernel → σ) (root : Option NodeId) (bi
 
 /-- Mask just the returned peer's refcount. Peer existence, other peers'
     counts, and every other WireGuard field remain observations. -/
-def selectedSnapshot (selected : Option PeerId) (k : Kernel) :
+def selectedSnapshot (selected : Option PeerId) (k : WGWorld) :
     Option Device × (PeerId → Option Peer) :=
-  (k.wg.map fun d => {d with peers := {}},
-   fun pid => (k.wg.bind fun d => d.peers.get? pid).map fun p =>
+  (k.dev.map fun d => {d with peers := {}},
+   fun pid => (k.dev.bind fun d => d.peers.get? pid).map fun p =>
      if selected = some pid then {p with refcount := 0} else p)
 
 theorem peerFinal_selected (pid : PeerId) (w : World) (device : Device) (peer : Peer)
-    (hasDevice : w.k.wg = some device) (hasPeer : device.peers.get? pid = some peer) :
+    (hasDevice : w.wg.dev = some device) (hasPeer : device.peers.get? pid = some peer) :
     selectedSnapshot (if peer.refcount = 0 then none else some pid)
-      (PeerMirror.peerFinal pid w peer).k =
-    selectedSnapshot (if peer.refcount = 0 then none else some pid) w.k := by
+      (PeerMirror.peerFinal pid w peer).wg =
+    selectedSnapshot (if peer.refcount = 0 then none else some pid) w.wg := by
   by_cases zero : peer.refcount = 0
   · simp [PeerMirror.peerFinal, PeerMirror.countRecords, PeerMirror.recordCmp,
       LookupMirror.record, zero]
@@ -75,9 +76,9 @@ theorem peerFinal_selected (pid : PeerId) (w : World) (device : Device) (peer : 
 theorem peerGet_selected (word : Option PeerId) (history points : List Point)
     (w final : World) (answer : Option PeerId)
     (accepted : ((peerGet word).run history).run w = .ok ((answer,points),final))
-    (prior : ∀ p ∈ history, selectedSnapshot answer p.world.k = selectedSnapshot answer w.k) :
-    selectedSnapshot answer final.k = selectedSnapshot answer w.k ∧
-      ∀ p ∈ points, selectedSnapshot answer p.world.k = selectedSnapshot answer w.k := by
+    (prior : ∀ p ∈ history, selectedSnapshot answer p.world.wg = selectedSnapshot answer w.wg) :
+    selectedSnapshot answer final.wg = selectedSnapshot answer w.wg ∧
+      ∀ p ∈ points, selectedSnapshot answer p.world.wg = selectedSnapshot answer w.wg := by
   cases word with
   | none =>
     rw [peer_null_run_logged] at accepted
@@ -92,16 +93,16 @@ theorem peerGet_selected (word : Option PeerId) (history points : List Point)
   | some pid =>
     have erased := peerGet_erases (some pid) history w
     rw [accepted] at erased
-    have actual : (peerGetMaybeZero (some pid)).run w = .ok (answer,final) := erased.symm
-    cases hd : w.k.wg with
+    have actual : (Source.peerGetMaybeZero (some pid)).run w = .ok (answer,final) := erased.symm
+    cases hd : w.wg.dev with
     | none =>
-      simp [peerGetMaybeZero, branch, requireNotPending, getPeer, getDev, getK, hd, invariant] at actual
+      simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, AmbientM.branch, monadLift, MonadLift.monadLift, liftAmbient, Source.peerGetMaybeZero, branch, Source.requireNotPending, Source.getPeer, Source.getDev, Source.getWG, hd, invariant] at actual
       cases actual
     | some device =>
       cases hp : device.peers.get? pid with
       | none =>
         have absent : device.peers[pid]? = none := hp
-        simp [peerGetMaybeZero, branch, requireNotPending, getPeer, getDev, getK, hd, absent,
+        simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, AmbientM.branch, monadLift, MonadLift.monadLift, liftAmbient, Source.peerGetMaybeZero, branch, Source.requireNotPending, Source.getPeer, Source.getDev, Source.getWG, hd, absent,
           invariant] at actual
         cases actual
       | some peer =>
@@ -153,9 +154,9 @@ theorem afterPeer_accepted (peer answer : Option PeerId) (history points : List 
 theorem searchSuffix_selected (node : Option NodeId) (history points : List Point)
     (w final : World) (answer : Option PeerId)
     (accepted : ((searchSuffix node).run history).run w = .ok ((answer,points),final))
-    (prior : ∀ p ∈ history, selectedSnapshot answer p.world.k = selectedSnapshot answer w.k) :
-    selectedSnapshot answer final.k = selectedSnapshot answer w.k ∧
-      ∀ p ∈ points, selectedSnapshot answer p.world.k = selectedSnapshot answer w.k := by
+    (prior : ∀ p ∈ history, selectedSnapshot answer p.world.wg = selectedSnapshot answer w.wg) :
+    selectedSnapshot answer final.wg = selectedSnapshot answer w.wg ∧
+      ∀ p ∈ points, selectedSnapshot answer p.world.wg = selectedSnapshot answer w.wg := by
   cases node with
   | none =>
     change Except.ok ((none,history),w) = Except.ok ((answer,points),final) at accepted
@@ -166,11 +167,11 @@ theorem searchSuffix_selected (node : Option NodeId) (history points : List Poin
     obtain ⟨peer,helperPoints,helperWorld,helper,tail⟩ := accepted_bind _ _ _ _ _ rest
     obtain ⟨peerEq,live,finalEq,pointsEq⟩ := afterPeer_accepted peer answer _ _ _ _ tail
     subst peer
-    have readFrames := frames_lift (preserves_getNode (fun w => selectedSnapshot answer w.k) id)
-      (selectedSnapshot answer w.k) history w n readPoints readWorld rfl prior read
+    have readFrames := frames_lift (preserves_getNode (fun w => selectedSnapshot answer w.wg) id)
+      (selectedSnapshot answer w.wg) history w n readPoints readWorld rfl prior read
     obtain ⟨inner,innerRun,helperEq⟩ := called_accepted helper
     have priorHelper : ∀ p ∈ readPoints ++ [⟨.call "wg_peer_get_maybe_zero",readWorld⟩],
-        selectedSnapshot answer p.world.k = selectedSnapshot answer readWorld.k := by
+        selectedSnapshot answer p.world.wg = selectedSnapshot answer readWorld.wg := by
       intro p member
       rcases List.mem_append.mp member with old | callPoint
       · exact (readFrames.2 p old).trans readFrames.1.symm
@@ -178,8 +179,8 @@ theorem searchSuffix_selected (node : Option NodeId) (history points : List Poin
         subst p
         rfl
     have helperFrames := peerGet_selected n.peer _ inner readWorld helperWorld answer innerRun priorHelper
-    have finalKernel : final.k = helperWorld.k := by rw [finalEq]; rfl
-    have finalFrame : selectedSnapshot answer final.k = selectedSnapshot answer w.k :=
+    have finalKernel : final.wg = helperWorld.wg := by rw [finalEq]; rfl
+    have finalFrame : selectedSnapshot answer final.wg = selectedSnapshot answer w.wg :=
       (congrArg (selectedSnapshot answer) finalKernel).trans (helperFrames.1.trans readFrames.1)
     refine ⟨finalFrame,?_⟩
     intro p member
@@ -201,16 +202,16 @@ theorem searchSuffix_selected (node : Option NodeId) (history points : List Poin
 theorem lookup_selected (root : Option NodeId) (bits key : Nat)
     (world final : World) (answer : Option PeerId) (points : List Point)
     (accepted : ((lookup root bits key).run []).run world = .ok ((answer,points),final)) :
-    selectedSnapshot answer final.k = selectedSnapshot answer world.k ∧
-      ∀ p ∈ points, selectedSnapshot answer p.world.k = selectedSnapshot answer world.k := by
+    selectedSnapshot answer final.wg = selectedSnapshot answer world.wg ∧
+      ∀ p ∈ points, selectedSnapshot answer p.world.wg = selectedSnapshot answer world.wg := by
   rw [lookup_split] at accepted
   obtain ⟨inner,innerRun,pointsEq⟩ := called_accepted accepted
   obtain ⟨node,searchPoints,searchWorld,search,rest⟩ := accepted_bind _ _ _ _ _ innerRun
   have searchFrames := frames_searchPrefix (selectedSnapshot answer) root bits key
-    (selectedSnapshot answer world.k) [⟨.call "lookup",world⟩] world node searchPoints searchWorld
+    (selectedSnapshot answer world.wg) [⟨.call "lookup",world⟩] world node searchPoints searchWorld
     rfl (by intro p member; have eq := List.mem_singleton.mp member; subst p; rfl) search
   have prior : ∀ p ∈ searchPoints,
-      selectedSnapshot answer p.world.k = selectedSnapshot answer searchWorld.k := by
+      selectedSnapshot answer p.world.wg = selectedSnapshot answer searchWorld.wg := by
     intro p member
     exact (searchFrames.2 p member).trans searchFrames.1.symm
   have suffixFrames := searchSuffix_selected node searchPoints inner searchWorld final answer rest prior

@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupAdequacy
 
 namespace Binary.LookupRelation
@@ -52,7 +53,7 @@ theorem lookup_framed_transport {α : Type} (fetch : Int64 → Option Decoded)
     (access : InvocationPermissions fetch permissions initial (Image.Lookup.entry+0x94))
     (pre : Pre_lookup c coverage preempt returnAddress initial world)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld))
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld))
     (P : MirrorHistory.Run (Option (IndexOwner × PeerId)) → Prop)
     (property : ∀ run, MirrorHistory.Accepted (MirrorHistory.lookup c.kinds c.query) world run → P run)
     (observer : World → α) (represents : Mem 64 → α → Prop)

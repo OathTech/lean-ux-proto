@@ -1,3 +1,4 @@
+import SourceAdapter
 import AllowedipsRelation
 import AllowedipsSourceSelected
 import LookupRelation
@@ -6,7 +7,7 @@ import PeerPhaseSchedule
 namespace Binary.AllowedipsRelation
 open Leanux Leanux.WG LookupObservation
 
-theorem project_kernel (c : Config) (before after : World) (same : after.k = before.k) :
+theorem project_kernel (c : Config) (before after : World) (same : after.wg = before.wg) :
     project c after = project c before := by simp only [project,same]
 
 /-- Before peer acquisition, an actually neutral raw scanner makes the
@@ -29,7 +30,7 @@ theorem countPhase_stable {raw nextRaw : List MachineState}
 minimal relation. Count phase equality is supplied by the executed history. -/
 theorem R.frame_kernel (c : Config) (raw nextRaw : List MachineState)
     (seen nextSeen : List LookupObservation.Point) (s t : MachineState) (w next : World)
-    (related : R c raw seen s w) (sameKernel : next.k = w.k)
+    (related : R c raw seen s w) (sameKernel : next.wg = w.wg)
     (last : nextRaw.getLast? = some t)
     (phase : LookupRelation.countPhase nextRaw nextSeen = LookupRelation.countPhase raw seen)
     (writes : Address → Prop) (frame : EqualOutside writes s.data.dmem t.data.dmem)
@@ -85,7 +86,7 @@ theorem search_prefix_project (c : Config) (world final : World) (answer : Optio
     (accepted : ((AllowedipsSource.searchPrefix c.root c.bits c.key).run []).run world =
       .ok ((answer,points),final)) :
     project c final = project c world ∧ ∀ p ∈ points, project c p.world = project c world := by
-  have frame := AllowedipsSource.frames_searchPrefix id c.root c.bits c.key world.k [] world
+  have frame := AllowedipsSource.frames_searchPrefix id c.root c.bits c.key world.wg [] world
     answer points final rfl (by intro p member; cases member) accepted
   exact ⟨project_kernel c world final frame.1,
     fun p member => project_kernel c world p.world (frame.2 p member)⟩

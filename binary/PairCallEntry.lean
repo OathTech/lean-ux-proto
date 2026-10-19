@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairCallRelation
 import AllowedipsEntryExports
 
@@ -7,7 +8,7 @@ local instance : Labels := Image.linkedLabels
 set_option maxRecDepth 4096
 
 theorem callEntry_of_facts {names w d root bits key o s c ra}
-    (device : w.k.wg = some d) (related : Corresponds names o s.data.dmem d)
+    (device : w.wg.dev = some d) (related : Corresponds names o s.data.dmem d)
     (heapOk : heap (target d) [d.peerAllowedips.root4,d.peerAllowedips.root6] = .ok ())
     (input : callInput names o s.data.dmem root bits key = .ok ())
     (pc : s.pc = AllowedipsImage.Lookup.entry)
@@ -90,7 +91,7 @@ theorem callEntry_of_facts {names w d root bits key o s c ra}
 with its source focus and sole pointer interpretation computed internally. -/
 theorem callBoundary_pre {names input coverage initial w root bits key ra}
     (checked : callBoundary names input coverage initial w root bits key ra = .ok ()) :
-    ∃ d, w.k.wg = some d ∧
+    ∃ d, w.wg.dev = some d ∧
       AllowedipsEntry (callConfig names w d root bits key) coverage.coverage coverage.preempt ra initial w
         (callView (callConfig names w d root bits key) d) ∧
       Corresponds names input.offsets initial.data.dmem d ∧
@@ -125,7 +126,7 @@ theorem callEntry_checked (fetch : Int64 → Option Decoded)
     (pcContract : AllowedipsTracePcContract fetch) (cmpContract : AllowedipsTraceConstCmp1Contract fetch)
     {names input coverage initial w root bits key ra}
     (checked : callBoundary names input coverage initial w root bits key ra = .ok ()) :
-    Eventually (historyStep fetch) (fun t => ∃ d, w.k.wg = some d ∧
+    Eventually (historyStep fetch) (fun t => ∃ d, w.wg.dev = some d ∧
       AllowedipsEntry.Post (callConfig names w d root bits key) initial coverage.coverage coverage.preempt ra t.machine ∧
       Corresponds names input.offsets t.machine.data.dmem d) ⟨initial,[initial]⟩ := by
   obtain ⟨d,device,pre,related,facts⟩ := callBoundary_pre checked

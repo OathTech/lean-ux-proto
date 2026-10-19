@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupHelperSeparation
 import LookupHelperSource
 import PeerAcceptedExecution
@@ -75,7 +76,7 @@ theorem helper_from_call (fetch : Int64 → Option Decoded)
     (owner : IndexOwner) (focused : c.focus.owner = some owner)
     (before : BeforeHelper c coverage preempt s world v bucket owner current)
     (answer : Option PeerId) (worldFinal : World)
-    (accepted : (peerGetMaybeZero c.focus.peer).run (helperWorld c world v) = .ok (answer, worldFinal)) :
+    (accepted : (Source.peerGetMaybeZero c.focus.peer).run (helperWorld c world v) = .ok (answer, worldFinal)) :
     Eventually (historyStep fetch)
       (AfterHelper c coverage preempt s world v current answer worldFinal) current := by
   have savedBefore := before
@@ -112,7 +113,7 @@ theorem helper_from_call (fetch : Int64 → Option Decoded)
     simp only [helperSource, List.getLast?_append, List.getLast?_singleton, Option.some_or, Option.map_some]
   have projected : project c (helperWorld c world v) = some v := by
     calc
-      _ = project c {world with steps := (helperWorld c world v).steps} :=
+      _ = project c {world with ambient := {world.ambient with steps := (helperWorld c world v).steps}} :=
         congrArg (project c) (LookupSearch.result_world _ _ _ _ _)
       _ = project c world := rfl
       _ = some v := entry.projected
@@ -166,7 +167,7 @@ theorem helper_from_call (fetch : Int64 → Option Decoded)
       simp only [project, hasDevice, focusPeer, Option.bind_some, Option.pure_def] at h
       change (device.peers.get? pid).map (·.refcount) = v.count at h
       simpa only [hasPeer, Option.map_some] using h.symm
-    have acceptedPeer : (peerGetMaybeZero (some pid)).run (helperWorld c world v) = .ok (answer, worldFinal) := by
+    have acceptedPeer : (Source.peerGetMaybeZero (some pid)).run (helperWorld c world v) = .ok (answer, worldFinal) := by
       simpa only [focusPeer] using accepted
     have bound := PeerMirror.accepted_peer_bound pid _ _ _ device peer hasDevice hasPeer acceptedPeer
     have sourceResult := PeerMirror.accepted_peer_result pid _ _ _ device peer hasDevice hasPeer acceptedPeer

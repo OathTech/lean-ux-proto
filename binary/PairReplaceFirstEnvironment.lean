@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairReplaceFirstAdequacy
 
 namespace Binary.Pair.Replace
@@ -13,7 +14,7 @@ theorem replace_first_return (fetch : Int64 → Option Decoded)
     {n o c initial w pid kid ra answer final} (environment : SerializedEnvironment onlineCPUs externalActions)
     (access : FirstReturnCallPermissions fetch permissions initial ra)
     (checked : Pre n o c initial w pid kid ra)
-    (accepted : (WG.indexReplaceHandshake pid kid).run w=.ok (answer,final)) :
+    (accepted : (Source.indexReplaceHandshake pid kid).run w=.ok (answer,final)) :
     Eventually (historyStep fetch) (fun t => Post n o c initial ra answer final t.machine ∧
       ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
       BeforeOuterReturn initial ra t.history ∧

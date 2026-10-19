@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupPost
 import LookupCutFrames
 import LookupSelectedExecution
@@ -19,7 +20,7 @@ theorem selected_execution (fetch : Int64 → Option Decoded)
     (pre : Pre_lookup c coverage preempt ra ⟨s, Image.Lookup.entry⟩ world)
     (owner : IndexOwner) (focused : c.focus.owner = some owner)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
     Eventually (historyStep fetch)
       (LookupPost c coverage preempt ra ⟨s, Image.Lookup.entry⟩ world answer finalWorld)
       ⟨⟨s, Image.Lookup.entry⟩, [⟨s, Image.Lookup.entry⟩]⟩ := by

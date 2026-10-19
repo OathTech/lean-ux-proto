@@ -302,7 +302,9 @@ def main():
                                         cwd=ROOT, text=True).strip()).parent
     sys.path.insert(0, str(ROOT))
     from harness.linux import verify_kernel
-    identity = verify_kernel(ORACLE.parent)
+    from target import pins, verify_image
+    verify_image()
+    identity = verify_kernel(ORACLE.parent, expected=pins()[0])
     kraken = verify_pin(ROOT)
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)

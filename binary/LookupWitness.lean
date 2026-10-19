@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupWitnessState
 import LookupEntrySimulation
 
@@ -273,7 +274,7 @@ theorem physical : LookupRelation.Physical config [initial]
 theorem related : LookupRelation.R config [initial] [LookupRelation.entryPoint data] initial world :=
   LookupRelation.entry_R config world data view projected physical rfl rfl
 
-theorem source_accepts : ∃ final, (WG.indexLookup [.handshake] config.query).run world = .ok (none, final) := by
+theorem source_accepts : ∃ final, (Source.indexLookup [.handshake] config.query).run world = .ok (none, final) := by
   exact ⟨_, rfl⟩
 
 theorem range_nat (base width : Nat) (a : BitVec 64)

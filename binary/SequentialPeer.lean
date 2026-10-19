@@ -1,3 +1,4 @@
+import SourceAdapter
 import SequentialExecution
 import PeerLiveEntryHistory
 import PeerDeadEntryHistory
@@ -18,7 +19,7 @@ theorem peer_nonnull (world : World) (device : Device) (pid : PeerId) (peer : Pe
     (s : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame ⟨s, Image.PeerGet.entry⟩ returnAddress) (nonnull : s.regs.rdi ≠ 0)
     (answer : Option PeerId) (worldFinal : World)
-    (accepted : (peerGetMaybeZero (some pid)).run world = .ok (answer, worldFinal))
+    (accepted : (Source.peerGetMaybeZero (some pid)).run world = .ok (answer, worldFinal))
     (field : s.dmem.loadInt (s.regs.rdi.toBitVec+0x420) 4 = some (peer.refcount : Int))
     (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (state : LookupCoverage.Context.At coverage preempt s.dmem)
@@ -34,7 +35,7 @@ theorem peer_nonnull (world : World) (device : Device) (pid : PeerId) (peer : Pe
     (fieldSeparate : ∀ a, InRange (s.regs.rdi.toBitVec+0x420) 4 a →
       ¬(InRange (s.regs.rsp.toBitVec-56) 64 a ∨ LookupCoverage.Context.writes coverage a))
     (comparison : coverage.CompareAllowed preempt)
-    (hasDevice : world.k.wg = some device) (hasPeer : device.peers.get? pid = some peer) :
+    (hasDevice : world.wg.dev = some device) (hasPeer : device.peers.get? pid = some peer) :
     Eventually (instructionStep fetch) (fun final =>
       Returned ⟨s, Image.PeerGet.entry⟩ final returnAddress ∧
       (answer.isSome = true → PeerGet.ScratchMapped s final.data.dmem) ∧

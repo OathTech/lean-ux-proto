@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupWitnessState
 
 namespace Binary.LookupHitWitness
@@ -13,7 +14,7 @@ def peer (live : Bool) : Peer := {
   internalId := 0, handshakeEntryPeer := some 0, refcount := count live }
 
 def world (live : Bool) : World := {LookupWitness.world with
-  k := {LookupWitness.world.k with wg := some {LookupWitness.device with
+  wg := {LookupWitness.world.wg with dev := some {LookupWitness.device with
     peers := ({} : Std.TreeMap Nat Peer).insert 0 (peer live)}}}
 
 def config : LookupRelation.Config := {LookupWitness.config with

@@ -1,3 +1,4 @@
+import SourceAdapter
 import PeerReturningSimulation
 import PeerDeadEntryHistory
 
@@ -38,7 +39,7 @@ theorem dead_helper_execution (c : Config) (world : World) (device : Device)
     (latest : sourceHistory.getLast?.map (·.world) = some world)
     (active : helperActive seen = true) (noReturn : lastHelperReturn seen = none)
     (focused : c.focus.peer = some pid) (pointer : s.regs.rdi.toBitVec = c.peers pid)
-    (hasDevice : world.k.wg = some device) (hasPeer : device.peers.get? pid = some peer)
+    (hasDevice : world.wg.dev = some device) (hasPeer : device.peers.get? pid = some peer)
     (sourceZero : peer.refcount = 0)
     (returnPC : Int64.ofBitVec returnAddress.toBitVec = Image.Lookup.entry+0xba)
     (initial : scan none history = none)

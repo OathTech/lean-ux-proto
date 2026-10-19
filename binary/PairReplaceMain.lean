@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairReplace
 open Lean Leanux Leanux.WG Binary.Pair
 
@@ -16,7 +17,7 @@ def runCase (input : ProbeInput) (label : String) (w : World) (pid : PeerId)
 
 def suite (input : ProbeInput) : Except String Json := do
   let w ← replayRecordedPrefix input.trace input.operation
-  let some d := w.k.wg | throw "replace prefix: no device"
+  let some d := w.wg.dev | throw "replace prefix: no device"
   let [e] := d.indexTable | throw "replace pilot requires a one-entry recorded prefix"
   let .keypair kid := e.owner | throw "replace prefix: expected keypair owner"
   let [(pid,_)] := d.peers.toList | throw "replace prefix: expected one peer"
@@ -24,7 +25,7 @@ def suite (input : ProbeInput) : Except String Json := do
   -- recorded operation. This is explicitly not a captured entry World.
   let old : IndexEntry := {e with owner := .handshake pid}
   let before := {d with indexTable := [old]}
-  let bw := {w with k := {w.k with wg := some before}}
+  let bw := {w with wg := {w.wg with dev := some before}}
   let mut cases := #[← runCase input "record-derived/projection-before-replacement" bw pid kid]
   cases := cases.push (← runCase input "synthetic/failure-new-already-linked" w pid kid)
   let mut collision := before
@@ -34,12 +35,12 @@ def suite (input : ProbeInput) : Except String Json := do
     entries := entries ++ [⟨e.index+(i+1)*8192,.keypair (100+i)⟩]
   for (label,table) in [("head",old::entries),("middle",entries.take 1++[old]++entries.drop 1),
       ("tail",entries++[old])] do
-    let cw := {w with k := {w.k with wg := some {collision with indexTable := table}}}
+    let cw := {w with wg := {w.wg with dev := some {collision with indexTable := table}}}
     cases := cases.push (← runCase input s!"synthetic/{label}" cw pid kid)
   let some keypair := before.keypairs[kid]? | throw "replace target missing"
   let independent := {before with keypairs := before.keypairs.insert kid {keypair with peer := none}}
   cases := cases.push (← runCase input "synthetic/independent-null-new-peer-word"
-    {bw with k := {bw.k with wg := some independent}} pid kid)
+    {bw with wg := {bw.wg with dev := some independent}} pid kid)
   let s ← Replace.fixture input bw
   let new ← addressOf s.names (.keypair kid)
   let badMemory := put s.binary.state.data.dmem (new+input.offsets.kind) 4 1

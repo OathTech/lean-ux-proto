@@ -1,3 +1,4 @@
+import SourceAccess
 import MirrorPeerPoints
 import OwnerStore
 
@@ -7,7 +8,7 @@ open Leanux Leanux.WG MirrorHistory
 /-- Lifetime stamp, keypair existence and every replay bitmap word. The
     embedded peer word is intentionally absent: lookup may clear it. -/
 def receivingSnapshot (w : World) : Nat × (KeypairId → Option (Nat × ReplayCounter)) :=
-  (w.k.keypairCounter, fun i => (w.k.wg.bind fun d => d.keypairs.get? i).map
+  (w.wg.keypairCounter, fun i => (w.wg.dev.bind fun d => d.keypairs.get? i).map
     fun k => (k.internalId, k.receivingCounter))
 
 def Preserves (project : World → σ) (a : M α) : Prop :=
@@ -120,24 +121,24 @@ theorem preserves_bind {project : World → σ} {a : M α} {f : α → M β}
     simp only [actual] at run
     exact (hf x middle y w' run).trans (ha w x middle actual)
 
-theorem preserves_getDev (project : World → σ) : Preserves project getDev := by
-  unfold getDev getK
-  apply preserves_bind (preserves_bind (preserves_get project) (fun _ => preserves_pure project _))
-  intro k
-  cases k.wg with
+theorem preserves_getDev (project : World → σ) : Preserves project Source.getDev := by
+  rw [Source.getDev_eq]
+  apply preserves_bind (preserves_get project)
+  intro w
+  cases w.wg.dev with
   | none => exact preserves_throw project _
   | some d => exact preserves_pure project d
 
-theorem preserves_getPeer (project : World → σ) (id : PeerId) : Preserves project (getPeer id) := by
-  unfold getPeer
+theorem preserves_getPeer (project : World → σ) (id : PeerId) : Preserves project (Source.getPeer id) := by
+  rw [Source.getPeer_eq]
   apply preserves_bind (preserves_getDev project)
   intro d
   cases d.peers.get? id with
   | none => exact preserves_throw project _
   | some p => exact preserves_pure project p
 
-theorem preserves_getKeypair (project : World → σ) (id : KeypairId) : Preserves project (getKeypair id) := by
-  unfold getKeypair
+theorem preserves_getKeypair (project : World → σ) (id : KeypairId) : Preserves project (Source.getKeypair id) := by
+  rw [Source.getKeypair_eq]
   apply preserves_bind (preserves_getDev project)
   intro d
   cases d.keypairs.get? id with
@@ -145,13 +146,14 @@ theorem preserves_getKeypair (project : World → σ) (id : KeypairId) : Preserv
   | some p => exact preserves_pure project p
 
 theorem preserves_setPeer (id : PeerId) (p : Peer) :
-    Preserves receivingSnapshot (setPeer id p) := by
+    Preserves receivingSnapshot (Source.setPeer id p) := by
   intro w x w' run
   cases run
-  cases h : w.k.wg <;> simp [receivingSnapshot, h]
+  cases h : w.wg.dev <;> simp [receivingSnapshot, h]
 
 theorem preserves_ownerWord (owner : IndexOwner) :
-    Preserves receivingSnapshot owner.peerWord := by
+    Preserves receivingSnapshot (Source.peerWord owner) := by
+  rw [Source.ownerWord_eq]
   cases owner with
   | handshake id =>
     exact preserves_bind (preserves_getPeer receivingSnapshot id) (fun _ => preserves_pure receivingSnapshot _)
@@ -159,18 +161,18 @@ theorem preserves_ownerWord (owner : IndexOwner) :
     exact preserves_bind (preserves_getKeypair receivingSnapshot id) (fun _ => preserves_pure receivingSnapshot _)
 
 theorem preserves_ownerStore (owner : IndexOwner) (word : Option PeerId) :
-    Preserves receivingSnapshot (owner.setPeerWord word) := by
+    Preserves receivingSnapshot (Source.setPeerWord owner word) := by
   intro w x w' run
-  cases hd : w.k.wg with
+  cases hd : w.wg.dev with
   | none =>
-    cases owner <;> simp [IndexOwner.setPeerWord, getPeer, getKeypair, getDev, getK, hd, invariant] at run <;> cases run
+    cases owner <;> simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG, liftAmbient, WG.getDev, WG.getPeer, WG.getKeypair, Source.setPeerWord, IndexOwner.setPeerWord, Source.getPeer, Source.getKeypair, Source.getDev, Source.getWG, hd, invariant] at run <;> cases run
   | some d =>
     cases owner with
     | handshake id =>
       cases hp : d.peers.get? id with
       | none =>
         have missing : d.peers[id]? = none := hp
-        simp [IndexOwner.setPeerWord, getPeer, getDev, getK, hd, missing, invariant] at run
+        simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG, liftAmbient, WG.getDev, WG.getPeer, WG.getKeypair, Source.setPeerWord, IndexOwner.setPeerWord, Source.getPeer, Source.getDev, Source.getWG, hd, missing, invariant] at run
         cases run
       | some p =>
         rw [OwnerWord.set_handshake_run w d id p word hd hp] at run
@@ -180,7 +182,7 @@ theorem preserves_ownerStore (owner : IndexOwner) (word : Option PeerId) :
       cases hk : d.keypairs.get? id with
       | none =>
         have missing : d.keypairs[id]? = none := hk
-        simp [IndexOwner.setPeerWord, getKeypair, getDev, getK, hd, missing, invariant] at run
+        simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, liftM, monadLift, MonadLift.monadLift, liftWG, liftAmbient, WG.getDev, WG.getPeer, WG.getKeypair, Source.setPeerWord, IndexOwner.setPeerWord, Source.getKeypair, Source.getDev, Source.getWG, hd, missing, invariant] at run
         cases run
       | some kp =>
         rw [OwnerWord.set_keypair_run w d id kp word hd hk] at run
@@ -212,11 +214,11 @@ theorem frames_count (old : Nat) : Frames receivingSnapshot (count old) := by
   intro initial history w answer points w' same prior run
   have erased := count_erases old history w
   rw [run] at erased
-  have actual : (refcountIncNotZero old).run w = .ok (answer,w') := erased.symm
+  have actual : (refcountIncNotZero old : M Bool).run w = .ok (answer,w') := erased.symm
   have small := PeerMirror.accepted_count_bound old w w' answer actual
   rw [count_run_logged old history w small] at run
   cases run
-  have kernel : (PeerMirror.countRecords w old).k = w.k := by
+  have kernel : (PeerMirror.countRecords w old).wg = w.wg := by
     unfold PeerMirror.countRecords
     split <;> rfl
   refine ⟨?_,?_⟩
@@ -301,11 +303,11 @@ theorem frames_finish (a : LookupMirror.Acc) : Frames receivingSnapshot (finish 
           | some pid => exact frames_pure receivingSnapshot _
 
 theorem frames_lookup (kinds : List IndexKind) (index : Nat) :
-    Frames receivingSnapshot (lookup kinds index) := by
-  unfold lookup
+    Frames receivingSnapshot (MirrorHistory.lookup kinds index) := by
+  unfold MirrorHistory.lookup
   apply frames_called
-  apply frames_bind (frames_lift (show Preserves receivingSnapshot (indexBucket index) from by
-    unfold indexBucket
+  apply frames_bind (frames_lift (show Preserves receivingSnapshot (Source.indexBucket index) from by
+    rw [Source.indexBucket_eq]
     apply preserves_bind (preserves_getDev receivingSnapshot)
     intro d
     exact preserves_pure receivingSnapshot _))

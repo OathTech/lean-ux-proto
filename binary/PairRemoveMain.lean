@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairRemove
 open Lean Leanux Leanux.WG Binary.Pair
 
@@ -15,7 +16,7 @@ def runCase (input : ProbeInput) (label : String) (w : World) (owners : List Ind
 
 def suite (input : ProbeInput) : Except String Json := do
   let w ← replayRecordedPrefix input.trace input.operation
-  let some d := w.k.wg | throw "remove prefix: no device"
+  let some d := w.wg.dev | throw "remove prefix: no device"
   let [e] := d.indexTable | throw "remove pilot requires a one-entry recorded prefix"
   let .keypair kid := e.owner | throw "remove prefix: expected keypair owner"
   let [(pid,peer)] := d.peers.toList | throw "remove prefix: expected one peer"
@@ -25,7 +26,7 @@ def suite (input : ProbeInput) : Except String Json := do
   unless keypair.refcount==1 do throw "remove prefix: keypair does not release"
   -- keypairsClear removes the keypair twice (unreference-now, then release);
   -- the peer's eventual release removes its handshake entry. Only the
-  -- selected indexRemove calls execute here, not their intervening callers.
+  -- selected Source.indexRemove calls execute here, not their intervening callers.
   let mut cases := #[← runCase input "recorded-prefix/selected-removal-calls" w
     [e.owner,e.owner,.handshake pid]]
   let mut collision := d
@@ -34,7 +35,7 @@ def suite (input : ProbeInput) : Except String Json := do
     collision := {collision with keypairs := collision.keypairs.insert (100+i) {peer := some pid}}
     entries := entries ++ [⟨e.index+(i+1)*8192,.keypair (100+i)⟩]
   collision := {collision with indexTable := entries++[e]}
-  let cw := {w with k := {w.k with wg := some collision}}
+  let cw := {w with wg := {w.wg with dev := some collision}}
   for (label,order) in [("head-first",[IndexOwner.keypair 100,.keypair 101,.keypair 102,e.owner]),
       ("middle-first",[.keypair 101,e.owner,.keypair 100,.keypair 102]),
       ("tail-first",[e.owner,.keypair 102,.keypair 101,.keypair 100])] do
@@ -42,7 +43,7 @@ def suite (input : ProbeInput) : Except String Json := do
   -- An absent owner with a stale non-NULL pprev passes the lookup-only
   -- reconstruction. It can then unlink a different owner under removal.
   let spare := IndexOwner.keypair 999
-  let badWorld := {w with k := {w.k with wg := some {d with keypairs := d.keypairs.insert 999 {peer := some pid}}}}
+  let badWorld := {w with wg := {w.wg with dev := some {d with keypairs := d.keypairs.insert 999 {peer := some pid}}}}
   let s ← Remove.fixture input badWorld
   let a ← addressOf s.names spare
   let bucketHead := s.names.table+(e.index%8192)*8

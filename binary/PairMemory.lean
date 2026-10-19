@@ -1,3 +1,4 @@
+import SourceAdapter
 import ProbeSupport
 
 /-! Executable index-lookup reconstruction. No definition in this module reads
@@ -158,7 +159,7 @@ def compareState (actual expected : LookupState) : Except String Unit := do
     throw s!"peer refcounts: binary={repr actual.refcounts}, mirror={repr expected.refcounts}"
 
 def assertMemory (n : Names) (o : Offsets) (m : DataMem) (w : World) : Except String Unit := do
-  let some d := w.k.wg | throw "mirror device missing"
+  let some d := w.wg.dev | throw "mirror device missing"
   let actual ← (reconstruct n o m).mapError DecodeError.message
   compareState actual (target d)
 

@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairLookupSourceFrame
 
 namespace Binary.Pair.IndexLookup
@@ -5,10 +6,10 @@ open Leanux Leanux.WG LookupRelation
 set_option maxRecDepth 2048
 
 theorem helper_source_frame {c : Config} {w final : World} {d : Device} {answer : Option PeerId}
-    (device : w.k.wg=some d)
+    (device : w.wg.dev=some d)
     (present : ∀ id, c.focus.peer=some id → ∃ peer, d.peers.get? id=some peer)
-    (accepted : (WG.peerGetMaybeZero c.focus.peer).run w=.ok (answer,final)) :
-    ∃ after, final.k.wg=some after ∧ SourceFrame c d after ∧
+    (accepted : (Source.peerGetMaybeZero c.focus.peer).run w=.ok (answer,final)) :
+    ∃ after, final.wg.dev=some after ∧ SourceFrame c d after ∧
       (∀ owner, OwnerWord.value after owner=OwnerWord.value d owner) ∧
       (answer=none ∨ answer=c.focus.peer) := by
   cases focus : c.focus.peer with
@@ -36,8 +37,8 @@ theorem helper_source_frame {c : Config} {w final : World} {d : Device} {answer 
 NULL and zero-count branches; positive-count bounds come only from acceptance. -/
 theorem lookup_source_frame {n o coverage s w d query kinds ra answer final}
     (facts : CallFacts n o coverage s w d query kinds ra)
-    (accepted : (WG.indexLookup kinds query).run w=.ok (answer,final)) :
-    ∃ after, final.k.wg=some after ∧ SourceFrame (callConfig n w d query kinds) d after ∧
+    (accepted : (Source.indexLookup kinds query).run w=.ok (answer,final)) :
+    ∃ after, final.wg.dev=some after ∧ SourceFrame (callConfig n w d query kinds) d after ∧
       ∀ owner, (callConfig n w d query kinds).focus.owner=some owner → ∀ value,
         OwnerWord.value after owner=some value → value=none ∨ value=(callConfig n w d query kinds).focus.peer := by
   let c := callConfig n w d query kinds
@@ -54,7 +55,7 @@ theorem lookup_source_frame {n o coverage s w d query kinds ra answer final}
     obtain ⟨helperAnswer,helperFinal,middle,points,helperAccepted,_,continuation,_⟩ :=
       lookup_accepts_helper c coverage.coverage coverage.preempt ra s w v facts.entry owner focus answer final accepted
     obtain ⟨setWorld,setRun,_,finalEq,_⟩ := afterHelper_accepted owner helperAnswer middle points helperFinal final answer continuation
-    have device : (helperWorld c w v).k.wg=some d := by
+    have device : (helperWorld c w v).wg.dev=some d := by
       rw [helperWorld,LookupSearch.result_world]
       exact facts.device
     obtain ⟨after,deviceAfter,helperFrame,words,allowed⟩ := helper_source_frame device

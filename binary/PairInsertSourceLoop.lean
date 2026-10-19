@@ -1,3 +1,4 @@
+import SourceAccess
 import PairInsertSource
 
 namespace Binary.Pair.Insert.Source
@@ -10,7 +11,7 @@ def attempt (owner : IndexOwner) (_a : DrawAcc) : M (ForInStep DrawAcc) := do
   if ← hasBucket .idxInsWalk1 .idxInsCollide1 index then return .yield (none,())
   if ← hasBucket .idxInsWalk2 .idxInsCollide2 index then
     unsupported "an index stolen during insertion"
-  modifyDev fun d => {d with indexTable := ⟨index,owner⟩::d.indexTable}
+  Source.modifyDev fun d => {d with indexTable := ⟨index,owner⟩::d.indexTable}
   return .done (some index,())
 
 def attempts (owner : IndexOwner) : Nat → DrawAcc → M DrawAcc
@@ -51,8 +52,8 @@ theorem presentation_loop (owner : IndexOwner) :
   simp only [Std.Legacy.Range.forIn_eq_forIn_range',
     show ([:fuel] : Std.Legacy.Range).size=fuel from by simp [Std.Legacy.Range.size]]
   rw [←range_attempts owner fuel 0]
-  unfold attempt hiddenU64 finish
-  simp only [bind_assoc]
+  unfold attempt finish
+  simp only [Source.hiddenU64_eq, bind_assoc, pure_bind]
   congr 1
   funext a
   rcases a with ⟨result,⟨⟩⟩
@@ -64,13 +65,13 @@ theorem presentation_loop (owner : IndexOwner) :
 These are extracted from an accepted execution, not assumed at binary entry. -/
 inductive RetryPath (owner : IndexOwner) : World → Nat → World → Prop
   | found {w index drawn first second final} :
-      (hiddenU64 .indexDraw).run w=.ok (index,drawn) →
+      (hiddenU64 .indexDraw : M Nat).run w=.ok (index,drawn) →
       (hasBucket .idxInsWalk1 .idxInsCollide1 index).run drawn=.ok (false,first) →
       (hasBucket .idxInsWalk2 .idxInsCollide2 index).run first=.ok (false,second) →
-      (modifyDev fun d => {d with indexTable := ⟨index,owner⟩::d.indexTable}).run second=.ok ((),final) →
+      (Source.modifyDev fun d => {d with indexTable := ⟨index,owner⟩::d.indexTable}).run second=.ok ((),final) →
       RetryPath owner w index final
   | collision {w draw drawn middle index final} :
-      (hiddenU64 .indexDraw).run w=.ok (draw,drawn) →
+      (hiddenU64 .indexDraw : M Nat).run w=.ok (draw,drawn) →
       (hasBucket .idxInsWalk1 .idxInsCollide1 draw).run drawn=.ok (true,middle) →
       RetryPath owner middle index final → RetryPath owner w index final
 
@@ -78,12 +79,12 @@ theorem attempt_effect {owner w a step final}
     (accepted : (attempt owner a).run w=.ok (step,final)) :
     (∃ index drawn first second,
       step=.done (some index,()) ∧
-      (hiddenU64 .indexDraw).run w=.ok (index,drawn) ∧
+      (hiddenU64 .indexDraw : M Nat).run w=.ok (index,drawn) ∧
       (hasBucket .idxInsWalk1 .idxInsCollide1 index).run drawn=.ok (false,first) ∧
       (hasBucket .idxInsWalk2 .idxInsCollide2 index).run first=.ok (false,second) ∧
-      (modifyDev fun d => {d with indexTable := ⟨index,owner⟩::d.indexTable}).run second=.ok ((),final)) ∨
+      (Source.modifyDev fun d => {d with indexTable := ⟨index,owner⟩::d.indexTable}).run second=.ok ((),final)) ∨
     (∃ index drawn, step=.yield (none,()) ∧
-      (hiddenU64 .indexDraw).run w=.ok (index,drawn) ∧
+      (hiddenU64 .indexDraw : M Nat).run w=.ok (index,drawn) ∧
       (hasBucket .idxInsWalk1 .idxInsCollide1 index).run drawn=.ok (true,final)) := by
   unfold attempt at accepted
   rw [StateT.run_bind] at accepted
@@ -102,7 +103,7 @@ theorem attempt_effect {owner w a step final}
     | true => cases accepted
     | false =>
       simp only [Bool.false_eq_true,↓reduceIte] at accepted
-      change ((modifyDev fun d => {d with indexTable := ⟨index,owner⟩::d.indexTable}).run second >>=
+      change ((Source.modifyDev fun d => {d with indexTable := ⟨index,owner⟩::d.indexTable}).run second >>=
         fun p => .ok (.done (some index,()),p.2)) = .ok (step,final) at accepted
       obtain ⟨⟨⟨⟩,last⟩,updated,accepted⟩ := bind_ok accepted
       change Except.ok (.done (some index,()),last)=Except.ok (step,final) at accepted
@@ -137,10 +138,7 @@ theorem finish_accepted {out w index final}
     out=(some index,()) ∧ final=w := by
   rcases out with ⟨answer,⟨⟩⟩
   cases answer with
-  | none =>
-    simp only [finish,budgetExhausted,StateT.run_bind] at accepted
-    cases present : w.hidden.isSome <;>
-      simp [present,invariant,unsupported] at accepted <;> cases accepted
+  | none => exact False.elim (Source.budgetExhausted_ne_ok "index draws" w (index,final) accepted)
   | some value =>
     change Except.ok (value,w)=Except.ok (index,final) at accepted
     cases Except.ok.inj accepted
@@ -150,8 +148,8 @@ theorem finish_accepted {out w index final}
 collision prefix and a successful insertion attempt. There is no fixed
 bound or assumed second-walk result in this statement. -/
 theorem source_path {owner w d index final}
-    (device : w.k.wg=some d)
-    (accepted : (WG.indexInsert owner).run w=.ok (index,final)) :
+    (device : w.wg.dev=some d)
+    (accepted : (Source.indexInsert owner).run w=.ok (index,final)) :
     RetryPath owner (unlinkedWorld w d owner) index final := by
   rw [indexInsert_eq,presentation_loop,StateT.run_bind,unhash_run w d owner device] at accepted
   let initial := unlinkedWorld w d owner

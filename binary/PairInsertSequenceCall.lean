@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsertSequencePre
 import PairSequenceInputFrame
 import PairSequenceCall
@@ -105,7 +106,7 @@ theorem call_checked (fetch : Int64 → Option Decoded)
         coupling.frame _ _ records privateFrame input⟩
   | insert owner =>
     obtain ⟨address,named⟩ := admissible
-    change ((WG.indexInsert owner).run w >>= fun p => .ok (.insert p.1,p.2))=.ok (answer,finalWorld) at accepted
+    change ((Source.indexInsert owner).run w >>= fun p => .ok (.insert p.1,p.2))=.ok (answer,finalWorld) at accepted
     obtain ⟨⟨value,world⟩,first,equal⟩ := bind_ok accepted
     cases Except.ok.inj equal
     let entry := Sequence.install n base ra Insert.codeEntry address 0 current

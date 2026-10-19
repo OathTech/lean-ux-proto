@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairMemory
 import AllowedipsFixture
 import AllowedipsLayout
@@ -107,7 +108,7 @@ def Corresponds (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) (d :
   reconstruct names o m = .ok (target d)
 
 def assertAt (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) (w : World) : Except String Unit := do
-  let some d := w.k.wg | throw "trie: mirror device missing"
+  let some d := w.wg.dev | throw "trie: mirror device missing"
   let actual ← (reconstruct names o m).mapError DecodeError.message
   let expected := target d
   unless actual.nodes == expected.nodes do

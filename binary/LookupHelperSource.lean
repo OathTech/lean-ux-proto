@@ -1,3 +1,4 @@
+import SourceAdapter
 import PeerPhysicalSimulation
 
 namespace Binary.LookupRelation
@@ -8,8 +9,8 @@ open Leanux Leanux.WG PeerCountPhase
 theorem project_peer_present (c : Config) (world : World) (v : View)
     (projected : project c world = some v) (pid : PeerId) (focused : c.focus.peer = some pid)
     (number : Nat) (count : v.count = some number) :
-    ∃ device peer, world.k.wg = some device ∧ device.peers.get? pid = some peer ∧ peer.refcount = number := by
-  cases hasDevice : world.k.wg with
+    ∃ device peer, world.wg.dev = some device ∧ device.peers.get? pid = some peer ∧ peer.refcount = number := by
+  cases hasDevice : world.wg.dev with
   | none => simp [project, hasDevice] at projected
   | some device =>
     have countEq := congrArg (fun view : Option View => view.bind (·.count)) projected
@@ -29,7 +30,7 @@ theorem R.peer_entry_data (c : Config) (world : World) (s : MachineState)
     (history : List MachineState) (seen : List LookupObservation.Point)
     (related : R c history seen s world) (initial : scan none history = none)
     (pid : PeerId) (focused : c.focus.peer = some pid) :
-    ∃ device peer, world.k.wg = some device ∧ device.peers.get? pid = some peer ∧
+    ∃ device peer, world.wg.dev = some device ∧ device.peers.get? pid = some peer ∧
       c.peers pid ≠ 0 ∧ s.data.dmem.loadInt (c.peers pid + .ofNat 64 Layouts.peer_refcount) 4 =
         some (peer.refcount : Int) := by
   obtain ⟨v, projected, physical⟩ := related.2.1

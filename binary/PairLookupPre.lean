@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairLookupFacts
 import SequentialLookup
 
@@ -107,7 +108,7 @@ theorem CallFacts.entry {n o coverage s w d query kinds ra}
     · exact facts.output_services outputNeeded a output (.inl (.inl metadata))
 
 theorem pre_lookup {n o coverage s w query kinds ra} (checked : Pre n o coverage s w query kinds ra) :
-    ∃ d, w.k.wg=some d ∧ Pre_lookup (callConfig n w d query kinds) coverage.coverage coverage.preempt ra s w := by
+    ∃ d, w.wg.dev=some d ∧ Pre_lookup (callConfig n w d query kinds) coverage.coverage coverage.preempt ra s w := by
   obtain ⟨d,facts⟩ := pre_facts checked
   exact ⟨d,facts.device,_,facts.entry⟩
 

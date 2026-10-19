@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairRemoveBody
 import PairRemoveSource
 import PairIndexKinds
@@ -28,7 +29,7 @@ theorem unlink_heap_frame {n o m} (layout : Layout o) (f : UnlinkFocus n o m) :
 def Post (n : Names) (o : Offsets) (c : Context) (initial : MachineState)
     (ra : UInt64) (final : World) (t : MachineState) : Prop :=
   Returned initial t ra ∧ MemoryReady c initial ra 4 (savedWords initial.data) false t.data.dmem ∧
-    (∃ d, final.k.wg=some d ∧ Corresponds n o t.data.dmem d ∧ ownership n o t.data.dmem=.ok (targetOwnership d)) ∧
+    (∃ d, final.wg.dev=some d ∧ Corresponds n o t.data.dmem d ∧ ownership n o t.data.dmem=.ok (targetOwnership d)) ∧
     EqualOutside (fun a => HeapBytes n o a ∨ External c initial 4 a) initial.data.dmem t.data.dmem ∧ KindFrame n o initial.data.dmem t.data.dmem
 
 /-- Complete sequential removal under Kraken's permission-granting effect
@@ -37,7 +38,7 @@ are named hypotheses; physical shape is derived from reconstruction. -/
 theorem remove_checked (fetch : Int64 → Option Decoded) (decoder : IndexRemoveDecoderAgreement fetch)
     (trace : TracePcContract fetch) (bh : BhEnableContract fetch)
     {n o c initial w owner ra final} (checked : Pre n o c initial w owner ra)
-    (accepted : (WG.indexRemove owner).run w=.ok ((),final)) :
+    (accepted : (Source.indexRemove owner).run w=.ok ((),final)) :
     Eventually (instructionStep fetch) (Post n o c initial ra final) initial := by
   obtain ⟨d,base,device,related,storage,owners,named,pc,arg⟩ := pre_facts checked
   obtain ⟨argument,facts⟩ := arg

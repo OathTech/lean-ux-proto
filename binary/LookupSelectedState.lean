@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupHelperCall
 
 namespace Binary.LookupRelation
@@ -81,7 +82,7 @@ theorem selected_after_bucket (c : Config) (coverage : KcovLayout) (preempt : Bi
     lastHelperReturn_append_decisions _ _ tags rfl
   have projected : project c (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2 = some v := by
     calc
-      _ = project c {world with steps := (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2.steps} :=
+      _ = project c {world with ambient := {world.ambient with steps := (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2.steps}} :=
         congrArg (project c) (LookupSearch.result_world _ _ _ _ _)
       _ = project c world := rfl
       _ = some v := entry.projected

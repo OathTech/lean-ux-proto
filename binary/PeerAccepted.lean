@@ -1,3 +1,4 @@
+import SourceAdapter
 import PeerDeadEntry
 import PeerLiveEntry
 import MirrorPeer
@@ -15,8 +16,8 @@ theorem accepted_nonnull_to_return (fetch : Int64 → Option Decoded)
     (traceByte : TraceConstCmp1Contract fetch)
     (pid : Leanux.WG.PeerId) (w w' : Leanux.World) (answer : Option Leanux.WG.PeerId)
     (device : Leanux.WG.Device) (peer : Leanux.WG.Peer)
-    (hasDevice : w.k.wg = some device) (hasPeer : device.peers.get? pid = some peer)
-    (accepted : (Leanux.WG.peerGetMaybeZero (some pid)).run w = .ok (answer, w'))
+    (hasDevice : w.wg.dev = some device) (hasPeer : device.peers.get? pid = some peer)
+    (accepted : (Source.peerGetMaybeZero (some pid)).run w = .ok (answer, w'))
     (s : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame ⟨s, Image.PeerGet.entry⟩ returnAddress) (nonnull : s.regs.rdi ≠ 0)
     (field : s.dmem.loadInt (s.regs.rdi.toBitVec+0x420) 4 = some (peer.refcount : Int))

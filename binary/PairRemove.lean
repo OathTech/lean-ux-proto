@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairIndex
 import PairIndexStorage
 import PairIndexCallCheck
@@ -21,7 +22,7 @@ def targetOwnership (d : Device) : List (IndexOwner × Bool) :=
 def assertAt (n : Names) (o : Offsets) (m : DataMem) (w : World) : Except String Unit := do
   unless Index.storageCheck n o do throw "remove: index storage overlaps or wraps"
   assertMemory n o m w
-  let some d := w.k.wg | throw "remove: no source device"
+  let some d := w.wg.dev | throw "remove: no source device"
   let actual ← (ownership n o m).mapError DecodeError.message
   unless actual == targetOwnership d do throw "remove: owner hashed state differs"
 
@@ -38,7 +39,7 @@ def callBoundary (n : Names) (o : Offsets) (c : CommonBitsCoverage.Context)
 The removal itself retains memory, including across repeated invocations. -/
 def fixture (input : ProbeInput) (w : World) : Except String Session := do
   let s ← startSession input w
-  let some d := w.k.wg | throw "remove fixture: no device"
+  let some d := w.wg.dev | throw "remove fixture: no device"
   let mut m := s.binary.state.data.dmem
   for (owner,a) in s.names.owners do
     unless d.indexTable.any (·.owner == owner) do
@@ -64,7 +65,7 @@ def invoke (input : ProbeInput) (seed : UInt64) (s : Session) (owner : IndexOwne
     (some fun s => match TrustBase.KcovPlan .pc s with
       | none => .error "remove coverage callback inputs are missing"
       | some writes => .ok (!writes.isEmpty))
-  let (_,world) ← (indexRemove owner).run s.world |>.mapError Stop.message
+  let (_,world) ← (Source.indexRemove owner).run s.world |>.mapError Stop.message
   if checkOwnership then assertAt s.names input.offsets r.state.data.dmem world
   else assertMemory s.names input.offsets r.state.data.dmem world
   unless r.state.pc.toBitVec.toNat==stopAddr && r.state.data.regs.rsp.toNat==stackAddr+8 do
@@ -85,6 +86,6 @@ def invoke (input : ProbeInput) (seed : UInt64) (s : Session) (owner : IndexOwne
     ("owner",toJson (reprStr owner)),
     ("instructions",toJson r.pcs.size),("reads",toJson r.reads.size),("writes",toJson r.writes.size),
     ("coverage",toJson (r.coverage.toList.drop s.binary.coverage.size)),
-    ("hashed",toJson ((s.world.k.wg.map fun d => d.indexTable.any (·.owner==owner)).getD false))])
+    ("hashed",toJson ((s.world.wg.dev.map fun d => d.indexTable.any (·.owner==owner)).getD false))])
 
 end Binary.Pair.Remove

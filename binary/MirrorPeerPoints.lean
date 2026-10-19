@@ -1,3 +1,4 @@
+import SourceAdapter
 import MirrorHistory
 
 namespace Binary.MirrorHistory
@@ -29,7 +30,7 @@ theorem count_run_logged (old : Nat) (h : List Point) (w : World)
       .ok ((old != 0, h ++ countPoints w old), countRecords w old) := by
   have noWrap : ¬old + 1 ≥ 2^31 := by omega
   by_cases zero : old = 0 <;>
-    simp [count, branchCmpLogged, branchLogged, mark,
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, count, branchCmpLogged, branchLogged, mark,
       branchCmp, branch, countPoints, countRecords,
       recordCmp, record, zero, noWrap, List.append_assoc] <;> rfl
 
@@ -41,7 +42,7 @@ theorem peer_null_run_logged (h : List Point) (w : World) :
 
 theorem peer_run_logged (pid : PeerId) (h : List Point) (w : World)
     (device : Device) (peer : Peer)
-    (hasDevice : w.k.wg = some device)
+    (hasDevice : w.wg.dev = some device)
     (hasPeer : device.peers.get? pid = some peer)
     (small : peer.refcount + 1 < 2^31) :
     ((peerGet (some pid)).run h).run w =
@@ -53,20 +54,20 @@ theorem peer_run_logged (pid : PeerId) (h : List Point) (w : World)
   all_goals have boolZero : (peer.refcount == 0) = decide (peer.refcount = 0) := rfl
   all_goals simp only [zero, decide_true, decide_false] at boolZero
   all_goals
-    simp [peerGet, count, branchLogged, branchCmpLogged, mark,
-      branch, branchCmp, requireNotPending, getPeer, getDev, getK,
-      hasDevice, peerRead, zero, noWrap, setPeer, modifyDev, modifyK,
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, liftWG, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer, WG.getKeypair, WG.setKeypair, WG.modifyDev, peerGet, count, branchLogged, branchCmpLogged, mark,
+      branch, branchCmp, Source.requireNotPending, Source.getPeer, Source.getDev, Source.getWG,
+      hasDevice, peerRead, zero, noWrap, Source.setPeer, Source.modifyDev, Source.modifyWG,
       peerPoints, countPoints, peerFinal, countRecords,
       recordCmp, record, bne, boolZero, List.append_assoc] <;> rfl
 
 theorem countPoints_kernel (w : World) (old : Nat) (q : Point)
-    (member : q ∈ countPoints w old) : q.world.k = w.k := by
+    (member : q ∈ countPoints w old) : q.world.wg = w.wg := by
   by_cases zero : old = 0 <;>
     simp [countPoints, countRecords, recordCmp, record, zero] at member <;>
     rcases member with rfl | rfl | rfl | rfl <;> rfl
 
 theorem peerPoints_kernel (w : World) (peer : Peer) (q : Point)
-    (member : q ∈ peerPoints w peer) : q.world.k = w.k := by
+    (member : q ∈ peerPoints w peer) : q.world.wg = w.wg := by
   simp only [peerPoints, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with (rfl | member) | rfl
   · rfl
@@ -84,9 +85,8 @@ theorem called_run (symbol : String) (action : Logged α)
       .ok ((answer, h ++ [⟨.call symbol, w⟩] ++ points ++
         [⟨.returned symbol, w'⟩]), w') := by
   simp [called, mark, StateT.run_bind, run, List.append_assoc]
-  change Except.ok ((answer, (h ++ (⟨.call symbol, w⟩ :: points)) ++
-    [⟨.returned symbol, w'⟩]), w') = _
-  simp only [List.append_assoc, List.cons_append]
+  rfl
+
 
 #print axioms called_run
 

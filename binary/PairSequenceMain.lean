@@ -1,9 +1,10 @@
+import SourceAdapter
 import PairSequenceRunner
 open Lean Leanux Leanux.WG Binary.Pair Sequence
 
 def suite (input : ProbeInput) : Except String Json := do
   let w ← replayRecordedPrefix input.trace input.operation
-  let some d := w.k.wg | throw "sequence.prefix.device"
+  let some d := w.wg.dev | throw "sequence.prefix.device"
   let [e] := d.indexTable | throw "sequence.prefix.index-entry"
   let .keypair kid := e.owner | throw "sequence.prefix.keypair"
   let [(pid,peer)] := d.peers.toList | throw "sequence.prefix.peer"
@@ -21,7 +22,7 @@ def suite (input : ProbeInput) : Except String Json := do
   let mut runs := #[]
   for dead in [false,true] do
     let dev := if dead then {collision with peers := collision.peers.insert pid {peer with refcount := 0}} else collision
-    let world := {w with k := {w.k with wg := some dev}}
+    let world := {w with wg := {w.wg with dev := some dev}}
     for capacity in [coverageBytes/8,4] do
       for seed in [(0 : UInt64),0xffffffffffffffff] do
         let report ← (runCalls input seed world calls capacity).mapError

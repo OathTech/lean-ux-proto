@@ -1,3 +1,4 @@
+import SourceAdapter
 import CallbackContracts
 import PairLookupAdequacy
 import PairRemoveAdequacy
@@ -18,7 +19,7 @@ theorem lookup_from_image (fetch : Int64 → Option Decoded)
      
     {n o coverage initial w query kinds ra answer finalWorld}
     (checked : Pre n o coverage initial w query kinds ra)
-    (accepted : (WG.indexLookup kinds query).run w=.ok (answer,finalWorld)) :
+    (accepted : (Source.indexLookup kinds query).run w=.ok (answer,finalWorld)) :
     Eventually (instructionStep fetch) (Post n o coverage initial ra answer finalWorld) initial := by
   exact lookup_checked fetch decoder
     (Callback.pc_contract fetch services) (Callback.cmp4_contract fetch services) (Callback.const_cmp4_contract fetch services) (Callback.const_cmp1_contract fetch services) (Callback.bh_contract fetch services)
@@ -37,7 +38,7 @@ or random-service premises remain. -/
 theorem remove_from_image (fetch : Int64 → Option Decoded) (decoder : IndexRemoveDecoderAgreement fetch)
     (services : ServiceDecoderAgreement fetch) 
     {n o c initial w owner ra final} (checked : Pre n o c initial w owner ra)
-    (accepted : (WG.indexRemove owner).run w=.ok ((),final)) :
+    (accepted : (Source.indexRemove owner).run w=.ok ((),final)) :
     Eventually (instructionStep fetch) (Post n o c initial ra final) initial := by
   exact remove_checked fetch decoder
     (Callback.pc_contract fetch services) (Callback.bh_contract fetch services)
@@ -56,7 +57,7 @@ or random-service premises remain. -/
 theorem replace_from_image (fetch : Int64 → Option Decoded) (decoder : IndexReplaceDecoderAgreement fetch)
     (services : ServiceDecoderAgreement fetch) 
     {n o c initial w pid kid ra answer final} (checked : Pre n o c initial w pid kid ra)
-    (accepted : (WG.indexReplaceHandshake pid kid).run w=.ok (answer,final)) :
+    (accepted : (Source.indexReplaceHandshake pid kid).run w=.ok (answer,final)) :
     Eventually (instructionStep fetch) (Post n o c initial ra answer final) initial := by
   exact replace_checked fetch decoder
     (Callback.pc_contract fetch services) (Callback.bh_contract fetch services)
@@ -79,7 +80,7 @@ theorem insert_from_image (fetch : Int64 → Option Decoded) (decoder : IndexIns
     (coupling : RandomInputCoupling fetch config c.coverage (c.preempt+512) (codeEntry+0x79).toUInt64 inputAt)
     (pre : Pre n o c initial w owner ra config)
     (supplied : w.hidden=some records) (input : inputAt initial.data.dmem records)
-    (accepted : (WG.indexInsert owner).run w=.ok (answer,final)) :
+    (accepted : (Source.indexInsert owner).run w=.ok (answer,final)) :
     Eventually (instructionStep fetch) (Post n o c initial ra config inputAt answer final) initial := by
   exact insert_checked fetch decoder
     (Callback.pc_contract fetch services) (Callback.cmp4_contract fetch services) (Callback.bh_contract fetch services)
@@ -101,7 +102,7 @@ theorem insert_simulation_from_image (fetch : Int64 → Option Decoded)
     (coupling : RandomInputCoupling fetch config c.coverage (c.preempt+512) (codeEntry+0x79).toUInt64 inputAt)
     (pre : Pre n o c initial w owner ra config)
     (supplied : w.hidden=some records) (input : inputAt initial.data.dmem records)
-    (accepted : (WG.indexInsert owner).run w=.ok (answer,final)) :
+    (accepted : (Source.indexInsert owner).run w=.ok (answer,final)) :
     Eventually (historyStep fetch) (fun t => Post n o c initial ra config inputAt answer final t.machine ∧
       ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
       RunEnvironment fetch permissions onlineCPUs externalActions t.history) ⟨initial,[initial]⟩ := by

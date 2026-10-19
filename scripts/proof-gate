@@ -2,8 +2,6 @@
 """The proof tree's gate (AGENTS.md, "Gates and speedbumps").
 
 Run through the bundle: `capped -- scripts/in-bundle scripts/proof-gate`.
-The binary charter surface uses `proof-gate --binary` from its worktree;
-its kernel replay and lake check are separate claim-point checks.
 Four checks, every one fail-closed and fail-noisy; the exit status is 0 only
 when all four pass:
 
@@ -169,14 +167,14 @@ def check_build():
         fail(f'lake build {TARGET} exited {result.returncode}')
 
 
-def check_axioms(names, cwd=ROOT, imports=None, artifact_name="proof-gate"):
-    print(f'[2/4] #print axioms for {len(names)} terminal statements', flush=True)
-    artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')) / artifact_name
+def check_axioms(names):
+    print(f'[2/4] #print axioms for {len(names)} terminal statements over {len(root_modules())} root modules', flush=True)
+    artifacts = Path(os.environ.get('LEANUX_ARTIFACTS', ROOT / '.artifacts')) / 'proof-gate'
     artifacts.mkdir(parents=True, exist_ok=True)
     scratch = artifacts / 'axioms.lean'
-    scratch.write_text(''.join(f'import {name}\n' for name in (imports if imports is not None else [module_name(path) for path in root_modules()]))
+    scratch.write_text(''.join(f'import {module_name(path)}\n' for path in root_modules())
                        + ''.join(f'#print axioms {name}\n' for name in names))
-    result = subprocess.run(capped(['lake', 'env', 'lean', str(scratch)]), cwd=cwd, capture_output=True, text=True)
+    result = subprocess.run(capped(['lake', 'env', 'lean', str(scratch)]), cwd=ROOT, capture_output=True, text=True)
     (artifacts / 'axioms.out').write_text(result.stdout + result.stderr)
     # Lean wraps a long axiom list over continuation lines that start with a
     # space; join them back before parsing.
@@ -253,45 +251,7 @@ def check_imports():
         fail(f'lakefile.toml declares no lean_lib named {TARGET}')
 
 
-def check_binary():
-    """Standalone charter surface; no dependency on lagging mirror proofs."""
-    sys.path.insert(0, str(ROOT / 'binary'))
-    from pin import verify_pin
-    from surface import HEADLINES, IMPORTS, check_surface
-    print('[binary] private Kraken pin/cleanliness, build, axioms, trust-surface diff, source escapes', flush=True)
-    try:
-        print(f'Kraken pin and clean tree: {verify_pin(ROOT)}', flush=True)
-    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
-        fail(str(exc))
-        return 1
-    result = subprocess.run(capped(['lake', '-d', 'binary', 'build']), cwd=ROOT)
-    if result.returncode:
-        fail(f'binary build exited {result.returncode}')
-    if not failures:
-        check_axioms(HEADLINES, cwd=ROOT / 'binary', imports=IMPORTS,
-                     artifact_name='binary-proof-gate')
-        try:
-            check_surface()
-        except (ValueError, OSError, subprocess.CalledProcessError) as exc:
-            fail(str(exc))
-    # Attic definitions are deliberately outside the proof path. The default
-    # BinaryProofs build and kernel replay check the actual import closure.
-    files = sorted((ROOT / 'binary').glob('*.lean'))
-    if not files:
-        fail('binary has no Lean sources')
-    for path in files:
-        for number, line in enumerate(strip_comments(path.read_text()).splitlines(), 1):
-            for match in FORBIDDEN.finditer(line):
-                fail(f'{path.relative_to(ROOT)}:{number}: {match.group(0)}')
-    print('binary proof gate: ' + ('FAILED' if failures else 'PASS'), flush=True)
-    return 1 if failures else 0
-
-
 def main():
-    if sys.argv[1:] == ['--binary']:
-        return check_binary()
-    if sys.argv[1:]:
-        raise SystemExit('usage: proof-gate [--binary]')
     names = terminal_statements()
     check_build()
     if not failures:

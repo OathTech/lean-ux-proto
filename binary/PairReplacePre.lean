@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairReplace
 import PairRemovePre
 import PairReplaceOwnership
@@ -16,7 +17,7 @@ structure NewReady (o : Offsets) (m : DataMem) (d : Device) (kid : KeypairId) (b
   index : ∃ value, word m "replace.new.index" (base+o.index) 4=.ok value
 
 theorem pre_facts {n o c s w pid kid ra} (pre : Pre n o c s w pid kid ra) :
-    ∃ d old new, w.k.wg=some d ∧ Corresponds n o s.data.dmem d ∧ storageCheck n o=true ∧
+    ∃ d old new, w.wg.dev=some d ∧ Corresponds n o s.data.dmem d ∧ storageCheck n o=true ∧
       Remove.ownership n o s.data.dmem=.ok (Remove.targetOwnership d) ∧
       (.handshake pid,old) ∈ n.owners ∧ (.keypair kid,new) ∈ n.owners ∧
       s.pc.toBitVec.toNat=entry ∧ s.data.regs.rsi.toNat=old ∧ s.data.regs.rdx.toNat=new ∧
@@ -59,7 +60,7 @@ theorem pre_of_parts {n o c s w pid kid ra d old new}
     (oldAddress : addressOf n (.handshake pid)=.ok old)
     (newAddress : addressOf n (.keypair kid)=.ok new)
     (arguments : (s.pc.toBitVec.toNat==entry && s.data.regs.rsi.toNat==old && s.data.regs.rdx.toNat==new)=true)
-    (device : w.k.wg=some d)
+    (device : w.wg.dev=some d)
     (ready : d.indexTable.any (·.owner==.handshake pid)=true → NewReady o s.data.dmem d kid new)
     (frame : Index.callFrameCheck n o c s ra 5=.ok ()) : Pre n o c s w pid kid ra := by
   unfold Pre callBoundary

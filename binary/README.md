@@ -253,7 +253,7 @@ It prints the headline types, invocation-boundary definitions, R/postcondition
 and verbatim trust declarations, and diffs `TrustSurface.expected.txt`:
 
 ```sh
-capped -- scripts/proof-gate --binary
+capped -- scripts/binary-proof-gate
 ```
 
 An intended surface change updates the specification explicitly, after
@@ -465,7 +465,7 @@ See the increment report for capture/three-way commands and measured cost.
 
 `PairSubsystemSurface` imports all seven new function/sequence headlines and
 the removal/replacement formal entry witnesses. It prints their types and
-axioms and the named trust premises. The existing `scripts/proof-gate --binary`
+axioms and the named trust premises. The existing `scripts/binary-proof-gate`
 also prints and diffs these definitions and the full TrustBase specification.
 From `binary/`, after a successful build, use:
 

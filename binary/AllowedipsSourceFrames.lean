@@ -1,13 +1,14 @@
+import SourceAdapter
 import AllowedipsSource
 import LookupSourceFrame
 
 namespace Binary.AllowedipsSource
 open Leanux Leanux.WG MirrorHistory LookupSourceFrame
 
-theorem frames_branch_kernel (project : Kernel → σ) (d : Decision) (b : Bool) :
-    Frames (fun w => project w.k) (branchLogged d b) := by
+theorem frames_branch_kernel (project : WGWorld → σ) (d : Decision) (b : Bool) :
+    Frames (fun w => project w.wg) (branchLogged d b) := by
   unfold branchLogged
-  apply frames_bind (frames_lift (show Preserves (fun w => project w.k) (branch d b) from by
+  apply frames_bind (frames_lift (show Preserves (fun w => project w.wg) (branch d b) from by
     intro w x w' run
     cases run
     rfl))
@@ -17,8 +18,8 @@ theorem frames_branch_kernel (project : Kernel → σ) (d : Decision) (b : Bool)
   exact frames_pure _ answer
 
 theorem preserves_getNode (project : World → σ) (id : NodeId) :
-    Preserves project (getNode id) := by
-  unfold getNode
+    Preserves project (Source.getNode id) := by
+  rw [Source.getNode_eq]
   apply preserves_bind (preserves_getDev project)
   intro d
   cases d.nodes.get? id with
@@ -41,43 +42,43 @@ theorem preserves_bitAt (project : World → σ) (n : AipNode) (bit : Nat) :
   · exact preserves_pure project _
   · exact preserves_throw project _
 
-theorem frames_commonBits (project : Kernel → σ) (node : AipNode) (key bits : Nat) :
-    Frames (fun w => project w.k) (commonBits node key bits) := by
+theorem frames_commonBits (project : WGWorld → σ) (node : AipNode) (key bits : Nat) :
+    Frames (fun w => project w.wg) (commonBits node key bits) := by
   intro initial history w answer points final same prior run
   rw [commonBits_run] at run
   cases run
   refine ⟨?_,?_⟩
-  · have eq := congrArg World.k (records_world w (commonChoices node key bits))
+  · have eq := congrArg World.wg (records_world w (commonChoices node key bits))
     exact (congrArg project eq).trans same
   · intro p member
     rcases List.mem_append.mp member with old | added
     · exact prior p old
-    · have eq := congrArg World.k (choicePoints_world w _ p added)
+    · have eq := congrArg World.wg (choicePoints_world w _ p added)
       exact (congrArg project eq).trans same
 
-theorem frames_swapEndian (project : Kernel → σ) (bits : Nat) :
-    Frames (fun w => project w.k) (swapEndian bits) := by
+theorem frames_swapEndian (project : WGWorld → σ) (bits : Nat) :
+    Frames (fun w => project w.wg) (AllowedipsSource.swapEndian bits) := by
   intro initial history w answer points final same prior run
   rw [swapEndian_run] at run
   cases run
   refine ⟨?_,?_⟩
-  · have eq := congrArg World.k (records_world w (swapChoices bits))
+  · have eq := congrArg World.wg (records_world w (swapChoices bits))
     exact (congrArg project eq).trans same
   · intro p member
     rcases List.mem_append.mp member with old | added
     · exact prior p old
-    · have eq := congrArg World.k (choicePoints_world w _ p added)
+    · have eq := congrArg World.wg (choicePoints_world w _ p added)
       exact (congrArg project eq).trans same
 
-theorem frames_prefixMatches (project : Kernel → σ) (node : AipNode) (key bits : Nat) :
-    Frames (fun w => project w.k) (prefixMatches node key bits) := by
+theorem frames_prefixMatches (project : WGWorld → σ) (node : AipNode) (key bits : Nat) :
+    Frames (fun w => project w.wg) (prefixMatches node key bits) := by
   unfold prefixMatches
   apply frames_bind (frames_called _ (frames_commonBits project node key bits))
   intro common
   exact frames_pure _ _
 
-theorem frames_iteration (project : Kernel → σ) (bits key : Nat) (acc : Acc) :
-    Frames (fun w => project w.k) (iteration bits key acc) := by
+theorem frames_iteration (project : WGWorld → σ) (bits key : Nat) (acc : Acc) :
+    Frames (fun w => project w.wg) (iteration bits key acc) := by
   unfold iteration
   cases acc.2.1 with
   | none =>
@@ -108,8 +109,8 @@ theorem frames_iteration (project : Kernel → σ) (bits key : Nat) (acc : Acc) 
         intro next
         exact frames_pure _ _
 
-theorem frames_loop (project : Kernel → σ) (bits key fuel : Nat) (acc : Acc) :
-    Frames (fun w => project w.k) (loop bits key fuel acc) := by
+theorem frames_loop (project : WGWorld → σ) (bits key fuel : Nat) (acc : Acc) :
+    Frames (fun w => project w.wg) (loop bits key fuel acc) := by
   induction fuel generalizing acc with
   | zero => exact frames_pure _ acc
   | succ fuel ih =>
@@ -120,8 +121,8 @@ theorem frames_loop (project : Kernel → σ) (bits key fuel : Nat) (acc : Acc) 
     | done answer => exact frames_pure _ answer
     | yield next => exact ih next
 
-theorem frames_findNode (project : Kernel → σ) (trie : Option NodeId) (bits key : Nat) :
-    Frames (fun w => project w.k) (findNode trie bits key) := by
+theorem frames_findNode (project : WGWorld → σ) (trie : Option NodeId) (bits key : Nat) :
+    Frames (fun w => project w.wg) (findNode trie bits key) := by
   rw [findNode_bounded]
   apply frames_bind (frames_loop project bits key 130 _)
   intro acc
@@ -136,20 +137,20 @@ theorem frames_findNode (project : Kernel → σ) (trie : Option NodeId) (bits k
 theorem findNode_kernel (trie : Option NodeId) (bits key : Nat)
     (world final : World) (answer : Option NodeId) (points : List Point)
     (accepted : ((findNode trie bits key).run []).run world = .ok ((answer,points),final)) :
-    final.k = world.k ∧ ∀ p ∈ points, p.world.k = world.k :=
-  frames_findNode id trie bits key world.k [] world answer points final rfl
+    final.wg = world.wg ∧ ∀ p ∈ points, p.world.wg = world.wg :=
+  frames_findNode id trie bits key world.wg [] world answer points final rfl
     (by intro p member; cases member) accepted
 
 /-- Source-only frame observation: all WG device fields except the peer
     map, plus each peer's existence and all of its fields except refcount.
     This is a frame theorem, not a physical representation prerequisite. -/
-def untouched (k : Kernel) : Option Device × (PeerId → Option Peer) :=
-  (k.wg.map fun d => {d with peers := {}},
-   fun pid => (k.wg.bind fun d => d.peers.get? pid).map fun p => {p with refcount := 0})
+def untouched (k : WGWorld) : Option Device × (PeerId → Option Peer) :=
+  (k.dev.map fun d => {d with peers := {}},
+   fun pid => (k.dev.bind fun d => d.peers.get? pid).map fun p => {p with refcount := 0})
 
 theorem peerFinal_untouched (pid : PeerId) (w : World) (device : Device) (peer : Peer)
-    (hasDevice : w.k.wg = some device) (hasPeer : device.peers.get? pid = some peer) :
-    untouched (PeerMirror.peerFinal pid w peer).k = untouched w.k := by
+    (hasDevice : w.wg.dev = some device) (hasPeer : device.peers.get? pid = some peer) :
+    untouched (PeerMirror.peerFinal pid w peer).wg = untouched w.wg := by
   by_cases zero : peer.refcount = 0
   · simp [PeerMirror.peerFinal, PeerMirror.countRecords, PeerMirror.recordCmp,
       LookupMirror.record, zero]
@@ -168,7 +169,7 @@ theorem peerFinal_untouched (pid : PeerId) (w : World) (device : Device) (peer :
 #print axioms peerFinal_untouched
 
 theorem frames_peerGet_untouched (word : Option PeerId) :
-    Frames (fun w => untouched w.k) (peerGet word) := by
+    Frames (fun w => untouched w.wg) (peerGet word) := by
   intro initial history w answer points final same prior run
   cases word with
   | none =>
@@ -184,16 +185,16 @@ theorem frames_peerGet_untouched (word : Option PeerId) :
   | some pid =>
     have erased := peerGet_erases (some pid) history w
     rw [run] at erased
-    have actual : (peerGetMaybeZero (some pid)).run w = .ok (answer,final) := erased.symm
-    cases hd : w.k.wg with
+    have actual : (Source.peerGetMaybeZero (some pid)).run w = .ok (answer,final) := erased.symm
+    cases hd : w.wg.dev with
     | none =>
-      simp [peerGetMaybeZero, branch, requireNotPending, getPeer, getDev, getK, hd, invariant] at actual
+      simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, AmbientM.branch, monadLift, MonadLift.monadLift, liftAmbient, Source.peerGetMaybeZero, branch, Source.requireNotPending, Source.getPeer, Source.getDev, Source.getWG, hd, invariant] at actual
       cases actual
     | some device =>
       cases hp : device.peers.get? pid with
       | none =>
         have absent : device.peers[pid]? = none := hp
-        simp [peerGetMaybeZero, branch, requireNotPending, getPeer, getDev, getK, hd, absent,
+        simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, AmbientM.branch, monadLift, MonadLift.monadLift, liftAmbient, Source.peerGetMaybeZero, branch, Source.requireNotPending, Source.getPeer, Source.getDev, Source.getWG, hd, absent,
           invariant] at actual
         cases actual
       | some peer =>
@@ -207,7 +208,7 @@ theorem frames_peerGet_untouched (word : Option PeerId) :
         · exact (congrArg untouched (peerPoints_kernel w peer p added)).trans same
 
 theorem frames_lookup_untouched (root : Option NodeId) (bits key : Nat) :
-    Frames (fun w => untouched w.k) (lookup root bits key) := by
+    Frames (fun w => untouched w.wg) (lookup root bits key) := by
   unfold lookup
   apply frames_called
   apply frames_bind (frames_swapEndian untouched bits)
@@ -234,7 +235,7 @@ theorem frames_lookup_untouched (root : Option NodeId) (bits key : Nat) :
       cases gone with
       | false => exact frames_pure _ _
       | true =>
-        apply frames_bind (frames_lift (show Preserves (fun w => untouched w.k)
+        apply frames_bind (frames_lift (show Preserves (fun w => untouched w.wg)
           (unsupported "lookup retry after a dying peer" : M Unit) from by
             intro w x w' run
             cases run))
@@ -247,9 +248,9 @@ theorem frames_lookup_untouched (root : Option NodeId) (bits key : Nat) :
 theorem lookup_untouched (root : Option NodeId) (bits key : Nat)
     (world final : World) (answer : Option PeerId) (points : List Point)
     (accepted : ((lookup root bits key).run []).run world = .ok ((answer,points),final)) :
-    untouched final.k = untouched world.k ∧
-      ∀ p ∈ points, untouched p.world.k = untouched world.k :=
-  frames_lookup_untouched root bits key (untouched world.k) [] world answer points final rfl
+    untouched final.wg = untouched world.wg ∧
+      ∀ p ∈ points, untouched p.world.wg = untouched world.wg :=
+  frames_lookup_untouched root bits key (untouched world.wg) [] world answer points final rfl
     (by intro p member; cases member) accepted
 
 #print axioms lookup_untouched

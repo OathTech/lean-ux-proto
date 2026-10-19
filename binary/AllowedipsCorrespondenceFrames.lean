@@ -1,3 +1,4 @@
+import SourceAdapter
 import AllowedipsCorrespondencePrefix
 import AllowedipsCorrespondenceState
 
@@ -33,7 +34,7 @@ theorem atPoint_framed (c : Config) (initialRaw : List MachineState)
     (source : MirrorHistory.Point)
     (observed : AllowedipsObservation.observe c.rxSection history = .ok events)
     (recorded : events = front ++ actual :: rest)
-    (kernel : source.world.k = world.k)
+    (kernel : source.world.wg = world.wg)
     (steps : StepsAt c (front ++ [actual]) source.world)
     (prefixNeutral : ∀ n, PeerCountPhase.scan none (history.take n) = none)
     (writes : Address → Prop)
@@ -72,7 +73,7 @@ theorem matches_framed (c : Config) (initialRaw : List MachineState)
     (history : List MachineState) (events : List LookupObservation.Point)
     (source : List MirrorHistory.Point)
     (observed : AllowedipsObservation.observe c.rxSection history = .ok events)
-    (semantic : MatchesPoints (fun seen _ w => StepsAt c seen w ∧ w.k = world.k) events source)
+    (semantic : MatchesPoints (fun seen _ w => StepsAt c seen w ∧ w.wg = world.wg) events source)
     (prefixNeutral : ∀ n, PeerCountPhase.scan none (history.take n) = none)
     (writes : Address → Prop)
     (frames : ∀ p ∈ events, EqualOutside writes initial.data.dmem p.machine.data.dmem)

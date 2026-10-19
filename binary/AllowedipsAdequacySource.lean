@@ -1,3 +1,4 @@
+import SourceAdapter
 import AllowedipsSourceSelected
 
 namespace Binary.AllowedipsSource
@@ -11,7 +12,7 @@ theorem suffix_live (id : NodeId) (history points : List Point)
     (accepted : ((searchSuffix (some id)).run history).run world =
       .ok ((answer,points),final)) :
     ∃ device node pid peer helperPoints,
-      world.k.wg = some device ∧ device.nodes.get? id = some node ∧
+      world.wg.dev = some device ∧ device.nodes.get? id = some node ∧
       node.peer = some pid ∧ device.peers.get? pid = some peer ∧
       answer = some pid ∧ peer.refcount ≠ 0 ∧ peer.refcount+1 < 2^31 ∧
       ((peerGet (some pid)).run
@@ -21,22 +22,22 @@ theorem suffix_live (id : NodeId) (history points : List Point)
       points = helperPoints ++ [⟨.returned "wg_peer_get_maybe_zero",PeerMirror.peerFinal pid world peer⟩] ++
         [⟨.decision .lookupPeerGone,final⟩] := by
   obtain ⟨node,readPoints,readWorld,read,rest⟩ := accepted_bind _ _ _ _ _ accepted
-  have readResult : ∃ device, world.k.wg = some device ∧ device.nodes.get? id = some node ∧
+  have readResult : ∃ device, world.wg.dev = some device ∧ device.nodes.get? id = some node ∧
       readPoints = history ∧ readWorld = world := by
-    cases hd : world.k.wg with
+    cases hd : world.wg.dev with
     | none =>
-      simp [StateT.run_lift,getNode,getDev,getK,hd,invariant] at read
+      simp [StateT.run_lift,Source.getNode_eq,Source.getDev_eq,StateT.run_bind,hd,invariant] at read
       cases read
     | some device =>
       cases hn : device.nodes.get? id with
       | none =>
         have absent : device.nodes[id]? = none := hn
-        simp [StateT.run_lift,getNode,getDev,getK,hd,absent,invariant] at read
+        simp [StateT.run_lift,Source.getNode_eq,Source.getDev_eq,StateT.run_bind,hd,absent,invariant] at read
         cases read
       | some n =>
         have present : device.nodes[id]? = some n := hn
         have eq : ((n,history),world) = ((node,readPoints),readWorld) := by
-          simp [StateT.run_lift,getNode,getDev,getK,hd,present] at read
+          simp [StateT.run_lift,Source.getNode_eq,Source.getDev_eq,StateT.run_bind,hd,present] at read
           exact Except.ok.inj read
         obtain ⟨⟨rfl,rfl⟩,rfl⟩ := Prod.mk.inj eq
         exact ⟨device,rfl,hn,rfl,rfl⟩
@@ -45,7 +46,7 @@ theorem suffix_live (id : NodeId) (history points : List Point)
   obtain ⟨peerAnswer,helperPoints,helperWorld,helper,after⟩ := accepted_bind _ _ _ _ _ rest
   obtain ⟨same,live,finalEq,pointsEq⟩ := afterPeer_accepted peerAnswer answer _ _ _ _ after
   obtain ⟨inner,innerRun,helperEq⟩ := called_accepted helper
-  have actual : (peerGetMaybeZero node.peer).run world = .ok (peerAnswer,helperWorld) := by
+  have actual : (Source.peerGetMaybeZero node.peer).run world = .ok (peerAnswer,helperWorld) := by
     have erased := peerGet_erases node.peer (history ++ [⟨.call "wg_peer_get_maybe_zero",world⟩]) world
     rw [innerRun] at erased
     exact erased.symm
@@ -60,7 +61,7 @@ theorem suffix_live (id : NodeId) (history points : List Point)
     cases hp : device.peers.get? pid with
     | none =>
       have absent : device.peers[pid]? = none := hp
-      simp [peerGetMaybeZero,branch,requireNotPending,getPeer,getDev,getK,hd,absent,invariant] at actual
+      simp [Except.pure, Except.bind, StateT.run, liftWG, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, WG.peerGetMaybeZero, WG.requireNotPending, WG.getPeer, WG.getDev, AmbientM.branch, monadLift, MonadLift.monadLift, liftAmbient, Source.peerGetMaybeZero,branch,Source.requireNotPending,Source.getPeer,Source.getDev,Source.getWG,hd,absent,invariant] at actual
       cases actual
     | some peer =>
       have bound := PeerMirror.accepted_peer_bound pid world helperWorld peerAnswer device peer hd hp actual

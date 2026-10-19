@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsertInputProof
 import MirrorLoop
 
@@ -5,9 +6,9 @@ namespace Binary.Pair.Insert.Source
 open Leanux Leanux.WG
 
 /-- The operational bucket walk used by the actual insertion. Its equality
-inside indexInsert is checked by the source-body normalization, not assumed. -/
+inside Source.indexInsert is checked by the source-body normalization, not assumed. -/
 def hasBucket (walk collide : Decision) (index : Nat) : M Bool := do
-  for e in ← indexBucket index do
+  for e in ← Source.indexBucket index do
     _ ← branch walk true
     if ← branch collide (e.index==index) then return true
   _ ← branch walk false
@@ -29,7 +30,7 @@ def walkScan (walk collide : Decision) (index : Nat) : List IndexEntry → Acc �
     if hit then ((some true,()),w) else walkScan walk collide index es (none,()) w
 
 theorem walkScan_world (walk collide : Decision) (index : Nat) (es : List IndexEntry) (a : Acc) (w : World) :
-    (walkScan walk collide index es a w).2={w with steps := (walkScan walk collide index es a w).2.steps} := by
+    (walkScan walk collide index es a w).2={w with ambient := {w.ambient with steps := (walkScan walk collide index es a w).2.steps}} := by
   induction es generalizing a w with
   | nil => rfl
   | cons e es ih =>
@@ -44,7 +45,7 @@ theorem walk_run (walk collide : Decision) (index : Nat) (es : List IndexEntry) 
   | nil => rfl
   | cons e es ih =>
     cases hit : (e.index==index) <;>
-      simp [List.forIn_cons,walkBody,walkScan,hit,branch,LookupMirror.record,StateT.run_bind,ih] <;> rfl
+      simp [List.forIn_cons,walkBody,walkScan,hit,LookupMirror.record,StateT.run_bind,ih] <;> rfl
 
 def walkFinish (walk : Decision) (a : Acc) : M Bool :=
   match a.1 with
@@ -55,7 +56,7 @@ def walkFinish (walk : Decision) (a : Acc) : M Bool :=
 
 theorem hasBucket_eq (walk collide : Decision) (index : Nat) :
     hasBucket walk collide index=(do
-      let entries ← indexBucket index
+      let entries ← Source.indexBucket index
       let a ← forIn entries (none,()) (walkBody walk collide index)
       walkFinish walk a) := by
   unfold hasBucket walkBody walkFinish
@@ -80,7 +81,7 @@ def bucketResult (walk collide : Decision) (index : Nat) (es : List IndexEntry) 
   else (false,LookupMirror.record out.2 walk false)
 
 theorem bucketResult_world (walk collide : Decision) (index : Nat) (es : List IndexEntry) (w : World) :
-    (bucketResult walk collide index es w).2={w with steps := (bucketResult walk collide index es w).2.steps} := by
+    (bucketResult walk collide index es w).2={w with ambient := {w.ambient with steps := (bucketResult walk collide index es w).2.steps}} := by
   have frame := walkScan_world walk collide index es (none,()) w
   unfold bucketResult
   split
@@ -90,7 +91,7 @@ theorem bucketResult_world (walk collide : Decision) (index : Nat) (es : List In
     rfl
 
 theorem hasBucket_run (walk collide : Decision) (index : Nat) (w : World) (d : Device)
-    (device : w.k.wg=some d) :
+    (device : w.wg.dev=some d) :
     (hasBucket walk collide index).run w=.ok (bucketResult walk collide index
       (d.indexTable.filter (fun e => e.index%8192==index%8192)) w) := by
   rw [hasBucket_eq]
@@ -123,8 +124,8 @@ theorem bucket_any (entries : List IndexEntry) (index : Nat) :
         simp [bucket,hit,ih]
 
 theorem hasBucket_effect {walk collide : Decision} {index : Nat} {w final : World} {d : Device} {answer : Bool}
-    (device : w.k.wg=some d) (accepted : (hasBucket walk collide index).run w=.ok (answer,final)) :
-    answer=d.indexTable.any (·.index==index) ∧ final={w with steps := final.steps} := by
+    (device : w.wg.dev=some d) (accepted : (hasBucket walk collide index).run w=.ok (answer,final)) :
+    answer=d.indexTable.any (·.index==index) ∧ final={w with ambient := {w.ambient with steps := final.steps}} := by
   rw [hasBucket_run walk collide index w d device] at accepted
   have equal := Except.ok.inj accepted
   have result := congrArg Prod.fst equal
@@ -140,12 +141,12 @@ theorem hasBucket_effect {walk collide : Decision} {index : Nat} {w final : Worl
 miss therefore entails a miss in the locked walk, without a second-walk
 outcome premise. The binary composition must establish the corresponding frame. -/
 theorem second_walk_misses {index : Nat} {w middle : World} {d : Device}
-    (device : w.k.wg=some d)
+    (device : w.wg.dev=some d)
     (first : (hasBucket .idxInsWalk1 .idxInsCollide1 index).run w=.ok (false,middle)) :
     ∃ final, (hasBucket .idxInsWalk2 .idxInsCollide2 index).run middle=.ok (false,final) ∧
-      final={middle with steps := final.steps} := by
+      final={middle with ambient := {middle.ambient with steps := final.steps}} := by
   obtain ⟨empty,frame⟩ := hasBucket_effect device first
-  have sameDevice : middle.k.wg=some d := by rw [frame]; exact device
+  have sameDevice : middle.wg.dev=some d := by rw [frame]; exact device
   let out := bucketResult .idxInsWalk2 .idxInsCollide2 index
     (d.indexTable.filter (fun e => e.index%8192==index%8192)) middle
   have answer : out.1=false := by rw [bucketResult_answer,bucket_any,←empty]

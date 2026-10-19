@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairTrieFrame
 import AllowedipsLoopBody
 import AllowedipsSourceSteps
@@ -146,14 +147,14 @@ theorem findNode_effect (fetch : Int64 → Option Decoded)
     (setup : AllowedipsLoop.Setup fetch base coverage c (fun id => d.nodes.get? id))
     (related : Corresponds n o base.dmem d)
     (apart : ∀ a, ReadBytes n o a → ¬AllowedipsLoop.writes base.regs.rsp coverage a)
-    (w final : World) (answer : Option NodeId) (device : w.k.wg = some d)
-    (accepted : (WG.findNode c.root c.bits c.key).run w = .ok (answer,final))
+    (w final : World) (answer : Option NodeId) (device : w.wg.dev = some d)
+    (accepted : (Source.findNode c.root c.bits c.key).run w = .ok (answer,final))
     (s : Executed) (initial : Invariant n o d base coverage c (none,c.root,none) s) :
     Eventually (historyStep fetch) (fun t =>
       t.machine.pc = AllowedipsImage.Lookup.entry+0x101 ∧
       t.machine.data.regs.rbp.toBitVec = AllowedipsRelation.pointer c.nodes answer ∧
       reconstruct n o t.machine.data.dmem = .ok (target d) ∧
-      final.k.wg = some d ∧ AllowedipsLoop.Frame base coverage t.machine.data) s := by
+      final.wg.dev = some d ∧ AllowedipsLoop.Frame base coverage t.machine.data) s := by
   obtain ⟨selected,frame⟩ := AllowedipsSource.findNode_accepted_select c.root c.bits c.key w final answer accepted
   have view : AllowedipsSource.nodeView w = (fun id => d.nodes.get? id) := by
     funext id

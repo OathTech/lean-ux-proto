@@ -26,7 +26,7 @@ theorem result_from_helper (fetch : Int64 → Option Decoded)
     (before : BeforeHelper c coverage preempt s world v bucket owner helper)
     (answer : Option PeerId) (helperFinal setWorld : World)
     (after : AfterHelper c coverage preempt s world v helper answer helperFinal current)
-    (setRun : (owner.setPeerWord answer).run helperFinal = .ok ((), setWorld)) :
+    (setRun : (Source.setPeerWord owner answer).run helperFinal = .ok ((), setWorld)) :
     historySteps fetch 4
       (AfterResult c coverage preempt s world v owner current answer helperFinal setWorld) current := by
   obtain ⟨callback, _, _, _, cbOwner, _, machine, _⟩ := before

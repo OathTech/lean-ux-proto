@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairTrie
 import PairIndex
 import AllowedipsSource
@@ -150,7 +151,7 @@ def lookupFrom (names : Names) (input : AllowedipsProbe.Input) (seed : UInt64)
     let context := s!"iteration {occurrence}"
     if let some id := acc.2.1 then
       (assertHeader names input r source root width key acc frame.stack).mapError (fun e => s!"{context}: {e}")
-      let (node, _) ← (getNode id).run source |>.mapError Stop.message
+      let (node, _) ← (Source.getNode id).run source |>.mapError Stop.message
       -- Stop after common_bits RET and compare its actual scalar effect.
       r ← advance input seed r #[input.entry+0xea] frame.returnPC
       let common := AllowedipsSource.commonValue node key width
@@ -166,8 +167,8 @@ def lookupFrom (names : Names) (input : AllowedipsProbe.Input) (seed : UInt64)
     let next := match step with | .done a => a | .yield a => a
     if let some old := wasCurrent then
       if let .yield (_, some child, _) := step then
-        let (n, _) ← (getNode old).run source |>.mapError Stop.message
-        let (c, _) ← (getNode child).run after |>.mapError Stop.message
+        let (n, _) ← (Source.getNode old).run source |>.mapError Stop.message
+        let (c, _) ← (Source.getNode child).run after |>.mapError Stop.message
         unless n.cidr < c.cidr do throw s!"{context}: CIDR measure did not increase"
     source := after
     history := points
@@ -180,10 +181,10 @@ def lookupFrom (names : Names) (input : AllowedipsProbe.Input) (seed : UInt64)
       unless r.state.data.regs.rbp.toNat == (← address names.nodes acc.2.2) do throw s!"{context}: exit.remembered"
     if acc.1.isSome then break
   let ((selected, _), finished) ← ((AllowedipsSource.finish acc).run history).run source |>.mapError Stop.message
-  let (directSelected, directFind) ← (WG.findNode root width key).run w |>.mapError Stop.message
-  unless selected == directSelected && finished.k == directFind.k && finished.steps == directFind.steps do
+  let (directSelected, directFind) ← (Source.findNode root width key).run w |>.mapError Stop.message
+  unless selected == directSelected && finished.wg.dev == directFind.wg.dev && finished.steps == directFind.steps do
     throw "source loop adapter differs from findNode"
-  let (answer, final) ← match (WG.lookup root width key).run w with
+  let (answer, final) ← match (Source.lookup root width key).run w with
     | .ok result => pure result
     | .error e => do
       let .outsideDomain _ "lookup retry after a dying peer" := e |

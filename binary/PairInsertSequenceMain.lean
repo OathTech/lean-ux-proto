@@ -1,9 +1,10 @@
+import SourceAdapter
 import PairInsertSequenceRunner
 open Lean Leanux Leanux.WG Binary.Pair InsertSequence
 
 def suite (input : ProbeInput) : Except String Json := do
   let recordedWorld ← replayRecordedPrefix input.trace input.operation
-  let some d := recordedWorld.k.wg | throw "insert-sequence.recordedWorld.device"
+  let some d := recordedWorld.wg.dev | throw "insert-sequence.recordedWorld.device"
   let [first,second] := d.peerList | throw "insert-sequence.recordedWorld.peers"
   unless d.indexTable.isEmpty && d.keypairs.isEmpty do throw "insert-sequence.recordedWorld.allocations"
   let some firstPeer := d.peers[first]? | throw "insert-sequence.recordedWorld.first-peer"
@@ -21,7 +22,7 @@ def suite (input : ProbeInput) : Except String Json := do
       let dev := {d with
         peers := d.peers.insert first {firstPeer with refcount := if dead then 0 else firstPeer.refcount}
         keypairs := d.keypairs.insert 20 {peer := some first}}
-      let world := {recordedWorld with k := {recordedWorld.k with wg := some dev},hidden := some records}
+      let world := {recordedWorld with wg := {recordedWorld.wg with dev := some dev}, ambient := {recordedWorld.ambient with hidden := some records}}
       for capacity in [coverageBytes/8,4] do
         for seed in [(0 : UInt64),0xffffffffffffffff] do
           for preempt in (if collisions==1 then [0,0xfffffe00] else [0]) do

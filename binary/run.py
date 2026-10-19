@@ -4,19 +4,31 @@ import argparse
 from datetime import datetime, timezone
 from email.parser import BytesParser
 from email.utils import parseaddr
-import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import shutil
+import shlex
 import subprocess
 
+from target import verify_image, kernel_environment
 from census import ROOT, ORACLE, extract, run
 from layouts import layouts
 from pin import verify_pin
 
 TRACE = 'd1_wrong_receiver_index_same_bucket'
-TOOLCHAIN = Path.home() / '.elan/toolchains/leanprover--lean4---v4.35.0/bin'
+def toolchain_bin():
+    if shutil.which('elan'):
+        return Path(subprocess.check_output(['elan', 'which', 'lake'],
+                    cwd=ROOT / 'binary', text=True).strip()).parent
+    lake = shutil.which('lake')
+    if lake is None:
+        raise ValueError('install the Lean toolchain named by binary/lean-toolchain')
+    return Path(lake).resolve().parent
+
+
+TOOLCHAIN = toolchain_bin()
 
 
 def bootstrap(root=ROOT):
@@ -68,10 +80,7 @@ def prepare(check, out, trace_name):
     report = json.loads((check / 'report.json').read_text())
     if report['status'] != 'pass' or report['traces'] != 1:
         raise ValueError('requires one successful differential trace')
-    expected = [s.strip() for s in (ROOT / 'kernel/identity-x86_64-net-choice.txt').read_text().splitlines()
-                if s.strip() and not s.startswith('#')][-1]
-    if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
-        raise ValueError('oracle image hash mismatch')
+    verify_image()
     chunk = check / 'chunk-000'
     [trace] = jsonl(chunk / 'model/inputs.jsonl')
     if trace['id'] != trace_name:
@@ -222,8 +231,8 @@ def main():
         check = ROOT / '.artifacts/check' / ('binary-tv-' + stamp)
         # The bundle fixes tools and guest libraries. Prepend this package's
         # Lean afterwards, so the check's freshness test uses the same version.
-        env = dict(os.environ, LEANUX_KERNEL_DIR=str(ORACLE.parent))
-        shell = f'export PATH="{TOOLCHAIN}:$PATH"; exec python3 -m evaluator.check --suite wireguard --binary-coverage --trace {args.trace} --out "$1"'
+        env = kernel_environment()
+        shell = f'export PATH={shlex.quote(str(TOOLCHAIN))}:"$PATH"; exec python3 -m evaluator.check --suite wireguard --binary-coverage --trace {args.trace} --out "$1"'
         checked_command([str(ROOT / 'scripts/in-bundle'), '/bin/sh', '-c', shell, 'binary-tv', str(check)], ROOT, env)
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)

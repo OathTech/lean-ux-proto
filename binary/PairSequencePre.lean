@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairSequenceCaller
 
 namespace Binary.Pair.IndexLookup
@@ -49,7 +50,7 @@ theorem replace_pre {n o c base initialWorld ra current w pid kid old new}
     (ready : Ready n o c base current.data.dmem w)
     (oldAddress : addressOf n (.handshake pid)=.ok old)
     (newAddress : addressOf n (.keypair kid)=.ok new)
-    (fresh : ∀ d, w.k.wg=some d → d.indexTable.any (·.owner==.handshake pid)=true →
+    (fresh : ∀ d, w.wg.dev=some d → d.indexTable.any (·.owner==.handshake pid)=true →
       d.indexTable.any (·.owner==.keypair kid)=false) :
     Replace.Pre n o c (install n base ra (.ofNat Replace.entry) old new current) w pid kid ra := by
   have next := install_ready facts ready (.ofNat Replace.entry) old new

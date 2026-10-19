@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairRemoveFirstAdequacy
 
 namespace Binary.Pair.Remove
@@ -13,7 +14,7 @@ theorem remove_first_return (fetch : Int64 → Option Decoded)
     {n o c initial w owner ra final} (environment : SerializedEnvironment onlineCPUs externalActions)
     (access : FirstReturnCallPermissions fetch permissions initial ra)
     (checked : Pre n o c initial w owner ra)
-    (accepted : (WG.indexRemove owner).run w=.ok ((),final)) :
+    (accepted : (Source.indexRemove owner).run w=.ok ((),final)) :
     Eventually (historyStep fetch) (fun t => Post n o c initial ra final t.machine ∧
       ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
       BeforeOuterReturn initial ra t.history ∧

@@ -1,3 +1,4 @@
+import SourceAccess
 import LookupHelperPrepared
 
 namespace Binary.MirrorHistory
@@ -82,9 +83,9 @@ theorem search_selected (c : Config) (es : List IndexEntry)
 /-- The nullable word is read through its selected owner, never from an
     index-table cache. Missing owners remain explicit source failures. -/
 theorem owner_peerWord_run (world : World) (device : Device) (owner : IndexOwner)
-    (word : Option PeerId) (hasDevice : world.k.wg = some device)
+    (word : Option PeerId) (hasDevice : world.wg.dev = some device)
     (value : OwnerWord.value device owner = some word) :
-    owner.peerWord.run world = .ok (word, world) := by
+    (Source.peerWord owner).run world = .ok (word, world) := by
   cases owner with
   | handshake id =>
     cases present : device.peers[id]? with
@@ -92,7 +93,7 @@ theorem owner_peerWord_run (world : World) (device : Device) (owner : IndexOwner
     | some peer =>
       simp [OwnerWord.value, present] at value
       subst word
-      simp [IndexOwner.peerWord, getPeer, getDev, getK, hasDevice, present]
+      simp [Source.ownerWord_eq, Source.getPeer_eq, Source.getDev_eq, StateT.run_bind, hasDevice, present]
       rfl
   | keypair id =>
     cases present : device.keypairs[id]? with
@@ -100,7 +101,7 @@ theorem owner_peerWord_run (world : World) (device : Device) (owner : IndexOwner
     | some kp =>
       simp [OwnerWord.value, present] at value
       subst word
-      simp [IndexOwner.peerWord, getKeypair, getDev, getK, hasDevice, present]
+      simp [Source.ownerWord_eq, Source.getKeypair_eq, Source.getDev_eq, StateT.run_bind, hasDevice, present]
       rfl
 
 /-- The concrete source continuation after the helper, retained for the
@@ -114,7 +115,7 @@ def resultSource (owner : IndexOwner) (peer : Option PeerId) :
 
 def afterHelper (owner : IndexOwner) (peer : Option PeerId) :
     MirrorHistory.Logged (Option (IndexOwner × PeerId)) := do
-  StateT.lift (owner.setPeerWord peer)
+  StateT.lift (Source.setPeerWord owner peer)
   resultSource owner peer
 
 theorem resultSource_run (owner : IndexOwner) (peer : Option PeerId)
@@ -130,14 +131,14 @@ theorem afterHelper_accepted (owner : IndexOwner) (peer : Option PeerId)
     (history points : List MirrorHistory.Point) (world final : World)
     (answer : Option (IndexOwner × PeerId))
     (accepted : ((afterHelper owner peer).run history).run world = .ok ((answer, points), final)) :
-    ∃ setWorld, (owner.setPeerWord peer).run world = .ok ((), setWorld) ∧
+    ∃ setWorld, (Source.setPeerWord owner peer).run world = .ok ((), setWorld) ∧
       answer = peer.map (fun pid => (owner, pid)) ∧
       final = LookupMirror.record setWorld .idxPeerAlive peer.isSome ∧
       points = history ++ [⟨.decision .idxPeerAlive, final⟩] := by
   obtain ⟨unit, middle, setWorld, setRun, resultRun⟩ := MirrorHistory.bind_accepted accepted
-  have erased := MirrorHistory.erases_lift (owner.setPeerWord peer) history world
+  have erased := MirrorHistory.erases_lift (Source.setPeerWord owner peer) history world
   rw [setRun] at erased
-  have actual : (owner.setPeerWord peer).run world = .ok (unit, setWorld) := erased.symm
+  have actual : (Source.setPeerWord owner peer).run world = .ok (unit, setWorld) := erased.symm
   cases unit
   simp only [StateT.run_lift, StateT.run_bind, StateT.run_pure, actual] at setRun
   change Except.ok (((), history), setWorld) = Except.ok (((), middle), setWorld) at setRun
@@ -163,9 +164,9 @@ theorem lookup_accepts_helper (c : Config) (coverage : KcovLayout) (preempt : Bi
     (entry : LookupEntry c coverage preempt returnAddress s world v)
     (owner : IndexOwner) (focused : c.focus.owner = some owner)
     (answer : Option (IndexOwner × PeerId)) (final : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, final)) :
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, final)) :
     ∃ helperAnswer helperFinal middle points,
-      (peerGetMaybeZero c.focus.peer).run (helperWorld c world v) = .ok (helperAnswer, helperFinal) ∧
+      (Source.peerGetMaybeZero c.focus.peer).run (helperWorld c world v) = .ok (helperAnswer, helperFinal) ∧
       ((MirrorHistory.called "wg_peer_get_maybe_zero" (MirrorHistory.peerGet c.focus.peer)).run
         (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).1.2).run
         (helperWorld c world v) = .ok ((helperAnswer, middle), helperFinal) ∧
@@ -178,8 +179,8 @@ theorem lookup_accepts_helper (c : Config) (coverage : KcovLayout) (preempt : Bi
   have fullSource := MirrorHistory.called_run_at "wg_index_hashtable_lookup" _ world final answer [] bodyPoints bodyRun
   rw [← LookupSearch.lookup_split] at fullSource
   obtain ⟨es, initialPoints, initialWorld, bucketRun, prefixRun⟩ := MirrorHistory.bind_accepted bodyRun
-  obtain ⟨device, hasDevice⟩ : ∃ device, world.k.wg = some device := by
-    cases hd : world.k.wg with
+  obtain ⟨device, hasDevice⟩ : ∃ device, world.wg.dev = some device := by
+    cases hd : world.wg.dev with
     | none => have h := entry.projected; simp [project, hd] at h
     | some device => exact ⟨device, rfl⟩
   have bucketEq : v.bucket = device.indexTable.filter (fun e => e.index % 8192 == c.query % 8192) := by
@@ -209,7 +210,7 @@ theorem lookup_accepts_helper (c : Config) (coverage : KcovLayout) (preempt : Bi
   | none => simp [found] at selection
   | some chosen =>
     have ownerEq : chosen.owner = owner := by simpa [found] using selection
-    have sourceDevice : (helperWorld c world v).k.wg = some device := by
+    have sourceDevice : (helperWorld c world v).wg.dev = some device := by
       rw [helperWorld, LookupSearch.result_world]
       exact hasDevice
     have wordValue : OwnerWord.value device owner = some c.focus.peer := by
@@ -220,7 +221,7 @@ theorem lookup_accepts_helper (c : Config) (coverage : KcovLayout) (preempt : Bi
     have getter := owner_peerWord_run (helperWorld c world v) device owner c.focus.peer sourceDevice wordValue
     rw [found] at suffixRun
     change ((do
-      let word ← StateT.lift chosen.owner.peerWord
+      let word ← StateT.lift (Source.peerWord chosen.owner)
       let peer ← MirrorHistory.called "wg_peer_get_maybe_zero" (MirrorHistory.peerGet word)
       afterHelper chosen.owner peer).run _).run _ = _ at suffixRun
     rw [ownerEq] at suffixRun

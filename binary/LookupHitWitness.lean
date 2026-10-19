@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupHitWitnessState
 import LookupWitness
 
@@ -343,7 +344,7 @@ theorem dead_pre : Pre_lookup config coverage 0 0x500000 (initial false) (world 
 theorem live_pre : Pre_lookup config coverage 0 0x500000 (initial true) (world true) := witness_pre true
 
 theorem source_accepts (live : Bool) : ∃ answer final,
-    (WG.indexLookup config.kinds config.query).run (world live) = .ok (answer, final) := by
+    (Source.indexLookup config.kinds config.query).run (world live) = .ok (answer, final) := by
   cases live <;> exact ⟨_, _, rfl⟩
 
 #print axioms witness_pre

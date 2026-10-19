@@ -5,13 +5,13 @@ Entry heaps are materialized from the recorded prefix, not captured snapshots.
 The independent kernel coverage and mirror decisions remain comparison channels.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import re
 import subprocess
 import time
 
+from target import verify_image, kernel_environment
 from census import ROOT, ORACLE, extract
 from layouts import layouts
 from pin import verify_pin
@@ -23,10 +23,7 @@ def prepare(check, out, name='wg_index_hashtable_remove', operation=4,
     report = json.loads((check / 'report.json').read_text())
     if report['status'] != 'pass' or report['traces'] != 1:
         raise ValueError('requires one passing mutator-profile recording')
-    expected = [s.strip() for s in (ROOT / 'kernel/identity-x86_64-net-choice.txt').read_text().splitlines()
-                if s.strip() and not s.startswith('#')][-1]
-    if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
-        raise ValueError('oracle hash differs')
+    verify_image()
     chunk = check / 'chunk-000'
     [trace] = [json.loads(s) for s in (chunk / 'model/inputs.jsonl').read_text().splitlines()]
     if trace['id'] != workload:

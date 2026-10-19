@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsertCallFacts
 import PairInsertMemory
 
@@ -11,7 +12,7 @@ structure Resident (n : Names) (o : Offsets) (m : DataMem) (owner : IndexOwner) 
   index : ∃ value, word m "insert.index" (base+o.index) 4=.ok value
 
 theorem boundary_data {n o c s w owner ra} (checked : callBoundary n o c s w owner ra=.ok ()) :
-    ∃ d base, w.k.wg=some d ∧ Corresponds n o s.data.dmem d ∧ storageCheck n o=true ∧
+    ∃ d base, w.wg.dev=some d ∧ Corresponds n o s.data.dmem d ∧ storageCheck n o=true ∧
       Remove.ownership n o s.data.dmem=.ok (Remove.targetOwnership d) ∧
       Resident n o s.data.dmem owner base ∧
       s.pc.toBitVec.toNat=entry ∧ s.data.regs.rdi.toNat=n.table ∧ s.data.regs.rsi.toNat=base ∧

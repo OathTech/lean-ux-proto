@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairSequenceCheck
 import PairInsertProvider
 
@@ -17,7 +18,7 @@ inductive Answer where
 
 def source : Call → M Answer
   | .existing call => return .existing (← Sequence.source call)
-  | .insert owner => return .insert (← WG.indexInsert owner)
+  | .insert owner => return .insert (← Source.indexInsert owner)
 
 def program : List Call → M (List Answer)
   | [] => pure []

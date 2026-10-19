@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairReplaceFirstBody
 import PairReplaceFirstFinish
 import PairReplaceSource
@@ -30,7 +31,7 @@ def Post (n : Names) (o : Offsets) (c : Context) (initial : MachineState)
     (ra : UInt64) (answer : Bool) (final : World) (t : MachineState) : Prop :=
   Returned initial t ra ∧ t.data.regs.rax.toBitVec.setWidth 8=(if answer then (1 : BitVec 8) else 0) ∧
     MemoryReady c initial ra 5 (savedWords initial.data) false t.data.dmem ∧
-    (∃ d, final.k.wg=some d ∧ Corresponds n o t.data.dmem d ∧
+    (∃ d, final.wg.dev=some d ∧ Corresponds n o t.data.dmem d ∧
       Remove.ownership n o t.data.dmem=.ok (Remove.targetOwnership d)) ∧
     EqualOutside (fun a => HeapBytes n o a ∨ External c initial 5 a) initial.data.dmem t.data.dmem ∧ KindFrame n o initial.data.dmem t.data.dmem
 
@@ -39,7 +40,7 @@ new entry's readiness is conditional on old membership, exactly as checked. -/
 theorem replace_checked (fetch : Int64 → Option Decoded) (decoder : IndexReplaceDecoderAgreement fetch)
     (trace : GuardedPc fetch) (bh : GuardedBh fetch)
     {n o c initial w pid kid ra answer final} (checked : Pre n o c initial w pid kid ra)
-    (accepted : (WG.indexReplaceHandshake pid kid).run w=.ok (answer,final)) :
+    (accepted : (Source.indexReplaceHandshake pid kid).run w=.ok (answer,final)) :
     Eventually (guardedStep fetch (StackGuard initial.data.regs.rsp)) (Post n o c initial ra answer final) initial := by
   obtain ⟨d,old,new,device,related,storage,owned,oldNamed,newNamed,pc,oldArg,newArg,facts,newReady⟩ := pre_facts checked
   have validated := (reconstruct_components related).1

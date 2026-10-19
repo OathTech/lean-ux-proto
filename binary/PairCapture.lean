@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairIndex
 
 namespace Binary.Pair.Capture
@@ -185,7 +186,7 @@ def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except Stri
   unless (← input.trace.getObjValAs? String "id") == snapshot.trace && input.operation == snapshot.operation &&
       snapshot.completedOperations.toList == List.range snapshot.operation do throw "snapshot workload/invocation mismatch"
   let world ← replayPrefix input.trace input.operation
-  let some d := world.k.wg | throw "recorded source prefix has no device"
+  let some d := world.wg.dev | throw "recorded source prefix has no device"
   let initial ← snapshot.initial.registers.state (← loadMemory snapshot.initial.blocks)
   let n ← names input snapshot layout initial d
   let frame ← callFrame input snapshot layout initial

@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairCallEntry
 import PairTrieLoop
 import AllowedipsRoot
@@ -180,8 +181,8 @@ theorem search_segment (fetch : Int64 → Option Decoded)
     (facts : CallFacts names input.offsets coverage initial ra bits key)
     (post : AllowedipsEntry.Post (callConfig names w d root bits key) initial coverage.coverage coverage.preempt ra entry)
     (related : Corresponds names input.offsets entry.data.dmem d)
-    (source final : World) (answer : Option NodeId) (device : source.k.wg = some d)
-    (accepted : (WG.findNode root bits key).run source = .ok (answer,final)) :
+    (source final : World) (answer : Option NodeId) (device : source.wg.dev = some d)
+    (accepted : (Source.findNode root bits key).run source = .ok (answer,final)) :
     Eventually (instructionStep fetch) (fun t =>
       (if root.isNone then answer=none ∧ t.pc=AllowedipsImage.Lookup.entry+0x184 else
         t.pc=AllowedipsImage.Lookup.entry+0x101 ∧

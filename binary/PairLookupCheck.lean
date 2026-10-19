@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairLookupNames
 import PairIndexCallCheck
 
@@ -22,7 +23,7 @@ def callBoundary (n : Names) (o : Offsets) (coverage : Context) (s : MachineStat
     (w : World) (query : Nat) (kinds : List IndexKind) (ra : UInt64) : Except String Unit := do
   Remove.assertAt n o s.data.dmem w
   unless interpretationCheck n do throw "lookup.call.address-interpretation"
-  let some d := w.k.wg | throw "lookup.call.missing-device"
+  let some d := w.wg.dev | throw "lookup.call.missing-device"
   let c := callConfig n w d query kinds
   let v := callView c d
   let mask := s.data.regs.get (.low .rsi .W32)

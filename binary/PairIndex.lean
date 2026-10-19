@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairMemory
 import MirrorLoop
 
@@ -43,7 +44,7 @@ structure CallFrame where
 /-- Fixture construction happens once, before the first assertion. Subsequent
 calls retain this heap and interpretation, including legitimate peer aliases. -/
 def startSession (input : ProbeInput) (w : World) : Except String Session := do
-  let some d := w.k.wg | throw "fixture has no device"
+  let some d := w.wg.dev | throw "fixture has no device"
   let names ← makeNames d input.offsets
   let memory ← materializePeers d input.offsets (← materialize d input.offsets input.preempt)
   let memory := materializeServices memory
@@ -141,7 +142,7 @@ def lookupFrom (input : ProbeInput) (seed : UInt64) (s : Session) (query : Nat)
   unless (← readNat initial frame.stack 8) == frame.returnPC &&
       (← readNat initial input.preempt 4) == frame.entryPreempt do throw "entry frame differs from bytes"
   let r : Run := {state := initial, history := #[initial], coverage := s.binary.coverage}
-  let (entries, world) ← (indexBucket query).run s.world |>.mapError Stop.message
+  let (entries, world) ← (Source.indexBucket query).run s.world |>.mapError Stop.message
   let mut paired := {s with world, binary := ← advance input seed r #[header, helper, tail] frame}
   let mut remaining := entries
   let mut acc : LookupMirror.Acc := (none, false)
@@ -173,8 +174,8 @@ def lookupFrom (input : ProbeInput) (seed : UInt64) (s : Session) (query : Nat)
   -- An extra adapter regression, not the runtime relation: source presentation
   -- and the actual exported function have equal results, kernel states and logs.
   -- Full source equality is supplied by LookupMirror.indexLookup_eq.
-  let (directAnswer, directAfter) ← (indexLookup kinds query).run s.world |>.mapError Stop.message
-  unless answer == directAnswer && after.k == directAfter.k && after.steps == directAfter.steps do throw "source adapter differs from indexLookup"
+  let (directAnswer, directAfter) ← (Source.indexLookup kinds query).run s.world |>.mapError Stop.message
+  unless answer == directAnswer && after.wg.dev == directAfter.wg.dev && after.steps == directAfter.steps do throw "source adapter differs from Source.indexLookup"
   let report := Json.mkObj [("call", toJson s.call), ("query", toJson query),
     ("loop_headers", toJson visits), ("result", toJson (reprStr answer)),
     ("instructions", toJson result.pcs.size), ("writes_checked", toJson result.writes.size),

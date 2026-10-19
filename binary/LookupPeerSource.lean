@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupProjection
 import MirrorPeerPoints
 
@@ -30,7 +31,7 @@ theorem owner_value_count_update (device : Device) (pid : PeerId) (peer : Peer) 
     it is not replaced by an erased-peer abstraction. -/
 theorem project_peerFinal (c : Config) (world : World) (device : Device)
     (pid : PeerId) (peer : Peer) (v : View)
-    (hasDevice : world.k.wg = some device) (hasPeer : device.peers.get? pid = some peer)
+    (hasDevice : world.wg.dev = some device) (hasPeer : device.peers.get? pid = some peer)
     (focused : c.focus.peer = some pid) (projected : project c world = some v) :
     project c (PeerMirror.peerFinal pid world peer) =
       some (if peer.refcount = 0 then v else {v with count := some (peer.refcount+1)}) := by

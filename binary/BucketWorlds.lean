@@ -1,10 +1,11 @@
+import SourceAdapter
 import BucketScan
 
 namespace Binary.LookupSearch
 open Leanux Leanux.WG
 
 def recordStep (world : World) (step : Step) : World :=
-  {world with steps := world.steps.push step}
+  {world with ambient := {world.ambient with steps := world.steps.push step}}
 
 def advance : World → List Step → World
   | world, [] => world
@@ -19,7 +20,7 @@ def decisionWorlds : World → List Step → List MirrorHistory.Point
       ⟨.decision step.decision, next⟩ :: decisionWorlds next rest
 
 theorem advance_eq (world : World) (steps : List Step) :
-    advance world steps = {world with steps := world.steps ++ steps.toArray} := by
+    advance world steps = {world with ambient := {world.ambient with steps := world.steps ++ steps.toArray}} := by
   induction steps generalizing world with
   | nil => simp [advance]
   | cons step rest ih =>
@@ -76,7 +77,7 @@ theorem result_worlds (kinds : List IndexKind) (query : Nat)
 theorem decisionWorlds_get (world : World) (steps : List Step) (i : Nat)
     (point : MirrorHistory.Point) (present : (decisionWorlds world steps)[i]? = some point) :
     ∃ step, steps[i]? = some step ∧ point.tag = .decision step.decision ∧
-      point.world = {world with steps := world.steps ++ (steps.take (i + 1)).toArray} ∧
+      point.world = {world with ambient := {world.ambient with steps := world.steps ++ (steps.take (i + 1)).toArray}} ∧
       point.world.steps.back? = some step := by
   induction steps generalizing world i with
   | nil => simp [decisionWorlds] at present

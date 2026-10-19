@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsert
 open Lean Leanux Leanux.WG Binary.Pair
 
@@ -10,7 +11,7 @@ def runCase (input : ProbeInput) (label : String) (w : World)
       s.binary.state.data with dmem := put s.binary.state.data.dmem input.preempt 4 preempt}}}}
     let mut reports := #[]
     for (owner,records) in calls do
-      s := {s with world := {s.world with hidden := some records}}
+      s := {s with world := {s.world with ambient := {s.world.ambient with hidden := some records}}}
       let (next,report) ← (Insert.invoke input seed s owner).mapError (fun e => s!"{label}: {e}")
       unless next.world.hidden==some [] do throw s!"{label}: unconsumed input"
       s := next
@@ -20,7 +21,7 @@ def runCase (input : ProbeInput) (label : String) (w : World)
 
 def suite (input : ProbeInput) : Except String Json := do
   let w ← replayRecordedPrefix input.trace input.operation
-  let some d := w.k.wg | throw "insert prefix: no device"
+  let some d := w.wg.dev | throw "insert prefix: no device"
   let [first,second] := d.peerList | throw "insert pilot requires two recorded peers"
   unless d.indexTable.isEmpty do throw "insert pilot requires no already linked entries"
   let t ← Runner.parseTrace input.trace
@@ -48,7 +49,7 @@ def suite (input : ProbeInput) : Except String Json := do
     ("padding",[{a with bytes := a.bytes.take 4++[1,0,0,0]}])]
   let mut controls := #[]
   for (name,records) in badCases do
-    let bad := {s with world := {s.world with hidden := some records}}
+    let bad := {s with world := {s.world with ambient := {s.world.ambient with hidden := some records}}}
     match Insert.invoke input 0 bad firstOwner with
     | .ok _ => throw s!"insert input control unexpectedly passed: {name}"
     | .error e =>
@@ -57,7 +58,7 @@ def suite (input : ProbeInput) : Except String Json := do
   let badMemory := put (put s.binary.state.data.dmem input.preempt 4 0xfffffe00)
     Binary.TrustBase.softirqPendingAddress.toNat 2 1
   let bad := {s with
-    world := {s.world with hidden := some [inputRecord 7]}
+    world := {s.world with ambient := {s.world.ambient with hidden := some [inputRecord 7]}}
     binary := {s.binary with state := {s.binary.state with data := {s.binary.state.data with dmem := badMemory}}}}
   let pendingControl ← match Insert.invoke input 0 bad firstOwner with
     | .ok _ => throw "nested pending-softirq control unexpectedly passed"

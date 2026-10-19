@@ -1,3 +1,4 @@
+import SourceAdapter
 import PeerCountState
 import LookupObservation
 import Representation
@@ -34,7 +35,7 @@ structure View where
   count : Option Nat
 
 def project (c : Config) (w : World) : Option View := do
-  let d ← w.k.wg
+  let d ← w.wg.dev
   pure {
     bucket := d.indexTable.filter (fun e => e.index % 8192 == c.query % 8192)
     ownerWord := c.focus.owner.bind (OwnerWord.value d)

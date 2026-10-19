@@ -3,6 +3,7 @@ import argparse
 import difflib
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -98,7 +99,10 @@ def render_surface(root=ROOT):
                           + 'set_option format.width 110\nset_option pp.universes true\n'
                           + ''.join(f'#check @{name}\n' for name in HEADLINES)
                           + ''.join(f'#print {name}\n' for name in DEFINITIONS))
-        result = subprocess.run(['lake', 'env', 'lean', str(source)], cwd=root / 'binary',
+        command = ['lake', 'env', 'lean', str(source)]
+        if shutil.which('capped'):
+            command = ['capped', '--'] + command
+        result = subprocess.run(command, cwd=root / 'binary',
                                 capture_output=True, text=True)
         if result.returncode:
             raise ValueError(f'trust-surface printing failed:\n{result.stdout}{result.stderr}')

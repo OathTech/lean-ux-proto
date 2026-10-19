@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairLookupAdequacy
 
 namespace Binary.Pair.IndexLookup
@@ -15,7 +16,7 @@ theorem lookup_simulation (fetch : Int64 → Option Decoded)
     {n o c initial w query kinds ra answer final} (environment : SerializedEnvironment onlineCPUs externalActions)
     (access : ReturningCallPermissions fetch permissions initial ra)
     (checked : Pre n o c initial w query kinds ra)
-    (accepted : (WG.indexLookup kinds query).run w=.ok (answer,final)) :
+    (accepted : (Source.indexLookup kinds query).run w=.ok (answer,final)) :
     Eventually (historyStep fetch) (fun t => Post n o c initial ra answer final t.machine ∧
       ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
       RunEnvironment fetch permissions onlineCPUs externalActions t.history) ⟨initial,[initial]⟩ := by

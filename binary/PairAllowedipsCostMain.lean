@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairAllowedipsCapture
 open Lean Leanux Binary.Pair Binary.Pair.Trie
 
@@ -25,8 +26,8 @@ def main (args : List String) : IO UInt32 := do
   let snapshot := {snapshot with initial := {snapshot.initial with capacity := words,coverageCapturedWords := words}}
   let initial ← liftE (snapshot.initial.registers.state memory)
   let prior ← liftE (replayRecordedPrefix input.trace input.operation)
-  let w := {prior with steps := #[],hidden := some [],netRxSection := 0,netRxSections := 0}
-  let some d := w.k.wg | throw (IO.userError "benchmark prefix has no device")
+  let w := {prior with ambient := {prior.ambient with steps := #[], hidden := some [], netRxSection := 0, netRxSections := 0}}
+  let some d := w.wg.dev | throw (IO.userError "benchmark prefix has no device")
   let trace ← liftE (Runner.parseTrace input.trace)
   let some (.wgXmit family key _ _) := trace.ops[input.operation]? | throw (IO.userError "benchmark operation differs")
   let bits := if family==4 then 32 else 128

@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsertWitness
 namespace Binary.Pair.Insert.Witness
 open Leanux Leanux.WG TrustBase Index
@@ -6,13 +7,13 @@ set_option maxRecDepth 16384
 set_option maxHeartbeats 4000000
 
 theorem source_answer (linked : Bool) :
-    ((WG.indexInsert (.keypair 0)).run (world linked)).toOption.map Prod.fst=some 7 := by
+    ((Source.indexInsert (.keypair 0)).run (world linked)).toOption.map Prod.fst=some 7 := by
   cases linked <;> decide +kernel
 
 theorem source_success (linked : Bool) :
-    ∃ final, (WG.indexInsert (.keypair 0)).run (world linked)=.ok (7,final) := by
+    ∃ final, (Source.indexInsert (.keypair 0)).run (world linked)=.ok (7,final) := by
   have answer := source_answer linked
-  cases result : (WG.indexInsert (.keypair 0)).run (world linked) with
+  cases result : (Source.indexInsert (.keypair 0)).run (world linked) with
   | error e => simp only [result,Except.toOption,Option.map_none] at answer; cases answer
   | ok pair =>
     rcases pair with ⟨value,final⟩
@@ -28,7 +29,7 @@ theorem executes (linked : Bool) (fetch : Int64 → Option Decoded)
     (coupling : RandomInputCoupling fetch config context.coverage (context.preempt+512)
       (codeEntry+0x79).toUInt64 inputAt)
     (input : inputAt (state linked).data.dmem [record 7]) :
-    ∃ final, (WG.indexInsert (.keypair 0)).run (world linked)=.ok (7,final) ∧
+    ∃ final, (Source.indexInsert (.keypair 0)).run (world linked)=.ok (7,final) ∧
       Eventually (instructionStep fetch)
         (Post names offsets context (state linked) (.ofNat stopAddr) config inputAt 7 final) (state linked) := by
   obtain ⟨final,accepted⟩ := source_success linked

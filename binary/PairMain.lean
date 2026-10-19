@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairIndexChecked
 
 open Lean Leanux Leanux.WG Binary.Pair
@@ -25,7 +26,7 @@ def expectReject (label clause : String) (check : Except String Unit) : Except S
 
 def suite (input : ProbeInput) : Except String Json := do
   let w ← replayPrefix input.trace input.operation
-  let some d := w.k.wg | throw "prefix has no device"
+  let some d := w.wg.dev | throw "prefix has no device"
   let [e] := d.indexTable | throw "pilot requires the one-entry recorded prefix"
   let .handshake pid := e.owner | throw "pilot prefix owner is not a handshake"
   let some peer := d.peers.get? pid | throw "pilot peer missing"
@@ -36,9 +37,9 @@ def suite (input : ProbeInput) : Except String Json := do
   cases := cases.push (← runCase input "synthetic/empty-bucket" w [(query + 1, [.handshake])])
   cases := cases.push (← runCase input "synthetic/same-bucket-miss" w [(query + 8192, [.handshake])])
   cases := cases.push (← runCase input "synthetic/live-twice" w repeated)
-  let dead := {w with k := {w.k with wg := some {d with peers := d.peers.insert pid {peer with refcount := 0}}}}
+  let dead := {w with wg := {w.wg with dev := some {d with peers := d.peers.insert pid {peer with refcount := 0}}}}
   cases := cases.push (← runCase input "synthetic/dead-twice" dead repeated)
-  let null := {w with k := {w.k with wg := some {d with peers := d.peers.insert pid {peer with handshakeEntryPeer := none}}}}
+  let null := {w with wg := {w.wg with dev := some {d with peers := d.peers.insert pid {peer with handshakeEntryPeer := none}}}}
   cases := cases.push (← runCase input "synthetic/null-twice" null repeated)
   -- Every colliding entry is embedded in a different keypair, but all of their
   -- peer words alias the same peer. These aliases must be accepted.
@@ -49,11 +50,11 @@ def suite (input : ProbeInput) : Except String Json := do
       collision := {collision with keypairs := collision.keypairs.insert i {peer := some pid}}
       entries := entries ++ [⟨query + (i+1)*8192, .keypair i⟩]
     collision := {collision with indexTable := entries ++ [e]}
-    let cw := {w with k := {w.k with wg := some collision}}
+    let cw := {w with wg := {w.wg with dev := some collision}}
     cases := cases.push (← runCase input s!"synthetic/collisions-{depth}/live-twice" cw repeated)
     cases := cases.push (← runCase input s!"synthetic/collisions-{depth}/wrong-kind" cw
       [(query + 8192, [.handshake])])
-    let cd := {cw with k := {cw.k with wg := some {collision with
+    let cd := {cw with wg := {cw.wg with dev := some {collision with
       peers := collision.peers.insert pid {peer with refcount := 0}}}}
     cases := cases.push (← runCase input s!"synthetic/collisions-{depth}/keypair-dead-twice" cd
       [(query + 8192, [.keypair]), (query + 8192, [.keypair])])

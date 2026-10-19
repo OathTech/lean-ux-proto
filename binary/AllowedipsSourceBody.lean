@@ -1,3 +1,4 @@
+import SourceAdapter
 import AllowedipsSourceSelect
 
 namespace Binary.AllowedipsSource
@@ -6,7 +7,7 @@ open Leanux Leanux.WG MirrorHistory
 /-- Nonempty loop body after the actual findNodeNode=true decision. -/
 def nodeBody (bits key id : Nat) (previous : Option NodeId) : Logged (ForInStep Acc) := do
   let mut found := previous
-  let n ← StateT.lift (getNode id)
+  let n ← StateT.lift (Source.getNode id)
   let matching ← prefixMatches n key bits
   if !(← branchLogged .findNodePrefixMatches matching) then
     return .done (some found, some id, found)

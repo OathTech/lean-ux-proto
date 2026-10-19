@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsertSequenceCheck
 import PairSequenceRunner
 import PairRandomRun
@@ -71,7 +72,7 @@ def runCalls (input : ProbeInput) (seed : UInt64) (w : World) (calls : List Call
     | .error error => if error==expected then .ok () else
         .error s!"insert-sequence.control.{label}: failed elsewhere: {error}"
   reject "input-tape" "insert-sequence.recorded-input-required"
-    (initialCheck fixture.names input.offsets c base {w with hidden := none} (.ofNat stopAddr) config)
+    (initialCheck fixture.names input.offsets c base {w with ambient := {w.ambient with hidden := none}} (.ofNat stopAddr) config)
   reject "private-output-alias" "insert-sequence.private-output-separation"
     (initialCheck fixture.names input.offsets c base w (.ofNat stopAddr)
       {config with blocks := config.blocks++IndexLookup.outputSpan base})

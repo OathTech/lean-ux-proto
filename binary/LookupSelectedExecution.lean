@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupAcceptedSource
 import LookupResultPrepared
 
@@ -18,7 +19,7 @@ theorem selected_through_result (fetch : Int64 → Option Decoded)
     (pre : Pre_lookup c coverage preempt returnAddress ⟨s, Image.Lookup.entry⟩ world)
     (owner : IndexOwner) (focused : c.focus.owner = some owner)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
     Eventually (historyStep fetch) (fun final =>
       ∃ v bucket helper current helperAnswer helperFinal setWorld points source,
         LookupEntry c coverage preempt returnAddress ⟨s, Image.Lookup.entry⟩ world v ∧

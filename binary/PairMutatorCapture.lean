@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairCapture
 import PairSequenceRunner
 
@@ -42,7 +43,7 @@ def names (input : ProbeInput) (snapshot : Snapshot) (layout : Json)
 input. Unobserved World/environment fields are supplied by the recorded
 prefix. This does not assert that prefix is the compiled caller's entry. -/
 def sourceWorld (template : World) (view : LookupState) : Except String World := do
-  let some original := template.k.wg | throw "capture.source-device"
+  let some original := template.wg.dev | throw "capture.source-device"
   let mut d := {original with indexTable := view.buckets.toList.flatten}
   for (owner,value) in view.ownerWords do
     match owner with
@@ -55,7 +56,7 @@ def sourceWorld (template : World) (view : LookupState) : Except String World :=
   for (id,value) in view.refcounts do
     let some peer := d.peers[id]? | throw "capture.source-count-owner"
     d := {d with peers := d.peers.insert id {peer with refcount := value}}
-  return {template with k := {template.k with wg := some d}}
+  return {template with wg := {template.wg with dev := some d}}
 
 def call (snapshot : Snapshot) (n : Names) (initial : MachineState) : Except String Sequence.Call := do
   let owner ← (ownerAt n "capture.old-argument" initial.data.regs.rsi.toNat).mapError DecodeError.message
@@ -103,7 +104,7 @@ def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except Stri
       snapshot.completedOperations.toList==List.range snapshot.operation &&
       (← input.trace.getObjValAs? String "id")==snapshot.trace do throw "capture.workload-or-mode"
   let template ← replayRecordedPrefix input.trace input.operation
-  let some d := template.k.wg | throw "capture.identity-prefix-device"
+  let some d := template.wg.dev | throw "capture.identity-prefix-device"
   let initial ← snapshot.initial.registers.state (← Capture.loadMemory snapshot.initial.blocks)
   let n ← names input snapshot layout initial d
   let view ← (reconstruct n input.offsets initial.data.dmem).mapError DecodeError.message

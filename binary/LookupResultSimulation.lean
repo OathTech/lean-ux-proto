@@ -64,7 +64,7 @@ theorem result_simulation (fetch : Int64 → Option Decoded)
     (owner : IndexOwner) (focused : c.focus.owner = some owner)
     (word : Option PeerId) (result : s.regs.rax.toBitVec = OwnerWord.pointer c.peers word)
     (location : s.regs.rbx.toBitVec = ownerAddress c owner)
-    (setRun : (owner.setPeerWord word).run world = .ok ((), setWorld))
+    (setRun : (Source.setPeerWord owner word).run world = .ok ((), setWorld))
     (bucketApart : ∀ v, project c world = some v → ∀ a, LookupBucketBytes c v a →
       ¬InRange (ownerAddress c owner) 8 a)
     (countApart : ∀ a, LookupCountBytes c a → ¬InRange (ownerAddress c owner) 8 a) :

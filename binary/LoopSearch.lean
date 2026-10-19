@@ -1,3 +1,4 @@
+import SourceAdapter
 import MirrorHistory
 
 namespace Binary.LookupSearch
@@ -69,7 +70,7 @@ theorem result_hit (kinds : List IndexKind) (index : Nat) (e : IndexEntry)
 theorem result_world (kinds : List IndexKind) (index : Nat) (es : List IndexEntry)
     (history : List MirrorHistory.Point) (w : World) :
     (result kinds index es history w).2 =
-      {w with steps := (result kinds index es history w).2.steps} := by
+      {w with ambient := {w.ambient with steps := (result kinds index es history w).2.steps}} := by
   induction es generalizing history w with
   | nil => rfl
   | cons e es ih =>
@@ -87,9 +88,9 @@ def searchSuffix (entry : Option IndexEntry) : MirrorHistory.Logged (Option (Ind
   match entry with
   | none => return none
   | some e =>
-    let word ← StateT.lift e.owner.peerWord
+    let word ← StateT.lift (Source.peerWord e.owner)
     let peer ← MirrorHistory.called "wg_peer_get_maybe_zero" (MirrorHistory.peerGet word)
-    StateT.lift (e.owner.setPeerWord peer)
+    StateT.lift (Source.setPeerWord e.owner peer)
     if ← MirrorHistory.branchLogged .idxPeerAlive peer.isSome then
       let some pid := peer | StateT.lift (invariant "unreachable")
       return some (e.owner, pid)
@@ -107,10 +108,10 @@ theorem finish_split (a : LookupMirror.Acc) :
   cases entry <;> cases stopped <;> rfl
 
 /-- This is an equality with the actual logged lookup, not just with a
-    separately defined source search. In particular its erasure is indexLookup. -/
+    separately defined source search. In particular its erasure is Source.indexLookup. -/
 theorem lookup_split (kinds : List IndexKind) (index : Nat) :
     MirrorHistory.lookup kinds index = MirrorHistory.called "wg_index_hashtable_lookup" (do
-      let es ← StateT.lift (indexBucket index)
+      let es ← StateT.lift (Source.indexBucket index)
       let entry ← searchPrefix kinds index es
       searchSuffix entry) := by
   simp only [MirrorHistory.lookup, searchPrefix, finish_split, bind_assoc]

@@ -7,7 +7,7 @@ namespace Binary.LookupRelation
 open Leanux Leanux.WG
 
 theorem project_steps (c : Config) (world : World) (steps : Array Step) :
-    project c {world with steps} = project c world := rfl
+    project c {world with ambient := {world.ambient with steps}} = project c world := rfl
 
 theorem project_advance (c : Config) (world : World) (steps : List Step) :
     project c (LookupSearch.advance world steps) = project c world := by

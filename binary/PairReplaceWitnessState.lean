@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairReplace
 import LookupWitnessState
 
@@ -12,7 +13,7 @@ def device (linked : Bool) : Device := {
   keypairs := ({} : Std.TreeMap Nat Keypair).insert 0 {peer := none},
   indexTable := if linked then [⟨0,.handshake 0⟩] else [] }
 def world (linked : Bool) : World :=
-  {LookupWitness.world with k := {LookupWitness.world.k with wg := some (device linked)}}
+  {LookupWitness.world with wg := {LookupWitness.world.wg with dev := some (device linked)}}
 def names : Names := ⟨0x100000,[(0,0x600000)],[(.handshake 0,0x6000e0),(.keypair 0,0x700000)]⟩
 def offsets : Offsets := ⟨65536,0,8,0,32,0,8,0,8,24,28,224,0,0,1056⟩
 def context : CommonBitsCoverage.Context := ⟨⟨0x800000,0x900000,4,2,0⟩,0⟩

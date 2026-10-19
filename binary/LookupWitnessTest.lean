@@ -1,3 +1,4 @@
+import SourceAdapter
 import Main
 import LookupWitnessState
 
@@ -36,7 +37,7 @@ def check : IO Unit := do
   unless first.coverage == expectedCoverage && first.comparisons == expectedComparisons do
     throw (IO.userError "witness coverage/operands differ from the reference Lean probe")
   let points ← liftE (LookupObservation.observe LookupWitness.config.rxSection first.history.toList)
-  let (answer, final) ← liftE ((WG.indexLookup [.handshake] LookupWitness.config.query).run
+  let (answer, final) ← liftE ((Source.indexLookup [.handshake] LookupWitness.config.query).run
     LookupWitness.world |>.mapError Stop.message)
   unless answer.isNone && points.filterMap (·.step) == final.steps.toList do
     throw (IO.userError "witness decisions differ from its accepted mirror run")

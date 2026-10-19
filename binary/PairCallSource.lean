@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairCallSearch
 import AllowedipsAdequacySource
 
@@ -7,26 +8,26 @@ open Leanux Leanux.WG
 /-- Accepted source execution supplies the live-hit bound; it is never an
 entry restriction. Histories are used internally to reuse source inversion. -/
 theorem lookup_effect {w final : World} {d : Device} {root : Option NodeId} {bits key : Nat}
-    {answer : Option PeerId} (device : w.k.wg = some d)
-    (accepted : (WG.lookup root bits key).run w = .ok (answer,final)) :
+    {answer : Option PeerId} (device : w.wg.dev = some d)
+    (accepted : (Source.lookup root bits key).run w = .ok (answer,final)) :
     ∃ source searched selected,
-      source.k.wg = some d ∧
-      (WG.findNode root bits key).run source = .ok (selected,searched) ∧
+      source.wg.dev = some d ∧
+      (Source.findNode root bits key).run source = .ok (selected,searched) ∧
       AllowedipsSource.select (fun id => d.nodes.get? id) root bits key = some selected ∧
       (match selected with
-      | none => answer=none ∧ final.k.wg=some d
+      | none => answer=none ∧ final.wg.dev=some d
       | some id => ∃ node pid peer,
           d.nodes.get? id=some node ∧ node.peer=some pid ∧ d.peers.get? pid=some peer ∧
           answer=some pid ∧ peer.refcount≠0 ∧ peer.refcount+1<2^31 ∧
-          final.k.wg=some {d with peers := d.peers.insert pid {peer with refcount := peer.refcount+1}}) := by
+          final.wg.dev=some {d with peers := d.peers.insert pid {peer with refcount := peer.refcount+1}}) := by
   obtain ⟨points,logged⟩ := AllowedipsSource.lookup_accepted root bits key [] w final answer accepted
   rw [AllowedipsSource.lookup_split] at logged
   obtain ⟨inner,body,_⟩ := AllowedipsSource.called_accepted logged
   obtain ⟨selected,searchPoints,searchWorld,search,suffix⟩ := AllowedipsSource.accepted_bind _ _ _ _ _ body
-  have searchKernel := (AllowedipsSource.frames_searchPrefix (fun k => k) root bits key w.k
+  have searchKernel := (AllowedipsSource.frames_searchPrefix (fun k => k) root bits key w.wg
     [⟨.call "lookup",w⟩] w selected searchPoints searchWorld rfl
     (by intro p member; cases List.mem_singleton.mp member; rfl) search).1
-  change searchWorld.k=w.k at searchKernel
+  change searchWorld.wg=w.wg at searchKernel
   obtain ⟨ignored,swapped,source,swap,rest⟩ := AllowedipsSource.accepted_bind _ _ _ _ _ search
   rw [AllowedipsSource.swapEndian_run] at swap
   obtain ⟨⟨rfl,rfl⟩,rfl⟩ := Prod.mk.inj (Except.ok.inj swap)
@@ -35,15 +36,15 @@ theorem lookup_effect {w final : World} {d : Device} {root : Option NodeId} {bit
     simp only [MirrorHistory.branch_run,StateT.run_bind] at done
     exact congrArg (fun x => x.1.1) (Except.ok.inj done)
   subst found
-  have sourceKernel := congrArg World.k (AllowedipsSource.records_world w (AllowedipsSource.swapChoices bits))
-  have sourceDevice : (AllowedipsSource.records w (AllowedipsSource.swapChoices bits)).k.wg=some d := by
+  have sourceKernel := congrArg World.wg (AllowedipsSource.records_world w (AllowedipsSource.swapChoices bits))
+  have sourceDevice : (AllowedipsSource.records w (AllowedipsSource.swapChoices bits)).wg.dev=some d := by
     rw [sourceKernel]; exact device
   have actual := AllowedipsSource.findNode_erases root bits key
     ([⟨.call "lookup",w⟩] ++ AllowedipsSource.choicePoints w (AllowedipsSource.swapChoices bits))
-    (AllowedipsSource.records w (AllowedipsSource.swapChoices bits))
+    (AllowedipsSource.records w (AllowedipsSource.swapChoices bits)) d sourceDevice
   simp only [List.nil_append] at find
   rw [find] at actual
-  have run : (WG.findNode root bits key).run (AllowedipsSource.records w (AllowedipsSource.swapChoices bits))=
+  have run : (Source.findNode root bits key).run (AllowedipsSource.records w (AllowedipsSource.swapChoices bits))=
       .ok (selected,searched) := actual.symm
   have select := (AllowedipsSource.findNode_accepted_select root bits key _ searched selected run).1
   have nodeView : AllowedipsSource.nodeView (AllowedipsSource.records w (AllowedipsSource.swapChoices bits))=

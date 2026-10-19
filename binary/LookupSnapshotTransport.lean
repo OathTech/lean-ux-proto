@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupFrameTransport
 import LookupSourceFrame
 import KeypairRepresentation
@@ -55,7 +56,7 @@ theorem lookup_snapshot_transport (fetch : Int64 → Option Decoded)
     (access : InvocationPermissions fetch permissions initial (Image.Lookup.entry+0x94))
     (pre : Pre_lookup c coverage preempt returnAddress initial world)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld))
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld))
     (P : MirrorHistory.Run (Option (IndexOwner × PeerId)) → Prop)
     (property : ∀ run, MirrorHistory.Accepted (MirrorHistory.lookup c.kinds c.query) world run → P run)
     (represented : ReceivingSnapshotFields c.keypairs initial.data.dmem (LookupSourceFrame.receivingSnapshot world))

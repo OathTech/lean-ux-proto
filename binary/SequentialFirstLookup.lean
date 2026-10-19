@@ -1,3 +1,4 @@
+import SourceAdapter
 import SequentialLookup
 import SequentialFirstResult
 import SequentialFirstTails
@@ -15,7 +16,7 @@ theorem selected_execution (fetch : Int64 → Option Decoded)
     (pre : Pre_lookup c coverage preempt returnAddress ⟨s, Image.Lookup.entry⟩ world)
     (owner : IndexOwner) (focused : c.focus.owner = some owner)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
     Eventually (guardedHistoryStep fetch (StackGuard s.regs.rsp))
       (fun final => Post c coverage preempt returnAddress ⟨s, Image.Lookup.entry⟩ world answer finalWorld final.machine)
       ⟨⟨s, Image.Lookup.entry⟩, [⟨s, Image.Lookup.entry⟩]⟩ := by
@@ -85,7 +86,7 @@ theorem miss_execution (fetch : Int64 → Option Decoded)
     (pre : Pre_lookup c coverage preempt ra ⟨s, Image.Lookup.entry⟩ world)
     (focused : c.focus.owner = none)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
     Eventually (guardedHistoryStep fetch (StackGuard s.regs.rsp))
       (fun final => Post c coverage preempt ra ⟨s, Image.Lookup.entry⟩ world answer finalWorld final.machine)
       ⟨⟨s, Image.Lookup.entry⟩, [⟨s, Image.Lookup.entry⟩]⟩ := by
@@ -170,7 +171,7 @@ theorem lookup_simulation (fetch : Int64 → Option Decoded)
     (initial : MachineState) (world : World)
     (pre : Pre_lookup c coverage preempt returnAddress initial world)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
     Eventually (guardedStep fetch (StackGuard initial.data.regs.rsp))
       (Post c coverage preempt returnAddress initial world answer finalWorld) initial := by
   have entryPC : initial.pc = Image.Lookup.entry := by obtain ⟨_, entry⟩ := pre; exact entry.pc

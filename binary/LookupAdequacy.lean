@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupSelectedReturn
 import LookupMissExecution
 import LookupInvocation
@@ -20,7 +21,7 @@ private theorem lookup_kraken (fetch : Int64 → Option Decoded)
     (initial : MachineState) (world : World)
     (pre : Pre_lookup c coverage preempt returnAddress initial world)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
     Eventually (historyStep fetch)
       (LookupPost c coverage preempt returnAddress initial world answer finalWorld)
       ⟨initial, [initial]⟩ := by
@@ -55,7 +56,7 @@ theorem lookup_simulation (fetch : Int64 → Option Decoded)
     (access : InvocationPermissions fetch permissions initial (Image.Lookup.entry+0x94))
     (pre : Pre_lookup c coverage preempt returnAddress initial world)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld)) :
     Eventually (historyStep fetch) (fun final =>
       LookupPost c coverage preempt returnAddress initial world answer finalWorld final ∧
       RunEnvironment fetch permissions onlineCPUs externalActions final.history)
@@ -93,7 +94,7 @@ theorem lookup_transport (fetch : Int64 → Option Decoded)
     (access : InvocationPermissions fetch permissions initial (Image.Lookup.entry+0x94))
     (pre : Pre_lookup c coverage preempt returnAddress initial world)
     (answer : Option (IndexOwner × PeerId)) (finalWorld : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, finalWorld))
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, finalWorld))
     (P : MirrorHistory.Run (Option (IndexOwner × PeerId)) → Prop)
     (property : ∀ run, MirrorHistory.Accepted (MirrorHistory.lookup c.kinds c.query) world run → P run) :
     Eventually (historyStep fetch) (fun final =>

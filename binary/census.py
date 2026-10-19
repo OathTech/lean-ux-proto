@@ -12,8 +12,7 @@ from pathlib import Path
 import re
 import subprocess
 
-ROOT = Path(__file__).resolve().parents[1]
-ORACLE = ROOT.parents[1] / '.artifacts/kernel-net-choice-s4/vmlinux'
+from target import ROOT, ORACLE
 
 
 def run(*args, **kw):

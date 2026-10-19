@@ -1,3 +1,4 @@
+import SourceAdapter
 import PeerLiveExecution
 import PeerDeadExecution
 import PeerNullExecution
@@ -16,7 +17,7 @@ theorem accepted_nonnull_helper_execution (c : Config) (world : World) (device :
     (s : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame ⟨s, Image.PeerGet.entry⟩ returnAddress) (nonnull : s.regs.rdi ≠ 0)
     (answer : Option PeerId) (worldFinal : World)
-    (accepted : (peerGetMaybeZero (some pid)).run world = .ok (answer, worldFinal))
+    (accepted : (Source.peerGetMaybeZero (some pid)).run world = .ok (answer, worldFinal))
     (field : s.dmem.loadInt (s.regs.rdi.toBitVec+0x420) 4 = some (peer.refcount : Int))
     (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (state : LookupCoverage.Context.At coverage preempt s.dmem)
@@ -43,7 +44,7 @@ theorem accepted_nonnull_helper_execution (c : Config) (world : World) (device :
     (latest : sourceHistory.getLast?.map (·.world) = some world)
     (active : helperActive seen = true) (noReturn : lastHelperReturn seen = none)
     (focused : c.focus.peer = some pid) (pointer : s.regs.rdi.toBitVec = c.peers pid)
-    (hasDevice : world.k.wg = some device) (hasPeer : device.peers.get? pid = some peer)
+    (hasDevice : world.wg.dev = some device) (hasPeer : device.peers.get? pid = some peer)
     (returnPC : Int64.ofBitVec returnAddress.toBitVec = Image.Lookup.entry+0xba)
     (initial : scan none history = none)
     (seed : Pending) (incoming : ∀ n, scan (some seed) (history.take n) ≠ none)

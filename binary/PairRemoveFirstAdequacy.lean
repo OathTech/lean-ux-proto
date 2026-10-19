@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairRemoveFirstBody
 import PairRemoveSource
 import PairIndexKinds
@@ -16,7 +17,7 @@ are named hypotheses; physical shape is derived from reconstruction. -/
 theorem remove_checked (fetch : Int64 → Option Decoded) (decoder : IndexRemoveDecoderAgreement fetch)
     (trace : GuardedPc fetch) (bh : GuardedBh fetch)
     {n o c initial w owner ra final} (checked : Pre n o c initial w owner ra)
-    (accepted : (WG.indexRemove owner).run w=.ok ((),final)) :
+    (accepted : (Source.indexRemove owner).run w=.ok ((),final)) :
     Eventually (guardedStep fetch (StackGuard initial.data.regs.rsp)) (Post n o c initial ra final) initial := by
   obtain ⟨d,base,device,related,storage,owners,named,pc,arg⟩ := pre_facts checked
   obtain ⟨argument,facts⟩ := arg

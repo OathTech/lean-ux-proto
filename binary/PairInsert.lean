@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsertInput
 import PairReplace
 import IndexInsertImage
@@ -59,8 +60,8 @@ def invokeFrom (input : ProbeInput) (seed : UInt64) (s : Session) (owner : Index
   let context ← Index.readContext initial.data.dmem
   callBoundary s.names input.offsets context initial s.world owner (.ofNat frame.returnPC)
   let some records := s.world.hidden | throw "insert: missing recorded inputs"
-  let some d := s.world.k.wg | throw "insert: missing device"
-  let unlinked := {s.world with k := {s.world.k with wg := some {d with
+  let some d := s.world.wg.dev | throw "insert: missing device"
+  let unlinked := {s.world with wg := {s.world.wg with dev := some {d with
     indexTable := d.indexTable.filter (fun e => !(e.owner==owner))}}}
   let mut remaining := records
   let mut draws := #[]
@@ -81,7 +82,7 @@ def invokeFrom (input : ProbeInput) (seed : UInt64) (s : Session) (owner : Index
     remaining := rest
     draws := draws.push value
   unless r.state.pc.toBitVec.toNat==frame.returnPC do throw "insert: input iteration budget exhausted"
-  let (answer,world) ← indexInsert owner |>.run s.world |>.mapError Stop.message
+  let (answer,world) ← Source.indexInsert owner |>.run s.world |>.mapError Stop.message
   Remove.assertAt s.names input.offsets r.state.data.dmem world
   unless world.hidden==some remaining do throw "insert.return.input-cursor"
   unless r.state.data.regs.rax.toNat==answer && r.state.data.regs.rsp.toNat==initial.data.regs.rsp.toNat+8 do

@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupProjection
 import TrustBase
 
@@ -15,16 +16,15 @@ def device : Device := {ifindex := 3, ifname := "wg0", indexTable := [entry]}
 /-- Unobserved World components are arbitrary concrete inhabitants. No
     physical representation of these components is asserted. -/
 def world : World := {
-  k := {
-    task := {
-      files := {
-        count := 1, resizeInProgress := false, nextFd := 0
-        fdt := {maxFds := 0, fd := #[], openFds := #[], closeOnExec := #[]} }
-      rlimitNofile := 0 }
-    files := {}, nextFile := 0, ctxs := {}, nextCtx := 0, idaUsed := {},
-    nrFiles := 0, maxFiles := 0, anonInodeInodeErr := false, wg := some device }
-  env := fun _ _ => false
-  timing := {advanceWait := 0, traceBound := 0} }
+  tasks := {task := {
+    files := {
+      count := 1, resizeInProgress := false, nextFd := 0
+      fdt := {maxFds := 0, fd := #[], openFds := #[], closeOnExec := #[]} }
+    rlimitNofile := 0 }}
+  fs := {}
+  wg := {dev := some device}
+  ambient := {env := fun _ _ => false, timing := {advanceWait := 0, traceBound := 0}} }
+
 
 def config : LookupRelation.Config := {
   table := 0x100000, query := 0x8a0b0c0d, kinds := [.handshake]

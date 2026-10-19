@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairBoundaryProof
 import AllowedipsSourceWitness
 
@@ -16,7 +17,7 @@ def device (bits : Nat) : Device := {
   peers := ({} : Std.TreeMap PeerId Peer).insert 0 (AllowedipsWitness.peer 0) }
 
 def world (bits : Nat) : World :=
-  {AllowedipsWitness.world with k := {AllowedipsWitness.world.k with wg := some (device bits)}}
+  {AllowedipsWitness.world with wg := {AllowedipsWitness.world.wg with dev := some (device bits)}}
 
 def names : Names := ⟨[(0,0xa00000)],[(0,0x600000)]⟩
 
@@ -97,17 +98,17 @@ theorem simulation (bits : Nat) (family : bits = 32 ∨ bits = 128)
     · exact check4
     · exact check6
   obtain ⟨final,accepted,deviceAt⟩ : ∃ final,
-      (WG.findNode (some 0) bits 1).run (world bits) = .ok (some 0,final) ∧
-      final.k.wg = some (device bits) := by
-    have projected : ((WG.findNode (some 0) bits 1).run (world bits)).toOption.map Prod.fst = some (some 0) := by
+      (Source.findNode (some 0) bits 1).run (world bits) = .ok (some 0,final) ∧
+      final.wg.dev = some (device bits) := by
+    have projected : ((Source.findNode (some 0) bits 1).run (world bits)).toOption.map Prod.fst = some (some 0) := by
       rcases family with rfl | rfl <;>
-        (unfold WG.findNode; simp only [Std.Legacy.Range.forIn_eq_forIn_range']; decide +kernel)
-    cases executed : (WG.findNode (some 0) bits 1).run (world bits) with
+        (unfold Source.findNode Leanux.WG.findNode; simp only [Std.Legacy.Range.forIn_eq_forIn_range']; decide +kernel)
+    cases executed : (Source.findNode (some 0) bits 1).run (world bits) with
     | error e => rw [executed] at projected; cases projected
     | ok result =>
       rw [executed] at projected
       have equal : result.1 = some 0 := Option.some.inj projected
-      have accepted : (WG.findNode (some 0) bits 1).run (world bits) = .ok (some 0,result.2) := by
+      have accepted : (Source.findNode (some 0) bits 1).run (world bits) = .ok (some 0,result.2) := by
         simpa only [←equal] using executed
       have frame := (AllowedipsSource.findNode_accepted_select (some 0) bits 1 (world bits) result.2 (some 0) accepted).2
       exact ⟨result.2,by cases result; simp_all only [Except.ok.injEq,Prod.mk.injEq,and_true],by rw [frame]; rfl⟩

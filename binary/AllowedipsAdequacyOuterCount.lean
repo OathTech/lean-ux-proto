@@ -77,7 +77,7 @@ theorem keeps_count (old : Nat) : Keeps (count old) := by
   intro history w answer points w' run
   have erased := count_erases old history w
   rw [run] at erased
-  have actual : (refcountIncNotZero old).run w = .ok (answer,w') := erased.symm
+  have actual : (refcountIncNotZero old : M Bool).run w = .ok (answer,w') := erased.symm
   have small := PeerMirror.accepted_count_bound old w w' answer actual
   rw [count_run_logged old history w small] at run
   cases run

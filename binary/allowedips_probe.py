@@ -2,12 +2,13 @@
 """Concrete allowedips three-way test; invoke through capped. No proof claim."""
 import argparse
 from datetime import datetime, timezone
-import hashlib
 import json
 import os
 from pathlib import Path
 import re
+import shlex
 
+from target import verify_image, kernel_environment
 from census import ROOT, ORACLE, extract, run
 from layouts import layouts
 from run import bootstrap, checked_command, jsonl, TOOLCHAIN
@@ -19,10 +20,7 @@ def prepare(check, out, operation, budget):
     report = json.loads((check / 'report.json').read_text())
     if report['status'] != 'pass' or report['traces'] != 1:
         raise ValueError('requires one successful differential trace')
-    expected = [line.strip() for line in (ROOT / 'kernel/identity-x86_64-net-choice.txt').read_text().splitlines()
-                if line.strip() and not line.startswith('#')][-1]
-    if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
-        raise ValueError('oracle image hash mismatch')
+    verify_image()
     chunk = check / 'chunk-000'
     [trace] = jsonl(chunk / 'model/inputs.jsonl')
     if trace['id'] != TRACE or trace['ops'][operation]['op'] != 'wg_xmit':
@@ -152,8 +150,8 @@ def main():
     else:
         stamp = datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')
         check = ROOT / '.artifacts/check' / ('binary-allowedips-' + stamp)
-        env = dict(os.environ, LEANUX_KERNEL_DIR=str(ORACLE.parent))
-        shell = f'export PATH="{TOOLCHAIN}:$PATH"; exec python3 -m evaluator.check --suite wireguard --binary-coverage --binary-profile allowedips --trace {TRACE} --out "$1"'
+        env = kernel_environment()
+        shell = f'export PATH={shlex.quote(str(TOOLCHAIN))}:"$PATH"; exec python3 -m evaluator.check --suite wireguard --binary-coverage --binary-profile allowedips --trace {TRACE} --out "$1"'
         checked_command([str(ROOT / 'scripts/in-bundle'), '/bin/sh', '-c', shell, 'binary-allowedips', str(check)], ROOT, env)
     out = ROOT / '.tmp/binary-allowedips'
     out.mkdir(parents=True, exist_ok=True)

@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairSequenceCheck
 import PairLookupAdequacy
 import PairReplaceAdequacy
@@ -10,7 +11,7 @@ set_option maxRecDepth 2048
 
 structure InitialFacts (n : Names) (o : Offsets) (c : Context) (base : MachineState)
     (w : World) (ra : UInt64) : Prop where
-  state : ∃ d, w.k.wg=some d ∧ Corresponds n o base.data.dmem d ∧
+  state : ∃ d, w.wg.dev=some d ∧ Corresponds n o base.data.dmem d ∧
     Remove.ownership n o base.data.dmem=.ok (Remove.targetOwnership d)
   storage : storageCheck n o=true
   names : IndexLookup.interpretationCheck n=true
@@ -68,7 +69,7 @@ theorem initial_facts {n o c base w ra} (checked : initialCheck n o c base w ra=
 relative to the initial allocation, separate from the source projection. -/
 structure Ready (n : Names) (o : Offsets) (c : Context) (base : MachineState)
     (m : DataMem) (w : World) : Prop where
-  state : ∃ d, w.k.wg=some d ∧ Corresponds n o m d ∧
+  state : ∃ d, w.wg.dev=some d ∧ Corresponds n o m d ∧
     Remove.ownership n o m=.ok (Remove.targetOwnership d)
   coverage : ∀ b, (phase c b).CoverageAt m
   preempt : load32 m preemptCountAddress=some c.preempt

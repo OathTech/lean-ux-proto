@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsertLoop
 import PairInsertPrefix
 
@@ -16,7 +17,7 @@ def Post (n : Names) (o : Offsets) (c : Context) (initial : MachineState)
     (answer : Nat) (final : World) (t : MachineState) : Prop :=
   Returned initial t ra ∧ t.data.regs.rax.toNat=answer ∧
     MemoryReady c initial ra (savedWords initial.data) .enabled t.data.dmem ∧
-    (∃ d, final.k.wg=some d ∧ Corresponds n o t.data.dmem d ∧
+    (∃ d, final.wg.dev=some d ∧ Corresponds n o t.data.dmem d ∧
       Remove.ownership n o t.data.dmem=.ok (Remove.targetOwnership d)) ∧
     ProviderState config c initial t ∧
     (∃ rest, final.hidden=some rest ∧ inputAt t.data.dmem rest) ∧
@@ -33,7 +34,7 @@ theorem insert_checked (fetch : Int64 → Option Decoded) (decoder : IndexInsert
     (coupling : RandomInputCoupling fetch config c.coverage (c.preempt+512) (codeEntry+0x79).toUInt64 inputAt)
     (pre : Pre n o c initial w owner ra config)
     (supplied : w.hidden=some records) (input : inputAt initial.data.dmem records)
-    (accepted : (WG.indexInsert owner).run w=.ok (answer,final)) :
+    (accepted : (Source.indexInsert owner).run w=.ok (answer,final)) :
     Eventually (instructionStep fetch) (Post n o c initial ra config inputAt answer final) initial := by
   obtain ⟨d,base,device,related,storage,owned,resident,pc,table,argument,facts⟩ := boundary_data pre.1
   have provider := providerCheck_sound pre.2

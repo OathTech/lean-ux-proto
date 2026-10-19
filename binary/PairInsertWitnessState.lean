@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsert
 import PairRemoveWitnessState
 import PairRandomRun
@@ -9,7 +10,7 @@ abbrev names := Remove.Witness.names
 abbrev offsets := Remove.Witness.offsets
 abbrev device := Remove.Witness.device
 
-def world (linked : Bool) : World := {Remove.Witness.world linked with hidden := some [record 7]}
+def world (linked : Bool) : World := {Remove.Witness.world linked with ambient := {(Remove.Witness.world linked).ambient with hidden := some [record 7]}}
 def context : CommonBitsCoverage.Context := ⟨⟨0x800000,0,0,0,0⟩,0⟩
 def config : RandomProvider.Config := RandomRun.privateConfig
 

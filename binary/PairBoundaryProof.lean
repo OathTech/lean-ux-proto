@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairLocalsProof
 import PairFrameProof
 import PairTrieReadProof
@@ -37,7 +38,7 @@ theorem boundary_ready (fetch : Int64 → Option Decoded)
     (s : MachineState) (w : World) (root : Option NodeId) (bits query : Nat)
     {stack : Nat}
     (checked : initialBoundary names input coverage s w root bits query stack = .ok ()) :
-    ∃ d, w.k.wg = some d ∧
+    ∃ d, w.wg.dev = some d ∧
       AllowedipsLoop.Setup fetch s.data coverage (loopConfig names w root bits query) (fun id => d.nodes.get? id) ∧
       Corresponds names input.offsets s.data.dmem d ∧
       (∀ a, ReadBytes names input.offsets a → ¬AllowedipsLoop.writes s.data.regs.rsp coverage a) ∧
@@ -85,11 +86,11 @@ theorem findNode_checked (fetch : Int64 → Option Decoded)
     (s : MachineState) (w final : World) (root : Option NodeId) (bits query : Nat) (answer : Option NodeId)
     {stack : Nat}
     (checked : initialBoundary names input coverage s w root bits query stack = .ok ())
-    (accepted : (WG.findNode root bits query).run w = .ok (answer,final)) :
+    (accepted : (Source.findNode root bits query).run w = .ok (answer,final)) :
     Eventually (historyStep fetch) (fun t =>
       t.machine.pc = AllowedipsImage.Lookup.entry+0x101 ∧
       t.machine.data.regs.rbp.toBitVec = AllowedipsRelation.pointer (interpretation names.nodes) answer ∧
-      (∃ d, final.k.wg = some d ∧ reconstruct names input.offsets t.machine.data.dmem = .ok (target d)) ∧
+      (∃ d, final.wg.dev = some d ∧ reconstruct names input.offsets t.machine.data.dmem = .ok (target d)) ∧
       AllowedipsLoop.Frame s.data coverage t.machine.data) ⟨s,[s]⟩ := by
   obtain ⟨d,device,setup,related,apart,initial⟩ :=
     boundary_ready fetch decoder callbacks cmp1 names input coverage s w root bits query checked

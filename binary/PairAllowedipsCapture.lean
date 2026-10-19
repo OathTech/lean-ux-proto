@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairAllowedips
 import PairCapture
 
@@ -121,8 +122,8 @@ def run (input : AllowedipsProbe.Input) (snapshot : Snapshot) (layout : Json)
   let trace ← Leanux.Runner.parseTrace input.trace
   let some (.wgXmit family key _ _) := trace.ops[input.operation]? | throw "capture operation is not wg_xmit"
   let prior ← replayRecordedPrefix input.trace input.operation
-  let w := {prior with steps := #[], hidden := some [], netRxSection := 0, netRxSections := 0}
-  let some d := w.k.wg | throw "source prefix has no device"
+  let w := {prior with ambient := {prior.ambient with steps := #[], hidden := some [], netRxSection := 0, netRxSections := 0}}
+  let some d := w.wg.dev | throw "source prefix has no device"
   let width := if family == 4 then 32 else 128
   let root := if width == 32 then d.peerAllowedips.root4 else d.peerAllowedips.root6
   let initial ← snapshot.initial.registers.state initialMemory

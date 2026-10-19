@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairCallAdequacy
 import PairBoundaryWitness
 
@@ -61,14 +62,14 @@ theorem pre (bits : Nat) (family : bits=32 ∨ bits=128) :
   exact ⟨_,pre⟩
 
 theorem accepted (bits : Nat) (family : bits=32 ∨ bits=128) :
-    ∃ final, (WG.lookup (some 0) bits 1).run (Witness.world bits)=.ok (some 0,final) := by
-  have result : ((WG.lookup (some 0) bits 1).run (Witness.world bits)).toOption.map Prod.fst=some (some 0) := by
+    ∃ final, (Source.lookup (some 0) bits 1).run (Witness.world bits)=.ok (some 0,final) := by
+  have result : ((Source.lookup (some 0) bits 1).run (Witness.world bits)).toOption.map Prod.fst=some (some 0) := by
     rcases family with rfl | rfl
     all_goals
-      unfold WG.lookup WG.findNode
+      unfold Source.lookup Leanux.WG.lookup Leanux.WG.findNode
       simp only [Std.Legacy.Range.forIn_eq_forIn_range']
       decide +kernel
-  cases actual : (WG.lookup (some 0) bits 1).run (Witness.world bits) with
+  cases actual : (Source.lookup (some 0) bits 1).run (Witness.world bits) with
   | error e => rw [actual] at result; cases result
   | ok value =>
     obtain ⟨answer,final⟩ := value

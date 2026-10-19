@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairIndexChecked
 import PairReplace
 
@@ -17,9 +18,9 @@ inductive Answer where
   deriving Repr, BEq
 
 def source : Call → M Answer
-  | .lookup q kinds => return .lookup (← WG.indexLookup kinds q)
-  | .remove owner => do WG.indexRemove owner; return .remove
-  | .replace pid kid => return .replace (← WG.indexReplaceHandshake pid kid)
+  | .lookup q kinds => return .lookup (← Source.indexLookup kinds q)
+  | .remove owner => do Source.indexRemove owner; return .remove
+  | .replace pid kid => return .replace (← Source.indexReplaceHandshake pid kid)
 
 def program : List Call → M (List Answer)
   | [] => pure []
@@ -85,7 +86,7 @@ def Admissible (n : Names) (call : Call) (w : World) : Prop :=
   | .replace pid kid =>
       (∃ a, addressOf n (.handshake pid)=.ok a) ∧
       (∃ a, addressOf n (.keypair kid)=.ok a) ∧
-      ∀ d, w.k.wg=some d → d.indexTable.any (·.owner==.handshake pid)=true →
+      ∀ d, w.wg.dev=some d → d.indexTable.any (·.owner==.handshake pid)=true →
         d.indexTable.any (·.owner==.keypair kid)=false
 
 end Binary.Pair.Sequence

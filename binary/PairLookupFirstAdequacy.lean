@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairLookupAdequacy
 import SequentialFirstLookup
 namespace Binary.Pair.IndexLookup.First
@@ -13,7 +14,7 @@ theorem lookup_checked (fetch : Int64 → Option Decoded)
     (traceConstCmp1 : LeafService fetch (.ofNat 0xffffffff810f3ec0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1)) (bhEnable : LeafService fetch (.ofNat 0xffffffff810732c0) BhEnableReady (fun _ => InRange preemptCountAddress 4) (fun before after => ∀ old : BitVec 32, before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) → after.data.dmem.loadInt preemptCountAddress 4 = some ((old-before.data.regs.get (.low .rsi .W32)).toNat : Int)))
     {n o coverage initial w query kinds ra answer finalWorld}
     (checked : Pre n o coverage initial w query kinds ra)
-    (accepted : (WG.indexLookup kinds query).run w=.ok (answer,finalWorld)) :
+    (accepted : (Source.indexLookup kinds query).run w=.ok (answer,finalWorld)) :
     Eventually (guardedStep fetch (StackGuard initial.data.regs.rsp)) (Post n o coverage initial ra answer finalWorld) initial := by
   obtain ⟨d,facts⟩ := pre_facts checked
   let c := callConfig n w d query kinds

@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairCallHit
 
 namespace Binary.Pair.Trie
@@ -63,11 +64,11 @@ theorem lookup_checked (fetch : Int64 → Option Decoded)
     (bh : AllowedipsBhEnableContract fetch)
     {names input coverage initial w root bits key ra answer final}
     (checked : callBoundary names input coverage initial w root bits key ra=.ok ())
-    (accepted : (WG.lookup root bits key).run w=.ok (answer,final)) :
+    (accepted : (Source.lookup root bits key).run w=.ok (answer,final)) :
     Eventually (instructionStep fetch) (fun t =>
       AllowedipsTail.Post initial coverage.coverage coverage.preempt ra
         (.ofBitVec (AllowedipsRelation.pointer (interpretation names.peers) answer)) t ∧
-      (∃ d, final.k.wg=some d ∧ Corresponds names input.offsets t.data.dmem d) ∧
+      (∃ d, final.wg.dev=some d ∧ Corresponds names input.offsets t.data.dmem d) ∧
       EqualOutside (fun a => AllowedipsEntry.TotalWrites initial coverage.coverage coverage.preempt a ∨
         CountBytes names input.offsets a) initial.data.dmem t.data.dmem) initial := by
   obtain ⟨d,device,pre,related,facts⟩ := callBoundary_pre checked
@@ -95,7 +96,7 @@ theorem lookup_checked (fetch : Int64 → Option Decoded)
   have selectRun := after_search_segment fetch decoder callbacks.pc facts post searchRelated frame position present
   apply eventually_trans (instructionStep fetch) _ _ _ selectRun
   rintro state ⟨position,selectedRelated,frame⟩
-  have middleRun : Eventually (instructionStep fetch) (fun t => ∃ d', final.k.wg=some d' ∧
+  have middleRun : Eventually (instructionStep fetch) (fun t => ∃ d', final.wg.dev=some d' ∧
       MiddlePost names input.offsets d' (callConfig names w d root bits key)
         (callView (callConfig names w d root bits key) d) coverage initial entry answer t) state := by
     cases selected with

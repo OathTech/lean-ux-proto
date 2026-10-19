@@ -1,3 +1,4 @@
+import SourceAdapter
 import TrieHeap
 import LookupProjection
 
@@ -28,7 +29,7 @@ structure View where
   count : Option Nat
 
 def project (c : Config) (w : World) : Option View := do
-  let d ← w.k.wg
+  let d ← w.wg.dev
   return ⟨fun id => d.nodes.get? id,
     c.focus.peer.bind (fun id => (d.peers.get? id).map (·.refcount))⟩
 

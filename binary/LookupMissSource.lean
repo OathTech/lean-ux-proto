@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupAcceptedSource
 
 namespace Binary.LookupRelation
@@ -13,8 +14,8 @@ theorem lookup_no_owner_source (c : Config) (coverage : KcovLayout) (preempt : B
       .ok ((none, (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).1.2 ++
         [⟨.returned "wg_index_hashtable_lookup", (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2⟩]),
         (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2) := by
-  obtain ⟨device, hasDevice⟩ : ∃ device, world.k.wg = some device := by
-    cases hd : world.k.wg with
+  obtain ⟨device, hasDevice⟩ : ∃ device, world.wg.dev = some device := by
+    cases hd : world.wg.dev with
     | none => have h := entry.projected; simp [project, hd] at h
     | some device => exact ⟨device, rfl⟩
   have bucketEq : v.bucket = device.indexTable.filter (fun e => e.index % 8192 == c.query % 8192) := by
@@ -45,7 +46,7 @@ theorem lookup_no_owner_accepted (c : Config) (coverage : KcovLayout) (preempt :
     (entry : LookupEntry c coverage preempt returnAddress s world v)
     (focused : c.focus.owner = none)
     (answer : Option (IndexOwner × PeerId)) (final : World)
-    (accepted : (indexLookup c.kinds c.query).run world = .ok (answer, final)) :
+    (accepted : (Source.indexLookup c.kinds c.query).run world = .ok (answer, final)) :
     answer = none ∧ final = (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2 := by
   have logged := lookup_no_owner_source c coverage preempt returnAddress s world v entry focused
   have erased := MirrorHistory.lookup_erases c.kinds c.query [] world

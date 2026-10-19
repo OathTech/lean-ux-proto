@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairLookupPre
 import OwnerStore
 
@@ -67,9 +68,9 @@ theorem SourceFrame.keypair {c d id keypair} (present : d.keypairs.get? id=some 
     simp [OwnerWord.value,Std.TreeMap.getElem?_insert,ne]
 
 theorem setter_frame {c w final d owner old value}
-    (device : w.k.wg=some d) (present : OwnerWord.value d owner=some old)
-    (focused : c.focus.owner=some owner) (run : (owner.setPeerWord value).run w=.ok ((),final)) :
-    ∃ d', final.k.wg=some d' ∧ SourceFrame c d d' ∧ OwnerWord.value d' owner=some value := by
+    (device : w.wg.dev=some d) (present : OwnerWord.value d owner=some old)
+    (focused : c.focus.owner=some owner) (run : (Source.setPeerWord owner value).run w=.ok ((),final)) :
+    ∃ d', final.wg.dev=some d' ∧ SourceFrame c d d' ∧ OwnerWord.value d' owner=some value := by
   cases owner with
   | handshake id =>
     cases found : d.peers.get? id with

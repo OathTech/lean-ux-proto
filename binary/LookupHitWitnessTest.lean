@@ -1,3 +1,4 @@
+import SourceAdapter
 import Main
 import LookupHitWitnessState
 
@@ -52,7 +53,7 @@ def check : IO Unit := do
       unless first.coverage == expectedCoverage && first.comparisons == expectedComparisons do
         throw (IO.userError "live witness coverage/operands differ from the recorded reference probe")
     let points ← liftE (LookupObservation.observe LookupHitWitness.config.rxSection first.history.toList)
-    let (answer, final) ← liftE ((WG.indexLookup LookupHitWitness.config.kinds LookupHitWitness.config.query).run
+    let (answer, final) ← liftE ((Source.indexLookup LookupHitWitness.config.kinds LookupHitWitness.config.query).run
       (LookupHitWitness.world live) |>.mapError Stop.message)
     unless answer.isSome == live && points.filterMap (·.step) == final.steps.toList do
       throw (IO.userError "hit witness decisions differ from its accepted mirror run")

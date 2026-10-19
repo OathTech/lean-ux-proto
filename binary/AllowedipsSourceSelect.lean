@@ -1,3 +1,4 @@
+import SourceAdapter
 import AllowedipsSourceFrames
 
 namespace Binary.AllowedipsSource
@@ -5,7 +6,7 @@ open Leanux Leanux.WG MirrorHistory LookupSourceFrame
 set_option maxHeartbeats 2000000
 
 def nodeView (w : World) : NodeView :=
-  fun id => w.k.wg.bind fun device => device.nodes.get? id
+  fun id => w.wg.dev.bind fun device => device.nodes.get? id
 
 theorem prefixMatches_run (node : AipNode) (key bits : Nat) (history : List Point) (w : World) :
     ((prefixMatches node key bits).run history).run w =
@@ -20,14 +21,14 @@ theorem prefixMatches_run (node : AipNode) (key bits : Nat) (history : List Poin
   simp only [StateT.run_bind, callRun]
   rfl
 
-theorem records_kernel (w : World) (choices : Choices) : (records w choices).k = w.k :=
+theorem records_kernel (w : World) (choices : Choices) : (records w choices).wg = w.wg :=
   by
-    have eq := congrArg World.k (records_world w choices)
+    have eq := congrArg World.wg (records_world w choices)
     exact eq
 
 theorem records_steps (w : World) (choices : Choices) :
-    records w choices = {w with steps := w.steps ++
-      (choices.map fun (d,b) => ({decision := d, outcome := b, netRx := w.netRxSection} : Step)).toArray} := by
+    records w choices = {w with ambient := {w.ambient with steps := w.steps ++
+      (choices.map fun (d,b) => ({decision := d, outcome := b, netRx := w.netRxSection} : Step)).toArray}} := by
   induction choices generalizing w with
   | nil => simp [records]
   | cons choice rest ih =>
@@ -54,17 +55,17 @@ theorem iteration_select (bits key : Nat) (acc : Acc) (history : List Point) (w 
   cases current with
   | none => rfl
   | some id =>
-    cases device : w.k.wg with
+    cases device : w.wg.dev with
     | none =>
-      simp [iteration, selectStep, nodeView, branchLogged, mark, branch,
-        getNode, getDev, getK, device, invariant, Except.toOption]
+      simp [LookupMirror.record, iteration, selectStep, nodeView, MirrorHistory.branch_run, StateT.run_lift, StateT.run_bind, StateT.run_pure,
+        Source.getNode_eq, Source.getDev_eq, device, invariant, Except.toOption]
       rfl
     | some dev =>
       cases node : dev.nodes.get? id with
       | none =>
         have absent : dev.nodes[id]? = none := node
-        simp [iteration, selectStep, nodeView, branchLogged, mark, branch,
-          getNode, getDev, getK, device, absent, invariant, Except.toOption]
+        simp [LookupMirror.record, iteration, selectStep, nodeView, MirrorHistory.branch_run, StateT.run_lift, StateT.run_bind, StateT.run_pure,
+          Source.getNode_eq, Source.getDev_eq, device, absent, invariant, Except.toOption]
         rfl
       | some n =>
         have present : dev.nodes[id]? = some n := node
@@ -76,9 +77,9 @@ theorem iteration_select (bits key : Nat) (acc : Acc) (history : List Point) (w 
         all_goals
           try simp only [full] at mismatch
           simp [-Option.map_eq_some_iff, iteration, StateT.run_lift, StateT.run_bind, StateT.run_pure,
-            getNode, getDev, getK, LookupMirror.record, device, present,
+            Source.getNode_eq, Source.getDev_eq, LookupMirror.record, device, present,
             prefixMatches_run, selectStep, nodeView, Except.toOption,
-            branchLogged, mark, branch, choose, AipNode.bitAt, invariant,
+            MirrorHistory.branch_run, StateT.run_lift, StateT.run_bind, StateT.run_pure, choose, AipNode.bitAt, invariant,
             records_steps, except_ok_bind, except_pure, except_map, throw_run,
             except_error_bind, mismatch, hasPeer, full, invalid, child]
         all_goals rfl
@@ -87,7 +88,7 @@ theorem iteration_select (bits key : Nat) (acc : Acc) (history : List Point) (w 
 
 theorem loop_select_accepted (bits key fuel : Nat) (acc result : Acc)
     (history points : List Point) (w final : World)
-    (prior : ∀ p ∈ history, p.world.k = w.k)
+    (prior : ∀ p ∈ history, p.world.wg = w.wg)
     (accepted : ((loop bits key fuel acc).run history).run w = .ok ((result,points),final)) :
     selectLoop (nodeView w) bits key fuel acc = some result := by
   induction fuel generalizing acc result history points w final with
@@ -101,9 +102,9 @@ theorem loop_select_accepted (bits key fuel : Nat) (acc result : Acc)
     have selected := iteration_select bits key acc history w
     rw [first] at selected
     change some step = selectStep (nodeView w) bits key acc at selected
-    have framed := frames_iteration id bits key acc w.k history w step middle intermediate
+    have framed := frames_iteration id bits key acc w.wg history w step middle intermediate
       rfl prior first
-    have kernel : intermediate.k = w.k := framed.1
+    have kernel : intermediate.wg = w.wg := framed.1
     have viewEq : nodeView intermediate = nodeView w := by
       funext id
       simp only [nodeView, kernel]
@@ -113,7 +114,7 @@ theorem loop_select_accepted (bits key fuel : Nat) (acc result : Acc)
       obtain ⟨rfl,rfl,rfl⟩ := rest
       rfl
     | yield next =>
-      have nextPrior : ∀ p ∈ middle, p.world.k = intermediate.k := by
+      have nextPrior : ∀ p ∈ middle, p.world.wg = intermediate.wg := by
         intro p member
         exact (framed.2 p member).trans framed.1.symm
       have recursive := ih next result middle points intermediate final nextPrior rest
@@ -125,7 +126,7 @@ theorem loop_select_accepted (bits key fuel : Nat) (acc result : Acc)
 theorem findNode_logged_select (trie : Option NodeId) (bits key : Nat)
     (w final : World) (answer : Option NodeId) (points : List Point)
     (accepted : ((findNode trie bits key).run []).run w = .ok ((answer,points),final)) :
-    select (nodeView w) trie bits key = some answer ∧ final.k = w.k := by
+    select (nodeView w) trie bits key = some answer ∧ final.wg = w.wg := by
   have frame := findNode_kernel trie bits key w final answer points accepted
   rw [findNode_bounded] at accepted
   obtain ⟨acc,middle,intermediate,ran,finished⟩ := accepted_bind _ _ _ _ _ accepted
@@ -149,9 +150,9 @@ theorem findNode_logged_select (trie : Option NodeId) (bits key : Nat)
     mirror supplies selection, while the complete Kernel is unchanged. -/
 theorem findNode_accepted_select (trie : Option NodeId) (bits key : Nat)
     (w final : World) (answer : Option NodeId)
-    (accepted : (WG.findNode trie bits key).run w = .ok (answer,final)) :
-    select (nodeView w) trie bits key = some answer ∧ final.k = w.k := by
-  obtain ⟨points,logged⟩ := accepted_logged (findNode_erases trie bits key) [] w final answer accepted
+    (accepted : (Source.findNode trie bits key).run w = .ok (answer,final)) :
+    select (nodeView w) trie bits key = some answer ∧ final.wg = w.wg := by
+  obtain ⟨points,logged⟩ := findNode_accepted trie bits key [] w final answer accepted
   exact findNode_logged_select trie bits key w final answer points logged
 
 #print axioms loop_select_accepted

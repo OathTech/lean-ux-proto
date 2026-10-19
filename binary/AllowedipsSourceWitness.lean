@@ -1,3 +1,4 @@
+import SourceAdapter
 import AllowedipsSource
 import AllowedipsImage
 import AllowedipsLayout
@@ -53,16 +54,15 @@ def device : Device := {
   peers := (List.range 5).foldl (fun peers id => peers.insert id (peer id)) {} }
 
 def world : World := {
-  k := {
-    task := {
-      files := {
-        count := 1, resizeInProgress := false, nextFd := 0
-        fdt := {maxFds := 0, fd := #[], openFds := #[], closeOnExec := #[]} }
-      rlimitNofile := 0 }
-    files := {}, nextFile := 0, ctxs := {}, nextCtx := 0, idaUsed := {},
-    nrFiles := 0, maxFiles := 0, anonInodeInodeErr := false, wg := some device }
-  env := fun _ _ => false
-  timing := {advanceWait := 0, traceBound := 0} }
+  tasks := {task := {
+    files := {
+      count := 1, resizeInProgress := false, nextFd := 0
+      fdt := {maxFds := 0, fd := #[], openFds := #[], closeOnExec := #[]} }
+    rlimitNofile := 0 }}
+  fs := {}
+  wg := {dev := some device}
+  ambient := {env := fun _ _ => false, timing := {advanceWait := 0, traceBound := 0}} }
+
 
 def key4 : Nat := 0x0a010203
 def key6 : Nat := 0xfd000002000000000000000000000009
@@ -124,14 +124,14 @@ def initial6 : MachineState := initial 1 128 key6
 
 /-- Kernel-reduced source acceptance on the concrete projected trie. -/
 theorem source4_result :
-    ((WG.lookup (some 7) 32 key4).run world).toOption.map Prod.fst = some (some 3) := by
-  unfold WG.lookup WG.findNode
+    ((Source.lookup (some 7) 32 key4).run world).toOption.map Prod.fst = some (some 3) := by
+  unfold Source.lookup Leanux.WG.lookup Leanux.WG.findNode
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   decide
 
 theorem source6_result :
-    ((WG.lookup (some 1) 128 key6).run world).toOption.map Prod.fst = some (some 4) := by
-  unfold WG.lookup WG.findNode
+    ((Source.lookup (some 1) 128 key6).run world).toOption.map Prod.fst = some (some 4) := by
+  unfold Source.lookup Leanux.WG.lookup Leanux.WG.findNode
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   decide
 
@@ -152,11 +152,11 @@ private theorem accepted_of_result (action : M (Option PeerId)) (pid : PeerId)
     exact ⟨final,rfl⟩
 
 theorem source4_accepted :
-    ∃ final, (WG.lookup (some 7) 32 key4).run world = .ok (some 3,final) :=
+    ∃ final, (Source.lookup (some 7) 32 key4).run world = .ok (some 3,final) :=
   accepted_of_result _ 3 source4_result
 
 theorem source6_accepted :
-    ∃ final, (WG.lookup (some 1) 128 key6).run world = .ok (some 4,final) :=
+    ∃ final, (Source.lookup (some 1) 128 key6).run world = .ok (some 4,final) :=
   accepted_of_result _ 4 source6_result
 
 theorem source4_logged : ∃ final points,

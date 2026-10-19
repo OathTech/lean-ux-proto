@@ -1,3 +1,4 @@
+import SourceAdapter
 import Image
 import Leanux.Runner
 import Layouts
@@ -50,26 +51,40 @@ def replayRecordedPrefix (j : Json) (count : Nat) : Except String Leanux.World :
     throw "probe requires a recorded prefix and a following operation"
   unless t.seccompPrefill == 0 do throw "probe does not support a seccomp prefill"
   let mut w : Leanux.World := {
-    k := Leanux.Runner.initialKernel t.rlimit t.net t.bare t.foreign t.stepped t.seccompChild
-    env := Leanux.Runner.harnessEnv, timing := Leanux.Env.timing
-    portBound := Leanux.Env.portBound, fixtureNetDevices := Leanux.Env.fixtureNetDevices
-    foreignCreator := t.foreign, netnsCHolders := if t.foreign then [9, 8, 5, 4] else []
-    allocArmed := t.allocArmed, routes := t.routes, armRecords := t.armRecords
-    dstCacheRecords := t.dstCacheRecords, napiBeforePut := t.napiBeforePut }
+    ambient := {
+      env := Leanux.Runner.harnessEnv, timing := Leanux.Env.timing,
+      allocArmed := t.allocArmed, armRecords := t.armRecords }
+    fs := Leanux.Runner.initialFS t.net t.foreign t.stepped t.seccompChild
+    tasks := Leanux.Runner.initialTasks t.rlimit t.foreign t.stepped t.seccompChild
+    wg := { Leanux.Runner.initialWG t.net t.bare with
+      portBound := Leanux.Env.portBound, fixtureNetDevices := Leanux.Env.fixtureNetDevices,
+      dstCacheRecords := t.dstCacheRecords, routing := { foreignCreator := t.foreign } }
+    fixture := {
+      netnsCHolders := if t.foreign then [9, 8, 5, 4] else [],
+      routes := t.routes, napiBeforePut := t.napiBeforePut } }
+  if t.net then
+    let boot : Leanux.M Unit := do
+      Leanux.Net.Fib.bootTables
+      if t.foreign then Leanux.Net.Fib.inCreatorNs Leanux.Net.Fib.bootTables
+    let (_, next) ← boot.run w |>.mapError Leanux.Stop.message
+    w := {next with ambient := {next.ambient with steps := #[], envCalls := []}}
   let mut results := #[]
   let mut ends := #[]
   for i in [:count] do
-    w := {w with hidden := t.hidden.map (·[i]!), netRxRaised := false}
+    w := {w with
+      wg := {w.wg with netRxRaised := false},
+      ambient := {w.ambient with hidden := t.hidden.map (·[i]!)},
+      fixture := {w.fixture with hiddenAhead := t.hidden.map fun h => (h.drop (i + 1)).toList}}
     let some op := t.ops[i]? | throw "prefix operation missing"
     let (ret, next) ← (Leanux.syscall (Leanux.Runner.toSyscall results ends i op)).run w
       |>.mapError Leanux.Stop.message
-    let (_, next) ← Leanux.skipAmbient.run next |>.mapError Leanux.Stop.message
+    let (_, next) ← (Leanux.skipAmbient : Leanux.M Unit).run next |>.mapError Leanux.Stop.message
     unless next.hidden == some [] do throw s!"unconsumed prefix records at {i}"
-    unless next.suspended.isEmpty && !next.netRxRaised do throw "incomplete prefix dispatch"
+    unless next.suspended.isEmpty && next.pendingWork.isEmpty && !next.netRxRaised do throw "incomplete prefix dispatch"
     w := next
     results := results.push ret
     ends := ends.push (if ret == 0 then w.userFds else none)
-  return {w with steps := #[], hidden := some []}
+  return {w with ambient := {w.ambient with steps := #[], hidden := some []}}
 
 def replayPrefix (j : Json) (count : Nat) : Except String Leanux.World := do
   unless count == 3 do throw "index probe requires the recorded three-operation prefix"

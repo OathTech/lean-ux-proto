@@ -129,7 +129,9 @@ def main():
                                         cwd=ROOT, text=True).strip()).parent
     sys.path.insert(0, str(ROOT))
     from harness.linux import verify_kernel
-    identity, kraken = verify_kernel(ORACLE.parent), verify_pin(ROOT)
+    from target import pins, verify_image
+    verify_image()
+    identity, kraken = verify_kernel(ORACLE.parent, expected=pins()[0]), verify_pin(ROOT)
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=True)
     if (out/'snapshot.json').exists():

@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupHelperFromBucket
 import LookupFirstHelperCall
 import PeerFirstStack
@@ -24,7 +25,7 @@ theorem helper_call_from_bucket (fetch : Int64 → Option Decoded)
   let afterWorld := (LookupSearch.result c.kinds c.query v.bucket [sourceEntry world] world).2
   have projected : project c afterWorld = some v := by
     calc
-      _ = project c {world with steps := afterWorld.steps} :=
+      _ = project c {world with ambient := {world.ambient with steps := afterWorld.steps}} :=
         congrArg (project c) (LookupSearch.result_world _ _ _ _ _)
       _ = project c world := rfl
       _ = some v := entry.projected

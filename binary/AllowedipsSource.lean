@@ -1,3 +1,5 @@
+import SourceAllowedips
+import SourceErasure
 import MirrorPeerPoints
 import Leanux.WG.Device
 import AllowedipsSelection
@@ -35,7 +37,7 @@ def findNode (trie : Option NodeId) (bits key : Nat) : Logged (Option NodeId) :=
     let id ← match node with
       | none => do _ ← branchLogged .findNodeNode false; return found
       | some id => do _ ← branchLogged .findNodeNode true; pure id
-    let n ← StateT.lift (getNode id)
+    let n ← StateT.lift (Source.getNode id)
     if !(← branchLogged .findNodePrefixMatches (← prefixMatches n key bits)) then return found
     if ← branchLogged .findNodeHasPeer n.peer.isSome then found := some id
     if ← branchLogged .findNodeFullLength (n.cidr == bits) then return found
@@ -48,7 +50,7 @@ def lookup (root : Option NodeId) (bits key : Nat) : Logged (Option PeerId) :=
     let node ← findNode root bits key
     if ← branchLogged .lookupFound node.isSome then
       let some id := node | StateT.lift (invariant "unreachable")
-      let n ← StateT.lift (getNode id)
+      let n ← StateT.lift (Source.getNode id)
       let peer ← called "wg_peer_get_maybe_zero" (peerGet n.peer)
       if ← branchLogged .lookupPeerGone peer.isNone then
         StateT.lift (unsupported "lookup retry after a dying peer")
@@ -56,8 +58,9 @@ def lookup (root : Option NodeId) (bits key : Nat) : Logged (Option PeerId) :=
     return none
 
 theorem swapEndian_erases (bits : Nat) :
-    Erases (swapEndian bits) (WG.swapEndian bits) := by
-  unfold swapEndian WG.swapEndian
+    Erases (swapEndian bits) (Binary.Source.swapEndian bits) := by
+  unfold swapEndian Binary.Source.swapEndian WG.swapEndian
+  simp only [Source.liftWG_bind, Source.liftWG_branch, Source.liftWG_pure, apply_ite]
   apply erases_bind (branch_erases _ _)
   intro b
   cases b with
@@ -99,9 +102,9 @@ theorem erases_forIn_range (range : Std.Legacy.Range) (b : β)
   rw [Std.Legacy.Range.forIn_eq_forIn_range', Std.Legacy.Range.forIn_eq_forIn_range']
   exact erases_forIn _ b logged original same
 
-theorem findNode_erases (trie : Option NodeId) (bits key : Nat) :
-    Erases (findNode trie bits key) (WG.findNode trie bits key) := by
-  unfold findNode WG.findNode
+theorem findNode_presentation_erases (trie : Option NodeId) (bits key : Nat) :
+    Erases (findNode trie bits key) (Source.Allowedips.findNode trie bits key) := by
+  unfold findNode Source.Allowedips.findNode
   apply erases_bind
   · apply erases_forIn_range
     intro i acc
@@ -143,14 +146,25 @@ theorem findNode_erases (trie : Option NodeId) (bits key : Nat) :
     | none => exact erases_lift _
     | some answer => exact erases_pure _
 
-theorem lookup_erases (root : Option NodeId) (bits key : Nat) :
-    Erases (lookup root bits key) (WG.lookup root bits key) := by
-  unfold lookup WG.lookup
-  apply called_erases
-  apply erases_bind (swapEndian_erases bits)
-  intro _
-  apply erases_bind (findNode_erases root bits key)
-  intro node
+theorem findNode_erases (trie : Option NodeId) (bits key : Nat)
+    (history : List Point) (w : World) (d : Device) (hd : w.wg.dev = some d) :
+    erase (((findNode trie bits key).run history).run w) = (Source.findNode trie bits key).run w := by
+  rw [Source.Allowedips.findNode_run trie bits key w d hd]
+  exact findNode_presentation_erases trie bits key history w
+
+theorem lookup_erases (root : Option NodeId) (bits key : Nat)
+    (w : World) (d : Device) (hd : w.wg.dev = some d) :
+    ErasesAt (lookup root bits key) (Source.lookup root bits key) w := by
+  rw [Source.Allowedips.lookup_eq]
+  unfold lookup Source.Allowedips.lookupBody
+  apply called_erases_at
+  apply erases_bind_at ((swapEndian_erases bits).at w)
+  intro ignored after swapped
+  have device : after.wg.dev = some d := by
+    rw [Source.Allowedips.swapEndian_device bits w after ignored swapped, hd]
+  apply erases_bind_at (fun h => findNode_erases root bits key h after d device)
+  intro node afterFind foundRun
+  apply Erases.at
   apply erases_bind (branch_erases _ _)
   intro found
   cases found with
@@ -194,11 +208,36 @@ theorem accepted_logged {logged : Logged α} {original : M α}
     obtain ⟨rfl, rfl⟩ := erased
     exact ⟨points, rfl⟩
 
+theorem accepted_logged_at {logged : Logged α} {original : M α}
+    (history : List Point) (world final : World) (same : ErasesAt logged original world)
+    (answer : α) (accepted : original.run world = .ok (answer, final)) :
+    ∃ points, (logged.run history).run world = .ok ((answer, points), final) := by
+  have erased := same history
+  rw [accepted] at erased
+  cases actual : (logged.run history).run world with
+  | error e => simp [actual, erase] at erased
+  | ok value =>
+    obtain ⟨⟨result, points⟩, after⟩ := value
+    simp only [actual, erase, Except.ok.injEq, Prod.mk.injEq] at erased
+    obtain ⟨rfl, rfl⟩ := erased
+    exact ⟨points, rfl⟩
+
+theorem findNode_accepted (trie : Option NodeId) (bits key : Nat)
+    (history : List Point) (world final : World) (answer : Option NodeId)
+    (accepted : (Source.findNode trie bits key).run world = .ok (answer,final)) :
+    ∃ points, ((findNode trie bits key).run history).run world = .ok ((answer,points),final) := by
+  cases hd : world.wg.dev with
+  | none => rw [Source.Allowedips.findNode_no_device trie bits key world hd] at accepted; cases accepted
+  | some d =>
+    exact accepted_logged_at history world final
+      (fun h => findNode_erases trie bits key h world d hd) answer accepted
+
 theorem lookup_accepted (root : Option NodeId) (bits key : Nat)
     (history : List Point) (world final : World) (answer : Option PeerId)
-    (accepted : (WG.lookup root bits key).run world = .ok (answer, final)) :
-    ∃ points, ((lookup root bits key).run history).run world = .ok ((answer, points), final) :=
-  accepted_logged (lookup_erases root bits key) history world final answer accepted
+    (accepted : (Source.lookup root bits key).run world = .ok (answer, final)) :
+    ∃ points, ((lookup root bits key).run history).run world = .ok ((answer, points), final) := by
+  obtain ⟨d, hd⟩ := Source.Allowedips.lookup_has_device root bits key world final answer accepted
+  exact accepted_logged_at history world final (lookup_erases root bits key world d hd) answer accepted
 
 abbrev Choices := List (Decision × Bool)
 
@@ -227,7 +266,7 @@ theorem commonBits_run (node : AipNode) (key bits : Nat) (h : List Point) (w : W
         records w (commonChoices node key bits)) := by
   cases width32 : (bits == 32) <;> cases width128 : (bits == 128) <;>
     cases high : ((node.bits ^^^ key) / 2^64 != 0) <;>
-    simp [commonBits, commonValue, commonChoices, branchLogged, mark,
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, commonBits, commonValue, commonChoices, branchLogged, mark,
       branch, records, choicePoints, LookupMirror.record, width32, width128, high,
       List.append_assoc] <;> rfl
 
@@ -239,12 +278,12 @@ theorem swapEndian_run (bits : Nat) (h : List Point) (w : World) :
     ((swapEndian bits).run h).run w =
       .ok (((),h ++ choicePoints w (swapChoices bits)), records w (swapChoices bits)) := by
   cases width32 : (bits == 32) <;>
-    simp [swapEndian, swapChoices, branchLogged, mark, branch,
+    simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, swapEndian, swapChoices, branchLogged, mark, branch,
       records, choicePoints, LookupMirror.record, width32, List.append_assoc] <;> rfl
 
 theorem choicePoints_world (w : World) (choices : Choices) (p : Point)
     (member : p ∈ choicePoints w choices) :
-    p.world = {w with steps := p.world.steps} := by
+    p.world = {w with ambient := {w.ambient with steps := p.world.steps}} := by
   induction choices generalizing w with
   | nil => cases member
   | cons choice rest ih =>
@@ -255,7 +294,7 @@ theorem choicePoints_world (w : World) (choices : Choices) (p : Point)
     · exact ih (LookupMirror.record w d b) member
 
 theorem records_world (w : World) (choices : Choices) :
-    records w choices = {w with steps := (records w choices).steps} := by
+    records w choices = {w with ambient := {w.ambient with steps := (records w choices).steps}} := by
   induction choices generalizing w with
   | nil => rfl
   | cons choice rest ih => exact ih (LookupMirror.record w choice.1 choice.2)
@@ -275,7 +314,7 @@ def iteration (bits key : Nat) (acc : Acc) : Logged (ForInStep Acc) := do
     return .done (some found, node, found)
   | some id =>
     _ ← branchLogged .findNodeNode true
-    let n ← StateT.lift (getNode id)
+    let n ← StateT.lift (Source.getNode id)
     let matching ← prefixMatches n key bits
     if !(← branchLogged .findNodePrefixMatches matching) then
       return .done (some found, node, found)

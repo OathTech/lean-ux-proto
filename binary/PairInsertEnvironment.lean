@@ -1,3 +1,4 @@
+import SourceAdapter
 import PairInsertAdequacy
 
 namespace Binary.Pair.Insert
@@ -18,7 +19,7 @@ theorem insert_simulation (fetch : Int64 → Option Decoded)
     (coupling : RandomInputCoupling fetch config c.coverage (c.preempt+512) (codeEntry+0x79).toUInt64 inputAt)
     (pre : Pre n o c initial w owner ra config)
     (supplied : w.hidden=some records) (input : inputAt initial.data.dmem records)
-    (accepted : (WG.indexInsert owner).run w=.ok (answer,final)) :
+    (accepted : (Source.indexInsert owner).run w=.ok (answer,final)) :
     Eventually (historyStep fetch) (fun t => Post n o c initial ra config inputAt answer final t.machine ∧
       ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
       RunEnvironment fetch permissions onlineCPUs externalActions t.history) ⟨initial,[initial]⟩ := by

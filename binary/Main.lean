@@ -1,20 +1,21 @@
+import SourceAdapter
 import ProbeSupport
 import AllowedipsFixture
 import LookupObservation
 import TrustBase
 
-open Lean
+open Lean Binary
 
 def probe (input : ProbeInput) (actualServices : Bool := false) : Except String Json := do
   let w ← replayPrefix input.trace input.operation
-  let some dev := w.k.wg | throw "no device after prefix"
+  let some dev := w.wg.dev | throw "no device after prefix"
   unless dev.indexTable.length == 1 do throw "expected one entry after recorded prefix"
   let before := dev.indexTable
-  let (answer, after) ← (Leanux.WG.indexLookup [.handshake] input.query).run w
+  let (answer, after) ← (Source.indexLookup [.handshake] input.query).run w
     |>.mapError Leanux.Stop.message
-  let some afterDev := after.k.wg | throw "mirror lost device"
+  let some afterDev := after.wg.dev | throw "mirror lost device"
   let memory ← materializePeers dev input.offsets (← materialize dev input.offsets input.preempt)
-  let memory := put memory Binary.Layouts.keypairCounterAddress.toNat 8 w.k.keypairCounter
+  let memory := put memory Binary.Layouts.keypairCounterAddress.toNat 8 w.wg.keypairCounter
   let memory := if actualServices then materializeServices memory else memory
   let some entry := input.instructions[0]? | throw "empty instruction list"
   let regs : Reg64s := {
@@ -44,7 +45,7 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
   let expected := match answer with
     | none => expected
     | some (_, pid) => put expected outputAddr 8 (peerAddr pid)
-  let expected := put expected Binary.Layouts.keypairCounterAddress.toNat 8 after.k.keypairCounter
+  let expected := put expected Binary.Layouts.keypairCounterAddress.toNat 8 after.wg.keypairCounter
   let expected := if actualServices then materializeServices expected else expected
   let mut finalMemory := r.state.data.dmem.storeBytes stackBase stackBytes
   if actualServices then
@@ -86,7 +87,7 @@ def probe (input : ProbeInput) (actualServices : Bool := false) : Except String 
     entry. Execute the real decoded callee as well as lookup, twice. -/
 def deadPeerCounterexample (input : ProbeInput) (keypairCase : Bool := false) : Except String Json := do
   let w ← replayPrefix input.trace input.operation
-  let some dev := w.k.wg | throw "no device"
+  let some dev := w.wg.dev | throw "no device"
   let [e] := dev.indexTable | throw "requires the single-entry fixture"
   let some pid ← ownerWord dev e.owner | throw "fixture peer word already NULL"
   let e := if keypairCase then {e with owner := .keypair 0} else e
@@ -96,15 +97,15 @@ def deadPeerCounterexample (input : ProbeInput) (keypairCase : Bool := false) : 
         keypairs := dev.keypairs.insert 0 {peer := some pid}}
     else dev
   let some peer := dev.peers.get? pid | throw "missing peer"
-  let w := { w with k := { w.k with wg := some { dev with
-    peers := dev.peers.insert pid {peer with refcount := 0} } }, steps := #[] }
-  let (answer1, after1) ← (Leanux.WG.indexLookup [e.kind] e.index).run w
+  let w := {w with wg := { w.wg with dev := some { dev with
+    peers := dev.peers.insert pid {peer with refcount := 0} } }, ambient := {w.ambient with steps := #[]}}
+  let (answer1, after1) ← (Source.indexLookup [e.kind] e.index).run w
     |>.mapError Leanux.Stop.message
-  let (answer2, after2) ← (Leanux.WG.indexLookup [e.kind] e.index).run {after1 with steps := #[]}
+  let (answer2, after2) ← (Source.indexLookup [e.kind] e.index).run {after1 with ambient := {after1.ambient with steps := #[]}}
     |>.mapError Leanux.Stop.message
-  unless answer1.isNone && answer2.isNone && after2.k == after1.k do
+  unless answer1.isNone && answer2.isNone && after2.wg.dev == after1.wg.dev do
     throw "dead-peer lookup result or second owner store differs"
-  let some afterDev := after1.k.wg | throw "device disappeared"
+  let some afterDev := after1.wg.dev | throw "device disappeared"
   unless (← ownerWord afterDev e.owner).isNone do throw "mirror did not clear owning peer word"
   let memory ← materialize dev input.offsets input.preempt
   let memory ← materializePeers dev input.offsets memory
@@ -145,7 +146,7 @@ def deadPeerCounterexample (input : ProbeInput) (keypairCase : Bool := false) : 
     unless (points.filterMap (·.step)).toArray == source.steps do
       throw "two-lookup regression decision sequence mismatch"
   let alias ← if keypairCase then do
-      let some d := after2.k.wg | throw "device disappeared"
+      let some d := after2.wg.dev | throw "device disappeared"
       let some k := d.keypairs.get? 0 | throw "keypair disappeared"
       unless k.peer.isNone do throw "keypair owner word was not cleared"
       pure (Json.mkObj [("physical_entry_peer", toJson (0 : Nat)),
@@ -362,12 +363,12 @@ def probe (input : Input) : Except String Json := do
   let priorWorld ← replayRecordedPrefix input.trace input.operation
   -- The selected unicast operation's pre-lookup code changes no trie or
   -- peer counts. syscall resets its decision/NET_RX context before that code.
-  let w := {priorWorld with steps := #[], hidden := some [], netRxSection := 0, netRxSections := 0}
-  let some dev := w.k.wg | throw "no device after recorded prefix"
+  let w := {priorWorld with ambient := {priorWorld.ambient with steps := #[], hidden := some [], netRxSection := 0, netRxSections := 0}}
+  let some dev := w.wg.dev | throw "no device after recorded prefix"
   let width := if family == 4 then 32 else 128
   let root := if family == 4 then dev.peerAllowedips.root4 else dev.peerAllowedips.root6
-  let (answer, after) ← (Leanux.WG.lookup root width key).run w |>.mapError Stop.message
-  let some afterDev := after.k.wg | throw "lookup lost device"
+  let (answer, after) ← (Binary.Source.lookup root width key).run w |>.mapError Stop.message
+  let some afterDev := after.wg.dev | throw "lookup lost device"
   let memory ← materialize dev input.offsets key width input.preempt input.entryPreempt
   let regs : Reg64s := {
     rdi := .ofNat (nodePointer root), rsi := .ofNat width,

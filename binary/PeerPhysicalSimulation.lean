@@ -1,3 +1,4 @@
+import SourceAdapter
 import LookupHelperPhase
 import PeerDecisionWorlds
 
@@ -83,7 +84,7 @@ theorem live_return_related (c : Config) (world : World) (device : Device)
     (history finalHistory : List MachineState) (seen : List Point)
     (nullPoint zeroPoint retry negative wrap dead : MachineState)
     (related : R c history seen s world)
-    (hasDevice : world.k.wg = some device) (hasPeer : device.peers.get? pid = some peer)
+    (hasDevice : world.wg.dev = some device) (hasPeer : device.peers.get? pid = some peer)
     (focused : c.focus.peer = some pid) (nonzero : peer.refcount ≠ 0)
     (noReturn : lastHelperReturn seen = none)
     (last : finalHistory.getLast? = some current)

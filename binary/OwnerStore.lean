@@ -1,3 +1,4 @@
+import SourceAdapter
 import OwnerWord
 import HistoryRegions
 import TrustBase
@@ -10,24 +11,22 @@ local instance : Labels := Image.linkedLabels
     completed refcount increment is therefore preserved, including when
     owner and referenced peer have the same identity. -/
 theorem set_handshake_run (w : World) (device : Device) (id : PeerId) (peer : Peer)
-    (word : Option PeerId) (hasDevice : w.k.wg = some device)
+    (word : Option PeerId) (hasDevice : w.wg.dev = some device)
     (hasPeer : device.peers.get? id = some peer) :
-    ((IndexOwner.handshake id).setPeerWord word).run w =
-      .ok ((), {w with k := {w.k with wg := some {device with peers := device.peers.insert id {peer with handshakeEntryPeer := word}}}}) := by
+    (Source.setPeerWord (.handshake id) word).run w =
+      .ok ((), {w with wg := {w.wg with dev := some {device with peers := device.peers.insert id {peer with handshakeEntryPeer := word}}}}) := by
   have peerRead : device.peers[id]? = some peer := hasPeer
-  simp [IndexOwner.setPeerWord, getPeer, getDev, getK, setPeer, modifyDev, modifyK,
+  simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, liftWG, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer, WG.getKeypair, WG.setKeypair, WG.modifyDev, Source.setPeerWord, IndexOwner.setPeerWord, Source.getPeer, Source.getDev, Source.getWG, Source.setPeer, Source.modifyDev, Source.modifyWG,
     hasDevice, peerRead]
-  rfl
 
 theorem set_keypair_run (w : World) (device : Device) (id : KeypairId) (kp : Keypair)
-    (word : Option PeerId) (hasDevice : w.k.wg = some device)
+    (word : Option PeerId) (hasDevice : w.wg.dev = some device)
     (hasKeypair : device.keypairs.get? id = some kp) :
-    ((IndexOwner.keypair id).setPeerWord word).run w =
-      .ok ((), {w with k := {w.k with wg := some {device with keypairs := device.keypairs.insert id {kp with peer := word}}}}) := by
+    (Source.setPeerWord (.keypair id) word).run w =
+      .ok ((), {w with wg := {w.wg with dev := some {device with keypairs := device.keypairs.insert id {kp with peer := word}}}}) := by
   have keyRead : device.keypairs[id]? = some kp := hasKeypair
-  simp [IndexOwner.setPeerWord, getKeypair, getDev, getK, setKeypair, modifyDev, modifyK,
+  simp [Except.pure, Except.bind, StateT.run, bind, StateT.bind, StateT.lift, pure, StateT.pure, get, getThe, MonadStateOf.get, StateT.get, modify, modifyGet, MonadStateOf.modifyGet, StateT.modifyGet, monadLift, MonadLift.monadLift, liftAmbient, AmbientM.branch, AmbientM.branchCmp, AmbientM.unsupported, liftWG, WG.requireNotPending, WG.getPeer, WG.getDev, WG.setPeer, WG.getKeypair, WG.setKeypair, WG.modifyDev, Source.setPeerWord, IndexOwner.setPeerWord, Source.getKeypair, Source.getDev, Source.getWG, Source.setKeypair, Source.modifyDev, Source.modifyWG,
     hasDevice, keyRead]
-  rfl
 
 def stored (s : MachineData) : MachineData :=
   {s with dmem := s.dmem.storeInt s.regs.rbx.toBitVec 8 s.regs.rax.toBitVec.toInt}

@@ -1,3 +1,4 @@
+import SourceAdapter
 import AllowedipsCorrespondenceFrames
 
 namespace Binary.AllowedipsCorrespondence
@@ -54,7 +55,7 @@ theorem cuts_framed (c : Config) (initialRaw : List MachineState)
     (history : List MachineState) (events : List Point) (source : List MirrorHistory.Point)
     (observed : AllowedipsObservation.observe c.rxSection history = .ok events)
     (matched : MatchesPoints (AtPoint (R c) c.rxSection history) events source)
-    (sourceKernel : ∀ point ∈ source, point.world.k = world.k)
+    (sourceKernel : ∀ point ∈ source, point.world.wg = world.wg)
     (prefixNeutral : ∀ n, PeerCountPhase.scan none (history.take n) = none)
     (writes : Address → Prop)
     (frames : ∀ current ∈ history, Cut current.pc →
