@@ -286,16 +286,28 @@ carriers remains open. No initialized
 T2 claim is made from Core alone; this is a proof-surface gap, not a mirror
 counterexample.
 
+
+The source-47 continuation joins a complete initialized entry bundle: Core,
+terminal provenance, allocation lineage, empty selected locations, packet
+allocation bounds and native TX ownership. Actual front, take, keepalive and
+restore now transport that bundle. The selected nonce source retains allocation
+preconditions through borrow and checks; actual owner acquisition and allocation
+produce the full unpublished entry. The no-key path recovers full entry at its
+restore cut. The whole actual staging source now composes those joins; create
+and queued-initiation callbacks remain explicit pending their source discharge. Completion now has an indexed cursor sharing the
+entry's exact ledger and cleanup debts; its send/free/timer joins remain open.
+These local results pass the aggregate checks below; initialized T2 conservation remains open.
+
 ## Validation
 
-Source-46 checkpoint passes the 3217-job aggregate build and 1523-declaration gate across
+Source-47 checkpoint passes the 3261-job aggregate build and 1523-declaration gate across
 thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`.
-Fourteen focused source queries also use only those axioms. All twelve
+Sixteen focused source queries also use only those axioms. All twelve
 counterexample recipes and fresh root kernel replay pass. The default model
 build passes 66 jobs; the unit suite passes 131 tests (one configured-kernel
-skip, 22.080 seconds). All 3170 frozen proof-source hashes match; all 916
+skip, 23.153 seconds). All 3214 frozen proof-source hashes match; all 916
 inherited proof modules, main at `783510e8` and mirror `77c9b555` are unchanged.
-The preceding validated checkpoint is `f4ba5c44`.
+The preceding validated checkpoint is `f1a2f19c`.
 
 Reproduce the proof and model checks from the campaign worktree:
 
@@ -322,7 +334,9 @@ repairs it, and the complete gate passes. Source-44 aggregate attempts also fail
 missing imports and exhaustive event cases. Those failures were repaired before
 the successful complete rebuild; scoped passes did not replace them. Source-45 first failed on two implicit
 statement binders shadowed by the new canonical `births` definition; explicit
-local binders repair that failure without changing either statement. New source
+local binders repair that failure without changing either statement. Source-47
+first failed when two completion modules exported the same theorem name; the
+release-specific export is renamed and the combined import check passes. New source
 files have no warnings.
 
 The earlier unchecked tactic-array panic and later SIGBUS were preserved in

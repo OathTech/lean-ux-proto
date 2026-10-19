@@ -32,13 +32,13 @@ locals and the complete pending/terminal partition remain open. Original early
 transmit refusals now have their exact invocation-level error charge; a GSO
 packet list does not multiply that charge.
 
-Source-46 checkpoint passes the 3217-job aggregate build and 1523-declaration axiom gate
-across thirteen roots, using only the three standard axioms; fourteen focused source
+Source-47 checkpoint passes the 3261-job aggregate build and 1523-declaration axiom gate
+across thirteen roots, using only the three standard axioms; sixteen focused source
 queries also pass. Fresh root kernel replay, all twelve counterexample recipes,
 the 66-job default model build and 131 unit tests pass (one configured-kernel
-skip, 22.080 seconds). All 3170 frozen proof-source hashes match; all 916 inherited
+skip, 23.153 seconds). All 3214 frozen proof-source hashes match; all 916 inherited
 proof modules, mirror `77c9b555` and main `783510e8` are unchanged. The preceding
-validated checkpoint is `f4ba5c44`. The inherited warning and repaired
+validated checkpoint is `f1a2f19c`. The inherited warning and repaired
 development failures are recorded in the report.
 
 The final Driver now exposes actual take, restore, terminal disposal and nested
@@ -61,6 +61,14 @@ sequencing. Their source callbacks and initialized transport remain open.
 Separate terminal receipt evidence and birth-to-allocation carriers now have
 whole-front and selected-loop/restore/allocation source joins. Core alone does
 not establish those semantic claims; initialized transport remains open. Source-46 passes the aggregate checks above.
+
+
+Source-47 validated local work adds initialized full Entry, actual take/keepalive/restore
+transport, and selected nonce/owner/allocation joins retaining all allocation
+preconditions. Canonical completion now uses the same explicit ledger/debts for
+its cursor and Entry. Enclosing create, queued-initiation, completion callbacks
+and complete initialized transport remain open; local source contracts do not
+discharge those remaining commitments.
 
 ## Current register
 

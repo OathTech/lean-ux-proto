@@ -1,19 +1,17 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationCompletionKeyRelease
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationCompletionAccounting
 
 /-! The remaining concrete completion obligations, after discharging native
-packet capture, the completion marker, authenticated-send timer deletion,
-each ordinary packet free and key repayment. The remaining source cuts stay explicit. -/
+packet capture, the completion marker, traversal and send timers, each ordinary
+packet free and key repayment. The remaining source cuts stay explicit. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligation.CompletionBatch
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
 open TransmitSecurity HandshakeSecurity.StagedDisposal CompletionCuts
 
 structure Remaining (context : Context) : Prop where
-  traversal : Holds context (.sending context.items) (CausalJournal.completionOps.traversal context.pid)
   send : ∀ skb rest receipt,
     Ensures (fun h w => State context (.sending (skb :: rest)) h w ∧ PacketAt skb receipt w)
       (Stopped context) (CausalJournal.completionOps.send context.pid skb receipt)
       (fun _ => State context (.sending rest))
-  dataSent : Holds context (.sending []) (CausalJournal.completionOps.dataSent context.pid)
   fresh : Holds context (.sending []) (CausalJournal.completionOps.fresh context.pid)
   peerRelease : Holds context (.freeing [])
     ((TxSource.observed CausalJournal.txEvent CausalJournal.txEvent?
@@ -21,11 +19,11 @@ structure Remaining (context : Context) : Prop where
 
 theorem Remaining.callbacks (remaining : Remaining context) : Callbacks context key where
   marker := marker_checked context
-  traversal := remaining.traversal
+  traversal := traversal_checked context _
   authenticated := authenticated_checked context _
   packet := packet_checked context
   send := remaining.send
-  dataSent := remaining.dataSent
+  dataSent := dataSent_checked context _
   fresh := remaining.fresh
   free := free_checked context
   keyRelease := keyRelease_checked context key _
