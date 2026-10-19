@@ -77,6 +77,8 @@ Source-53 composes full Entry through native handshake checking and the complete
 
 Source-54 closes the Entry-only crypted completion callback and composes actual peer/device configuration, opening and removal. Native allocation freshness is transported on the same observed run. Admission and creation retain terminal completeness on the same ledger, including refusal and stopped cuts; the release evidence is derived from actual reference funding. The combined root passes 3424 jobs and seventeen focused standard-axiom queries. Initialized conservation and whole-history terminal completeness remain open. The last aggregate gate and fresh replay checkpoint remains source-53 `51c7344a`.
 
+Source-55 pairs terminal completeness with forward accounting through actual front admissions, keepalive births, take/allocation/restore, socket results and ordinary completion cleanup. The paired handshake/send/clear workers, send drain, removal/down and peer/device configuration now compose; staging and keepalive callbacks remain explicit in configuration until their paired whole-source join. The root passes 3460 jobs and eighteen focused standard-axiom queries. Initialized conservation, the remaining completion/staging joins and reset quiescence are open. Source-53 `51c7344a` remains the last aggregate gate and fresh replay checkpoint.
+
 ## Current register
 
 The proof tree is current over the namespace-pin landing `218d3ffd`: after
