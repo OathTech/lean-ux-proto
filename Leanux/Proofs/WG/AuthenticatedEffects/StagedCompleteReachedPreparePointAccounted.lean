@@ -1,11 +1,10 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPreparePointResidual
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPreparePointExecution
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPreparePointSourceFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPreparePointCallerFrames
 
 /-! The local source points preserve the same ledger at the mapped final
-journal history. The incoming canonical Framed certificate is still explicit:
-this module does not claim that the full prepare caller derives it, nor that
-Iteration.prepare is closed. The setter/cache lemmas supply that next proof. -/
+journal history. The complete canonical caller now derives every frame;
+the conditional helper remains available without weakening its statement. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Prepare.Points
 open Leanux Leanux.Proofs.Logged Lifetimes TransmitSecurity CausalJournal
 open Staged.Obligations StagedTerminalComplete
@@ -21,8 +20,8 @@ theorem encode_quiet (event : OriginEvent) : birthPackets (encode event)=[] ∧ 
   ⟨rfl,fun _=>rfl⟩
 
 /-- An actual native cut, including a silent write before its access receipt,
-retains the incoming fixed ledger and ownership projection. The source frame
-prerequisite is local and remains visible until its whole caller proof. -/
+retains the incoming fixed ledger and ownership projection. The conditional helper keeps its source frame premise explicit;
+`canonical_point_accounted` derives that premise from the original caller. -/
 theorem point_accounted
     (before : CompleteCarrier.Accounted history ledger debts locals w)
     (framed : Framed canonical w a (project history))
@@ -39,6 +38,17 @@ theorem point_accounted
   · intro event member
     obtain ⟨origin,_,rfl⟩:=List.mem_map.mp member
     exact (encode_quiet origin).2
+
+/-- Every fixed native preparation cut retains the same packet ledger,
+including writes before their original receipts, with no incoming frame
+assumption. The returned equality is the original source continuation. -/
+theorem canonical_point_accounted
+    (before : CompleteCarrier.Accounted history ledger debts locals w)
+    (point : Point canonical w a (project history) site v b middle remaining) :
+    ∃suffix,middle=project history++suffix ∧
+      CompleteCarrier.Accounted (history++suffix.map encode) ledger debts locals v ∧
+      runWGPrefix RxOrigin.prepare w a (project history)=runWGPrefix remaining v b middle :=
+  point_accounted before (canonical_framed _) point
 
 /-- The original action has a complete normal/Stop decomposition through the
 fixed source witness. This is source coverage, independently of accounting. -/

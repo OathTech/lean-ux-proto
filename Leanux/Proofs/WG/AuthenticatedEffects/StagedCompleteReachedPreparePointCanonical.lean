@@ -78,7 +78,59 @@ noncomputable def publication (id : SkbId) (state : PacketState) : Shape (RxWork
 
 noncomputable def packet (pkt : RxPacket) : Shape (decryptPacketPrefix pkt) := by
   unfold decryptPacketPrefix
-  repeat' prepare_shape_step
+  apply Shape.bind
+  · prepare_shape_step
+  intro noKey
+  apply boolShape noKey
+  · exact .pure none
+  apply Shape.bind (.access (.readKey pkt.keypair))
+  intro k
+  apply Shape.bind
+  · prepare_shape_step
+  intro reject
+  apply boolShape reject
+  · exact .bind (.access (.readKey pkt.keypair)) (fun fresh=>
+      .bind (.access (.writeKey pkt.keypair {fresh with receiving:={fresh.receiving with isValid:=false}}))
+        (fun _=>.pure none))
+  apply Shape.bind
+  · prepare_shape_step
+  intro cowOk
+  apply Shape.bind
+  · prepare_shape_step
+  intro cowBad
+  apply boolShape cowBad
+  · exact .pure none
+  apply Shape.bind
+  · prepare_shape_step
+  intro sgBad
+  apply boolShape sgBad
+  · exact .pure none
+  apply Shape.bind
+  · prepare_shape_step
+  intro decryptBad
+  apply boolShape decryptBad
+  · exact .pure none
+  let plain:=aeadDecrypt k.receiving.key (counterNonce (u64le pkt.bytes 8)) (pkt.bytes.drop 16) []
+  change Shape (match plain with
+    | some bytes=>do
+      if ← liftWGPrefix (branch .decTrimFailed false) then return none
+      return some {pkt with nonce:=u64le pkt.bytes 8,bytes}
+    | _=>liftWGPrefix (invariant "unreachable"))
+  let finish : List UInt8 → MixedM (Option RxPacket) := fun bytes=>do
+    if ← liftWGPrefix (branch .decTrimFailed false) then return none
+    return some {pkt with nonce:=u64le pkt.bytes 8,bytes}
+  let absent : MixedM (Option RxPacket) := liftWGPrefix (invariant "unreachable")
+  let tailShape (bytes : List UInt8) : Shape (finish bytes) := by
+    apply Shape.bind
+    · prepare_shape_step
+    intro trimBad
+    exact boolShape trimBad _ _ (.pure none) (.pure (some {pkt with nonce:=u64le pkt.bytes 8,bytes}))
+  let emptyShape : Shape absent := by dsimp only [absent]; prepare_shape_step
+  let shaped := optionShape (E:=LifetimeEvent) plain absent finish emptyShape tailShape
+  let source {action : MixedM (Option RxPacket)} (_ : Shape action) := action
+  refine (congrArg Shape (show _ = source shaped from ?_)).mpr shaped
+  dsimp only [source]
+  cases plain <;> rfl
 
 noncomputable def readDecrypt (id : SkbId) : Shape (RxOrigin.readDecryptPrefix id) := by
   unfold RxOrigin.readDecryptPrefix
