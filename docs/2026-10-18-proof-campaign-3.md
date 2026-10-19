@@ -2,6 +2,8 @@
 
 ## Progress
 
+Current carry: main `3f3879e0` is merged into this branch at `adc57aca`. All result claims below are validated only against the previous mirror until the carry repairs pass. The inherited source-equation failures and proposed repair are listed below; the 916 inherited proof files remain unchanged. New refill and pending-work frames at `74b03922` elaborate and their four public axiom queries use only standard axioms.
+
 [AGENT 2026-10-18] Work begins on `proofs/campaign-3` at `783510e8`, under
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
 proof tree includes campaign 1's GRO carry. No mirror definition or landed
@@ -24,6 +26,26 @@ stops the work. The last validated checkpoint and the current integration status
 | T4 handshake replay resistance | Complete and validated. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Actual initialized stale initiation receipts are refused, restore all peer records and preserve sent data. The factored native continuation returns without a response from the exact receipt endpoint; it requires no separate ambient-history join. The final-journal exports also establish response-consumption and session-installation uniqueness by exchange epoch, and exactly one allocation from the same successful session receipt. Named C2 source assumptions stay visible. |
 | T5 responder confirmation | Complete and validated. `initialized_responder_confirmation_discipline` joins promotion-label uniqueness, each confirmation's own accepted transport cause and actual responder AEAD after confirmation of the same allocation. Initialized transport covers inner promotion receipts even when the enclosing receive later stops. `PendingPromotion.H1DriverFrames` and `H1ResponderCurrentEdges` remain named local C2 operational assumptions; no incoming carrier, reachability, funding or callback premise remains. |
 | T6 key retirement | Complete and validated. `reference_aware_retirement_outcome` packages unconditional native TX/RX checks, invalidation, exact age comparison, initialized R2 access and holder accounting, the session-derived zero timer, selected-arm provenance, actual dispatch and worker unpublication, retained material and final removal. Actual clock/worker runs and residual-reference conditions remain explicit. Universal native RX final release includes authenticated cleanup. No worker-latency or physical-zeroization claim is made. |
+
+## Carry to main `3f3879e0`
+
+The initial aggregate rebuild has reported these inherited source-alignment
+failures; it is still running, so this is not a final failure inventory.
+
+| Inherited module | Required source alignment |
+| --- | --- |
+| `WG/NetlinkDump/DeviceSource.lean` | Save the peers-nest snapshot before the header reservation, matching the landed cancel path. |
+| `Logged/Checkpoints.lean` | Include the new pending-unit completion refusal in the operation source and its erasure equation. |
+| `Logged/Scheduler.lean` | Read the refill allowance, include it in the original finite loop, and retain pending empty-ring dispatch. |
+| `WG/Lifetimes/BatchActivation.lean` | Align the activation observer and its erasure equation with occupancy plus refills. |
+
+These failures do not establish a mirror defect. The proposed repair updates
+observer copies and source equations to the landed control flow, then carries
+the dependent frames without weakening the security outcomes. Charter section
+6 requires changes to existing landed definitions or lemmas to be proposed
+separately; clarification of that scope is pending. Existing inherited files
+have not been edited. `Framing/BatchRefills.lean` adds separate store frames for
+the new refill and pending queries and the stronger completion check.
 
 ## C3-F1: invalidation and clearing do not cancel previously admitted encryption
 
