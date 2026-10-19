@@ -264,16 +264,38 @@ combined core ledger. The whole observed front also retains canonical queue
 accounting at its last completed stopped checkpoint. Whole completion batches,
 stopped ownership frontiers and full initialized transport remain open.
 
+The source-46 continuation adds a concrete selected-batch frontier at the actual
+take receipt. Only nonconsuming selection/nonce events may follow while that
+frontier owns the batch. Native borrow, checks, reservation and the no-key
+prefix preserve it; restoration establishes its own receipt-bound Core cut.
+The checked loop supplies the exact ordered plaintext/peer/key batch to its
+submission callback. Native refusal disposal, queue installation and whole
+completion sequencing have local source contracts with explicit stopped
+ownership obligations; concrete callback discharge is continuing. The whole
+transmit front now derives Core at normal return or its actual stopped
+checkpoint from the incoming Core alone. These additions pass aggregate validation below.
+
+A separate semantic gap in the proof carrier remains explicit: Core's domain,
+queue and physical properties alone do not justify arbitrary terminal labels
+or bind an allocated ticket to its original birth. Separate source receipt evidence and
+birth-to-allocation carriers now compile, including strict birth-before-terminal
+ordering and whole-front normal/stopped transport. The richer selected carrier
+preserves both through checked nonce traversal, restore and native allocation;
+restore/allocation clear every selected location. Initialized transport of these
+carriers remains open. No initialized
+T2 claim is made from Core alone; this is a proof-surface gap, not a mirror
+counterexample.
+
 ## Validation
 
-Source-45 passes the 3168-job aggregate build and 1523-declaration gate across
+Source-46 checkpoint passes the 3217-job aggregate build and 1523-declaration gate across
 thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`.
-Nine focused core-transport queries also use only those axioms. All twelve
+Fourteen focused source queries also use only those axioms. All twelve
 counterexample recipes and fresh root kernel replay pass. The default model
 build passes 66 jobs; the unit suite passes 131 tests (one configured-kernel
-skip, 22.092 seconds). All 3121 frozen proof-source hashes match; all 916
+skip, 22.080 seconds). All 3170 frozen proof-source hashes match; all 916
 inherited proof modules, main at `783510e8` and mirror `77c9b555` are unchanged.
-The preceding validated checkpoint is `e3eab800`.
+The preceding validated checkpoint is `f4ba5c44`.
 
 Reproduce the proof and model checks from the campaign worktree:
 

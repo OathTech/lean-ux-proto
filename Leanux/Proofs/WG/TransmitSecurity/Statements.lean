@@ -1,3 +1,11 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationCompletionRemaining
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationCreateTailContracts
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationQueueFrontier
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedTerminalProvenanceFront
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedTerminalProvenanceOrder
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationHeldSource
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationSoundAllocation
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationSoundRestore
 import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationCreateTailSource
 import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationFirstTerminalSendSuffix
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedAdmissionFrontOutcome

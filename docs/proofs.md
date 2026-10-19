@@ -32,13 +32,13 @@ locals and the complete pending/terminal partition remain open. Original early
 transmit refusals now have their exact invocation-level error charge; a GSO
 packet list does not multiply that charge.
 
-Source-45 passes the 3168-job aggregate build and 1523-declaration axiom gate
-across thirteen roots, using only the three standard axioms; nine focused core
+Source-46 checkpoint passes the 3217-job aggregate build and 1523-declaration axiom gate
+across thirteen roots, using only the three standard axioms; fourteen focused source
 queries also pass. Fresh root kernel replay, all twelve counterexample recipes,
 the 66-job default model build and 131 unit tests pass (one configured-kernel
-skip, 22.092 seconds). All 3121 frozen proof-source hashes match; all 916 inherited
+skip, 22.080 seconds). All 3170 frozen proof-source hashes match; all 916 inherited
 proof modules, mirror `77c9b555` and main `783510e8` are unchanged. The preceding
-validated checkpoint is `e3eab800`. The inherited warning and repaired
+validated checkpoint is `f4ba5c44`. The inherited warning and repaired
 development failures are recorded in the report.
 
 The final Driver now exposes actual take, restore, terminal disposal and nested
@@ -54,6 +54,13 @@ transport this combined core. The whole front retains canonical queue accounting
 at its stopped checkpoint. These local results pass aggregate checks. General stopped
 ownership frontiers, first-terminal transport and initialized conservation remain open. Mirror/C1/C2
 claims are unchanged.
+
+Source-46 local joins add the actual selected-take frontier, checked-loop packet
+shape, restore cut, whole-front Core checkpoints and result-aware completion
+sequencing. Their source callbacks and initialized transport remain open.
+Separate terminal receipt evidence and birth-to-allocation carriers now have
+whole-front and selected-loop/restore/allocation source joins. Core alone does
+not establish those semantic claims; initialized transport remains open. Source-46 passes the aggregate checks above.
 
 ## Current register
 
