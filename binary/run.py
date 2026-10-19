@@ -2,6 +2,8 @@
 """Run under capped: python3 binary/run.py [--check EXISTING_CHECK_DIRECTORY]."""
 import argparse
 from datetime import datetime, timezone
+from email.parser import BytesParser
+from email.utils import parseaddr
 import hashlib
 import json
 import os
@@ -17,21 +19,41 @@ TRACE = 'd1_wrong_receiver_index_same_bucket'
 TOOLCHAIN = Path.home() / '.elan/toolchains/leanprover--lean4---v4.35.0/bin'
 
 
-def bootstrap():
-    [lock] = [r for r in json.loads((ROOT / 'dependencies/sources.lock.json').read_text()) if r['name'] == 'kraken']
-    if lock['toolchain'] != (ROOT / 'binary/lean-toolchain').read_text().strip():
+def bootstrap(root=ROOT):
+    root = Path(root).resolve()
+    [lock] = [r for r in json.loads((root / 'dependencies/sources.lock.json').read_text()) if r['name'] == 'kraken']
+    if lock['toolchain'] != (root / 'binary/lean-toolchain').read_text().strip():
         raise ValueError('dependency pin or toolchain drift')
-    dest = ROOT / '.deps/kraken'
-    shared = ROOT.parents[1] / '.deps/kraken'
+    dest = root / '.deps/kraken'
+    common = Path(subprocess.check_output(
+        ['git', '-C', str(root), 'rev-parse', '--path-format=absolute', '--git-common-dir'],
+        text=True).strip())
+    shared = common.parent / '.deps/kraken'
     if not dest.exists():
+        if shared == dest or not shared.is_dir():
+            raise ValueError('missing local Kraken source; stage the locked upstream checkout in .deps/kraken first')
         dest.parent.mkdir(parents=True, exist_ok=True)
         subprocess.run(['git', 'clone', '--no-hardlinks', '--no-checkout', str(shared), str(dest)], check=True)
         subprocess.run(['git', '-C', str(dest), 'switch', '-c', 'task/binary-adequacy', lock['upstream_commit']], check=True)
         for patch in lock['patches']:
-            subprocess.run(['git', '-C', str(dest), '-c', 'user.name=Codex',
-                            '-c', 'user.email=codex@localhost', 'am', '--committer-date-is-author-date',
-                            str(ROOT / patch)], check=True)
-    verify_pin(ROOT)
+            path = root / patch
+            message = BytesParser().parsebytes(path.read_bytes(), headersonly=True)
+            name, address = parseaddr(message['From'])
+            if not name or not address:
+                raise ValueError(f'{patch}: missing patch author identity')
+            # These patches were committed with author = committer and equal
+            # dates. Preserve each patch's identity, including the later series,
+            # so reconstruction gives the exact locked commit, not just its tree.
+            subprocess.run(['git', '-C', str(dest), '-c', f'user.name={name}',
+                            '-c', f'user.email={address}', 'am', '--committer-date-is-author-date',
+                            str(path)], check=True)
+    if not (root / 'lake-manifest.json').exists():
+        subprocess.run(['lake', '--keep-toolchain', 'update'], cwd=root, check=True)
+    if not (root / 'binary/lake-manifest.json').exists():
+        # The consumer deliberately selects v4.35.0 over upstream Kraken's
+        # nightly declaration. Resolve the two local path dependencies first.
+        subprocess.run(['lake', '--keep-toolchain', 'update'], cwd=root / 'binary', check=True)
+    verify_pin(root)
 
 
 def checked_command(args, cwd, env=None):
