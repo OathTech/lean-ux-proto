@@ -3,7 +3,6 @@ import Leanux.Proofs.WG.Config.KeyInstall
 
 set_option pp.structureInstances false
 set_option autoImplicit false
-set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
@@ -13,12 +12,12 @@ theorem keyPeer_missing_full (pid : PeerId) (sendStaged : Bool) :
   intro g ambient result final after pre run
   cases device : g.dev with
   | none =>
-    simp [keyPeerSource, precomputeStaticStatic, requireNotPending, getDev, device,
+    simp [keyPeerSource, keyPeerSourceWith, precomputeStaticStatic, requireNotPending, getDev, device,
       invariant, AmbientM.invariant] at run
     cases run
   | some d =>
     have missing : d.peers[pid]? = none := by simpa [peerAt, device] using pre
-    simp [keyPeerSource, precomputeStaticStatic, requireNotPending, getPeer, getDev, device,
+    simp [keyPeerSource, keyPeerSourceWith, precomputeStaticStatic, requireNotPending, getPeer, getDev, device,
       missing, invariant, AmbientM.invariant] at run
     cases run
 
@@ -133,7 +132,7 @@ private theorem observedKeyPeerSource_erase_device (pid : PeerId) (d : Device)
       ((keyPeerSource pid sendStaged).run g).run ambient := by
   cases resident : d.peers[pid]? with
   | none =>
-    simp [observedKeyPeerSource, keyPeerSource, precomputeStaticStatic, requireNotPending,
+    simp [observedKeyPeerSource, keyPeerSource, keyPeerSourceWith, precomputeStaticStatic, requireNotPending,
       getPeer, getDev, device, resident, invariant, AmbientM.invariant]
     rfl
   | some p => exact observedKeyPeerSource_erase pid d p sendStaged resident g ambient device
@@ -150,7 +149,7 @@ theorem observedKeyPeerLoopSource_erase (pids : List PeerId) (d : Device) (sendS
         _ ← branch .setDevKeyPeerIter true
         keyPeerSource pid sendStaged
         keyPeerLoopSource rest sendStaged) := by
-      simp [keyPeerLoopSource, List.forIn_cons, bind_assoc]
+      simp [keyPeerLoopSource, keyPeerLoopSourceWith, keyPeerSource, List.forIn_cons, bind_assoc]
     have observedFactor : (do let _ ← observedKeyPeerLoopSource (pid :: rest) sendStaged; pure ()) = (do
         _ ← branch .setDevKeyPeerIter true
         let _ ← observedKeyPeerSource pid sendStaged
@@ -238,7 +237,7 @@ theorem observedKeyInstallSource_erase (key : Key) (d : Device)
       let (pids, sendStaged) ← keyInstallObservationPrefix key
       keyPeerLoopSource pids sendStaged
       _ ← branch .setDevKeyPeerIter false) := by
-    simp [keyInstallSource, keyInstallObservationPrefix, bind_assoc]
+    simp [keyInstallSource, keyInstallSourceWith, keyPeerLoopSource, keyInstallObservationPrefix, bind_assoc]
   obtain ⟨selection, current, inputs, prefixRun, selectionEffect, currentDevice⟩ :=
     keyInstallObservationPrefix_returns d key g ambient device
   subst selection

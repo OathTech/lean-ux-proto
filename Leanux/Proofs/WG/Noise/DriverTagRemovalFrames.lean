@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.DriverTagRemovalFactors
 import Leanux.Proofs.WG.Noise.DriverTagFlushCallerSource
 import Leanux.Proofs.WG.Noise.DriverTagAllowedFrames
 import Leanux.Proofs.WG.Queues.JointRemoval
@@ -19,9 +20,6 @@ theorem makeDead_tags (pid : PeerId) : SameView tagView (WG.peerMakeDead pid) :=
     (ambient_frame (AmbientM.branch .pubkeyRemoveHashed (d.peerHashtable.any (·.2 == pid)))).bind (fun _ =>
     (modifyDev_frame (fun d => {d with peerHashtable := d.peerHashtable.filter (·.2 != pid)}) (fun _ => rfl)).bind (fun _ =>
       modifyPeer_frame pid (fun p => {p with isDead := true}) (fun _ => rfl))))))
-
-abbrev destructFinishSource : WG.M Unit :=
-  pinned_const _private.Leanux.Proofs.WG.Configuration.LifecycleCompletion.«0».Leanux.Proofs.WG.Configuration.destructFinish
 
 theorem destructFinish_retains (g : WGWorld) (ambient : Ambient) (result : Unit)
     (final : WGWorld) (after : Ambient)

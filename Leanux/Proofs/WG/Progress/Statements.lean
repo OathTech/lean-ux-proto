@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Progress.SeccompInstallFiniteClaims
+import Leanux.Proofs.WG.Progress.KeyConfigurationFiniteClaims
 import Leanux.Proofs.WG.Progress.FsFinalCallerFiniteClaims
 import Leanux.Proofs.WG.Progress.SeccompFilterFiniteClaims
 import Leanux.Proofs.WG.Progress.SeccompTranslationFiniteClaims
@@ -2264,5 +2266,53 @@ theorem original_seccomp_translation_check_finite
     (p : Leanux.Seccomp.ClassicProg) (d : Leanux.Seccomp.SeccompData) :
     Leanux.Seccomp.checkTranslation p d = SeccompTranslationFinite.check p d :=
   SeccompTranslationFinite.original_check_result_finite p d
+
+/-- Exact finite evaluation of the original installation caller, retaining all refusals and Stops. -/
+theorem original_seccomp_set_mode_filter_finite (flags : UInt32)
+    (fprog : Leanux.Seccomp.SockFprog) (badFprog : Bool) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (Leanux.liftSeccomp (Leanux.Seccomp.seccompSetModeFilter flags fprog badFprog))
+      (Leanux.liftSeccomp (SeccompInstallFinite.mode flags fprog badFprog)) :=
+  SeccompInstallFinite.original_mode_finite flags fprog badFprog
+
+/-- Exact finite evaluation of the original installation caller, retaining all refusals and Stops. -/
+theorem original_do_seccomp_finite (op : Nat) (flags : UInt32)
+    (uargs : Leanux.Seccomp.SeccompArgs) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (Leanux.liftSeccomp (Leanux.Seccomp.doSeccomp op flags uargs))
+      (Leanux.liftSeccomp (SeccompInstallFinite.dispatch op flags uargs)) :=
+  SeccompInstallFinite.original_dispatch_finite op flags uargs
+
+/-- Exact finite evaluation of the original installation caller, retaining all refusals and Stops. -/
+theorem original_prctl_set_seccomp_finite (mode : Nat)
+    (filter : Leanux.Seccomp.SeccompArgs) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (Leanux.liftSeccomp (Leanux.Seccomp.prctlSetSeccomp mode filter))
+      (Leanux.liftSeccomp (SeccompInstallFinite.prctl mode filter)) :=
+  SeccompInstallFinite.original_prctl_finite mode filter
+
+/-- Exact finite evaluation of the original installation caller, retaining all refusals and Stops. -/
+theorem original_seccomp_install_finite (via : Leanux.Seccomp.InstallVia)
+    (flags : UInt32) (filter : Option Leanux.ClassicProg) (len : Option Nat)
+    (bad : Leanux.Seccomp.BadPtr) (mode : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (Leanux.liftSeccomp (Leanux.Seccomp.sysSeccompInstall via flags filter len bad mode))
+      (Leanux.liftSeccomp (SeccompInstallFinite.install via flags filter len bad mode)) :=
+  SeccompInstallFinite.original_install_finite via flags filter len bad mode
+
+/-- Exact finite evaluation of the native private-key stage, including queued removal and original Stops. -/
+theorem original_configuration_install_finite (key : Leanux.WG.Key) :
+    Campaign2.AgreesOn (fun _ => True) (Config.keyInstallSource key) (KeyConfigurationFinite.install key) :=
+  KeyConfigurationFinite.original_install_finite key
+
+/-- Exact finite evaluation of the native private-key stage, including queued removal and original Stops. -/
+theorem original_configuration_collision_finite (key : Leanux.WG.Key) :
+    Campaign2.AgreesOn (fun _ => True) (Config.keyCollisionSource key) (KeyConfigurationFinite.collision key) :=
+  KeyConfigurationFinite.original_collision_finite key
+
+/-- Exact finite evaluation of the native private-key stage, including queued removal and original Stops. -/
+theorem original_configuration_key_stage_finite (attrs : Leanux.WG.DeviceAttrs) :
+    Campaign2.AgreesOn (fun _ => True) (Config.RequestOrder.keyStage attrs) (KeyConfigurationFinite.stage attrs) :=
+  KeyConfigurationFinite.original_key_stage_finite attrs
 
 end Leanux.Proofs.WG.Progress

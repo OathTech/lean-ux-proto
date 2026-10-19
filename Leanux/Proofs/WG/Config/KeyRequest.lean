@@ -4,7 +4,6 @@ import Leanux.Proofs.WG.Config.ClaimView
 
 set_option pp.structureInstances false
 set_option autoImplicit false
-set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
@@ -67,7 +66,7 @@ theorem setDevice_private_changed_no_collision (d : Device) (key : Key)
     have source : ((devicePrivateSource (privateKeyAttrs d key)).run g).run ambient =
         (((keyInstallSource key).run current).run inputs >>= fun ((_, out), tail) =>
           .ok (((0 : Int), out), logged (logged tail .setDevHasPeers false) .setDevZeroKey true)) := by
-      simp [devicePrivateSource, devicePeersSource, privateKeyAttrs, WG.andM, getDev,
+      simp [devicePrivateSource, devicePrivateSourceWith, devicePeersSource, privateKeyAttrs, WG.andM, getDev,
         device, updated, requestGeneration, changed, changedFlag, branch, AmbientM.branch]
       rw [collisionRun]
       rfl

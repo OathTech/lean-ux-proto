@@ -4,7 +4,6 @@ import Leanux.Proofs.WG.Config.KeyPeerLoop
 
 set_option pp.structureInstances false
 set_option autoImplicit false
-set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
@@ -89,7 +88,7 @@ theorem observedKeyPeerSource_erase (pid : PeerId) (d : Device) (p : Peer) (send
       precomputeStaticStatic pid
       expireCurrentPeerKeypairs pid) >>= fun _ => do
         if ← branch .setDevSendStagedPeer sendStaged then sendStagedPackets pid) := by
-    simp [keyPeerSource, bind_assoc]
+    simp [keyPeerSource, keyPeerSourceWith, bind_assoc]
   rw [left, right]
   change (((((do precomputeStaticStatic pid; expireCurrentPeerKeypairs pid) : WG.M Unit).run g).run ambient) >>= _) =
     (((((do precomputeStaticStatic pid; expireCurrentPeerKeypairs pid) : WG.M Unit).run g).run ambient) >>= _)

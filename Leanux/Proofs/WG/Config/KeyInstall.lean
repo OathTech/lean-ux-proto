@@ -1,7 +1,6 @@
 import Leanux.Proofs.WG.Config.KeyPeerLoop
 
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
@@ -42,7 +41,7 @@ theorem keyInstall_quiet (d : Device) (key : Key)
       cases new : (identityAfter key d.staticIdentity).hasIdentity
     all_goals simp [requestsStagedSend, old, running, new] at quiet
     all_goals simp [before, first, requested, middle, kept, mark, old, running, new] at identityRun cookieRun
-    all_goals simp [keyInstallSource, WG.andM, getDev, device, branch, AmbientM.branch, old, running]
+    all_goals simp [keyInstallSource, keyInstallSourceWith, WG.andM, getDev, device, branch, AmbientM.branch, old, running]
     all_goals rw [identityRun]
     all_goals dsimp only [bind, Except.bind]
     all_goals simp [identityDevice, new, pure, StateT.pure, StateT.run, Except.pure]

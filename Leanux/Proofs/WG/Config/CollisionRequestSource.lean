@@ -7,7 +7,6 @@ import Leanux.Proofs.WG.Config.ScalarReturns
 
 set_option autoImplicit false
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
@@ -77,7 +76,7 @@ theorem keyCollision_present_effect (d : Device) (key pub : Key) (pid : PeerId) 
     · intro result w ambient u out after pre run
       obtain ⟨rfl, device⟩ := pre
       exact lookup w ambient u out after device run
-  unfold keyCollisionSource
+  unfold keyCollisionSource keyCollisionSourceWith
   refine ensures_bind _ _ hg ?_
   intro result w ambient u out after pre run
   obtain ⟨rfl, device⟩ := pre
@@ -142,7 +141,7 @@ theorem setDevice_private_collision (d : Device) (key pub : Key) (pid : PeerId) 
         (((keyCollisionSource key).run g).run before >>= fun ((_, current), inputs) =>
           ((keyInstallSource key).run current).run inputs >>= fun ((_, out), tail) =>
             .ok (((0 : Int), out), logged (logged tail .setDevHasPeers false) .setDevZeroKey true)) := by
-      simp [devicePrivateSource, devicePeersSource, privateKeyAttrs, WG.andM, getDev,
+      simp [devicePrivateSource, devicePrivateSourceWith, devicePeersSource, privateKeyAttrs, WG.andM, getDev,
         device, updated, requestGeneration, changed, changedFlag, branch, AmbientM.branch]
       rfl
     rw [source] at run

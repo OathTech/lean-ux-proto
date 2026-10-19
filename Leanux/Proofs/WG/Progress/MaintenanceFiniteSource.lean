@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Progress.InitiationCallerFiniteSource
-import Leanux.Proofs.WG.Noise.DriverTagRemovalSource
-import Leanux.Proofs.WG.Noise.DriverTagControlSource
+import Leanux.Proofs.WG.Noise.DriverTagFlushFactors
+import Leanux.Proofs.WG.Noise.DriverTagRemovalFactors
+import Leanux.Proofs.WG.Noise.DriverTagControlFactors
 
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress.MaintenanceFinite

@@ -2,7 +2,6 @@ import Leanux.Proofs.WG.Config.KeyInstallEffects
 
 set_option pp.structureInstances false
 set_option autoImplicit false
-set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
@@ -26,26 +25,36 @@ theorem publicResult_valid (key : Key) (ok : (publicResult key).2 = true) :
   unfold publicResult at *
   split at * <;> simp_all
 
-def keyCollisionSource (key : Key) : WG.M Unit := do
-  let (pub, ok) ← generatePublic key
+/-- Original public-key collision path with generation and removal exposed. -/
+def keyCollisionSourceWith (generate : Key → WG.M (Option Key × Bool))
+    (remove : Option PeerId → WG.M Unit) (key : Key) : WG.M Unit := do
+  let (pub, ok) ← generate key
   if ← branch .setDevGenPublic ok then
     let some pub := pub | invariant "a generated public key without a write"
     let peer ← pubkeyLookup pub
     if ← branch .setDevOldPeer peer.isSome then
       peerPut peer
-      peerRemove peer
+      remove peer
 
-def devicePrivateSource (a : DeviceAttrs) : WG.M Int := do
+def keyCollisionSource (key : Key) : WG.M Unit :=
+  keyCollisionSourceWith generatePublic peerRemove key
+
+/-- Original private-key guards and continuation with concrete stage callbacks. -/
+def devicePrivateSourceWith (collision install : Key → WG.M Unit)
+    (next : WG.M Int) (a : DeviceAttrs) : WG.M Int := do
   if ← WG.andM (branch .setDevHasPrivateKey a.privateKey.isSome) (branch .setDevPrivateKeyLen true) then
     let some key := a.privateKey | invariant "unreachable"
     if !(← branch .setDevKeyUnchanged ((← getDev).staticIdentity.staticPrivate == key)) then
-      keyCollisionSource key
-      keyInstallSource key
-  devicePeersSource a
+      collision key
+      install key
+  next
+
+def devicePrivateSource (a : DeviceAttrs) : WG.M Int :=
+  devicePrivateSourceWith keyCollisionSource keyInstallSource (devicePeersSource a) a
 
 theorem devicePrivate_source (a : DeviceAttrs) : devicePrivateSource a = deviceKeySource a := by
   rw [← deviceKey_loop_factor]
-  simp only [devicePrivateSource, deviceKeyFactoredSource, keyCollisionSource, bind_assoc]
+  simp only [devicePrivateSource, devicePrivateSourceWith, deviceKeyFactoredSource, keyCollisionSource, keyCollisionSourceWith, bind_assoc]
   congr 1
   funext hasKey
   cases hasKey <;> simp
@@ -91,18 +100,18 @@ theorem keyCollision_absent (d : Device) (key : Key) (absent : noKeyCollision d 
     else checked
   refine ⟨(), g, after, ?_, device⟩
   by_cases isNull : key == nullPoint
-  · simp [keyCollisionSource, generatePublic, publicResult, branch, AmbientM.branch,
+  · simp [keyCollisionSource, keyCollisionSourceWith, generatePublic, publicResult, branch, AmbientM.branch,
       isNull, after, checked, generated, mark]
     rfl
   · cases valid : (curve25519 key basePoint).2 with
     | false =>
-      simp [keyCollisionSource, generatePublic, publicResult, branch, AmbientM.branch,
+      simp [keyCollisionSource, keyCollisionSourceWith, generatePublic, publicResult, branch, AmbientM.branch,
         isNull, valid, after, checked, generated, mark]
       rfl
     | true =>
       have missing := absent (curve25519 key basePoint).1
         (by simp [publicResult, isNull]) (by simp [publicResult, isNull, valid])
-      simp [keyCollisionSource, generatePublic, publicResult, branch, AmbientM.branch,
+      simp [keyCollisionSource, keyCollisionSourceWith, generatePublic, publicResult, branch, AmbientM.branch,
         isNull, valid, after, checked, generated, mark, pubkeyLookup, peerGetMaybeZero,
         getDev, device, missing]
       rfl

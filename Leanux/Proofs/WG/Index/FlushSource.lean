@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.FlushFactors
 import Leanux.Proofs.WG.Index.FlushFrames
 import Leanux.Proofs.WG.Index.ClearSource
 import Leanux.Proofs.WG.Index.TimerFrames
@@ -8,27 +9,6 @@ set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Index
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
-
-/-- The actual dequeue, pending guard and flag update are one source cut.
-Keeping the peer read with its write permits projections of its other fields. -/
-def flushedSendPrepare (pid : PeerId) : WG.M Unit := do
-  modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue.erase pid}
-  let p ← getPeer pid
-  if !p.handshakePending then invariant "queued work without a pending flag"
-  setPeer pid {p with handshakePending := (← getDev).sendWorkQueue.contains pid}
-
-theorem runFlushedSendWork_factor (pid : PeerId) : runFlushedSendWork pid = (do
-    flushedSendPrepare pid
-    let _ ← hidden (.sectionStart .sendWorker)
-    handshakeSendWorker pid
-    let _ ← hidden (.sectionStop .sendWorker)
-    pure ()) := by
-  simp only [runFlushedSendWork,flushedSendPrepare,bind_assoc]
-  congr 1
-  funext u
-  congr 1
-  funext p
-  split <;> simp only [bind_assoc]
 
 theorem flushedSendPrepare_tables (pid : PeerId) :
     Ensures (flushedSendPrepare pid) TablesSafeWG (fun _ => TablesSafeWG) := by

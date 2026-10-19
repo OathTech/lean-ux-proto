@@ -1,20 +1,29 @@
 import Leanux.Proofs.WG.Config.ExpiryClock
 
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
 
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
-def keyPeerSource (pid : PeerId) (sendStaged : Bool) : WG.M Unit := do
-  precomputeStaticStatic pid
+/-- Original peer update with only its curve-bearing precomputation exposed. -/
+def keyPeerSourceWith (precompute : PeerId → WG.M Unit)
+    (pid : PeerId) (sendStaged : Bool) : WG.M Unit := do
+  precompute pid
   expireCurrentPeerKeypairs pid
   if ← branch .setDevSendStagedPeer sendStaged then sendStagedPackets pid
 
-def keyPeerLoopSource (pids : List PeerId) (sendStaged : Bool) : WG.M Unit := do
+def keyPeerSource (pid : PeerId) (sendStaged : Bool) : WG.M Unit :=
+  keyPeerSourceWith precomputeStaticStatic pid sendStaged
+
+/-- The saved peer-list traversal with its actual precomputation callback. -/
+def keyPeerLoopSourceWith (precompute : PeerId → WG.M Unit)
+    (pids : List PeerId) (sendStaged : Bool) : WG.M Unit := do
   for pid in pids do
     _ ← branch .setDevKeyPeerIter true
-    keyPeerSource pid sendStaged
+    keyPeerSourceWith precompute pid sendStaged
+
+def keyPeerLoopSource (pids : List PeerId) (sendStaged : Bool) : WG.M Unit :=
+  keyPeerLoopSourceWith precomputeStaticStatic pids sendStaged
 
 def peerUpdatedDevice (d : Device) (pid : PeerId) (p : Peer) (now : Int64) : Device :=
   expiredDevice (precomputeDevice d pid p) pid
@@ -35,7 +44,7 @@ theorem keyPeer_quiet_exact (pid : PeerId) (d : Device) (p : Peer)
   have he := expireCurrent_exact pid (precomputeDevice d pid p)
     {p with precomputedStaticStatic := precomputedAfter d.staticIdentity p}
     (precomputeDevice_peer pid d p)
-  unfold keyPeerSource
+  unfold keyPeerSource keyPeerSourceWith
   refine ensures_bind _ _ hp ?_
   intro _
   refine ensures_bind _ _ he ?_
@@ -49,12 +58,12 @@ theorem keyPeer_missing (pid : PeerId) :
   intro g ambient result final after pre run
   cases device : g.dev with
   | none =>
-    simp [keyPeerSource, precomputeStaticStatic, requireNotPending, getDev, device,
+    simp [keyPeerSource, keyPeerSourceWith, precomputeStaticStatic, requireNotPending, getDev, device,
       invariant, AmbientM.invariant] at run
     cases run
   | some d =>
     have missing : d.peers[pid]? = none := by simpa [peerAt, device] using pre
-    simp [keyPeerSource, precomputeStaticStatic, requireNotPending, getPeer, getDev, device,
+    simp [keyPeerSource, keyPeerSourceWith, precomputeStaticStatic, requireNotPending, getPeer, getDev, device,
       missing, invariant, AmbientM.invariant] at run
     cases run
 
@@ -87,14 +96,14 @@ theorem keyPeerLoop_quiet (pids : List PeerId) (d : Device) :
   induction pids generalizing d with
   | nil =>
     intro w ambient ret v after hp hr
-    simp [keyPeerLoopSource] at hr
+    simp [keyPeerLoopSource, keyPeerLoopSourceWith] at hr
     rcases hr with ⟨rfl, rfl⟩
     exact ⟨d, hp, .nil d⟩
   | cons pid rest ih =>
     have factor : keyPeerLoopSource (pid :: rest) false = ((do
         _ ← branch .setDevKeyPeerIter true
         keyPeerSource pid false) >>= fun _ => keyPeerLoopSource rest false) := by
-      simp [keyPeerLoopSource, List.forIn_cons, bind_assoc]
+      simp [keyPeerLoopSource, keyPeerLoopSourceWith, keyPeerSource, List.forIn_cons, bind_assoc]
     have hstep : Ensures (do
         _ ← branch .setDevKeyPeerIter true
         keyPeerSource pid false) (fun w => w.dev = some d)
@@ -112,16 +121,21 @@ theorem keyPeerLoop_quiet (pids : List PeerId) (d : Device) :
     obtain ⟨final, hv, tail⟩ := ih (peerUpdatedDevice d pid p now) w ambient ret v after hd hr
     exact ⟨final, hv, .cons d pid p now rest final resident tail⟩
 
-def keyInstallSource (key : Key) : WG.M Unit := do
+/-- Original installation with identity and precomputation callbacks exposed. -/
+def keyInstallSourceWith (setPrivate : Key → WG.M Unit)
+    (precompute : PeerId → WG.M Unit) (key : Key) : WG.M Unit := do
   let d ← getDev
   let sendStaged ← WG.andM (branch .setDevSendStagedNoIdentity !d.staticIdentity.hasIdentity)
     (branch .setDevSendStagedRunning d.running)
-  setStaticIdentityPrivateKey key
+  setPrivate key
   let hasIdentity := (← getDev).staticIdentity.hasIdentity
   let sendStaged ← WG.andM (branch .setDevSendStagedKept sendStaged) (branch .setDevSendStagedHasIdentity hasIdentity)
   cookiePrecomputeDeviceKeys
-  keyPeerLoopSource (← getDev).peerList sendStaged
+  keyPeerLoopSourceWith precompute (← getDev).peerList sendStaged
   _ ← branch .setDevKeyPeerIter false
+
+def keyInstallSource (key : Key) : WG.M Unit :=
+  keyInstallSourceWith setStaticIdentityPrivateKey precomputeStaticStatic key
 
 def deviceKeyFactoredSource (a : DeviceAttrs) : WG.M Int := do
   if ← WG.andM (branch .setDevHasPrivateKey a.privateKey.isSome) (branch .setDevPrivateKeyLen true) then
@@ -146,7 +160,7 @@ theorem deviceKey_loop_factor (a : DeviceAttrs) :
       ((fun (_ : Unit) => ForInStep.yield PUnit.unit) <$> (if b then act else pure ())) =
       (if b then (fun (_ : Unit) => ForInStep.yield PUnit.unit) <$> act else pure (ForInStep.yield PUnit.unit)) := by
     cases b <;> simp
-  simp [deviceKeyFactoredSource, keyInstallSource, deviceKeySource, keyPeerLoopSource, keyPeerSource, bind_assoc, map_cond]
+  simp [deviceKeyFactoredSource, keyInstallSource, keyInstallSourceWith, deviceKeySource, keyPeerLoopSourceWith, keyPeerSourceWith, bind_assoc, map_cond]
   rfl
 
 end Leanux.Proofs.WG.Config

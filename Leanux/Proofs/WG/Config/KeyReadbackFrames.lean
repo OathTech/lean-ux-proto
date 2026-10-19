@@ -120,7 +120,7 @@ theorem keyPeer_quiet_readbackFrame (pid : PeerId) (sock : NlSock) (fixtures : F
     intro p
     exact ensures_bind _ _ (invalidate .expireNextKeypair p.keypairNext)
       (fun _ => invalidate .expireCurrentKeypair p.keypairCurrent)
-  unfold keyPeerSource
+  unfold keyPeerSource keyPeerSourceWith
   refine ensures_bind _ _ precompute (fun _ => ensures_bind _ _ expire ?_)
   intro _ g ambient value final after pre run
   simp [branch, AmbientM.branch] at run
@@ -168,7 +168,7 @@ theorem keyInstall_established_readbackFrame (d : Device) (key : Key)
           _ ← branch .setDevKeyPeerIter true
           keyPeerSource pid false
           keyPeerLoopSource rest false) := by
-        simp [keyPeerLoopSource, List.forIn_cons, bind_assoc]
+        simp [keyPeerLoopSource, keyPeerLoopSourceWith, keyPeerSource, List.forIn_cons, bind_assoc]
       rw [factor]
       refine ensures_bind (Q := fun _ g => readbackFrame g sock fixtures) _ _ ?_ ?_
       · exact (ensures_iff _ _ _).mpr (hoare_liftAmbient_variant
@@ -193,7 +193,7 @@ theorem keyInstall_established_readbackFrame (d : Device) (key : Key)
   have source : ((keyInstallSource key).run g).run ambient =
       (((keyPeerLoopSource d.peerList false).run cookieState).run cookieAmbient >>= fun ((_, current), tail) =>
         .ok (((), current), mark tail .setDevKeyPeerIter false)) := by
-    simp [keyInstallSource, WG.andM, getDev, pre.1, established, branch, AmbientM.branch]
+    simp [keyInstallSource, keyInstallSourceWith, WG.andM, getDev, pre.1, established, branch, AmbientM.branch]
     rw [show ((setStaticIdentityPrivateKey key).run g).run first = _ from identityRun]
     dsimp only [bind, Except.bind]
     simp [identityDevice, pure, StateT.pure, StateT.run, Except.pure]
@@ -226,18 +226,18 @@ theorem setDevice_rotation_readbackFrame (d : Device) (key : Key)
         (fun _ g => readbackFrame g sock fixtures) := by
     intro g ambient value final after pre run
     by_cases isNull : key == nullPoint
-    · simp [keyCollisionSource, generatePublic, branch, AmbientM.branch, isNull] at run
+    · simp [keyCollisionSource, keyCollisionSourceWith, generatePublic, branch, AmbientM.branch, isNull] at run
       rcases run with ⟨rfl, rfl⟩
       exact pre.2
     · cases valid : (curve25519 key basePoint).2 with
       | false =>
-        simp [keyCollisionSource, generatePublic, branch, AmbientM.branch, isNull, valid] at run
+        simp [keyCollisionSource, keyCollisionSourceWith, generatePublic, branch, AmbientM.branch, isNull, valid] at run
         rcases run with ⟨rfl, rfl⟩
         exact pre.2
       | true =>
         have missing := absent (curve25519 key basePoint).1
           (by simp [publicResult, isNull]) (by simp [publicResult, isNull, valid])
-        simp [keyCollisionSource, generatePublic, branch, AmbientM.branch,
+        simp [keyCollisionSource, keyCollisionSourceWith, generatePublic, branch, AmbientM.branch,
           isNull, valid, pubkeyLookup, peerGetMaybeZero, getDev, pre.1, missing] at run
         rcases run with ⟨rfl, rfl⟩
         exact pre.2
@@ -259,7 +259,7 @@ theorem setDevice_rotation_readbackFrame (d : Device) (key : Key)
     have source : ((devicePrivateSource (privateKeyAttrs d key)).run g).run ambient =
         (((keyInstallSource key).run current).run inputs >>= fun ((_, out), tail) =>
           .ok (((0 : Int), out), logged (logged tail .setDevHasPeers false) .setDevZeroKey true)) := by
-      simp [devicePrivateSource, devicePeersSource, privateKeyAttrs, WG.andM, getDev,
+      simp [devicePrivateSource, devicePrivateSourceWith, devicePeersSource, privateKeyAttrs, WG.andM, getDev,
         pre.1, updated, requestGeneration, changed, changedFlag, branch, AmbientM.branch]
       rw [collisionRun]
       rfl

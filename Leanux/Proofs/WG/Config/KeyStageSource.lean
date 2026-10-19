@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.KeyStageFactors
 import Leanux.Proofs.WG.Config.KeyStageModel
 import Leanux.Proofs.WG.Config.QueuedRemoveSource
 import Leanux.Proofs.WG.Config.ConfiguredDeviceSource
@@ -66,52 +67,12 @@ theorem lookup_effect (cs : Ledger) (loans : Reservations) (pub : Key) (before :
     exact ⟨after,present,.removed pid p after found resident positive
       (QueuedRemove.effect_of_entry cs loans before after pid v present post members rows)⟩
 
-theorem stage_factor (attrs : DeviceAttrs) :
-    RequestOrder.keyStage attrs = (do
-      if ← WG.andM (branch .setDevHasPrivateKey attrs.privateKey.isSome)
-          (branch .setDevPrivateKeyLen true) then
-        let some key := attrs.privateKey | invariant "unreachable"
-        if !(← branch .setDevKeyUnchanged ((← getDev).staticIdentity.staticPrivate == key)) then
-          keyCollisionSource key
-          keyInstallSource key
-      pure 0 : WG.M Int) := by
-  have bind_cond {α β : Type} (c : Prop) [Decidable c]
-      (a b : WG.M α) (f : α → WG.M β) :
-      (if c then a else b) >>= f = if c then a >>= f else b >>= f := by
-    split <;> rfl
-  have map_cond (yes : Bool) (action : WG.M Unit) :
-      ((fun (_ : Unit)=>ForInStep.yield PUnit.unit) <$> (if yes then action else pure ())) =
-        (if yes then (fun (_ : Unit)=>ForInStep.yield PUnit.unit) <$> action
-        else pure (ForInStep.yield PUnit.unit)) := by
-    cases yes <;> simp
-  simp [RequestOrder.keyStage,deviceKeyWith,keyCollisionSource,keyInstallSource,
-    keyPeerLoopSource,keyPeerSource,bind_assoc,bind_cond,map_cond]
-  congr 1
-  funext has
-  cases has <;> simp
-  cases h : attrs.privateKey with
-  | none => simp
-  | some key =>
-    simp only
-    congr 1
-    funext d
-    congr 1
-    funext unchanged
-    cases unchanged <;> simp
-    congr 1
-    funext pair
-    obtain ⟨pub,ok⟩ := pair
-    congr 1
-    funext generated
-    cases generated <;> simp
-    cases pub <;> simp [bind_assoc,bind_cond]
-
 theorem generated_effect (cs : Ledger) (loans : Reservations) (key : Key) (before : Device)
     (g v : WGWorld) (a b : Ambient)
     (pre : Entry cs loans g) (device : g.dev=some before)
     (run : ((keyCollisionSource key).run g).run a=.ok (((),v),b)) :
     Entry cs loans v ∧ ∃ after,v.dev=some after ∧ GeneratedEffect before key after := by
-  unfold keyCollisionSource at run
+  unfold keyCollisionSource keyCollisionSourceWith at run
   rw [MaterialOrigin.bind_ok_ambient] at run
   obtain ⟨pair,u,c,generated,tail⟩ := run
   have frame := (ProjectedAction.iff_run_ambient _ _ _).mp
@@ -164,7 +125,7 @@ theorem install_effect (before : Device) (key : Key)
 theorem install_factor (key : Key) : keyInstallSource key =
     ((pinned_const _private.Leanux.Proofs.WG.Queues.DeviceStages.«0».Leanux.Proofs.WG.Queues.RxCredits.DeviceStages.keyFinish) key) := by
   index_unfold _private.Leanux.Proofs.WG.Queues.DeviceStages.«0».Leanux.Proofs.WG.Queues.RxCredits.DeviceStages.keyFinish
-  simp only [keyInstallSource,keyPeerLoopSource,keyPeerSource,bind_assoc,TxDisposition.bind_ite,pure_bind]
+  simp only [keyInstallSource, keyInstallSourceWith,keyPeerLoopSourceWith,keyPeerSourceWith,bind_assoc,TxDisposition.bind_ite,pure_bind]
 
 theorem install_entry (cs : Ledger) (loans : Reservations) (key : Key) :
     Preserves (Entry cs loans) (keyInstallSource key) := by

@@ -11,7 +11,7 @@ open Leanux.Proofs.WG.Configuration
 theorem collision_preserves (P : WGWorld → Prop)
     (c : Index.ConfigurationKeyRules.Contracts P) (key : Key) :
     Preserves P (keyCollisionSource key) := by
-  unfold keyCollisionSource
+  unfold keyCollisionSource keyCollisionSourceWith
   apply preserves_bind ((generatePublic_sameWGWorld key).wp P)
   rintro ⟨pub,ok⟩
   apply preserves_bind (hoare_liftAmbient (AmbientM.branch .setDevGenPublic ok) P)
