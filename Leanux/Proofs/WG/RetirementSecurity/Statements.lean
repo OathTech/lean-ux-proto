@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.RetirementSecurity.ZeroTimerQueued
+import Leanux.Proofs.WG.RetirementSecurity.InitializedRetirement
 import Leanux.Proofs.WG.RetirementSecurity.HolderInitialized
 import Leanux.Proofs.WG.RetirementSecurity.HolderDumpDispatch
 import Leanux.Proofs.WG.RetirementSecurity.HolderOuterControls
@@ -1978,5 +1980,80 @@ theorem accepted_exact_key_reference_account (trace : Runner.Trace) (placeholder
     ∃w h,Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
       (.ok (result,w),h) ∧ HolderAccount [] w.wg :=
   HolderInitialized.accepted trace placeholders run
+
+
+/-- Given actual queued-clear dispatch after a normal initialized execution,
+the selected peer's three slots are cleared and every remaining key reference
+is exactly accounted for by native packet/slot holders. Completion of that
+worker is the explicit progress premise; elapsed time alone is insufficient. -/
+theorem initialized_clear_worker_reference_retirement (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) (dispatch : Env.runOneClearWorker.run w=.ok ((),v)) :
+    HolderAccount [] v.wg ∧ ∃d pid,w.wg.dev=some d ∧ pid∈d.clearWorkQueue ∧
+      SlotsCleared pid v.wg ∧ Retains w.wg v.wg :=
+  InitializedRetirement.clear_worker trace placeholders initialized dispatch
+
+/-- After initialization, a selected TX batch holding the sole remaining
+reference retires its key allocation when the actual native worker consumes
+that batch. A true normal worker return is the explicit scheduling/readiness
+premise; both encrypted and DEAD batches use this same disposal path. -/
+theorem initialized_final_tx_reference_removes_key (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) (allocation : Credits.Allocation)
+    (projected : durableLoans w.wg=some loans)
+    (last : (loans.map (·.allocation)).count allocation=1)
+    (pid : PeerId) (p : Peer) (items : List SkbId) (headId : SkbId) (head : DataPacket)
+    (peer : peerAt w.wg pid=some p) (queued : p.txQueue.all.head?=some items)
+    (first : items.head?=some headId) (packet : Queues.TxDisposition.txPackets w.wg headId=some head)
+    (key : head.keypair=allocation.slot) (b : Ambient)
+    (worker : ((txStep pid).run w.wg).run w.ambient=.ok ((true,v),b)) :
+    keyAt v allocation.slot=none :=
+  InitializedRetirement.final_tx trace placeholders initialized allocation projected last
+    pid p items headId head peer queued first packet key b worker
+
+/-- Native RX cleanup pays the saved packet's actual final key credit and
+leaves its allocation absent after the subsequent peer release and skb free.
+The exact incoming cleanup-cut ledger and last-credit condition are explicit;
+this local statement does not assume that a fair TX schedule also drains RX. -/
+theorem original_final_rx_cleanup_removes_key (allocation : Credits.Allocation) (remaining : Credits.Ledger)
+    (account : Credits.Exact (allocation::remaining) w) (last : allocation∉remaining)
+    (id : SkbId) (pkt : RxPacket) (flag : Bool) (key : pkt.keypair=allocation.slot) (a b : Ambient)
+    (run : ((Queues.RxCredits.cleanup id pkt flag).run w).run a=.ok (((),v),b)) :
+    keyAt v allocation.slot=none := FinalDisposal.rx allocation remaining account last id pkt flag key a b run
+
+/-- Once the abstract allocation is removed, neither the native key getter
+nor its reference-acquisition wrapper can return a key from that state. This
+is store retirement, with no claim about physical-memory zeroisation. -/
+theorem removed_key_cannot_be_obtained {id : KeypairId} (removed : keyAt w id=none) :
+    (∀a b k v,((getKeypair id).run w).run a≠.ok ((k,v),b)) ∧
+    (∀a b out v,((keypairGet (some id)).run w).run a≠.ok ((out,v),b)) :=
+  ⟨fun a b _ _ run=>InitializedRetirement.removed_cannot_read removed a b run,
+    fun a b _ _ run=>InitializedRetirement.removed_cannot_acquire removed a b run⟩
+
+
+/-- The actual zero-key timer callback leaves a live peer queued for clear
+work, including the coalesced queue arm. It keeps the initialized exact key
+account and original key store; the timer callback itself does not erase keys. -/
+theorem initialized_zero_timer_queues_clear (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) (pid : PeerId) (p : Peer) (alive : p.isDead=false)
+    (found : peerAt w.wg pid=some p) (b : Ambient)
+    (run : ((expiredZeroKeyMaterial pid).run w.wg).run w.ambient=.ok (((),v),b)) :
+    HolderAccount [] v ∧ KeyTimes.keypairStore v=KeyTimes.keypairStore w.wg ∧
+      ∃d,v.dev=some d ∧ pid∈d.clearWorkQueue :=
+  ZeroTimerQueued.initialized_callback trace placeholders initialized pid p alive found b run
+
+/-- Conditional operational retirement executes the actual zero-key callback
+and that peer's actual flushed clear work: all three slots are cleared while
+remaining packet references stay exactly funded. These two native runs are
+explicit progress premises, not a fairness theorem inferred from elapsed time. -/
+theorem initialized_timer_worker_clears_slots (trace : Runner.Trace) (placeholders : Bool)
+    (initialized : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) (pid : PeerId) (p : Peer) (alive : p.isDead=false)
+    (found : peerAt w.wg pid=some p) (b c : Ambient)
+    (fired : ((expiredZeroKeyMaterial pid).run w.wg).run w.ambient=.ok (((),u),b))
+    (dispatched : ((runFlushedClearWork pid).run u).run b=.ok (((),v),c)) :
+    (∃d,u.dev=some d ∧ pid∈d.clearWorkQueue) ∧ HolderAccount [] v ∧ SlotsCleared pid v ∧ Retains u v :=
+  ZeroTimerQueued.initialized_callback_then_worker trace placeholders initialized pid p alive found b c fired dispatched
 
 end Leanux.Proofs.WG.RetirementSecurity

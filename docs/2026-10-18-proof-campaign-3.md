@@ -19,12 +19,12 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 
 | Outcome | Status and remaining obligation |
 | --- | --- |
-| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Each initialized AEAD now has an exclusive allocation-stamped reservation token matching its packet nonce, with no two AEAD occurrences sharing an assigned token. Historical key-material continuity remains open. |
+| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Each initialized AEAD now has an exclusive allocation-stamped reservation token matching its packet nonce, with no two AEAD occurrences sharing an assigned token. Initialized encryption receipts now bind the head, packet and AEAD key slot. Historical key-material continuity remains open. |
 | T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; packet/material transport to actual encryption and socket emission, and complete TX dispositions, remain to prove. |
 | T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts, not causal closure of all delayed effects. |
 | T4 handshake replay resistance | Open. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Direct initialized stale-refusal/no-response remains. Named C2 source assumptions stay visible. |
 | T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Key-allocation continuity and the actual encryption prohibition remain open. |
-| T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized exact holder accounting is proved; conditional cleanup remains open. |
+| T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized exact holder accounting is proved. Concrete clear-work and final-TX-release retirement are proved under their explicit source/progress conditions; timer-wheel and initialized RX-cleanup linkage remain open. |
 
 ## C3-F1: invalidation and clearing do not cancel previously admitted encryption
 
@@ -533,6 +533,27 @@ listed `harness.test_wg` twice: all 140 executions pass (131 distinct tests,
 one configured-kernel skip, 22.816 seconds). All 1945 frozen proof hashes,
 916 existing main proof files, main and the mirror remain unchanged. All six
 outcomes remain open.
+
+Checkpoint twenty-five passes complete validation. The initialized shared journal now
+binds every encryption receipt’s head and packet peer/key fields and actual
+AEAD slot, including stopped prefixes and the final causal-journal projection.
+Native staging derives resident-material inputs from current-slot selection
+and key acquisition. Native keepalive, receive completion and encryption
+retain the joint material/configuration carrier; finite inventory labels are
+explicitly equivalent to C1 bounds and do not assert authentication.
+Initialized clear work retains exactly the residual packet-held references;
+actual final TX disposal removes the sole-held allocation. The actual zero
+callback queues clear work for a live peer, including coalesced work; executing
+that specific work clears the slots. Native final RX cleanup and non-reacquisition
+are local contracts. Wheel selection, initialized RX cuts and whole material
+transport remain open. Adopted owned pins are T3 `f32d8f40`, T4 `bce16ed1`, and
+T6 `c902607c`. The gate passes 2023 jobs and 1312 terminal declarations across
+thirteen root modules, with only permitted axioms. All twelve witness recipes,
+fresh-root kernel replay and the 130-job model build pass. The unit suite
+completes 131 tests with one configured-kernel skip (23.266 seconds). All 1967
+frozen proof hashes and 916 existing main proof files remain unchanged; the
+root retains the campaign imports. Main and the mirror remain unchanged.
+All six full outcomes remain open.
 
 ## Validation
 

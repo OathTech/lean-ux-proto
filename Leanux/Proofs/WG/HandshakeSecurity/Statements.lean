@@ -3,6 +3,8 @@ import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalSessionInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorkerEntry
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorker
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialJournal
+import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialBounds
+import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialCarrierCallbacks
 import Leanux.Proofs.WG.HandshakeSecurity.StagingMaterialBank
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
@@ -1262,5 +1264,32 @@ theorem native_journal_encryption_retains_key_material
     PrefixPreserves (fun h w => ResidentMaterial.JournalInv h w.wg)
       ResidentMaterial.Safe (TransmitSecurity.Journal.encrypt item) :=
   ResidentMaterial.encrypt item
+
+/-- Security: native staged sends derive packet-allocation key residency and
+fresh-frontier bounds from the actual current-slot selection and key read.
+The complete nonce loop and refusal paths preserve earlier material receipts,
+including before a later Stop. Only the explicit C1 entry carrier is needed;
+no H1 responder contract is assumed at this local boundary. -/
+theorem native_staging_derives_packet_material_inputs (pid : PeerId) :
+    ResidentMaterial.CarrierSafe (TransmitSecurity.Driver.stagingObserved TransmitSecurity.Journal.hooks pid) :=
+  ResidentMaterial.staging_carrier pid
+
+/-- Security: actual native receive completion preserves older TX allocation
+material through confirmation, receive timers and any triggered staged send.
+The local carrier contains C1 identity/slot bounds and the same material
+journal; it assumes no H1 contract or independent confirmation history. -/
+theorem native_receive_retains_tx_key_material (pid : PeerId) (packet : RxPacket) (endpoint : Endpoint) :
+    ResidentMaterial.CarrierSafe
+      (TransmitSecurity.Driver.consumeObserved TransmitSecurity.Journal.hooks pid packet endpoint) :=
+  ResidentMaterial.consume_carrier pid packet endpoint
+
+/-- Security: the actual encryption callback preserves the complete material
+carrier and strict-prefix AEAD certificates, including before a later Stop.
+The C1 bounds are obtained by forgetting a finite auxiliary key inventory;
+that inventory is never presented as evidence of key confirmation. -/
+theorem native_encryption_retains_material_carrier (item : Option (List SkbId)) :
+    PrefixPreserves (fun h w => ResidentMaterial.Carrier h w.wg) ResidentMaterial.Safe
+      (TransmitSecurity.Journal.encrypt item) :=
+  ResidentMaterial.encrypt_carrier item
 
 end Leanux.Proofs.WG.HandshakeSecurity

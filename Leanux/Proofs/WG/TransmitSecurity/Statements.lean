@@ -33,6 +33,7 @@ import Leanux.Proofs.WG.TransmitSecurity.BatchNativeStaging
 import Leanux.Proofs.WG.TransmitSecurity.ReservationBankEncryption
 import Leanux.Proofs.WG.TransmitSecurity.BatchNativeTx
 import Leanux.Proofs.WG.TransmitSecurity.BatchNativeInitialized
+import Leanux.Proofs.WG.TransmitSecurity.BatchJournalFinal
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Exclusive reservation tokens now reach every initialized AEAD occurrence;
@@ -715,5 +716,19 @@ theorem initialized_native_batch_alignment (trace : Runner.Trace) (placeholders 
     ∀ index, index < trace.ops.size → BatchCoherence.Runner.OperationEntry trace placeholders index :=
   ⟨(BatchCoherence.Initialized.normal trace placeholders run).2,
     BatchCoherence.Initialized.entries trace placeholders run⟩
+
+/-- A mixed-key batch could encrypt a packet under its neighbour's key.
+Every initialized encryption receipt records the same key slot and peer at
+the head and per-packet reads, and uses that packet's slot for AEAD. This
+holds through stopped prefixes and the final causal journal, without incoming
+batch or physical-ownership assumptions. Resident key-material continuity and
+routing authorization remain separate obligations. -/
+theorem initialized_encryption_batch_binding (trace : Runner.Trace) (placeholders : Bool) :
+    BatchJournal.Safe (runPrefixOuter (Journal.execute trace placeholders) []).2 ∧
+    BatchJournal.Safe
+      ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+        AuthenticatedEffects.CausalJournal.old?) :=
+  ⟨BatchJournal.Scheduler.initialized trace placeholders,
+    BatchJournal.final_initialized trace placeholders⟩
 
 end Leanux.Proofs.WG.TransmitSecurity
