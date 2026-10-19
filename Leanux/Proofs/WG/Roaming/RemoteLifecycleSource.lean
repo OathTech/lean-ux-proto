@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.LifecycleDeleteRuleSource
 import Leanux.Proofs.WG.Roaming.RemoteLifecycleFrames
 
 set_option autoImplicit false
@@ -94,28 +95,9 @@ theorem cleanup_native (entry : RemoteMap) :
     (lift_native entry _ (preexit_native entry))
 
 theorem envDelete_native (entry : RemoteMap) :
-    Preserves (fun w : World => Retained entry w.wg) Env.wgDelete := by
-  rw [Configuration.envDelete_factor]
-  unfold Configuration.envDeleteWith
-  repeat' first
-    | (rx_retention_head getWG; exact RemoteWorkers.product_store entry _
-        (fun initial => productGetWG_spec (fun s=>s=initial)))
-    | (rx_retention_head Env.requireIdleDevice; exact RemoteWorkers.product_store entry _ PendingScheduler.requireIdleDevice_store)
-    | (rx_retention_head liftWG
-       apply lift_native entry
-       first
-       | exact (ensures_iff _ _ _).mp (RemoteMaintenance.down entry)
-       | exact (ensures_iff _ _ _).mp (RemoteMaintenance.destruct entry)
-       | exact (RemoteCompletion.store_remotes getDev_sameWGStore).wp (RemoteRetained entry)
-       | exact (RemoteCompletion.store_remotes mayHaveSlept_sameWGStore).wp (RemoteRetained entry))
-    | (allocation_release_lift_from Net.M; exact RemoteWorkers.product_store entry _
-        (fun initial => productRouting_spec _ (fun s=>s=initial)))
-    | (rx_retention_head Env.inetdevDestroy; exact RemoteWorkers.product_store entry _ DriverTags.Environment.inetdev_store)
-    | (rx_retention_head modifyRouting; exact RemoteWorkers.product_store entry _
-        (fun initial => productRouting_spec _ (fun s=>s=initial)))
-    | (rx_retention_head unsupported; exact productAmbient_spec (AmbientM.unsupported _) _ (fun _ _ pre=>pre))
-    | (rx_retention_head skipCut; exact productAmbient_spec (AmbientM.skipCut _) _ (fun _ _ pre=>pre))
-    | (allocation_release_lift_from AmbientM; exact productAmbient_spec _ _ (fun _ _ pre=>pre))
-    | rx_retention_step
+    Preserves (fun w : World => Retained entry w.wg) Env.wgDelete :=
+  LifecycleSource.envDelete_preserves _ (fun action same=>RemoteWorkers.product_store entry action same)
+    (lift_native entry _ ((ensures_iff _ _ _).mp (RemoteMaintenance.down entry)))
+    (lift_native entry _ ((ensures_iff _ _ _).mp (RemoteMaintenance.destruct entry)))
 
 end Leanux.Proofs.WG.Roaming.RemoteLifecycle

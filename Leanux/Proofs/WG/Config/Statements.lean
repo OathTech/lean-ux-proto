@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Config.QueuedRemoveClaims
+import Leanux.Proofs.WG.Config.RequestOrderClaims
+import Leanux.Proofs.WG.Config.InitializedOwnerAccountClaims
 import Leanux.Proofs.WG.Config.ConfiguredDeviceClaims
 import Leanux.Proofs.WG.Config.OwnerRunnerNormalSource
 import Leanux.Proofs.WG.Config.QueuedReplacementReadbackClaims
@@ -2646,5 +2649,63 @@ theorem original_replacement_ready_getter_returns (d : Device) (sock : NlSock)
       (fun value s => value=.ok (emptyPeersJson d) ∧
         ReplaceCompletion.View.Empty s ∧ s.wg.nlSock7=socketReadbackFinal sock d) :=
   replacement_ready_getter_returns d sock room idle queue
+
+
+/-- A valid REMOVE_ME command follows actual queued cleanup and bypasses later
+attributes, including malformed entries. Its normal endpoint has exact configured
+list/table filtering and no represented route owned by the removed peer. -/
+theorem original_queued_remove_peer_command (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations)
+    (attrs : PeerAttrs) (key : Key) (flags : UInt32) (pid : PeerId) (before : Device)
+    (pubkey : attrs.publicKey=some key) (flagattr : attrs.flags=some flags)
+    (valid : flags &&& ~~~WGPEER_F_ALL=0)
+    (protocol : attrs.protocolVersion=none ∨ attrs.protocolVersion=some 1)
+    (remove : flags &&& WGPEER_F_REMOVE_ME ≠ 0)
+    (found : before.peerHashtable.find? (·.1 == key)=some (key,pid)) :
+    Campaign2.Ensures (setPeerCmd attrs)
+      (fun s=>OwnerConfiguration.ProjectedEntry cs loans s ∧ s.wg.device=some before)
+      (fun ret s=>ret=0 ∧ OwnerConfiguration.ProjectedEntry cs loans s ∧
+        ∃ after,s.wg.device=some after ∧ QueuedRemove.Effect before pid after) :=
+  QueuedRemove.original_command cs loans attrs key flags pid before
+    pubkey flagattr valid protocol remove found
+
+/-- Every original mixed device-request outcome has its exact completed-call
+certificate: ordered stages, actual receipts and linked generation entry.
+Earlier completed receipts remain visible when a later helper stops. -/
+theorem original_mixed_device_request_certificate (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (fun _ => True)
+      (fun entry outcome => ∃ result : RequestOrder.Inspection,
+        result.outcome = outcome ∧ RequestOrder.Certificate attrs entry result) :=
+  RequestOrder.original_request_certificate attrs
+
+/-- Completed peer commands occupy their original input-list positions.
+Malformed entries and a first negative result cut off later peer commands. -/
+theorem original_mixed_device_peer_position (attrs : DeviceAttrs)
+    (entry : Campaign2.Snapshot) (result : RequestOrder.Inspection)
+    (facts : RequestOrder.Certificate attrs entry result)
+    (i : Nat) (r : RequestOrder.Receipt) (p : PeerAttrs)
+    (selected : (RequestOrder.peerReceipts result.receipts)[i]? = some r)
+    (kind : r.kind = .peer p) :
+    (attrs.peers.getD [])[i]? = some (.attrs p) :=
+  RequestOrder.certificate_peer_position attrs entry result facts i r p selected kind
+
+/-- The first completed negative peer result is the last completed peer
+command, including in a request whose later enclosing computation stops. -/
+theorem original_mixed_device_negative_peer_cutoff (attrs : DeviceAttrs)
+    (entry : Campaign2.Snapshot) (result : RequestOrder.Inspection)
+    (facts : RequestOrder.Certificate attrs entry result) (r : RequestOrder.Receipt)
+    (member : r ∈ RequestOrder.peerReceipts result.receipts) (negative : r.result < 0) :
+    ∃ before, RequestOrder.peerReceipts result.receipts = before ++ [r] :=
+  RequestOrder.request_negative_peer_last attrs result.receipts facts.1.2.2.1 r member negative
+
+/-- A nonempty actual request certificate begins with its generation action.
+Its before-WG equals request entry; the optional device generation alone changes,
+and the action preserves its Ambient state. -/
+theorem original_mixed_device_generation_entry (attrs : DeviceAttrs)
+    (entry : Campaign2.Snapshot) (result : RequestOrder.Inspection)
+    (facts : RequestOrder.Certificate attrs entry result)
+    (nonempty : result.receipts ≠ []) :
+    ∃ r rest, result.receipts = r :: rest ∧ RequestOrder.EntryReceipt attrs entry.wg r :=
+  RequestOrder.certificate_entry attrs entry result facts nonempty
 
 end Leanux.Proofs.WG.Config
