@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.TimerDiscipline.HookInitializedClaims
+import Leanux.Proofs.WG.TimerDiscipline.SessionFrontierClaims
 import Leanux.Proofs.WG.TimerDiscipline.HookSchedulerClaims
 import Leanux.Proofs.WG.TimerDiscipline.SessionWheelClaims
 import Leanux.Proofs.WG.TimerDiscipline.HookTransmitWorkerClaims
@@ -1070,6 +1072,7 @@ theorem original_transmit_iteration_hook_journal (pid : PeerId) :
   HookJournal.TransmitWorker.original pid
 
 open HookCommon Lifetimes in
+/-- The original full poll retains its hook/session history and exact outcome. -/
 theorem original_poll_hook_session_journal (pid : PeerId) (budget : Nat) :
     (do let result←inspect (poll pid budget); pure result.1)=Campaign2.Product.inspect (rxPoll pid budget (fun packets=>packets.forM Env.deliverInner)) ∧
     Campaign2.Product.Returns (inspect (poll pid budget)) (fun _=>True)
@@ -1077,6 +1080,7 @@ theorem original_poll_hook_session_journal (pid : PeerId) (budget : Nat) :
   HookCommon.original_poll pid budget
 
 open HookCommon Lifetimes in
+/-- The original NAPI softirq retains every reached hook/session receipt. -/
 theorem original_softirq_hook_session_journal :
     (do let result←inspect (softirq); pure result.1)=Campaign2.Product.inspect Env.napiSoftirq ∧
     Campaign2.Product.Returns (inspect (softirq)) (fun _=>True)
@@ -1084,6 +1088,7 @@ theorem original_softirq_hook_session_journal :
   HookCommon.original_softirq
 
 open HookCommon Lifetimes in
+/-- The original inline poll retains hook/session pairs and local wheel facts. -/
 theorem original_inline_hook_session_journal :
     (do let result←inspect (inline); pure result.1)=Campaign2.Product.inspect Env.pollScheduledInline ∧
     Campaign2.Product.Returns (inspect (inline)) (fun _=>True)
@@ -1091,6 +1096,7 @@ theorem original_inline_hook_session_journal :
   HookCommon.original_inline
 
 open HookCommon Lifetimes in
+/-- The original IRQ-exit polling path retains its actual hook/session journal. -/
 theorem original_irq_exit_hook_session_journal :
     (do let result←inspect (irqExit); pure result.1)=Campaign2.Product.inspect Env.napiIrqExit ∧
     Campaign2.Product.Returns (inspect (irqExit)) (fun _=>True)
@@ -1098,6 +1104,7 @@ theorem original_irq_exit_hook_session_journal :
   HookCommon.original_irqExit
 
 open HookCommon Lifetimes in
+/-- The original scheduler retains committed worker hook/session receipts with every callback supplied. -/
 theorem original_schedule_hook_session_journal (worker : Option Worker) :
     (do let result←inspect (schedule worker); pure result.1)=Campaign2.Product.inspect (Env.schedule worker) ∧
     Campaign2.Product.Returns (inspect (schedule worker)) (fun _=>True)
@@ -1105,6 +1112,7 @@ theorem original_schedule_hook_session_journal (worker : Option Worker) :
   HookCommon.original_schedule worker
 
 open HookCommon Lifetimes in
+/-- Every deferred-operation constructor retains exact outcomes and valid committed hook/session receipts. -/
 theorem original_all_deferred_hook_session_journal (call : EnvDeferredCall) :
     (do let result←inspect (deferred call); pure result.1)=Campaign2.Product.inspect call.original ∧
     Campaign2.Product.Returns (inspect (deferred call)) (fun _=>True)
@@ -1112,6 +1120,7 @@ theorem original_all_deferred_hook_session_journal (call : EnvDeferredCall) :
   HookCommon.original_deferred call
 
 open HandshakeJournal Lifetimes in
+/-- Every normal derived hook reached by the response call has its exact local wheel effect. -/
 theorem original_response_session_wheel_effects (pid : PeerId) :
     (do let result←inspect (response pid);pure result.1)=Campaign2.inspect (sendHandshakeResponse pid) ∧
     Campaign2.Returns (inspect (response pid)) (fun _=>True)
@@ -1119,6 +1128,7 @@ theorem original_response_session_wheel_effects (pid : PeerId) :
   HandshakeJournal.original_response_wheel pid
 
 open HandshakeJournal Lifetimes in
+/-- The handshake reception retains its successful-session cut and exact normal derived-hook wheel effect. -/
 theorem original_reception_session_wheel_effects (msg : List UInt8) (src : SkbSource) :
     (do let result←inspect (reception msg src);pure result.1)=Campaign2.inspect (receiveHandshakePacket msg src) ∧
     Campaign2.Returns (inspect (reception msg src)) (fun _=>True)
@@ -1126,9 +1136,64 @@ theorem original_reception_session_wheel_effects (msg : List UInt8) (src : SkbSo
   HandshakeJournal.original_reception_wheel msg src
 
 open HandshakeJournal Lifetimes in
+/-- The selected receive step retains actual session and derived-hook wheel facts. -/
 theorem original_receive_step_session_wheel_effects :
     (do let result←inspect step;pure result.1)=Campaign2.inspect receiveStep ∧
     Campaign2.Returns (inspect step) (fun _=>True) (fun result _=>WheelHistoryFacts result.2) :=
   HandshakeJournal.original_step_wheel
+
+open HookCommon HandshakeJournal Lifetimes Lean Leanux.Runner in
+/-- The complete peer command retains every inline-drain hook and its original outcome. -/
+theorem original_peer_command_hook_journal (attrs : PeerAttrs) :
+    (do let result←HookCommon.inspect (Leanux.Proofs.Logged.liftWGObserver (peerCommand attrs));pure result.1)=
+      Campaign2.Product.inspect (liftWG (setPeerCmd attrs)) ∧
+    Campaign2.Product.Returns (HookCommon.inspect (Leanux.Proofs.Logged.liftWGObserver (peerCommand attrs))) (fun _=>True)
+      (fun result _=>Facts result.2) :=
+  HookCommon.original_peerCommand attrs
+
+open HookCommon HandshakeJournal Lifetimes Lean Leanux.Runner in
+/-- The complete device command retains inline maintenance hooks across success or Stop. -/
+theorem original_device_command_hook_journal (attrs : DeviceAttrs) :
+    (do let result←HookCommon.inspect (Leanux.Proofs.Logged.liftWGObserver (deviceCommand attrs));pure result.1)=
+      Campaign2.Product.inspect (liftWG (wgSetDevice attrs)) ∧
+    Campaign2.Product.Returns (HookCommon.inspect (Leanux.Proofs.Logged.liftWGObserver (deviceCommand attrs))) (fun _=>True)
+      (fun result _=>Facts result.2) :=
+  HookCommon.original_deviceCommand attrs
+
+open HookCommon HandshakeJournal Lifetimes Lean Leanux.Runner in
+/-- Every original syscall retains valid hook/session pairs and local wheel effects, including before Stop. -/
+theorem original_syscall_hook_session_journal (c : Syscall) :
+    (do let result←HookCommon.inspect (HookCommon.syscall c);pure result.1)=Campaign2.Product.inspect (Leanux.syscall c) ∧
+    Campaign2.Product.Returns (HookCommon.inspect (HookCommon.syscall c)) (fun _=>True)
+      (fun result _=>Facts result.2) :=
+  HookCommon.original_syscall c
+
+open HookCommon HandshakeJournal Lifetimes Lean Leanux.Runner in
+/-- The initialized runner retains every committed hook/session receipt with exact JSON or indexed Stop. -/
+theorem original_initialized_hook_session_journal (trace : Trace) (placeholders : Bool) :
+    (Initialized.inspection trace placeholders).1.map Prod.fst=Runner.executeTrace trace placeholders ∧
+    Facts (Initialized.inspection trace placeholders).2 :=
+  HookCommon.original_initialized trace placeholders
+
+open HandshakeJournal Lifetimes in
+/-- The complete response call has strictly ordered session allocation stamps and at most one derived hook per stamp. -/
+theorem original_response_session_allocation_distinct (pid : PeerId) :
+    (do let result←inspect (response pid);pure result.1)=Campaign2.inspect (sendHandshakeResponse pid) ∧
+    Campaign2.Returns (inspect (response pid)) (fun _=>True) (fun result _=>AllocationFacts result) :=
+  HandshakeJournal.original_response_allocation pid
+
+open HandshakeJournal Lifetimes in
+/-- The complete handshake reception retains ordered session stamps through success or Stop. -/
+theorem original_reception_session_allocation_distinct (msg : List UInt8) (src : SkbSource) :
+    (do let result←inspect (reception msg src);pure result.1)=Campaign2.inspect (receiveHandshakePacket msg src) ∧
+    Campaign2.Returns (inspect (reception msg src)) (fun _=>True) (fun result _=>AllocationFacts result) :=
+  HandshakeJournal.original_reception_allocation msg src
+
+open HandshakeJournal Lifetimes in
+/-- The actual receive-step history has distinct session stamps; normal completion bounds them by its final counter. -/
+theorem original_receive_step_session_allocation_distinct :
+    (do let result←inspect step;pure result.1)=Campaign2.inspect receiveStep ∧
+    Campaign2.Returns (inspect step) (fun _=>True) (fun result _=>AllocationFacts result) :=
+  HandshakeJournal.original_step_allocation
 
 end Leanux.Proofs.WG.TimerDiscipline
