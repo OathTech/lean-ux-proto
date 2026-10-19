@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Progress.MaintenanceFiniteClaims
+import Leanux.Proofs.WG.Progress.SeccompFiniteClaims
+import Leanux.Proofs.WG.Progress.FsCallerFiniteClaims
+import Leanux.Proofs.WG.Progress.DeferredFiniteClaims
 import Leanux.Proofs.WG.Progress.ActivationFiniteClaims
 import Leanux.Proofs.WG.Progress.SchedulerFiniteClaims
 import Leanux.Proofs.WG.Progress.PeerFiniteClaims
@@ -1803,5 +1807,123 @@ theorem original_allowed_insert_finite (family addr cidr : Nat) (peer : PeerId) 
     Campaign2.AgreesOn (fun _ => True) (WG.insert family addr cidr peer)
       (AllowedFinite.insert family addr cidr peer) :=
   AllowedFinite.original_insert_finite family addr cidr peer
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_maintenance_send_finite (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.runFlushedSendWork pid) (MaintenanceFinite.send pid) :=
+  MaintenanceFinite.original_send_finite pid
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_maintenance_drain_finite (upTo : Option PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.drainHandshakeSendWq upTo) (MaintenanceFinite.drain upTo) :=
+  MaintenanceFinite.original_drain_finite upTo
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_maintenance_timersStop_finite (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.timersStop pid) (MaintenanceFinite.timersStop pid) :=
+  MaintenanceFinite.original_timersStop_finite pid
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_maintenance_afterDead_finite (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.peerRemoveAfterDead pid) (MaintenanceFinite.afterDead pid) :=
+  MaintenanceFinite.original_afterDead_finite pid
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_maintenance_remove_finite (peer : Option PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.peerRemove peer) (MaintenanceFinite.remove peer) :=
+  MaintenanceFinite.original_remove_finite peer
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_maintenance_removeAll_finite  :
+    Campaign2.AgreesOn (fun _ => True) (WG.peerRemoveAll) (MaintenanceFinite.removeAll) :=
+  MaintenanceFinite.original_removeAll_finite
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_maintenance_destruct_finite  :
+    Campaign2.AgreesOn (fun _ => True) (WG.wgDestruct) (MaintenanceFinite.destruct) :=
+  MaintenanceFinite.original_destruct_finite
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_maintenance_stop_finite  :
+    Campaign2.AgreesOn (fun _ => True) (WG.wgStop) (MaintenanceFinite.stop) :=
+  MaintenanceFinite.original_stop_finite
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_maintenance_down_finite  :
+    Campaign2.AgreesOn (fun _ => True) (WG.wgDown) (MaintenanceFinite.down) :=
+  MaintenanceFinite.original_down_finite
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_seccomp_convert_finite (prog : Seccomp.ClassicProg) (newProg : Option Nat)
+    (seen : Bool) (newLen : Nat) :
+    Campaign2.Product.AgreesOn (fun _=>True)
+      (liftSeccomp (Seccomp.bpfConvertFilter prog newProg seen newLen))
+      (liftSeccomp (SeccompFinite.convert prog newProg seen newLen)) :=
+  SeccompFinite.original_convert_finite prog newProg seen newLen
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_fs_fopReadIter_finite (iocb : Kiocb) (count : Nat) (ops : Option FopsId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.fopReadIter iocb count ops)) (liftFS (FsFinite.fopReadIter iocb count ops)) :=
+  FsFinite.original_fopReadIter_finite iocb count ops
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_fs_fopWriteIter_finite (iocb : Kiocb) (src : IovIter) (ops : Option FopsId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.fopWriteIter iocb src ops)) (liftFS (FsFinite.fopWriteIter iocb src ops)) :=
+  FsFinite.original_fopWriteIter_finite iocb src ops
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_fs_putPipeInfo_finite (ino : PipefsInodeId) (pid : PipeId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.putPipeInfo ino pid)) (liftFS (FsFinite.putPipeInfo ino pid)) :=
+  FsFinite.original_putPipeInfo_finite ino pid
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_fs_pipeRelease_finite (ino : PipefsInodeId) (fid : FileId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.pipeRelease ino fid)) (liftFS (FsFinite.pipeRelease ino fid)) :=
+  FsFinite.original_pipeRelease_finite ino fid
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_fs_fopRelease_finite (fid : FileId) (ops : Option FopsId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.fopRelease fid ops)) (liftFS (FsFinite.fopRelease fid ops)) :=
+  FsFinite.original_fopRelease_finite fid ops
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_fs_fputFinal_finite (fid : FileId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.fputFinal fid)) (liftFS (FsFinite.fputFinal fid)) :=
+  FsFinite.original_fputFinal_finite fid
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_fs_fputSync_finite (fid : FileId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.fputSync fid)) (liftFS (FsFinite.fputSync fid)) :=
+  FsFinite.original_fputSync_finite fid
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_fs_taskWorkRun_finite  :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.taskWorkRun )) (liftFS (FsFinite.taskWorkRun )) :=
+  FsFinite.original_taskWorkRun_finite
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_timer_callback_finite (pid : PeerId) (timer : PeerTimer) :
+    Campaign2.AgreesOn (fun _=>True) (WG.timerCallback pid timer) (TimerFinite.callback pid timer) :=
+  TimerFinite.original_callback_finite pid timer
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_timer_dispatch_finite (w : Worker) (pid : PeerId) (timer : PeerTimer)
+    (entry : WheelEntry) (prior : Option UInt64) :
+    Campaign2.Product.AgreesOn (fun _=>True) (Leanux.Proofs.Logged.timerDispatchUnit w pid timer entry prior)
+      (TimerFinite.dispatch w pid timer entry prior) :=
+  TimerFinite.original_dispatch_finite w pid timer entry prior
+
+/-- Exact finite native evaluation, preserving every original refusal and Stop. -/
+theorem original_deferred_evaluate_finite (call : Leanux.Proofs.WG.Lifetimes.EnvDeferredCall) :
+    Campaign2.Product.AgreesOn (fun _=>True) call.original (DeferredFinite.evaluate call) :=
+  DeferredFinite.original_evaluate_finite call
 
 end Leanux.Proofs.WG.Progress
