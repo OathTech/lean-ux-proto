@@ -176,5 +176,10 @@ source finding.
    also connects fixed actual worker selection/dequeue/disposal and queue
    installation prefixes to their same-ledger cuts. These local bridges do
    not yet discharge the initialized native-cut obligation.
+   Source-64 `e5d73508` additionally derives native dispatch entry from the
+   original initialized operation prefix and syscall guards, with its actual
+   continuation. Partial allocation aliases and fixed publication, send and
+   DEAD-cleanup intervals retain local provenance. Complete initialized
+   internal-cut composition and remaining silent intervals are still open.
 
 No mirror change or narrower T2 outcome is adopted.
