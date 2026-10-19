@@ -13,6 +13,8 @@ import Leanux.Proofs.WG.HandshakeSecurity.EncryptionNonceEncoding
 import Leanux.Proofs.WG.HandshakeSecurity.NonceRejectionClaims
 import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialCarrier
 import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialConfirmationEntry
+import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialExecutionConsumer
+import Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterialQuiet
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderEncryptionInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.StagingMaterialBank
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
@@ -1491,5 +1493,23 @@ theorem native_rx_confirmation_entry_allocation
       r.run.value = true ∧ ReceiveMaterial.Replay.Certified (pre.filterMap origin) r ∧
       ReceiveMaterial.Certificate (pre.filterMap origin) r.skb r.packet w.wg core :=
   ReceiveMaterial.Replay.confirmation_input_material input quiet resident
+
+/-- Security: the actual shared confirmation receipt records that its resident
+key allocation authenticated the poll's own accepted packet. The certificate
+is committed before any later staging or Stop; the incoming native poll carrier
+is explicit until the initialized driver transport is established. -/
+theorem native_rx_confirmation_records_allocation (pid : PeerId) (kid : KeypairId) :
+    PrefixEnsures (ReceiveMaterial.Execution.ConfirmationInput pid kid)
+      ReceiveMaterial.Execution.Safe (liftWGObserver (TransmitSecurity.Journal.confirmation pid kid))
+      (fun _ h w => ReceiveMaterial.Execution.Carrier h w.wg) :=
+  ReceiveMaterial.Execution.confirmation_product pid kid
+
+/-- Security: native decrypt preparation maintains the allocation certificates
+and replay/confirmation history in the actual shared journal. Only resident
+numeric key bounds accompany the RX material; this local source contract uses
+no H1, authorization, reference-funding or independent history hypothesis. -/
+theorem native_rx_preparation_carries_confirmation_material :
+    ReceiveMaterial.Execution.ProductSafe TransmitSecurity.Journal.hooks.prepare :=
+  ReceiveMaterial.Execution.prepare
 
 end Leanux.Proofs.WG.HandshakeSecurity

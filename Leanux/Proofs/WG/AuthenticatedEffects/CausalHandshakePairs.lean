@@ -10,6 +10,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity
 
 def required : Event → Option Event
   | .scope (.entered ⟨_,.handshake kind pid⟩) => some (.old (.handshake (.callback kind pid)))
+  | .scope (.entered ⟨_,.completion pid items⟩) => some (.old (.disposition (.completion pid items)))
   | _ => none
 
 def Safe : List Event → Prop
@@ -47,6 +48,19 @@ theorem Safe.emit {history : List Event} (safe : Safe history) (event : Event) (
   obtain rfl := List.mem_singleton.mp member
   exact quiet)
 
+
+theorem Safe.pair_events {history : List Event} (safe : Safe history)
+    (entry callback : Event) (needed : required entry = some callback) (quiet : Quiet callback) :
+    Safe (history ++ [entry,callback]) := by
+  apply safe.append
+  constructor
+  · intro next found
+    have same : callback = next := Option.some.inj (needed.symm.trans found)
+    exact congrArg some same
+  · constructor
+    · intro next found; rw [quiet] at found; cases found
+    · trivial
+
 theorem Safe.pair {history : List Event} (safe : Safe history) (index : Nat)
     (kind : HandshakeCausal.Kind) (pid : PeerId) :
     Safe (history ++ [.scope (.entered ⟨index,.handshake kind pid⟩),.old (.handshake (.callback kind pid))]) := by
@@ -72,6 +86,24 @@ theorem Safe.next {history : List Event} (safe : Safe history)
   | nil => cases found
   | cons event rest =>
     have same : event = .old (.handshake (.callback kind pid)) := Option.some.inj found
+    exact ⟨rest,by rw [same]⟩
+
+
+theorem Safe.next_completion {history : List Event} (safe : Safe history)
+    (before after : List Event) (index : Nat) (pid : PeerId) (items : List SkbId)
+    (position : history = before ++ .scope (.entered ⟨index,.completion pid items⟩) :: after) :
+    ∃ rest, after = .old (.disposition (.completion pid items)) :: rest := by
+  rw [position] at safe
+  clear position
+  have tail : Safe (.scope (.entered ⟨index,.completion pid items⟩) :: after) := by
+    induction before with
+    | nil => exact safe
+    | cons first rest ih => exact ih safe.2
+  have found := tail.1 _ rfl
+  cases after with
+  | nil => cases found
+  | cons event rest =>
+    have same : event = .old (.disposition (.completion pid items)) := Option.some.inj found
     exact ⟨rest,by rw [same]⟩
 
 theorem emit_quiet (event : Event) (quiet : Quiet event) :

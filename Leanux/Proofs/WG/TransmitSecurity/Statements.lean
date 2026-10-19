@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedAdmission
+import Leanux.Proofs.WG.TransmitSecurity.StagedTrim
+import Leanux.Proofs.WG.TransmitSecurity.StagedKeepalive
+import Leanux.Proofs.WG.TransmitSecurity.StagedHandshakeFrames
 import Leanux.Proofs.WG.TransmitSecurity.SocketCiphertextBinding
 import Leanux.Proofs.WG.TransmitSecurity.CompletionOriginFinal
 import Leanux.Proofs.WG.HandshakeSecurity.EncryptionNonceEncoding
@@ -839,5 +843,49 @@ theorem initialized_socket_encryption_binding (trace : Runner.Trace) (placeholde
       SocketCiphertext.Safe ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
         AuthenticatedEffects.CausalJournal.old?) :=
   ⟨SocketCiphertext.initialized trace placeholders,SocketCiphertext.final_initialized trace placeholders⟩
+
+
+/-- Security: the native overflow arm cannot substitute or silently lose a
+staged packet. It removes an ordered prefix, retains the exact suffix and adds
+one drop count per removed position; equal plaintexts remain distinct positions.
+The native call and its resident starting peer are explicit. -/
+theorem native_staged_overflow_accounting (pid : PeerId) (r : WGRunWitness Unit)
+    (valid : r.Valid (Lifetimes.xmitTrim pid)) :
+    ∀ d p, r.before.dev = some d → d.peers[pid]? = some p →
+      ∃ n, n ≤ p.staged.length ∧
+        Staged.stagedAt r.after pid = some (p.internalId,p.staged.drop n) ∧
+        Staged.dropped r.after = some (d.txDropped+n) ∧
+        (∀ q, pid ≠ q → Staged.stagedAt r.after q = Staged.stagedAt r.before q) ∧
+        p.staged.take n ++ p.staged.drop n = p.staged :=
+  Staged.trim_exact pid r valid
+
+/-- Security: routing admission cannot replace or reorder the supplied packet
+sequence at its staged splice. Every initialized successful receipt contains the
+exact MTU-normalized sequence after the queue's existing prefix. Its later
+staging/allocation ancestry remains a separate transport obligation. -/
+theorem initialized_routed_staged_sequence (trace : Runner.Trace) (placeholders : Bool)
+    (receipt : Journal.RoutingHistory.Receipt)
+    (member : receipt ∈ ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?).filterMap Journal.RoutingHistory.routed?)
+    (pid : PeerId) (selected : receipt.run.value = .ok pid) :
+    ∃ stamp retained,
+      Staged.stagedAt receipt.run.after pid =
+        some (stamp,retained ++ receipt.packets.map (fun p => {p with mtu := receipt.mtu})) :=
+  Staged.initialized_admission trace placeholders receipt member pid selected
+
+/-- Security: native keepalive preparation can add only the canonical empty
+packet to its caller's peer, using the actual MTU. It neither edits another
+peer's staged queue nor changes drop accounting. This source contract supplies
+no authentication or causal authorization merely from an empty payload. -/
+theorem native_keepalive_preparation (pid : PeerId) (r : WGRunWitness Bool)
+    (valid : r.Valid (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid)) :
+    Staged.dropped r.after = Staged.dropped r.before ∧
+      (∀ q, pid ≠ q → Staged.stagedAt r.after q = Staged.stagedAt r.before q) ∧
+      ∃ stamp packets mtu,
+        Staged.stagedAt r.before pid = some (stamp,packets) ∧
+        r.before.dev.map Device.mtu = some mtu ∧
+        (Staged.stagedAt r.after pid = some (stamp,packets) ∨
+          (packets = [] ∧ r.value = true ∧ Staged.stagedAt r.after pid = some (stamp,[{mtu}]))) :=
+  Staged.keepalive_projection pid r valid
 
 end Leanux.Proofs.WG.TransmitSecurity

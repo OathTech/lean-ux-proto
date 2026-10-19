@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeFreshInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedParents
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalStackInitialized
@@ -75,6 +76,14 @@ import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeQuietFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CookieAcceptance
 import Leanux.Proofs.WG.AuthenticatedEffects.CookieProtocol
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalHandshakePairInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalCompletionParents
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeNested
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeCompletion
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeFixture
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeHandshake
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeReceive
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeSend
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeTimers
 
 /-! T3 local cookie exception tranche. These claims establish the original
 cookie-only dispatch, bounded construction/reply attempts and session frame.
@@ -1274,5 +1283,34 @@ theorem initialized_handshake_context_has_own_admission
       HandshakeFresh.Available (before.filterMap CausalJournal.handshake?) pid :=
   CausalJournal.HandshakePairs.current_authenticated trace placeholders pre post effect index kind pid
     position different current
+
+/-- Security: an initialized completion context identifies its exact completion
+receipt and a strictly earlier native allocation of the selected batch head.
+The allocation's current context remains to be authorized in the causal-root
+induction; a numeric packet ID or scope label alone does not grant authority. -/
+theorem initialized_completion_context_has_actual_allocation_parent
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (effect : CausalJournal.Event)
+    (index : Nat) (pid : PeerId) (items : List SkbId)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 = pre ++ effect :: post)
+    (different : effect ≠ .old (.disposition (.completion pid items)))
+    (current : CausalScope.current CausalJournal.scope? pre = .ok (some ⟨index,.completion pid items⟩)) :
+    ∃ before rest, pre = before ++
+      [.scope (.entered ⟨index,.completion pid items⟩),.old (.disposition (.completion pid items))] ++ rest ∧
+      CausalJournal.CompletionParents.Parent before items :=
+  CausalJournal.CompletionParents.current_entry trace placeholders pre post effect index pid items
+    position different current
+
+/-- Security: every prefix of the initialized final execution has a well-formed
+causal scope stack, including prefixes retained after Stop. Each normal callback
+closes its exact entered token; no malformed context can authorize a recorded
+effect. A valid empty context is still possible in this statement: context
+presence and authentication of its root remain separate obligations. -/
+theorem initialized_causal_scopes_are_well_formed
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 = before ++ after) :
+    CausalScope.WellFormed CausalJournal.scope? before :=
+  CausalJournal.ScopeBalance.initialized_prefix trace placeholders before after position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

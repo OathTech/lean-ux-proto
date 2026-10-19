@@ -1,7 +1,10 @@
+import Leanux.Proofs.WG.RetirementSecurity.TxCoverageDeferred
 import Leanux.Proofs.WG.RetirementSecurity.ReadySocketJournalFinal
 import Leanux.Proofs.WG.RetirementSecurity.Outcome
 import Leanux.Proofs.WG.RetirementSecurity.TxDispositionCoverage
 import Leanux.Proofs.WG.RetirementSecurity.AdmissionOwner
+import Leanux.Proofs.WG.RetirementSecurity.TxCoverageStaging
+import Leanux.Proofs.WG.RetirementSecurity.TxCoverageHandshake
 import Leanux.Proofs.WG.RetirementSecurity.TimerRetirementOrigin
 import Leanux.Proofs.WG.RetirementSecurity.ConditionalRetirementRx
 import Leanux.Proofs.WG.RetirementSecurity.UnpublicationWorker
@@ -2423,5 +2426,62 @@ theorem original_tx_submission_owner
       ((createData pid items).run t).run e=.ok (((),v),b) ∧
       keyAt w kid=some k ∧ k.peer=some pid ∧ keyAt t kid=some k :=
   AdmissionOwner.submit compatible packets a b run
+
+/-- Every resident TX packet's owning queue or caller local survives native
+staging and worker disposal: new allocations are published or freed, and a
+completed worker removes exactly its selected batch. This converse to physical
+inventory has an explicit incoming coverage premise. Initialized caller and
+historical socket/disposal closure are separate obligations. -/
+theorem original_tx_coverage_transfers (locals : List TxLocalBatch) :
+    (∀pid,Preserves (TxCoverage locals) (sendStagedPackets pid)) ∧
+    (∀pid,Preserves (TxCoverage locals) (txStep pid)) := by
+  constructor
+  · intro pid
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a result v b before run
+    cases result
+    exact before.staged pid a b run
+  · intro pid
+    apply (hoare_iff_run_ambient _ _ _).mpr
+    intro w a result v b before run
+    exact before.step pid a b run
+
+/-- Native routing, handshake receive and all timer callbacks preserve an
+allocated TX packet's owning queue or explicit local. Keepalives use the same
+staged allocation path. Coverage is still a visible input at these native
+boundaries; historical disposal classification and initialized caller closure
+are not inferred from this local transport. -/
+theorem original_tx_coverage_callers (locals : List TxLocalBatch) :
+    (∀family addr packets mtu,Preserves (TxCoverage locals) (wgXmit family addr packets mtu)) ∧
+    (∀msg src,Preserves (TxCoverage locals) (receiveHandshakePacket msg src)) ∧
+    (∀pid timer,Preserves (TxCoverage locals) (timerCallback pid timer)) :=
+  ⟨TxCoverageTraffic.transmit,TxCoverageNative.receive,TxCoverageNative.callback⟩
+
+/-- Native receive, RX polling, and all three data-worker iterations retain an
+owning peer queue or explicit caller local for every resident TX allocation.
+The incoming coverage invariant is explicit. These contracts cover real stack
+replies and NAPI callbacks, but do not assert historical terminal outcomes or
+coverage at stopped internal cuts. -/
+theorem original_tx_coverage_data_workers (locals : List TxLocalBatch) :
+    (∀msg src,Preserves (TxCoverage locals) (wgReceive msg src)) ∧
+    (∀pid budget,Preserves (fun w : World=>TxCoverage locals w.wg)
+      (rxPoll pid budget (fun packets=>packets.forM Env.deliverInner))) ∧
+    Preserves (fun w : World=>TxCoverage locals w.wg)
+      (encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)) ∧
+    Preserves (fun w : World=>TxCoverage locals w.wg)
+      (decryptIter Env.napiSoftirq Env.napiIrqExit (Env.condResched .decryptWorker)) ∧
+    (∀pid,Preserves (fun w : World=>TxCoverage locals w.wg)
+      (txIter pid (Env.condResched .txWorker))) :=
+  ⟨TxCoverageReceive.receive,TxCoveragePoll.stack,TxCoverageEncrypt.iteration,
+    TxCoverageDecrypt.iteration,TxCoverageWorkers.transmit⟩
+
+/-- Every native scheduled worker and deferred timer/workqueue call preserves
+resident TX coverage at successful boundaries. Existing scheduler factors keep
+the actual dispatch choices and callbacks; this statement requires the explicit
+incoming coverage invariant and adds no fairness or stopped-prefix claim. -/
+theorem original_tx_coverage_scheduler (locals : List TxLocalBatch) :
+    (∀stack,Preserves (fun w : World=>TxCoverage locals w.wg) (Env.schedule stack)) ∧
+    (∀call : Lifetimes.EnvDeferredCall,Preserves (fun w : World=>TxCoverage locals w.wg) call.original) :=
+  ⟨TxCoverageScheduler.schedule,TxCoverageDeferred.original⟩
 
 end Leanux.Proofs.WG.RetirementSecurity

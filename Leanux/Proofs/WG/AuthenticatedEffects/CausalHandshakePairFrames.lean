@@ -105,4 +105,36 @@ theorem receipt_callback (record : HandshakeCausal.Event → Event)
   funext w a h
   rfl
 
+
+/-- The protected entry and its first receipt are emitted before any stopping
+body instruction; nested callbacks may then append their own paired scopes. -/
+theorem product_scoped_pair (cause : Cause) (callback : Event)
+    (needed : ∀ index, required (.scope (.entered ⟨index,cause⟩)) = some callback)
+    (quiet : Quiet callback) (body : PrefixM Event α)
+    (preserves : Driver.ProductHistorySafe Safe body) :
+    Driver.ProductHistorySafe Safe (CausalScope.prefixScope Event.scope cause
+      (fun _ => emitPrefix callback >>= fun _ => body)) := by
+  intro w h hi
+  let token : CausalScope.Token Cause := ⟨h.length,cause⟩
+  let entered := h ++ [.scope (.entered token),callback]
+  have ready : Safe entered := hi.pair_events _ callback (needed h.length) quiet
+  obtain ⟨suffix,grown,safe,normal⟩ := preserves w entered ready
+  clear normal
+  change ∃ suffix, (runPrefix _ w h).2 = h ++ suffix ∧ _
+  rw [CausalScope.prefix_run,runPrefix_bind,runPrefix_emit]
+  simp only [List.append_assoc,List.singleton_append]
+  cases run : runPrefix body w entered with
+  | mk result history =>
+    rw [run] at grown safe
+    change history = entered ++ suffix at grown
+    cases result with
+    | error stop =>
+      exact ⟨[.scope (.entered token),callback] ++ suffix,
+        by simpa only [entered,List.append_assoc] using grown,safe,True.intro⟩
+    | ok result =>
+      rcases result with ⟨value,v⟩
+      have closed := safe.emit (.scope (.exited h.length)) rfl
+      exact ⟨[.scope (.entered token),callback] ++ suffix ++ [.scope (.exited h.length)],
+        by simp only [grown,entered,List.append_assoc],closed,closed⟩
+
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.HandshakePairs

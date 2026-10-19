@@ -24,16 +24,47 @@ macro "handshake_pair_completion_step" : tactic => `(tactic| first
   | (driver_history_head captureObserved; apply product_capture)
   | driver_product_history_step)
 
-private theorem complete (pid : PeerId) (item : List SkbId) :
-    Driver.ProductHistorySafe Safe (CompletionEffects.completeWith observed pid item) := by
-  unfold CompletionEffects.completeWith TxDisposition.andObs
+private def tail (pid : PeerId) (item : List SkbId) : PrefixM Event Unit := do
+  observed.traversal pid
+  observed.sent pid
+  let mut dataSent := false
+  for id in item do
+    let packet ← captureObserved (observed.packet id)
+    _ ← observed.step (branch .doneSkbIterate true)
+    let isKeepalive := packet.value.bytes.length == MESSAGE_DATA_LEN_0
+    let sent ← observed.send pid id packet
+    if ← TxDisposition.andObs (observed.step (branch .doneSendOk sent))
+        (observed.step (branch .doneNotKeepalive !isKeepalive)) then dataSent := true
+  _ ← observed.step (branch .doneSkbIterate false)
+  if ← observed.step (branch .doneDataSent dataSent) then observed.dataSent pid
+  observed.fresh pid
+
+private theorem complete_factor (pid : PeerId) (item : List SkbId) :
+    CompletionEffects.completeWith observed pid item =
+      (observed.completion pid item >>= fun _ => tail pid item) := rfl
+
+private theorem completion_emit (pid : PeerId) (item : List SkbId) :
+    observed.completion pid item = emitPrefix (.old (.disposition (.completion pid item))) := by
+  funext w h
+  change (Except.ok (ε := Stop) ((),w),h ++
+    (((h.filterMap completion?) ++ [Completion.Event.disposition (.completion pid item)]).drop
+      (h.filterMap completion?).length).map (Event.old ∘ Journal.completionEvent)) = _
+  simp only [List.drop_left,List.map_cons,List.map_nil]
+  rfl
+
+private theorem complete_tail (pid : PeerId) (item : List SkbId) :
+    Driver.ProductHistorySafe Safe (tail pid item) := by
+  unfold tail TxDisposition.andObs
   simp only [observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' handshake_pair_completion_step
 
 private theorem complete_scope (pid : PeerId) (item : List SkbId) :
     Driver.ProductHistorySafe Safe (CompletionEffects.completeScoped Event.scope
-      CausalSources.Cause.completion observed pid item) :=
-  product_scope (.completion pid item) (fun _ => rfl) _ (fun _ => complete pid item)
+      CausalSources.Cause.completion observed pid item) := by
+  unfold CompletionEffects.completeScoped
+  simp only [complete_factor,completion_emit]
+  exact product_scoped_pair (.completion pid item) (.old (.disposition (.completion pid item)))
+    (fun _ => rfl) rfl _ (complete_tail pid item)
 
 private theorem body (pid : PeerId) (first : Option (List SkbId)) :
     Driver.ProductHistorySafe Safe (CompletionEffects.bodySourceWith observed
