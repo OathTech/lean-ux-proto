@@ -4,11 +4,11 @@ import Leanux.Seccomp.Bridge
 and address-table allocation callback are exposed. The instruction switch stays
 in this single factor; the default source equation checks every original path. -/
 set_option autoImplicit false
-namespace Leanux.Proofs.WG.Progress.SeccompFinite
+namespace Leanux.Proofs.WG.Progress.SeccompPass
 open Leanux Leanux.Seccomp
-def afterAllocationWith {ρ : Type} [ForIn Seccomp.M ρ Unit] (passes : ρ)
+def afterAllocationWith {m : Type → Type} [SeccompM m] {ρ : Type} [ForIn m ρ Unit] (passes : ρ)
     (prog : Seccomp.ClassicProg) (newProg : Option Nat) (seenLdAbsIn : Bool)
-    (newLenIn : Nat) (hasAddrs : Bool) (addrsIn : Array Nat) : Seccomp.M (Except Int ConvertOut) := do
+    (newLenIn : Nat) (hasAddrs : Bool) (addrsIn : Array Nat) : m (Except Int ConvertOut) := do
   let len := prog.size
   let mut addrs := addrsIn
   let seenLdAbs := seenLdAbsIn
@@ -168,9 +168,9 @@ def afterAllocationWith {ρ : Type} [ForIn Seccomp.M ρ Unit] (passes : ρ)
       Seccomp.invariant s!"bpf_convert_filter: BUG_ON(*new_len != new_flen): {newLenIn} and {newFlen}"
     return .ok { insns := out, newLen := newLenIn, stackDepth, seenLdAbs }
   Seccomp.invariant "bpf_convert_filter: the pass loop ended without returning"
-def withPasses {ρ : Type} [ForIn Seccomp.M ρ Unit] (passes : ρ)
-    (allocate : Seccomp.M Bool) (prog : Seccomp.ClassicProg) (newProg : Option Nat)
-    (seenLdAbsIn : Bool) (newLenIn : Nat) : Seccomp.M (Except Int ConvertOut) := do
+def withPasses {m : Type → Type} [SeccompM m] {ρ : Type} [ForIn m ρ Unit] (passes : ρ)
+    (allocate : m Bool) (prog : Seccomp.ClassicProg) (newProg : Option Nat)
+    (seenLdAbsIn : Bool) (newLenIn : Nat) : m (Except Int ConvertOut) := do
   let len := prog.size
   -- `len <= 0 || len > BPF_MAXINSNS` is one unsigned compare `(len - 1) > 0xfff` (measured)
   if ← Seccomp.branchCmp .convLenNonpositive (len ≤ 0 || len > BPF_MAXINSNS) (minusOneU len 32) 0xfff then return .error errEINVAL
@@ -182,6 +182,24 @@ def withPasses {ρ : Type} [ForIn Seccomp.M ρ Unit] (passes : ρ)
     hasAddrs := true
     addrs := Array.replicate len 0
   afterAllocationWith passes prog newProg seenLdAbsIn newLenIn hasAddrs addrs
+theorem original_source {m : Type → Type} [SeccompM m]
+    (prog : Seccomp.ClassicProg) (newProg : Option Nat) (seen : Bool) (newLen : Nat) :
+    (bpfConvertFilter prog newProg seen newLen : m _) =
+      withPasses Lean.Loop.mk (Seccomp.alloc .kcallocAddrs) prog newProg seen newLen := rfl
+
+end Leanux.Proofs.WG.Progress.SeccompPass
+
+namespace Leanux.Proofs.WG.Progress.SeccompFinite
+open Leanux Leanux.Seccomp
+def afterAllocationWith {ρ : Type} [ForIn Seccomp.M ρ Unit] (passes : ρ)
+    (prog : Seccomp.ClassicProg) (newProg : Option Nat) (seenLdAbsIn : Bool)
+    (newLenIn : Nat) (hasAddrs : Bool) (addrsIn : Array Nat) : Seccomp.M (Except Int ConvertOut) :=
+  SeccompPass.afterAllocationWith passes prog newProg seenLdAbsIn newLenIn hasAddrs addrsIn
+
+def withPasses {ρ : Type} [ForIn Seccomp.M ρ Unit] (passes : ρ)
+    (allocate : Seccomp.M Bool) (prog : Seccomp.ClassicProg) (newProg : Option Nat)
+    (seenLdAbsIn : Bool) (newLenIn : Nat) : Seccomp.M (Except Int ConvertOut) :=
+  SeccompPass.withPasses passes allocate prog newProg seenLdAbsIn newLenIn
 
 theorem original_source (prog : Seccomp.ClassicProg) (newProg : Option Nat) (seen : Bool) (newLen : Nat) :
     (bpfConvertFilter prog newProg seen newLen : Seccomp.M _) =

@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Progress.FsAllocationFiniteClaims
+import Leanux.Proofs.WG.Progress.SeccompLocalFiniteClaims
 import Leanux.Proofs.WG.Progress.MaintenanceFiniteClaims
 import Leanux.Proofs.WG.Progress.SeccompFiniteClaims
 import Leanux.Proofs.WG.Progress.FsCallerFiniteClaims
@@ -1932,5 +1934,69 @@ theorem original_timer_dispatch_finite (w : Worker) (pid : PeerId) (timer : Peer
 theorem original_deferred_evaluate_finite (call : Leanux.Proofs.WG.Lifetimes.EnvDeferredCall) :
     Campaign2.Product.AgreesOn (fun _=>True) call.original (DeferredFinite.evaluate call) :=
   DeferredFinite.original_evaluate_finite call
+
+/-- Finite evaluation of the original allocation caller, retaining exact refusal
+and Stop behavior before projection; the source equality also retains all FS fields. -/
+theorem original_fs_allocEmptyFile_finite (flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.allocEmptyFile flags)) (liftFS (FsFinite.allocEmptyFile flags)) :=
+  FsFinite.original_allocEmptyFile_finite flags
+
+/-- Finite evaluation of the original allocation caller, retaining exact refusal
+and Stop behavior before projection; the source equality also retains all FS fields. -/
+theorem original_fs_allocPathPseudo_finite (inode : InodeId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.allocPathPseudo inode)) (liftFS (FsFinite.allocPathPseudo inode)) :=
+  FsFinite.original_allocPathPseudo_finite inode
+
+/-- Finite evaluation of the original allocation caller, retaining exact refusal
+and Stop behavior before projection; the source equality also retains all FS fields. -/
+theorem original_fs_allocFdtable_finite (slotsWanted : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.allocFdtable slotsWanted)) (liftFS (FsFinite.allocFdtable slotsWanted)) :=
+  FsFinite.original_allocFdtable_finite slotsWanted
+
+/-- Finite evaluation of the original allocation caller, retaining exact refusal
+and Stop behavior before projection; the source equality also retains all FS fields. -/
+theorem original_fs_allocPipeInfo_finite :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.allocPipeInfo)) (liftFS (FsFinite.allocPipeInfo)) :=
+  FsFinite.original_allocPipeInfo_finite
+
+/-- Finite evaluation of the original allocation caller, retaining exact refusal
+and Stop behavior before projection; the source equality also retains all FS fields. -/
+theorem original_fs_allocFile_finite (flags : UInt32) (fopId : FopsId) (inode : InodeId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.allocFile flags fopId inode)) (liftFS (FsFinite.allocFile flags fopId inode)) :=
+  FsFinite.original_allocFile_finite flags fopId inode
+
+/-- Finite evaluation of the original allocation caller, retaining exact refusal
+and Stop behavior before projection; the source equality also retains all FS fields. -/
+theorem original_fs_allocFilePseudo_finite (flags : UInt32) (inode : InodeId) (fopId : FopsId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.allocFilePseudo flags inode fopId)) (liftFS (FsFinite.allocFilePseudo flags inode fopId)) :=
+  FsFinite.original_allocFilePseudo_finite flags inode fopId
+
+/-- Finite evaluation of the original allocation caller, retaining exact refusal
+and Stop behavior before projection; the source equality also retains all FS fields. -/
+theorem original_fs_anonInodeGetfileImpl_finite (fopId : FopsId) (priv : PrivateData) (flags : UInt32) (makeInode : Bool) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.anonInodeGetfileImpl fopId priv flags makeInode)) (liftFS (FsFinite.anonInodeGetfileImpl fopId priv flags makeInode)) :=
+  FsFinite.original_anonInodeGetfileImpl_finite fopId priv flags makeInode
+
+/-- Finite evaluation of the original allocation caller, retaining exact refusal
+and Stop behavior before projection; the source equality also retains all FS fields. -/
+theorem original_fs_anonInodeGetfile_finite (fopId : FopsId) (priv : PrivateData) (flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.anonInodeGetfile fopId priv flags)) (liftFS (FsFinite.anonInodeGetfile fopId priv flags)) :=
+  FsFinite.original_anonInodeGetfile_finite fopId priv flags
+
+/-- The original Local converter has the same complete result and recorded
+state as its three-pass evaluator; failures remain exact Local Stops. -/
+theorem original_seccomp_local_convert_finite (prog : Seccomp.ClassicProg)
+    (newProg : Option Nat) (seen : Bool) (newLen : Nat) (initial : Seccomp.Local.LState) :
+    Seccomp.Local.run (Seccomp.bpfConvertFilter prog newProg seen newLen : Seccomp.Local.L _) initial =
+      Seccomp.Local.run (SeccompLocalFinite.convert prog newProg seen newLen) initial :=
+  SeccompLocalFinite.original_convert_result_finite prog newProg seen newLen initial
 
 end Leanux.Proofs.WG.Progress

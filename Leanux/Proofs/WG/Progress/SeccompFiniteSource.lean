@@ -99,35 +99,42 @@ theorem returns_option {α β : Type} (x : Option α) (some : α → Seccomp.M �
   | some v=>exact hs v
 
 open Lean Meta Elab Tactic in
-elab "return_head " name:ident : tactic => withMainContext do
+elab "return_head_for " predicate:ident name:ident : tactic => withMainContext do
   let target := (← instantiateMVars (← getMainTarget)).consumeMData
-  unless target.isAppOf ``Returns do throwError "not a return contract"
+  let predicateName ← realizeGlobalConstNoOverloadWithInfo predicate
+  unless target.isAppOf predicateName do throwError "not the expected return contract"
   let action := target.getAppArgs[target.getAppArgs.size-2]!.consumeMData.headBeta
   let expected ← realizeGlobalConstNoOverloadWithInfo name
   unless action.getAppFn.constName? == some expected do throwError "different return action"
 
 open Lean Meta Elab Tactic in
-elab "return_match" : tactic => withMainContext do
+elab "return_match_for " predicate:ident : tactic => withMainContext do
   let target := (← instantiateMVars (← getMainTarget)).consumeMData
-  unless target.isAppOf ``Returns do throwError "not a return contract"
+  let predicateName ← realizeGlobalConstNoOverloadWithInfo predicate
+  unless target.isAppOf predicateName do throwError "not the expected return contract"
   let action := target.getAppArgs[target.getAppArgs.size-2]!.consumeMData.headBeta
   unless (← matchMatcherApp? action).isSome do throwError "not a return match"
 
 open Lean Meta Elab Tactic in
-elab "return_first " name:ident : tactic => withMainContext do
+elab "return_first_for " predicate:ident name:ident : tactic => withMainContext do
   let target := (← instantiateMVars (← getMainTarget)).consumeMData
-  unless target.isAppOf ``Returns do throwError "not a return contract"
+  let predicateName ← realizeGlobalConstNoOverloadWithInfo predicate
+  unless target.isAppOf predicateName do throwError "not the expected return contract"
   let action := target.getAppArgs[target.getAppArgs.size-2]!.consumeMData.headBeta
   unless action.isAppOf ``Bind.bind do throwError "not a bind"
   let first := action.getAppArgs[action.getAppArgs.size-2]!.consumeMData.headBeta
   let expected ← realizeGlobalConstNoOverloadWithInfo name
   unless first.getAppFn.constName? == some expected do throwError "different first action"
 
+macro "return_head " name:ident : tactic => `(tactic| return_head_for Returns $name)
+macro "return_match" : tactic => `(tactic| return_match_for Returns)
+macro "return_first " name:ident : tactic => `(tactic| return_first_for Returns $name)
+
 theorem after_finite (prog : Seccomp.ClassicProg)
     (newProg : Option Nat) (seen : Bool) (newLen : Nat) (has : Bool) (addrs : Array Nat) :
     afterAllocationWith Lean.Loop.mk prog newProg seen newLen has addrs =
       afterAllocationWith [(),(),()] prog newProg seen newLen has addrs := by
-  unfold afterAllocationWith
+  unfold afterAllocationWith SeccompPass.afterAllocationWith
   apply bind_same
   apply loop_three
   · rfl
@@ -158,8 +165,12 @@ theorem finite_repeat (allocation : Seccomp.M Bool) (prog : Seccomp.ClassicProg)
     (newProg : Option Nat) (seen : Bool) (newLen : Nat) :
     withPasses Lean.Loop.mk allocation prog newProg seen newLen =
       withPasses [(),(),()] allocation prog newProg seen newLen := by
-  unfold withPasses
-  simp only [after_finite]
+  have after (has : Bool) (addrs : Array Nat) :
+      SeccompPass.afterAllocationWith (m:=Seccomp.M) Lean.Loop.mk prog newProg seen newLen has addrs =
+        SeccompPass.afterAllocationWith [(),(),()] prog newProg seen newLen has addrs :=
+    after_finite prog newProg seen newLen has addrs
+  unfold withPasses SeccompPass.withPasses
+  simp only [after]
 
 def convert (prog : Seccomp.ClassicProg) (newProg : Option Nat)
     (seen : Bool) (newLen : Nat) : Seccomp.M (Except Int ConvertOut) :=
