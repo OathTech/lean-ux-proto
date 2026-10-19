@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedQueuePeekInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingPointInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNapiPointComposition
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRunnerPointCoverage
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedQueueInteriorInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIterationPointInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingInteriorInitialized
@@ -2370,6 +2374,105 @@ theorem initialized_iteration_source_points_conditional
     Scheduler.Points.Remainders (scheduler_children carrierGood children napi)
       (Scheduler.Points.scheduleShape none) world history :=
   entry.source_points carrierGood (scheduler_children carrierGood children napi)
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Leanux.Runner Queues Queues.RxCredits AuthenticatedEffects.CausalJournal RunnerSource
+open QueueInterior RetirementSecurity AllocatedObligation ScheduledSource
+
+/-- Security: initialized peek retains the same pending packet cohort and
+ledger at the native cached-queue setter. Its original write event is the
+fixed remaining suffix before the same worker body; no packet is duplicated
+by the change in queue representation. -/
+theorem initialized_native_peek_interval
+    (entry : TxEntry trace placeholders operationIndex pid world history)
+    (device : world.wg.dev=some d) (resident : d.peers[pid]?=some p)
+    (chosen : ((p.txQueue.peek).run world.wg).run world.ambient=.ok (((first,queue),world.wg),b)) :
+    ∃ ledger,
+      let after := replacePeer world.wg d pid {p with txQueue:=queue}
+      let reads := history++[readEvent pid p,readEvent pid p]
+      runPrefix (peekMutation pid) world history=(.ok ((first,p),{world with wg:=after,ambient:=b}),reads) ∧
+      CompleteConsequences.Cut reads ledger [] [] after ∧
+      (∀ items, first=some items → CreateDisposal.PendingBatch reads ledger items) ∧
+      queue.all=p.txQueue.all ∧ queue.peeked=first ∧
+      runPrefixOuter (RoutingJoint.executeTraceWith (Driver.syscallObserved hooks)
+        (fun result w=>(result,w)) trace placeholders) [] =
+        runPrefixOuter (entry.resume {world with wg:=after,ambient:=b}
+          (peekDue pid (first,p) >>= TxWorker.body pid)) reads :=
+  entry.peek_interval device resident chosen
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open AuthenticatedEffects.CausalJournal
+
+/-- Security: initialized staging selection retains the original taken cohort
+and actual borrowed-key receipt in its selected account. Native guard and
+child interiors remain explicit source obligations. -/
+theorem initialized_routed_staging_selection
+    (caller : RoutedTransmit.Caller trace placeholders operationIndex world history)
+    (front : Transmit.Path caller.input caller.events caller.entered.wg caller.entered.ambient
+      (.ok pid) v b prior)
+    (selected : runWGPrefix (CausalJournal.selection pid) v b
+      (Transmit.resultHistory caller.input (.ok pid) caller.entered.wg v caller.entered.ambient b prior)=
+      (.ok ((some (peer,key),u),c),middle)) :
+    ∃ ledger after generation,
+      let events := Transmit.resultHistory caller.input (.ok pid) caller.entered.wg v caller.entered.ambient b prior
+      Staging.Selected events ledger [] [] pid v b peer key middle u c after generation ∧
+      CompleteSelected.Ready after [] [] generation pid peer events.length middle u c :=
+  caller.staging_selected front selected
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Napi.Composition
+variable {native inside : Napi.Composition.ChildPoints} {nativeOther insideOther : OtherPoints}
+  {Good : Napi.Composition.History → World → Prop}
+
+/-- Security: initialized scheduling composes actual worker iteration, softirq
+and IRQ-exit source points with NAPI. The same-world conservation evidence
+is conditional on six remaining iteration families and five NAPI families;
+these visible obligations prevent an unsupported global completeness claim. -/
+theorem initialized_scheduler_napi_source_points_conditional
+    (entry : ScheduledSource.Entry trace placeholders operationIndex world history)
+    (carrierGood : ∀h w,Napi.Points.Carrier h w→Good h w)
+    (children : Napi.Points.ChildContracts native inside Good)
+    (other : OtherChildren native inside nativeOther insideOther Good) :
+    Scheduler.Points.Covered (schedulerPoints native nativeOther) Good
+      (Scheduler.Points.scheduleShape none) world history ∧
+      Scheduler.Points.Remainders (schedulerChildren carrierGood children other)
+        (Scheduler.Points.scheduleShape none) world history :=
+  entry.source_points (fun h w before=>carrierGood h w before.1)
+    (schedulerChildren carrierGood children other)
+
+end
+
+section
+open Leanux.Runner Queues.RxCredits AuthenticatedEffects AuthenticatedEffects.StagedEntry
+open AuthenticatedEffects.StagedEntry.Reached
+open Reached.Runner.Points
+
+/-- Security: every actual outer-runner native boundary and child entry or
+normal return carries its initialized packet account, even when the later
+execution stops. Primitive and child interiors are separate obligations. -/
+theorem initialized_runner_native_boundaries (trace : Trace) (placeholders : Bool)
+    (point : Point Boundary (executeShape trace placeholders) [] site u middle) :
+    CompleteProduct.Carrier middle u := initialized_boundary trace placeholders point
+
+/-- Security: the original initialized runner covers its fixed source points
+with the supplied same-world conservation evidence. Dispatch and four service
+families remain explicit child contracts; no incoming initialized account or
+assumption of later successful execution is required. -/
+theorem initialized_runner_source_points_conditional (trace : Trace) (placeholders : Bool)
+    {native inside : ChildPoints} {Good : Reached.Runner.Points.History→World→Prop}
+    (carrierGood : ∀h w,CompleteProduct.Carrier h w→Good h w)
+    (children : ChildContracts native inside Good) :
+    Covered native Good (executeShape trace placeholders) [] :=
+  initialized_covered trace placeholders carrierGood children
 
 end
 
