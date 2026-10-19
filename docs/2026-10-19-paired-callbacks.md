@@ -9,9 +9,10 @@ the scope and budget. No new theorem or external acceptance is claimed yet.
 The independent [charter review](2026-10-19-review-paired-callback-charter.md)
 found R1: insertion's first-return claim requires an additional random-service
 interior safety proof. Its endpoint frame and input coupling do not imply this.
-The finding is accepted; the material scope choice is pending with the user.
+The finding is accepted; the user chose the bounded revision recorded in the charter.
 Five-callback implementation proceeds independently after review, starting
-2026-10-19 17:30 UTC. The original first-return success criterion is unresolved.
+2026-10-19 17:30 UTC. First-return is now scoped to lookup/remove/replace;
+insertion and mixed insertion retain the documented broader permission premise.
 
 Baseline assumptions are the five behavioral callback contracts, decoding,
 serialized environment and access permissions; insertion additionally uses

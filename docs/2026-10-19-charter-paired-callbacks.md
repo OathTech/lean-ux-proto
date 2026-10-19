@@ -1,7 +1,7 @@
 # Shared callback proofs and first-return permissions
 
-Status: independently reviewed; callback work ready, insertion first-return
-scope pending user clarification. Worktree `binary-pair-runner`, branch
+Status: independently reviewed and revised; executing the bounded increment.
+Worktree `binary-pair-runner`, branch
 `task/binary-pair-runner`; starting checkpoint `d61a8027`.
 
 [USER 2026-10-19] Develop the agreed shared-callback increment: write and
@@ -14,13 +14,14 @@ whether testing candidate contracts followed by reusable proofs reduces cost.
 [AGENT 2026-10-19] The independent [charter review](2026-10-19-review-paired-callback-charter.md)
 found one high-severity dependency, R1: the retained random-service contracts
 do not constrain their interior enough to derive insertion's first-return
-boundary. Accepted. The five callbacks and their existing-client instantiations
-can proceed independently; no insertion first-return implementation or complete
-charter claim proceeds until its scope is settled. The user has been asked to
-choose between a bounded increment retaining the broader insertion permission
-premise and an added image-derived random-service safety proof. The original
-success criterion below remains visibly unresolved until that choice is recorded.
-Do not strengthen the random assumptions to bypass the missing proof.
+boundary. Accepted; no strengthened random assumption may bypass this proof.
+
+[USER 2026-10-19] Keep the increment bounded: prove and reuse the five callbacks,
+pursue first-return for lookup/remove/replace, and retain the explicitly broader
+permission premise for insertion and mixed insertion sequences. Random-service
+interior safety is a separate future obligation. This revises the original
+first-return deliverable and its success criterion; R1 is resolved by this scope
+decision, not by a claim that the missing implication has been proved.
 
 ## Objective and claim
 
@@ -39,8 +40,8 @@ discharge universal contracts. Keep the existing general conditional lemmas
 and add corollaries without these five behavioral hypotheses. Do not replace
 them with a bundled or renamed assumption, or a premise asserting execution.
 
-Repair the permission boundary to cover exactly actual prefixes through the
-first outer ABI return, including removal's tail-call return. Avoid relying
+For lookup/remove/replace, repair the permission boundary to cover exactly actual
+prefixes through the first outer ABI return, including removal's tail-call return. Avoid relying
 solely on a syntactic RET instruction or on a final PC that could have been
 crossed earlier. The theorem must export permission safety for the same
 execution that establishes its postcondition.
@@ -83,8 +84,9 @@ external acceptance; independent work can proceed without claiming acceptance.
    wrappers, and the remaining callback. Follow actual instruction effects,
    including unspecified flags; no native axiom, sorry, unsafe or kernel bypass.
 4. Supply proved contracts to the existing index-family clients and add revised
-   headlines. Tighten first-return permissions and prove the execution boundary
-   needed by those headlines. Preserve source/reconstruction results and derive
+   headlines. Tighten first-return permissions for lookup/remove/replace and
+   prove their execution boundaries; insertion and mixed insertion retain the
+   broader premise. Preserve source/reconstruction results and derive
    later entry readiness through the existing retained-heap composition.
 5. Run scoped paired workloads, positive witnesses, builds, headline axiom
    reports, fresh kernel replay and existing trust-surface checks. Obtain an
@@ -95,8 +97,9 @@ external acceptance; independent work can proceed without claiming acceptance.
 ## Success, measurements and stop conditions
 
 Success requires all five image proofs, their use in the revised single-call
-and mixed-sequence headlines, and a first-return permission statement tied to
-the successful execution. Concrete positive entries still run to return.
+and mixed-sequence headlines, and first-return permission statements tied to
+lookup/remove/replace's successful executions. The broader insertion and mixed
+insertion permission premise stays visible. Concrete positive entries still run to return.
 The report lists hypotheses before and after, exact checked modules/pins,
 counterexamples and fixes, and all failures. It reproduces TrustBase.lean and
 names the remaining interpretation/environment obligations. Test count or
