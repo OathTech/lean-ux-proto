@@ -2,7 +2,7 @@ import CallbackContracts
 import PairLookupAdequacy
 import PairRemoveAdequacy
 import PairReplaceAdequacy
-import PairInsertAdequacy
+import PairInsertEnvironment
 import PairSequenceAdequacy
 import PairInsertSequenceAdequacy
 
@@ -86,6 +86,30 @@ theorem insert_from_image (fetch : Int64 → Option Decoded) (decoder : IndexIns
     physical coupling pre supplied input accepted
 
 #print axioms insert_from_image
+
+/-- Sequential refinement with an actual instruction history and an explicit
+permission audit. `ReturningCallPermissions` retains the broader returning-
+history quantifier documented in review R2; it is not a first-return claim. -/
+theorem insert_simulation_from_image (fetch : Int64 → Option Decoded)
+    (decoder : IndexInsertDecoderAgreement fetch)
+    (services : ServiceDecoderAgreement fetch)
+    (permissions : Permissions) (onlineCPUs : Nat) (externalActions : List Nat)
+    {n o c initial ra config inputAt w owner records answer final}
+    (environment : SerializedEnvironment onlineCPUs externalActions)
+    (access : ReturningCallPermissions fetch permissions initial ra)
+    (physical : RandomReturnContract fetch config)
+    (coupling : RandomInputCoupling fetch config c.coverage (c.preempt+512) (codeEntry+0x79).toUInt64 inputAt)
+    (pre : Pre n o c initial w owner ra config)
+    (supplied : w.hidden=some records) (input : inputAt initial.data.dmem records)
+    (accepted : (WG.indexInsert owner).run w=.ok (answer,final)) :
+    Eventually (historyStep fetch) (fun t => Post n o c initial ra config inputAt answer final t.machine ∧
+      ActualHistory fetch initial t.history ∧ t.history.getLast?=some t.machine ∧
+      RunEnvironment fetch permissions onlineCPUs externalActions t.history) ⟨initial,[initial]⟩ := by
+  exact insert_simulation fetch decoder (Callback.pc_contract fetch services)
+    (Callback.cmp4_contract fetch services) (Callback.bh_contract fetch services)
+    permissions onlineCPUs externalActions environment access physical coupling pre supplied input accepted
+
+#print axioms insert_simulation_from_image
 end Binary.Pair.Insert
 
 namespace Binary.Pair.Sequence

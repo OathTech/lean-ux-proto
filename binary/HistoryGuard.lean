@@ -109,6 +109,62 @@ theorem guarded_to_history {fetch guard s P}
     apply step_cps
     exact instruction_mono fetch s.machine _ _ (fun t h => ih ⟨t,s.history++[t]⟩ h) step.2
 
+def GuardedSegment {Annotation : Type} (fetch : Int64 → Option Decoded)
+    (guard : MachineState → Prop) (Audit : List MachineState → Annotation → Executed → Prop)
+    (initial : Executed) (post : Annotation → Executed → Prop) : Prop :=
+  Eventually (guardedHistoryStep fetch guard)
+    (fun final => ∃ a,post a final ∧ Audit initial.history a final) initial
+
+theorem GuardedSegment.bind {Annotation : Type} {fetch guard}
+    {Audit : List MachineState → Annotation → Executed → Prop} {initial : Executed}
+    {P Q : Annotation → Executed → Prop}
+    (compose : ∀ {h a b s t}, Audit h a s → Audit s.history b t → Audit h b t)
+    (first : GuardedSegment fetch guard Audit initial P)
+    (next : ∀ s a, P a s → Audit initial.history a s → GuardedSegment fetch guard Audit s Q) :
+    GuardedSegment fetch guard Audit initial Q := by
+  apply eventually_trans (guardedHistoryStep fetch guard) _ _ _ first
+  rintro s ⟨a,post,audit⟩
+  apply eventually_weaken (guardedHistoryStep fetch guard) _ _ _ _ (next s a post audit)
+  rintro t ⟨b,post,later⟩
+  exact ⟨b,post,compose audit later⟩
+
+theorem guarded_forget {fetch guard s P Q}
+    (run : Eventually (guardedHistoryStep fetch guard) P s)
+    (post : ∀ t,P t → Q t.machine) : Eventually (guardedStep fetch guard) Q s.machine := by
+  apply eventually_weaken (guardedStep fetch guard) _ _ _ _ (guarded_history_project run)
+  rintro t ⟨history,h⟩
+  exact post ⟨t,history⟩ h
+
+theorem guarded_lift {fetch guard s P}
+    (run : Eventually (guardedStep fetch guard) P s) (history : List MachineState) :
+    Eventually (guardedHistoryStep fetch guard) (fun t => P t.machine) ⟨s,history⟩ := by
+  induction run generalizing history with
+  | done s hp => exact .done _ hp
+  | step s mid step _ ih =>
+    apply step_cps
+    exact ⟨step.1,instruction_mono fetch s _ _ (fun t h => ih t h (history++[t])) step.2⟩
+
+theorem guarded_prefix {fetch guard P s} (front : List MachineState)
+    (initialPrefix : front <+: s.history) (run : Eventually (guardedHistoryStep fetch guard) P s) :
+    Eventually (guardedHistoryStep fetch guard) (fun t => P t ∧ front <+: t.history) s := by
+  induction run with
+  | done s hp => exact .done _ ⟨hp,initialPrefix⟩
+  | step s mid step _ ih =>
+    apply step_cps
+    refine ⟨step.1,?_⟩
+    exact instruction_mono fetch s.machine _ _
+      (fun t h => ih ⟨t,s.history++[t]⟩ h (initialPrefix.trans ⟨[t],rfl⟩)) step.2
+
+theorem guarded_last {fetch guard Q s} (initial : s.history.getLast?=some s.machine)
+    (run : Eventually (guardedHistoryStep fetch guard) Q s) :
+    Eventually (guardedHistoryStep fetch guard) (fun t => Q t ∧ t.history.getLast?=some t.machine) s := by
+  induction run with
+  | done s h => exact .done s ⟨h,initial⟩
+  | step s mid step _ ih =>
+    apply step_cps
+    exact ⟨step.1,instruction_mono fetch s.machine _ _
+      (fun t ht => ih ⟨t,s.history++[t]⟩ ht (by simp)) step.2⟩
+
 #print axioms history_guard
 #print axioms guarded_history_project
 end Binary.Callback

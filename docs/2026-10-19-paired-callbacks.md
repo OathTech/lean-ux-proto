@@ -2,7 +2,7 @@
 
 Status: in progress on `task/binary-pair-runner`. Start 2026-10-19 17:24:01 UTC,
 baseline `d61a8027`. The [charter](2026-10-19-charter-paired-callbacks.md) governs
-the scope and budget. All five image contracts and remove/replace first-return headlines are locally proved; lookup first-return and closing validation remain in progress. External acceptance of this increment is pending.
+the scope and budget. All five image contracts, lookup/remove/replace first-return headlines and the non-inserting sequence boundary are locally proved; closing validation remains in progress. External acceptance of this increment is pending.
 
 ## Review and dependency
 
@@ -180,3 +180,77 @@ coverage calls now check using this mechanism and the original memory proofs.
 This is intermediate progress, not a lookup first-return theorem. The sibling
 composition scripts still duplicate existing bookkeeping; that cost remains
 visible in this increment's assessment.
+
+### Lookup and retained-heap composition, 19:07 UTC
+
+The full lookup sibling and non-inserting sequence theorem now build with the
+first-return guard. The physical bucket loop, NULL/dead/live peer-get branches,
+owner store and BH-enable/epilogue all retain their original entry predicates
+and postconditions. `PairLookupFirstEnvironment.lookup_first_return` constructs
+its actual history and applies `FirstReturnCallPermissions` to that same history.
+`PairSequenceFirstAdequacy.sequence_checked` derives each next Pre from retained
+resources and uses `FirstReturnDomainPermissions`. Insertion and mixed insertion
+continue to expose the broader permission premise and random-service contracts.
+
+`history_guard_suffix` recovers guards from existing exact region histories.
+`guarded_forget` and `guarded_lift` compose endpoint-only segments without claiming
+that an arbitrary supplied history is actual; actual history is established
+at the outer headline. `GuardedSegment.bind` is used by the bucket-loop sibling.
+`guarded_mapped` reuses the ISA memory-preservation proof while retaining the guard.
+Stack-slot exclusions are derived by modular cancellation, including wraparound;
+they are not new entry hypotheses. Much of the composition and post-processing
+remains duplicated and will be counted as such.
+
+The final sequence build passed 468 jobs with standard headline axioms. An
+overlapping earlier build failed while writing `PairLookupFootprint.olean`; the
+same target subsequently passed in the remaining build. This was an artifact
+race between two builds launched here, not a successful check. Subsequent builds
+in this worktree are serialized. Ordinary proof elaboration failures during
+the sibling conversion were repaired; no failed build is counted as evidence.
+Closing review and combined validation are in progress.
+
+The closing review found that sequence composition used the first-return fact
+for its permission audit but dropped that fact from the exported postcondition.
+The revised `First.SequencePost` now retains `BeforeOuterReturn` for every call
+record, proved by the same sequence induction. The rebuilt surface checks with
+only standard axioms. A variable-shadowing elaboration error in that repair was
+fixed before the successful build. Insertion also has an explicit-environment
+`insert_simulation_from_image` corollary, retaining `ReturningCallPermissions`.
+
+### Trust surface and limits
+
+The revised public statements are printed in `PairCallbackSurface.lean`, with
+their definitions and full trust declarations diffed by `binary/surface.py`.
+The new callback proofs conclude the five existing contracts; they do not
+replace them with another behavioral premise. Existing general conditional
+lemmas remain available. The preferred new headlines are:
+
+- `IndexLookup.lookup_first_return`, `Remove.remove_first_return`, and
+  `Replace.replace_first_return`: unchanged Pre/Post, image decoder agreements,
+  `SerializedEnvironment`, and `FirstReturnCallPermissions`.
+- `Sequence.First.sequence_checked`: same executable initial resources,
+  source-only admissibility and caller preparation; `FirstReturnDomainPermissions`.
+  Every call's recorded history exports its first-return boundary.
+- `Insert.insert_simulation_from_image` and `InsertSequence.sequence_from_image`:
+  proved shared callbacks, but explicit `RandomReturnContract`,
+  `RandomInputCoupling` and broader returning-history permissions remain.
+
+All five service interpretations use `ServiceDecoderAgreement`; anchored
+functions retain their named decoder agreements. Executable entry checks,
+Names/layout interpretation, accepted mirror runs and supplied input assertions
+remain explicit domains, not facts about every real kernel entry. The external
+ELF bytes/decoder agreement and Kraken's model are interpretation obligations.
+The local kernel axiom set is the standard three; external acceptance is pending.
+
+This does not establish concurrent contextual refinement, IRQ/preemption/RCU
+interleavings, compiled caller execution, allocation/free correctness, or whole
+WireGuard operation/trace simulation. BH-enable covers its original physically
+ready no-pending-work domain, including nested counts; pending work is not
+proved absent in every real invocation. Insertion's random-service interior
+first-return safety remains outside this increment. Tests of those bodies do
+not discharge their universal contracts. Allowed-IPs' additional comparison
+contracts and the original M2 correspondence theorem remain separate work.
+Reconstructed recorded prefixes and generated witness states are not captured
+kernel snapshots and do not prove entry reachability. No new campaign function
+coverage or campaign-wide throughput claim follows. The mirror baseline is
+`cb2348e`, lagging current main; no merge was performed.

@@ -61,6 +61,30 @@ theorem const_cmp1_leaf (fetch : Int64 → Option Decoded) (agree : ServiceDecod
   subst p
   exact const_cmp1_run s ra ready frame
 
+theorem bh_leaf (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgreement fetch)
+    : LeafService fetch (.ofNat 0xffffffff810732c0) BhEnableReady
+      (fun _ => InRange preemptCountAddress 4)
+      (fun before after => ∀ old : BitVec 32,
+        before.data.dmem.loadInt preemptCountAddress 4=some (old.toNat : Int) →
+        after.data.dmem.loadInt preemptCountAddress 4=
+          some ((old-before.data.regs.get (.low .rsi .W32)).toNat : Int)) := by
+  apply leaf_history agree
+  rintro ⟨s,p⟩ ra pc ready frame
+  change p=_ at pc
+  subst p
+  rcases ready with ⟨count,read,hardirq,pending,apart⟩
+  apply eventually_weaken (guardedStep ServiceImage.fetch (leafGuard s.regs.rsp))
+    _ _ _ _ (bh_run s ra count read hardirq pending apart frame)
+  rintro t ⟨returned,framed,changed⟩
+  refine ⟨returned,framed,?_⟩
+  intro old oldRead
+  have equal : old=count := by
+    apply BitVec.eq_of_toNat_eq
+    exact_mod_cast Option.some.inj (oldRead.symm.trans read)
+  subst old
+  exact changed
+
+
 theorem LeafService.forget {fetch address ready writes effect}
     (leaf : LeafService fetch address ready writes effect) :
     ServiceReturns fetch address ready writes effect := by
@@ -69,6 +93,7 @@ theorem LeafService.forget {fetch address ready writes effect}
   rintro t ⟨ret,framed,effect,interior⟩
   exact ⟨ret,framed,effect,fun q hq => (interior q hq).2⟩
 
+#print axioms bh_leaf
 #print axioms pc_leaf
 #print axioms cmp4_leaf
 #print axioms const_cmp4_leaf
