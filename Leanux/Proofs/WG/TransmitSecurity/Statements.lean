@@ -26,6 +26,7 @@ import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastDecrypt
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastHandshake
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastDeviceConfiguration
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastTx
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionHistoryFinal
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Transport from reservation through every actual AEAD invocation remains open. -/
@@ -595,5 +596,19 @@ theorem original_configuration_lifecycle_history_exclusion :
     EncryptionPast.Removal.remove_peer,EncryptionPast.DeviceFrames.create,
     EncryptionPast.DeviceLifecycle.device_open,EncryptionPast.Removal.down,
     EncryptionPast.DeviceLifecycle.device_delete_default,EncryptionPast.Tx.tx⟩
+
+/-- Security: an actual transport-encryption receipt cannot reuse a packet
+allocation identity in any initialized driver execution, including a stopped
+prefix and both timer modes. The identity includes the device epoch, so device
+recreation cannot alias old packet IDs. This derives physical ownership and
+historical exclusion from initialization; key-material continuity remains a
+separate requirement for the complete nonce-safety outcome. -/
+theorem initialized_encryption_identity_nonreuse (trace : Runner.Trace) (placeholders : Bool) :
+    EncryptionHistory.Safe (runPrefixOuter (Journal.execute trace placeholders) []).2 ∧
+    EncryptionHistory.Safe
+      ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+        AuthenticatedEffects.CausalJournal.old?) :=
+  ⟨EncryptionHistory.Scheduler.initialized trace placeholders,
+    EncryptionHistory.final_initialized trace placeholders⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

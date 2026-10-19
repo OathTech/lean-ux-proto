@@ -50,6 +50,21 @@ theorem staging_lift (pid : PeerId) :
   rw [Driver.nonce_staging_specialization]
   exact Nonce.stagingObserved_erases pid
 
+theorem transmit_lift (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    Driver.transmitObserved hooks family addr packets mtu =
+      liftWGPrefix (wgXmit family addr packets mtu) := by
+  apply eq_native_lift
+  · apply native_via_nonce (Driver.transmit_projects native_projection family addr packets mtu)
+      (Driver.transmit_projects NativeDriver.nonce_projection family addr packets mtu)
+    rw [Driver.nonce_transmitObserved_eq]
+    exact Nonce.transmitObserved_erases family addr packets mtu
+  · unfold Driver.transmitObserved
+    simp only [staging_lift]
+    dsimp only [hooks]
+    let rho : Exchange.Event → Option Exchange.Event := some
+    change StateHistoryFrame rho _
+    repeat' exchange_quiet_step rho
+
 theorem keepalive_quiet (pid : PeerId) : StateHistoryFrame some (Driver.keepaliveObserved hooks pid) := by
   unfold Driver.keepaliveObserved
   rw [staging_lift]

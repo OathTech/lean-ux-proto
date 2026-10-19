@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.RetirementSecurity.HolderReplayFrames
+import Leanux.Proofs.WG.RetirementSecurity.HolderDeviceConfiguration
+import Leanux.Proofs.WG.RetirementSecurity.HolderBoundary
+import Leanux.Proofs.WG.RetirementSecurity.KeySlotInitialized
+import Leanux.Proofs.WG.RetirementSecurity.KeySlotDeferred
 import Leanux.Proofs.WG.RetirementSecurity.KeySlotDataCompletion
 import Leanux.Proofs.WG.RetirementSecurity.KeySlotTimers
 import Leanux.Proofs.WG.RetirementSecurity.KeySlotBulkRemoval
@@ -1730,5 +1735,80 @@ theorem original_device_data_slot_liveness (attrs : DeviceAttrs) (pid : PeerId)
     Preserves (KeySlotLiveness.InvExcept pending) (txStep pid) :=
   ⟨KeySlotLiveness.set_device attrs,KeySlotLiveness.down,
     KeySlotLiveness.consume_done pid pkt endpoint,KeySlotLiveness.tx_step pid⟩
+
+/-- Actual worker scheduling, receive-stack callbacks and deferred timer/work
+calls preserve live published key slots. The recorded source choices and stop
+paths are retained; this safety contract does not turn dispatch fairness into
+reference disposal or assert initialized credit ownership. -/
+theorem original_scheduled_slot_liveness (stack : Option Worker)
+    (call : Lifetimes.EnvDeferredCall) :
+    Preserves (fun w : World=>KeySlotLiveness.InvExcept pending w.wg) (Env.schedule stack) ∧
+    Preserves (fun w : World=>KeySlotLiveness.InvExcept pending w.wg) call.original :=
+  ⟨KeySlotScheduler.schedule stack,KeySlotDeferred.original call⟩
+
+/-- The original initialized runner derives independent stamped peer
+protection for every surviving published key slot. Native configuration,
+receive, cached writes, timer drains and deletion are discharged; no incoming
+slot, peer-funding or coverage invariant is assumed. This is peer protection,
+not the still-separate exact key-reference account. -/
+theorem initialized_published_slots_have_peer_protection (trace : Runner.Trace) (placeholders : Bool)
+    (run : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) :
+    ∃carriers holders,holders.Funded carriers [] w.wg ∧ Queues.RxCredits.StableRx carriers w.wg ∧
+      SlotPeerReferences holders [] w.wg :=
+  KeySlotInitialized.slot_protection trace placeholders run
+
+/-- A successful shared campaign-journal execution derives live published
+slots at its actual returned World. The World is retained through the existing
+runner result callback; the actual event journal and source execution agree.
+This initialized carrier does not assert eventual reference disposal. -/
+theorem initialized_shared_journal_slot_liveness (trace : Runner.Trace) (placeholders : Bool)
+    (run : Leanux.Proofs.Logged.runPrefixOuter (TransmitSecurity.Journal.execute trace placeholders) []=(.ok result,h)) :
+    ∃w,Leanux.Proofs.Logged.runPrefixOuter (Queues.RoutingJoint.executeTraceWith
+      (TransmitSecurity.Driver.syscallObserved TransmitSecurity.Journal.hooks)
+      (fun j w=>(j,w)) trace placeholders) []=(.ok (result,w),h) ∧ KeySlotInitialized.JournalInv h w :=
+  KeySlotInitialized.journal_endpoint trace placeholders run
+
+/-- The actual device peer-list stage retains exact key credit together with
+its independent peer/slot support for each following command. Slot protection
+is derived at each boundary from liveness and funded base references; whole
+initialized key-credit transport remains an explicit separate obligation. -/
+theorem original_peer_list_joint_accounts (attrs : DeviceAttrs) :
+    Preserves (HolderBoundary.Entry temporary carriers loans) (Configuration.devicePeersSource attrs) :=
+  HolderBoundary.peer_list attrs
+
+/-- The original complete device command preserves exact key credit and its
+independent peer/slot support through static-key conflict deletion, bulk peer
+replacement, expiry, staging and all peer commands. Unpublication and expiry
+are not treated as reference disposal. The initialized account closure is a
+separate obligation, rather than a conclusion inferred from peer funding. -/
+theorem original_device_joint_accounts (attrs : DeviceAttrs) :
+    Preserves (HolderBoundary.Entry temporary carriers loans) (wgSetDevice attrs) :=
+  HolderBoundary.device attrs
+
+/-- Native TX disposal and handshake worker iterations transport exact key
+credit on the existing scheduler accounting cut. Physical TX separation and
+independent slot protection are derived at the real dequeue; authentication,
+replay refusal and the actual peer payments retain the same key account.
+Initialized scheduler and RX/NAPI closure remain separate obligations. -/
+theorem original_tx_handshake_joint_accounts (pid : PeerId) :
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe
+      (Queues.RxHistory.mixed (Lifetimes.txIterPrefix pid
+        (Leanux.Proofs.Logged.liftPrefix (Env.condResched .txWorker)))) ∧
+    Leanux.Proofs.Logged.PrefixPreserves
+      (HolderScheduled.Inv initial loans before temporary locals active)
+      OwnerChecks.Safe Origins.HistoryAdapters.receiveIteration :=
+  ⟨HolderScheduled.tx pid,HolderScheduled.handshake⟩
+
+/-- Actual replay-window writes and decryption-rejection invalidation do not
+create or lose key references. This ownership projection assumes neither
+successful authentication nor a well-shaped replay bitmap; a Stop has no
+claimed successor state. -/
+theorem original_replay_decrypt_key_accounts (kid : KeypairId) (nonce : Nat) (pkt : RxPacket) :
+    Preserves (HolderAccount temporary) (counterValidate kid nonce) ∧
+    Preserves (HolderAccount temporary) (decryptPacket pkt) :=
+  ⟨HolderReplay.counter kid nonce,HolderReplay.decrypt pkt⟩
 
 end Leanux.Proofs.WG.RetirementSecurity

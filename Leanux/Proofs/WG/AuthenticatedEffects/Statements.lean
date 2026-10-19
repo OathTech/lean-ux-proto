@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalOldProjection
+import Leanux.Proofs.WG.AuthenticatedEffects.SendCallerContracts
+import Leanux.Proofs.WG.AuthenticatedEffects.QueuedSourceContracts
+import Leanux.Proofs.WG.AuthenticatedEffects.TimerOccurrences
 import Leanux.Proofs.WG.AuthenticatedEffects.CompletionEffectsObservedProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalSourceMetadata
 import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsFactors
@@ -1144,5 +1148,14 @@ theorem completed_scope_restores_caller
     (normal : runWGPrefix (CausalScope.scope record cause body) w a h = (.ok ((value,v),b),history)) :
     CausalScope.current decode history = CausalScope.current decode h :=
   CausalScope.scope_normal_current record decode inverse cause body frame w v a b h history value normal
+
+/-- Security: the final causal/exchange observer retains the prior initialized
+combined execution's exact result and old event order, including a stopped
+prefix. Both use the same Driver source; no independent erased histories are
+joined. Causal authorization of the newly recorded effects remains separate. -/
+theorem causal_journal_preserves_prior_execution (trace : Runner.Trace) (placeholders : Bool) :
+    ProjectsOuter CausalJournal.old? id (CausalJournal.execute trace placeholders)
+      (TransmitSecurity.Journal.execute trace placeholders) :=
+  CausalJournal.execute_projects trace placeholders
 
 end Leanux.Proofs.WG.AuthenticatedEffects

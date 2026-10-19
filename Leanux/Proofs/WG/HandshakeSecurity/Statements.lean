@@ -7,6 +7,10 @@ import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDeferred
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDecoration
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeLifecycle
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeEnvironment
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDeviceConfiguration
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeInitialized
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSessionEffects
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeJointWorker
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeNativeFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeOrigins
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeObservation
@@ -52,9 +56,10 @@ import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveDeviceConfig
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationOrderDriver
 
-/-! Native T4 replay and T5 confirmation boundaries. Initialized history,
-authentication linkage and responder-send exclusion remain separate obligations;
-these statements do not claim campaign completion. -/
+/-! Native T4 replay and T5 confirmation claims. Timestamp and exchange
+histories are transported from initialization; native C2 dependencies remain
+visible. Responder encryption exclusion and the remaining campaign composition
+are separate obligations; these statements do not claim campaign completion. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
@@ -1012,5 +1017,134 @@ theorem environment_exchange_history (facts : H1DriverSourceFacts) :
     Exchange.ProductPreserves (TransmitSecurity.Driver.envDownObserved ExchangeDriver.hooks) ∧
     Exchange.ProductPreserves (TransmitSecurity.Driver.envDeleteObserved ExchangeDriver.hooks) :=
   ⟨Exchange.env_up_checked facts,Exchange.env_down_checked facts,Exchange.env_delete_checked facts⟩
+
+/-- Device and peer configuration preserve the exchange ledger through the
+actual command path, including nested queued sends during peer removal. Native
+C2 edge and tag-frame assumptions are named explicitly; initialized runner
+transport remains separate. -/
+theorem configuration_exchange_history (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (attrs : DeviceAttrs) :
+    Exchange.Preserves (TransmitSecurity.Driver.configDevice ExchangeDriver.hooks attrs) :=
+  Exchange.config_device facts config attrs
+
+/-- The actual initialized native execution has a valid exchange history,
+including completed exchanges before a later Stop. Only named native C2 edge
+and tag-frame facts are assumed; the caller supplies no initialized invariant,
+reachability or exchange-history premise. The source returns exactly the
+original runner result or indexed Stop. -/
+theorem initialized_native_exchange_history (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
+    (trace : Runner.Trace) (placeholders : Bool) :
+    ErasesOuter (ExchangeDriver.execute trace placeholders) (Runner.executeTrace trace placeholders) ∧
+    Exchange.History (runPrefixOuter (ExchangeDriver.execute trace placeholders) []).2
+      (Exchange.replay (runPrefixOuter (ExchangeDriver.execute trace placeholders) []).2) :=
+  ⟨ExchangeDriver.execute_erases trace placeholders,Exchange.initialized facts config traffic trace placeholders⟩
+
+/-- Replaying a response cannot consume the same initiation exchange twice:
+two successful native response receipts for one peer have strictly different
+start epochs in this initialized execution. Named C2 native source facts remain
+explicit, and completed receipts survive a later Stop. -/
+theorem initialized_response_consumed_once (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre between post : List Exchange.Event) (first second : List UInt8)
+    (r s : WGRunWitness (Option PeerId)) (pid : PeerId)
+    (position : (runPrefixOuter (ExchangeDriver.execute trace placeholders) []).2 =
+      pre ++ Exchange.Event.consumeResponse first r :: between ++ Exchange.Event.consumeResponse second s :: post)
+    (accepted₁ : r.value = some pid) (accepted₂ : s.value = some pid) :
+    ∃ epoch₁ epoch₂, Exchange.ResponseAt pre pid epoch₁ ∧
+      Exchange.ResponseAt (pre ++ Exchange.Event.consumeResponse first r :: between) pid epoch₂ ∧ epoch₁ < epoch₂ :=
+  Exchange.initialized_response_once facts config traffic trace placeholders
+    pre between post first second r s pid position accepted₁ accepted₂
+
+/-- A completed native session advances the allocation counter once and is
+linked to an actual earlier native exchange start in the same initialized execution.
+C2 H1's native allocation effect is explicit inside the source-facts package;
+no session or history invariant is assumed by this result. -/
+theorem initialized_exchange_installation_count (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
+    (trace : Runner.Trace) (placeholders : Bool) (pre post : List Exchange.Event)
+    (pid : PeerId) (r : WGRunWitness Bool)
+    (position : (runPrefixOuter (ExchangeDriver.execute trace placeholders) []).2 =
+      pre ++ Exchange.Event.session pid r :: post) (success : r.value = true) :
+    r.after.keypairCounter = r.before.keypairCounter + 1 ∧
+    ∃ epoch, Exchange.InstallAt pre pid epoch ∧ Exchange.Origin pre pid epoch :=
+  Exchange.initialized_install_count facts config traffic trace placeholders pre post pid r position success
+
+/-- Replay cannot install a second keypair for the same native exchange:
+two successful session receipts have strictly different exchange epochs in
+this initialized execution. Named native C2 facts remain explicit; no incoming
+history or reachability premise is required. -/
+theorem initialized_exchange_installed_once (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
+    (trace : Runner.Trace) (placeholders : Bool) (pre between post : List Exchange.Event)
+    (r s : WGRunWitness Bool) (pid : PeerId)
+    (position : (runPrefixOuter (ExchangeDriver.execute trace placeholders) []).2 =
+      pre ++ Exchange.Event.session pid r :: between ++ Exchange.Event.session pid s :: post)
+    (accepted₁ : r.value = true) (accepted₂ : s.value = true) :
+    ∃ epoch₁ epoch₂, Exchange.InstallAt pre pid epoch₁ ∧
+      Exchange.InstallAt (pre ++ Exchange.Event.session pid r :: between) pid epoch₂ ∧ epoch₁ < epoch₂ :=
+  Exchange.initialized_install_once facts config traffic trace placeholders
+    pre between post r s pid position accepted₁ accepted₂
+
+/-- Replay claims and authenticated effects can observe one handshake
+execution: callback-level exchange projections compose through the actual
+cookie/MAC prefix and worker, retaining every stopped prefix. This source
+projection does not identify unrelated histories from native-result erasure. -/
+theorem joint_handshake_exchange_projection (decode : E → Option Exchange.Event)
+    (callbacks : AuthenticatedEffects.HandshakeMac → Origins.HandshakeSources.Ops (WGPrefix E))
+    (session : PeerId → WGPrefix Exchange.Event Bool) (keepalive : PeerId → WGPrefix Exchange.Event Unit)
+    (projects : ∀ mac, AuthenticatedEffects.HandshakeWorker.OpsProjects decode
+      (callbacks mac) (ExchangeDriver.receiveOps session keepalive)) :
+    StateProjectsPrefix decode id
+      (AuthenticatedEffects.HandshakeWorker.observedWith callbacks)
+      (ExchangeDriver.worker session keepalive) :=
+  ExchangeJoint.worker_exchange decode callbacks session keepalive projects
+
+/-- A successful native session in the initialized execution creates the
+actual derived key identified by the entry allocation counter and passes its
+slot to the clear/rotation/index suffix. That same receipt zeroes its handshake
+tag, preserves every other peer's tag and advances the counter once. Final
+role-slot residency remains distinct from this creation and clearing claim. -/
+theorem initialized_session_creation_and_clear (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
+    (trace : Runner.Trace) (placeholders : Bool) (pre post : List Exchange.Event)
+    (pid : PeerId) (r : WGRunWitness Bool)
+    (position : (runPrefixOuter (ExchangeDriver.execute trace placeholders) []).2 =
+      pre ++ Exchange.Event.session pid r :: post) (success : r.value = true) :
+    Exchange.SessionMaterialCut pid r ∧ handshakeTagAt r.after pid = some HANDSHAKE_ZEROED ∧
+    (∀ target, target ≠ pid → handshakeTagAt r.after target = handshakeTagAt r.before target) ∧
+    r.after.keypairCounter = r.before.keypairCounter + 1 :=
+  ⟨Exchange.initialized_session_material facts config traffic trace placeholders pre post pid r position success,
+    Exchange.initialized_session_clears facts config traffic trace placeholders pre post pid r position success⟩
+
+/-- Every successful initialized session contains exactly one actual
+keypairCreate receipt returning a key slot. Its native allocation endpoint
+identifies the created allocation rather than inferring existence from a
+counter increment; later slot residency is a separate lifetime claim. -/
+theorem initialized_session_single_allocation (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
+    (trace : Runner.Trace) (placeholders : Bool) (pre post : List Exchange.Event)
+    (pid : PeerId) (r : WGRunWitness Bool)
+    (position : (runPrefixOuter (ExchangeDriver.execute trace placeholders) []).2 =
+      pre ++ Exchange.Event.session pid r :: post) (success : r.value = true) :
+    ∃ slot allocation device,
+      (runWGPrefix (Installation.observed pid) r.before r.ambientBefore []).2 = [allocation] ∧
+      allocation.Valid ∧ allocation.execution.value = some slot ∧
+      allocation.execution.before.dev = some device ∧ slot = device.nextKeypairId ∧
+      allocation.execution.after = Lifetimes.keyAllocationWorld allocation.execution.before device allocation.word :=
+  Exchange.initialized_session_allocation facts config traffic trace placeholders pre post pid r position success
+
+/-- A normally refused session leaves the complete WireGuard state unchanged,
+including every handshake tag, the key store and allocation counter. This is
+tied to its actual receipt in the initialized execution; no incoming state
+invariant or successful session premise is assumed. -/
+theorem initialized_refused_session_unchanged (facts : H1DriverSourceFacts)
+    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
+    (trace : Runner.Trace) (placeholders : Bool) (pre post : List Exchange.Event)
+    (pid : PeerId) (r : WGRunWitness Bool)
+    (position : (runPrefixOuter (ExchangeDriver.execute trace placeholders) []).2 =
+      pre ++ Exchange.Event.session pid r :: post) (refused : r.value = false) : r.after = r.before :=
+  Exchange.initialized_session_refusal_world facts config traffic trace placeholders pre post pid r position refused
 
 end Leanux.Proofs.WG.HandshakeSecurity

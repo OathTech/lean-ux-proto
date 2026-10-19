@@ -19,10 +19,10 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 
 | Outcome | Status and remaining obligation |
 | --- | --- |
-| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Historical key-material continuity and global single consumption remain open. |
+| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Historical key-material continuity and reservation-to-encryption uniqueness remain open. |
 | T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; packet/material transport to actual encryption and socket emission, and complete TX dispositions, remain to prove. |
 | T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts, not causal closure of all delayed effects. |
-| T4 handshake replay resistance | Open. The allocation-aware retained-peer timestamp archive now closes over initialized executions; exchange-linked installation still needs full execution closure. |
+| T4 handshake replay resistance | Open. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Direct initialized stale-refusal/no-response and final role-slot residency exports remain. Named C2 source assumptions stay visible. |
 | T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Key-allocation continuity and the actual encryption prohibition remain open. |
 | T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized holder accounting and conditional cleanup remain open. |
 
@@ -305,21 +305,21 @@ and authentication invariants remain separate obligations.
 [AGENT 2026-10-19] Historical encryption identities pair a device epoch with
 a packet ID. Pending-alias exclusion and allocation-frontier bounds transport
 this history through allocation and device recreation; numeric IDs alone would
-conflate different device lifetimes. This carrier is separate from key-material
-continuity and is not yet initialized over the whole driver.
+conflate different device lifetimes. The carrier now closes over the initialized
+whole driver; key-material continuity remains a separate obligation.
 
 The register names each module's assumptions and boundaries. All six campaign
 outcomes remain open; these are compositional results toward those outcomes.
 
-The eighteenth source checkpoint passes all 1783 proof-build jobs and the
-1253-declaration gate across thirteen root modules, with only standard axioms.
+The nineteenth source checkpoint passes all 1848 proof-build jobs and the
+1271-declaration gate across thirteen root modules, with only standard axioms.
 All twelve witness recipes and fresh-root kernel replay pass at the default
 cap. The model executable build passes 130 jobs, and the unit suite
 completes 131 tests with one kernel-build-dependent skip. This checkpoint
-adds guarded fixture scopes while preserving the existing initialized claims.
-Historical encryption exclusion now covers native configuration, lifecycle and
-TX completion. Guarded completion-effect projection, exchange deferred/lifecycle
-transport and native slot-liveness contracts are also checked. All six outcomes remain open.
+adds initialized encryption-identity non-reuse, exact final causal-journal
+projection, initialized exchange epochs and concrete session allocation/clearing,
+initialized slot protection and stronger native joint holder contracts.
+All six outcomes remain open.
 No differential guest run is needed for this proof-only checkpoint: the mirror
 and its pin are unchanged. The inherited Env deprecation warning remains outside
 the permitted edit scope; campaign-owned code has no compiler warning.
@@ -383,6 +383,29 @@ open. A scoped removal proof compiler was deliberately interrupted after a
 looping tactic; all seven dirty repository worktrees were snapshotted with
 indexes and branches preserved before further development. The corrected
 proof passes; this development failure was not a mirror finding.
+
+The nineteenth checkpoint passes complete validation. Native exchange history derives
+from initialized execution, with named C2 native edge/configuration/traffic
+facts still explicit. Successful sessions now expose the actual singleton
+allocation receipt, derived material cut, handshake clearing and unchanged
+other-peer tags; false sessions preserve the complete WireGuard state. Direct
+initialized stale-refusal/no-response and final role-slot placement remain;
+T4 is not yet marked complete. Initialized slot liveness supplies independent peer
+protection on the same shared execution; exact key-holder accounting remains
+open. The parent joins physical occurrence ownership with the used-encryption
+history. Its initialized whole-driver proof now excludes repeated device-epoch/packet
+identities, with no supplied physical/history invariant, including both timer
+modes and stopped prefixes. Exact old-history projection transports this
+claim to the final causal journal. Complete native device configuration and
+TX/handshake iterations also preserve their stated joint holder accounts. All 1792 proof-source hashes stayed unchanged through the gate, replay and
+speedbump runs. Adopted owned-path pins are T3 `495d5e54`, T4 `5cdbf628` and
+T6 `1a6ff935`; no mirror or existing main proof file changed.
+
+[AGENT 2026-10-19] Additional causal and exchange receipts use a new journal
+instance of the same source driver. Its exact projection retains the prior
+journal's complete states, results, event order and stopped prefixes. This
+reuses existing initialized claims without a second execution or another
+native frame pass; causal authorization remains a separate obligation.
 
 ## Validation
 
