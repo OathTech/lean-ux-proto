@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Config.InitializedRoutingClaims
+import Leanux.Proofs.WG.Config.ConfiguredOwnerClaims
 import Leanux.Proofs.WG.Config.RoutingReadbackClaims
 import Leanux.Proofs.WG.Config.ReplacementInitialClaims
 import Leanux.Proofs.WG.Config.ReplacementMixedGetterClaims
@@ -2431,5 +2433,53 @@ theorem original_allowedip_routing_readback (d : Device) (t4 t6 : AllowedIps.Tre
         (result.1 = 0 → AllowedipMoved d out t4 t6 pid attrs) ∧
         result.2 = weightedPeerResult out (routingReadNode out) next ctx skb next.allowedipsList) :=
   allowedip_routing_readback d t4 t6 pid p attrs ctx skb shape routing resident fresh sequence
+
+/-- Every normal original allowed-IP setter retains configured, resident owners
+for both represented families from initial ownership and list residency.
+Invalid attributes and ENOMEM retain their actual effects; no final
+representation or successful-allocation premise is supplied. -/
+theorem original_allowedip_owner_coherence (d : Device) (t4 t6 : AllowedIps.Tree)
+    (pid : PeerId) (p : Peer) (attrs : AllowedIpAttrs)
+    (shape : AllowedIps.AddressShape attrs)
+    (routing : AllowedIps.RoutingInvariant d t4 t6)
+    (owners : ConfiguredOwners d t4 t6) (selected : pid ∈ d.peerList)
+    (resident : d.peers[pid]? = some p)
+    (listed : ∀ q ∈ d.peerList, ∃ p, d.peers[q]? = some p) :
+    Campaign2.Ensures (setAllowedip pid attrs) (fun s => s.wg.device = some d)
+      (fun ret s => ∃ out u4 u6, s.wg.device = some out ∧
+        AllowedipRoutingEffect d out t4 t6 pid attrs ret ∧
+        AllowedIps.RoutingInvariant out u4 u6 ∧ ConfiguredOwners out u4 u6 ∧
+        ResidentOwnerLists out u4 u6) :=
+  setAllowedip_resident_owners d t4 t6 pid p attrs shape routing owners selected resident listed
+
+
+/-- The original initialized runner keeps exactly its JSON or indexed Stop
+while retaining valid completed routing changes even before a later Stop.
+Parsed attributes supply the address-shape premise. -/
+theorem original_initialized_configuration_history (input : Lean.Json)
+    (trace : Runner.Trace) (parsed : Runner.parseTrace input = .ok trace)
+    (placeholders : Bool) :
+    (InitializedRouting.inspection trace placeholders).outcome.map Prod.fst =
+      Runner.executeTrace trace placeholders ∧
+    AllowedIps.CompletionSafe ([],[])
+      (InitializedRouting.inspection trace placeholders).routing :=
+  ⟨InitializedRouting.inspection_json trace placeholders,
+    InitializedRouting.inspection_safe trace
+      (Configuration.parseTrace_shape input trace parsed) placeholders⟩
+
+/-- A normal initialized execution has one actual endpoint carrying the
+routing fold, coherent resident base list, index invariant and residual account.
+Raw routing owners' membership in that base list is a separate obligation. -/
+theorem original_initialized_configuration_endpoint (input : Lean.Json)
+    (trace : Runner.Trace) (parsed : Runner.parseTrace input = .ok trace)
+    (placeholders : Bool) (json : Lean.Json)
+    (run : Runner.executeTrace trace placeholders = .ok json) :
+    ∃ final, (InitializedRouting.inspection trace placeholders).outcome = .ok (json,final) ∧
+      AllowedIps.CompletionSafe ([],[]) (InitializedRouting.inspection trace placeholders).routing ∧
+      InitializedRouting.RoutingAt (InitializedRouting.inspection trace placeholders).routing final ∧
+      InitializedRouting.BaseReady final ∧ Index.View.IndexCore final.toSnapshot ∧
+      Index.InitializedBounds.EndpointSafe final.toSnapshot ∧
+      Index.ReachedInitialized.ActualAccount trace placeholders json final :=
+  InitializedRouting.parsed_accepted input trace parsed placeholders json run
 
 end Leanux.Proofs.WG.Config
