@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingInteriorInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSocketInteriorInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerFinishInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedOrdinaryCleanupInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerRetirementInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSchedulerPointInitialized
@@ -2203,6 +2206,111 @@ theorem initialized_scheduler_source_points_conditional
     Covered native Good (scheduleShape none) world history ∧
       Remainders children (scheduleShape none) world history :=
   entry.source_points carrierGood children
+
+end
+
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open AuthenticatedEffects.CausalJournal Staged.Obligations HandshakeSecurity.StagedConservation StagingInterior
+
+/-- Security: the initialized routed take retains the exact ordered staged tickets when
+the native queue clears. Its actual receipt transfers those same tickets to
+the selected location before key borrowing, without losing obligations or
+charging a drop. -/
+theorem initialized_routed_take_interval
+    (caller : RoutedTransmit.Caller trace placeholders operationIndex world history)
+    (front : Transmit.Path caller.input caller.events caller.entered.wg caller.entered.ambient
+      (.ok pid) v b prior)
+    (device : v.dev=some d) (resident : d.peers[pid]?=some p)
+    (nonempty : p.staged.isEmpty=false) :
+    ∃ ledger,
+      let events := Transmit.resultHistory caller.input (.ok pid) caller.entered.wg v caller.entered.ambient b prior
+      let cleared := queueWorld pid p [] d v
+      let clockAfter := clock b .stagedEmpty false
+      let receipt : Take.Receipt := ⟨pid,⟨some p,v,cleared,b,clockAfter⟩⟩
+      ((Take.takePrefix pid).run v).run b=.ok ((some p,cleared),clockAfter) ∧
+      Staged.Origins.Aligned (Staged.Origins.Born events d.ifindex pid p.internalId)
+        (pendingAt (.staged d.ifindex pid p.internalId) ledger) p.staged ∧
+      Staged.stagedAt cleared pid=some (p.internalId,[]) ∧
+      Staged.dropped cleared=Staged.dropped v ∧
+      ∃ next generation, Staged.Obligations.Step ledger next ∧
+        next=transferLocation (.staged generation pid p.internalId) (.selected events.length) ledger ∧
+        CompleteSelected.Ready next [] [] generation pid p events.length
+          (events++[.stagingTaken receipt]) cleared clockAfter ∧
+        StagedEntry.SelectionContinuation receipt events :=
+  caller.take_interval front device resident nonempty
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Lifetimes Queues AuthenticatedEffects.CausalJournal AllocatedObligation AllocatedObligation.CompletionBatch Staged.Obligations
+open StagedTerminalComplete CompletionFirstTerminal ScheduledSource
+
+/-- Security: every reached packet in the initialized send list supplies the original
+binding and settlement chain for its socket result interval. The actual
+captured peer and family guard lead to one existing receipt and one
+settlement. Coverage inside a stopped socket front remains separate. -/
+theorem initialized_socket_result_intervals
+    (entry : TxEntry trace placeholders operationIndex pid world history)
+    (selected : runPrefix (workerSelection pid) world history=(.ok (some ⟨items,head,true⟩,u),middle))
+    (shape : items=done++(skb::rest))
+    (prepared : runPrefix (WorkerCompletion.prelude pid items) u
+      (middle++[WorkerCompletion.entered pid items middle])=(.ok ((),loopWorld),loopHistory))
+    (iterations : runPrefix (sendLoop completionOps pid done false) loopWorld loopHistory=
+      (.ok (next,v),after)) :
+    ∃ initial, ∃ context : CompletionBatch.Context,
+      context.pid=pid ∧ context.locals=[] ∧ context.items=items ∧ context.initialLedger=initial ∧
+      ∃ ledger debts packet z last,
+        SendSettlements context initial [] ledger debts ∧ Staged.Obligations.Step initial ledger ∧
+        runPrefix (WorkerCompletion.workerPrefix pid (.packet done skb)) world history=(.ok ((),z),last) ∧
+        Owned context (.sending (skb::rest)) last ledger debts z ∧ Complete last ledger ∧ PacketAt skb packet z ∧
+        ∀ peer q readEvents ipv4 result frontWorld events,
+          runPrefix (captureObserved (Completion.access (getPeerMixed context.pid))) z
+            (last.filterMap CausalJournal.completion?)=
+            (.ok (peer,q),last.filterMap CausalJournal.completion?++readEvents) →
+          SelectedFamily ipv4 peer →
+          runPrefix (SocketInterior.socketFront context.pid packet peer ipv4) (familyWorld ipv4 q)
+            ((last++readEvents.map FirstTerminal.encode).filterMap CausalJournal.completion?)=
+            (.ok (result,frontWorld),
+              (last++readEvents.map FirstTerminal.encode).filterMap CausalJournal.completion?++events) →
+          Nonempty (SocketInterior.Awaiting context skb rest packet peer ipv4
+            (last++readEvents.map FirstTerminal.encode) ledger debts (familyWorld ipv4 q) result frontWorld events) :=
+  entry.socket_intervals selected shape prepared iterations
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Queues AuthenticatedEffects.CausalJournal AllocatedObligation EncryptionPacket EncryptionInterior PeerRetirement
+variable {state : PacketState}
+
+/-- Security: after the initialized publication records final release, its original timer
+guard and both identity-retirement writes preserve the same settled packet
+ledger. A busy timer stops with the receipt retained; quiet cuts keep the
+original remaining runner continuation. -/
+theorem initialized_publication_release_finish_interiors
+    (entry : EncryptionRun.Entry trace placeholders operationIndex (some items) world history)
+    (path : PublicationPath items world history ledger [] [] headId head state v after)
+    (point : PublicationPoint .scheduled items state ledger [] [] v after first pid next last)
+    (native : ((HandshakeSecurity.StagedDisposal.releaseCut (some pid)).run next.wg).run next.ambient=
+      .ok ((some (owner,p),g),clock)) :
+    ∃ settled,
+      Staged.Obligations.Step ledger settled ∧ Staged.Obligations.AllocatedFrame ledger settled ∧
+      let recorded := last++[releaseEvent (some pid) (some (owner,p)) next.wg g next.ambient clock]
+      CompleteCarrier.Accounted recorded settled [] [] g ∧
+      Finish.Cases owner p g clock (((HandshakeSecurity.StagedDisposal.releaseFinish owner p).run g).run clock) ∧
+      (Finish.pending p=none → ∀ site : Finish.Site,
+        CompleteConsequences.Cut recorded settled [] [] (Finish.atWorld site owner g) ∧
+        runPrefixOuter (RoutingJoint.executeTraceWith (Driver.syscallObserved hooks)
+          (fun result w=>(result,w)) trace placeholders) [] =
+          runPrefixOuter (entry.resume
+            {next with wg:=Finish.atWorld site owner g,ambient:=Finish.atClock site owner clock}
+            (EncryptionRun.returned world items (do
+              liftWGObserver (liftWGPrefix (Finish.tailAt site owner))
+              pure true))) recorded) :=
+  entry.publication_finish_interiors path point native
 
 end
 
