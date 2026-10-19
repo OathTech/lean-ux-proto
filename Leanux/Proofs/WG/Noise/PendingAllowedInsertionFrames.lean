@@ -42,7 +42,7 @@ theorem addPlacedSource_frame (root : Slot) (bits key cidr : Nat) (pid : PeerId)
     SameView view (Config.addPlacedSource root bits key cidr pid placed exact) := by
   intro initial
   change Preserves (fun w => view w = initial) _
-  unfold Config.addPlacedSource
+  unfold Config.addPlacedSource Config.addPlacedSourceWith
   repeat' pending_allowed_step initial
 
 theorem addRootSource_frame (root : Slot) (bits key cidr : Nat) (pid : PeerId)
@@ -50,9 +50,9 @@ theorem addRootSource_frame (root : Slot) (bits key cidr : Nat) (pid : PeerId)
     SameView view (Config.addRootSource root bits key cidr pid trie) := by
   intro initial
   change Preserves (fun w => view w = initial) _
-  unfold Config.addRootSource
+  unfold Config.addRootSource Config.addRootSourceWith
   repeat' first
-    | (rx_retention_head Config.addPlacedSource
+    | (rx_retention_head Config.addPlacedSourceWith
        exact (addPlacedSource_frame _ _ _ _ _ _ _).wp (fun s => s = initial))
     | pending_allowed_step initial
 

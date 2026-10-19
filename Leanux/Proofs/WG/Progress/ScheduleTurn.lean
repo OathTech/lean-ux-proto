@@ -7,7 +7,7 @@ set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG Leanux.Env
 
-def resumeCandidates (stack : Option Worker) (candidates : List Activation) : M TurnResult := do
+def resumeCandidatesWith (run : Activation → M Unit) (stack : Option Worker) (candidates : List Activation) : M TurnResult := do
   match candidates with
   | [] => return turnReturn
   | [a] =>
@@ -15,14 +15,19 @@ def resumeCandidates (stack : Option Worker) (candidates : List Activation) : M 
       if ← Activation.hasWork { worker := w } then
         unsupported "the records do not determine which suspended worker resumed"
     modifyAmbient fun s => { s with suspended := s.suspended.filter (· != a) }
-    Activation.run a
+    run a
     return turnContinue
   | _ =>
     unsupported "the records do not determine which suspended worker resumed"
     return turnContinue
 
+
+def resumeCandidates (stack : Option Worker) (candidates : List Activation) : M TurnResult :=
+  resumeCandidatesWith Activation.run stack candidates
+
 /-- One original scheduler iteration, including its explicit return marker. -/
-def scheduleTurn (stack : Option Worker) : M TurnResult := do
+def scheduleTurnWith (run : Activation → M Unit) (dispatch : Worker → M Bool)
+    (consistent : Activation → M Bool) (napi : M Unit) (stack : Option Worker) : M TurnResult := do
   let netRx := (HiddenSite.sectionStart .netRx).info.id
   if (← getAmbient).hidden.isNone then
     let d ← getDev
@@ -39,10 +44,14 @@ def scheduleTurn (stack : Option Worker) : M TurnResult := do
   if let some (w, true) := next.bind sectionOf then
     if ← dispatch w then return turnContinue else return turnReturn
   if next == some netRx && (← getDev).peers.toList.any (·.2.napiScheduled) then
-    napiSoftirq
+    napi
     if (← peekHiddenSite) == some netRx then return turnReturn
     return turnContinue
-  resumeCandidates stack (← (← getAmbient).suspended.filterM Activation.consistent)
+  resumeCandidatesWith run stack (← (← getAmbient).suspended.filterM consistent)
+
+
+def scheduleTurn (stack : Option Worker) : M TurnResult :=
+  scheduleTurnWith Activation.run Env.dispatch Activation.consistent napiSoftirq stack
 
 theorem schedule_source (stack : Option Worker) :
     schedule stack = (do
@@ -52,7 +61,7 @@ theorem schedule_source (stack : Option Worker) :
       match result.1 with
       | some ret => pure ret
       | none => budgetExhausted "the scheduler loop") := by
-  simp only [schedule, scheduleTurn, resumeCandidates, turnContinue, turnReturn]
+  simp only [schedule, scheduleTurn, scheduleTurnWith, resumeCandidatesWith, turnContinue, turnReturn]
   congr 1
   funext budget
   congr 1
@@ -88,20 +97,20 @@ theorem turn_resumption (stack : Option Worker) (initial afterPeek : World) (nex
   have hok {α β : Type} (x : α) (f : α → Except Stop β) :
       (Except.ok x >>= f) = f x := rfl
   have hg (w : World) : (getAmbient : Leanux.M Ambient).run w = .ok (w.ambient, w) := rfl
-  simp only [scheduleTurn, StateT.run_bind, hg, hok]
+  simp only [scheduleTurn, scheduleTurnWith, StateT.run_bind, hg, hok]
   simp only [records, Bool.false_eq_true, ite_false]
   simp only [StateT.run_bind, peek, hok]
   cases hs : next.bind sectionOf with
   | none =>
     simp only [hd, hok]
-    simp only [noPoll, Bool.false_eq_true, ite_false, StateT.run_bind, hg, hok]
+    simp only [noPoll, Bool.false_eq_true, ite_false, StateT.run_bind, hg, hok, resumeCandidates]
   | some pair =>
     obtain ⟨worker, start⟩ := pair
     cases start with
     | true => exact False.elim (noStart worker hs)
     | false =>
       simp only [hd, hok]
-      simp only [noPoll, Bool.false_eq_true, ite_false, StateT.run_bind, hg, hok]
+      simp only [noPoll, Bool.false_eq_true, ite_false, StateT.run_bind, hg, hok, resumeCandidates]
 
 theorem turn_resumes_singleton (initial afterPeek : World) (next : Option Nat)
     (d : Device) (a : Activation) (records : initial.ambient.hidden.isNone = false)

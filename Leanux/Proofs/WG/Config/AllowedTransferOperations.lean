@@ -6,7 +6,8 @@ set_option autoImplicit false
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG
 
-def addPlacedSource (root : Slot) (bits key cidr : Nat) (pid : PeerId)
+def addPlacedSourceWith
+    (allocate : AllocSite → AipNode → AipM (Option NodeId)) (root : Slot) (bits key cidr : Nat) (pid : PeerId)
     (placed : Option NodeId) (exact : Bool) : WG.M Int := do
   if ← branch .addExact exact then
     let some id := placed | invariant "exact placement without a node"
@@ -14,7 +15,7 @@ def addPlacedSource (root : Slot) (bits key cidr : Nat) (pid : PeerId)
     listDel id              -- list_move_tail
     listAddTail pid id
     return 0
-  let newnodeAlloc ← allocNode .allocNode205 (newNode key cidr bits (some pid))
+  let newnodeAlloc ← allocate .allocNode205 (newNode key cidr bits (some pid))
   if ← branch .addNewnodeNoMem newnodeAlloc.isNone then return -ENOMEM
   let some newnode := newnodeAlloc | invariant "unreachable"
   listAddTail pid newnode
@@ -38,7 +39,7 @@ def addPlacedSource (root : Slot) (bits key cidr : Nat) (pid : PeerId)
     if ← branch .addNewnodeAtRoot parent.isNone then connectNode root newnode
     else if let some p := parent then chooseAndConnectNode p newnode
     return 0
-  let nodeAlloc ← allocNode .allocNode234 (newNode (← getNode newnode).bits cidr bits none)
+  let nodeAlloc ← allocate .allocNode234 (newNode (← getNode newnode).bits cidr bits none)
   if ← branch .addIntermediateNoMem nodeAlloc.isNone then
     listDel newnode
     freeNode newnode
@@ -50,18 +51,27 @@ def addPlacedSource (root : Slot) (bits key cidr : Nat) (pid : PeerId)
   else if let some p := parent then chooseAndConnectNode p node
   return 0
 
-def addRootSource (root : Slot) (bits key cidr : Nat) (pid : PeerId)
+def addPlacedSource (root : Slot) (bits key cidr : Nat) (pid : PeerId)
+    (placed : Option NodeId) (exact : Bool) : WG.M Int :=
+  addPlacedSourceWith WG.allocNode root bits key cidr pid placed exact
+
+def addRootSourceWith
+    (allocate : AllocSite → AipNode → AipM (Option NodeId)) (root : Slot) (bits key cidr : Nat) (pid : PeerId)
     (trie : Option NodeId) : WG.M Int := do
   if ← branch .addEmptyTrie trie.isNone then
     let some id ← (do
-        let r ← allocNode .allocNode190 (newNode key cidr bits (some pid))
+        let r ← allocate .allocNode190 (newNode key cidr bits (some pid))
         if ← branch .addRootNoMem r.isNone then return none
         pure r) | return -ENOMEM
     listAddTail pid id
     connectNode root id
     return 0
   let (placed, exact) ← nodePlacement trie key cidr bits
-  addPlacedSource root bits key cidr pid placed exact
+  addPlacedSourceWith allocate root bits key cidr pid placed exact
+
+def addRootSource (root : Slot) (bits key cidr : Nat) (pid : PeerId)
+    (trie : Option NodeId) : WG.M Int :=
+  addRootSourceWith WG.allocNode root bits key cidr pid trie
 
 theorem add_transfer_source (root : Slot) (bits key cidr : Nat) (peer : Option PeerId) :
     add root bits key cidr peer = (do

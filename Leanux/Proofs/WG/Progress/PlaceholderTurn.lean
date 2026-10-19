@@ -29,7 +29,7 @@ theorem turn_placeholder (stack : Option Worker) (initial : World) (d : Device)
   have hg (w : World) : (getAmbient : Leanux.M Ambient).run w = .ok (w.ambient, w) := rfl
   have hok {α β : Type} (x : α) (f : α → Except Stop β) :
       (Except.ok x >>= f) = f x := rfl
-  simp only [scheduleTurn, StateT.run_bind, hg,
+  simp only [scheduleTurn, scheduleTurnWith, StateT.run_bind, hg,
     records, Option.isNone_none, ite_true, hd, hok]
   rfl
 

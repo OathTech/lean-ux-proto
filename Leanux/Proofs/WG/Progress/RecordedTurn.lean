@@ -17,7 +17,7 @@ theorem turn_dispatch (stack : Option Worker) (worker : Worker)
   have hok {α β : Type} (x : α) (f : α → Except Stop β) :
       (Except.ok x >>= f) = f x := rfl
   have hg (w : World) : (getAmbient : Leanux.M Ambient).run w = .ok (w.ambient, w) := rfl
-  simp only [scheduleTurn, StateT.run_bind, hg, hok,
+  simp only [scheduleTurn, scheduleTurnWith, StateT.run_bind, hg, hok,
     records, Bool.false_eq_true, ite_false, peek, start]
   cases hd : (dispatch worker).run afterPeek with
   | error err => rfl
@@ -99,7 +99,7 @@ theorem turn_napi (stack : Option Worker) (initial afterPeek : World) (next : Op
   have hok {α β : Type} (x : α) (f : α → Except Stop β) :
       (Except.ok x >>= f) = f x := rfl
   have hg (w : World) : (getAmbient : Leanux.M Ambient).run w = .ok (w.ambient, w) := rfl
-  simp only [scheduleTurn, StateT.run_bind, hg, hok,
+  simp only [scheduleTurn, scheduleTurnWith, StateT.run_bind, hg, hok,
     records, Bool.false_eq_true, ite_false, peek]
   cases hs : next.bind sectionOf with
   | none =>

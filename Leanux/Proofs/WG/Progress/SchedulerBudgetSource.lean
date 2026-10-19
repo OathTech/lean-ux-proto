@@ -29,7 +29,7 @@ theorem scheduleTurn_result (stack : Option Worker) :
     apply (hoare_iff_run _ _ _).mpr
     intro before result after pre run
     cases run
-  unfold scheduleTurn resumeCandidates
+  unfold scheduleTurn scheduleTurnWith resumeCandidatesWith
   dsimp only
   repeat' first
     | with_reducible exact finish turnReturn (Or.inl rfl)

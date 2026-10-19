@@ -46,7 +46,7 @@ theorem placed_insertion {V : Type} {view : WGWorld → V} (contracts : Insertio
     SameView view (Config.addPlacedSource root bits key cidr pid placed exact) := by
   intro initial
   change Preserves (fun w=>view w=initial) _
-  unfold Config.addPlacedSource
+  unfold Config.addPlacedSource Config.addPlacedSourceWith
   repeat' allowed_frame_step contracts at initial
 
 theorem root_insertion {V : Type} {view : WGWorld → V} (contracts : InsertionContracts view)
@@ -54,9 +54,9 @@ theorem root_insertion {V : Type} {view : WGWorld → V} (contracts : InsertionC
     SameView view (Config.addRootSource root bits key cidr pid trie) := by
   intro initial
   change Preserves (fun w=>view w=initial) _
-  unfold Config.addRootSource
+  unfold Config.addRootSource Config.addRootSourceWith
   repeat' first
-    | (rx_retention_head Config.addPlacedSource;
+    | (rx_retention_head Config.addPlacedSourceWith;
        exact (placed_insertion contracts _ _ _ _ _ _ _).wp (fun s=>s=initial))
     | allowed_frame_step contracts at initial
 

@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Progress.ActivationFiniteClaims
+import Leanux.Proofs.WG.Progress.SchedulerFiniteClaims
+import Leanux.Proofs.WG.Progress.PeerFiniteClaims
+import Leanux.Proofs.WG.Progress.AllowedFiniteClaims
 import Leanux.Proofs.WG.Progress.CookieFiniteClaims
 import Leanux.Proofs.WG.Progress.ReceptionFiniteClaims
 import Leanux.Proofs.WG.Progress.InitiationFiniteClaims
@@ -1736,5 +1740,68 @@ callback refusal and every original Stop outcome. -/
 theorem original_receive_step_finite :
     Campaign2.AgreesOn (fun _ => True) WG.receiveStep HandshakeFinite.receiveStep :=
   HandshakeFinite.original_receiveStep_finite
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_activation_iteration_finite (a : Activation) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.Activation.iter a) (ActivationFinite.iteration a) :=
+  ActivationFinite.original_iteration_finite a
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_activation_run_finite (a : Activation) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.Activation.run a) (ActivationFinite.run a) :=
+  ActivationFinite.original_run_finite a
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_activation_dispatch_finite (worker : Worker) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.dispatch worker) (ActivationFinite.dispatch worker) :=
+  ActivationFinite.original_dispatch_finite worker
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_scheduler_consistent_finite (a : Activation) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.Activation.consistent a) (SchedulerFinite.consistent a) :=
+  SchedulerFinite.original_consistent_finite a
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_scheduler_schedule_finite (stack : Option Worker) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.schedule stack) (SchedulerFinite.schedule stack) :=
+  SchedulerFinite.original_schedule_finite stack
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_peer_precompute_finite (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.precomputeStaticStatic pid) (PeerFinite.precompute pid) :=
+  PeerFinite.original_precompute_finite pid
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_peer_setPrivate_finite (key : Key) :
+    Campaign2.AgreesOn (fun _ => True) (WG.setStaticIdentityPrivateKey key) (PeerFinite.setPrivate key) :=
+  PeerFinite.original_setPrivate_finite key
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_peer_handshakeInit_finite (pid : PeerId) (psk : Option Key) :
+    Campaign2.AgreesOn (fun _ => True) (WG.handshakeInit pid psk) (PeerFinite.handshakeInit pid psk) :=
+  PeerFinite.original_handshakeInit_finite pid psk
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_peer_create_finite (key : Key) (psk : Option Key) :
+    Campaign2.AgreesOn (fun _ => True) (WG.peerCreate key psk) (PeerFinite.create key psk) :=
+  PeerFinite.original_create_finite key psk
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_allowed_allocate_finite (site : AllocSite) (node : AipNode) :
+    Campaign2.AgreesOn (fun _ => True) (liftAip (WG.allocNode site node))
+      (liftAip (AllowedFinite.allocate site node)) :=
+  AllowedFinite.original_allocate_finite site node
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_allowed_add_finite (root : Slot) (bits key cidr : Nat) (peer : Option PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.add root bits key cidr peer)
+      (AllowedFinite.add root bits key cidr peer) :=
+  AllowedFinite.original_add_finite root bits key cidr peer
+
+/-- Exact finite native evaluation; original refusals and Stops remain unchanged. -/
+theorem original_allowed_insert_finite (family addr cidr : Nat) (peer : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.insert family addr cidr peer)
+      (AllowedFinite.insert family addr cidr peer) :=
+  AllowedFinite.original_insert_finite family addr cidr peer
 
 end Leanux.Proofs.WG.Progress

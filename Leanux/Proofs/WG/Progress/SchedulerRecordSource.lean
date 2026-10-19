@@ -14,7 +14,7 @@ theorem resumeCandidates_retains (records : List HiddenRecord) (stack : Option W
     apply (hoare_iff_run _ _ _).mpr
     intro before value after pre run
     cases run
-  unfold resumeCandidates
+  unfold resumeCandidates resumeCandidatesWith
   repeat' first
     | with_reducible exact hasWork_retains records _
     | with_reducible exact activation_retains _ records
@@ -32,7 +32,11 @@ theorem scheduleTurn_retains (records : List HiddenRecord) (stack : Option Worke
   have fail {α : Type} (message : String) :
       Preserves (fun w : World=>Tail records w.ambient.hidden) (invariant message : Leanux.M α) :=
     product_invariant_retains records message
-  unfold scheduleTurn
+  have resumed (candidates : List Activation) :
+      Preserves (fun w : World=>Tail records w.ambient.hidden)
+        (resumeCandidatesWith Env.Activation.run stack candidates) := by
+    simpa only [resumeCandidates] using resumeCandidates_retains records stack candidates
+  unfold scheduleTurn scheduleTurnWith
   repeat' first
     | with_reducible exact getAmbient_retains records
     | with_reducible exact dev
@@ -40,7 +44,7 @@ theorem scheduleTurn_retains (records : List HiddenRecord) (stack : Option Worke
     | with_reducible exact dispatch_retains _ records
     | with_reducible exact softirq_retains records
     | with_reducible exact consistentFilter_retains records _
-    | with_reducible exact resumeCandidates_retains records _ _
+    | with_reducible exact resumed _
     | with_reducible exact fail _
     | with_reducible exact preserves_pure _
     | with_reducible apply preserves_bind
@@ -150,7 +154,7 @@ theorem resumeCandidates_continue_strict (records : List HiddenRecord)
       cases stack with
       | none => exact finish
       | some worker =>
-        unfold resumeCandidates
+        unfold resumeCandidates resumeCandidatesWith
         apply hoare_bind _ _ (hasWork_retains records _)
         intro busy
         cases busy
@@ -192,7 +196,7 @@ theorem scheduleTurn_continue_strict (stack : Option Worker) (records : List Hid
     cases device : middle.wg.dev with
     | none =>
       have hg (w : World) : (getAmbient : Leanux.M Ambient).run w=.ok (w.ambient,w):=rfl
-      simp only [scheduleTurn,StateT.run_bind,hg,hok,recorded,Bool.false_eq_true,ite_false,peek] at run
+      simp only [scheduleTurn, scheduleTurnWith,StateT.run_bind,hg,hok,recorded,Bool.false_eq_true,ite_false,peek] at run
       cases selected : next.bind sectionOf with
       | none =>
         change ((liftWG getDev).run middle >>= _) = _ at run

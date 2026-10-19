@@ -35,7 +35,7 @@ theorem addPlaced_exact_returns (root : Slot) (bits addr cidr : Nat) (d : Device
       liftAip (getNode nid) := rfl
   have setLift (nid : NodeId) (value : AipNode) : (monadLift (setNode nid value) : WG.M Unit) =
       liftAip (setNode nid value) := rfl
-  simp only [addPlacedSource, getLift, setLift]
+  simp only [addPlacedSource, addPlacedSourceWith, getLift, setLift]
   simp [branch, AmbientM.branch, getNode, setNode, liftAip, getDev, modifyDev,
     device, node, first, beforeList, owned] at listRun ⊢
   rw [listRun]
@@ -64,7 +64,7 @@ theorem addRoot_exact_returns (v4 : Bool) (d : Device) (id : NodeId) (addr cidr 
   have placementLift : (monadLift (nodePlacement (some id) addr cidr (allowedBits v4)) :
       WG.M (Option NodeId × Bool)) =
       liftAip (nodePlacement (some id) addr cidr (allowedBits v4)) := rfl
-  simp only [addRootSource, placementLift]
+  simp only [addRootSource, addRootSourceWith, placementLift]
   simp [branch, AmbientM.branch]
   change (((liftAip (nodePlacement (some id) addr cidr (allowedBits v4))).run g).run first >>=
     fun ((r, g'), a') =>

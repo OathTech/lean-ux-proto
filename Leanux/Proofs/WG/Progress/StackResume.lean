@@ -17,7 +17,7 @@ theorem resumeCandidates_stack_busy (worker : Worker) (a : Activation) (initial 
     (resumeCandidates (some worker) [a]).run initial = .error (resumptionAmbiguity initial) := by
   have same := hasWork_world { worker } initial initial true after rfl busy
   subst after
-  simp only [resumeCandidates, StateT.run_bind, busy]
+  simp only [resumeCandidates, resumeCandidatesWith, StateT.run_bind, busy]
   rfl
 
 theorem resumeCandidates_stack_idle (worker : Worker) (a : Activation) (initial after : World)
@@ -26,13 +26,13 @@ theorem resumeCandidates_stack_idle (worker : Worker) (a : Activation) (initial 
       ((Activation.run a).run (detached initial a) >>= fun out => pure (turnContinue, out.2)) := by
   have same := hasWork_world { worker } initial initial false after rfl idle
   subst after
-  simp only [resumeCandidates, StateT.run_bind, idle]
+  simp only [resumeCandidates, resumeCandidatesWith, StateT.run_bind, idle]
   rfl
 
 theorem resumeCandidates_stack_error (worker : Worker) (a : Activation) (initial : World) (err : Stop)
     (failed : (Activation.hasWork { worker }).run initial = .error err) :
     (resumeCandidates (some worker) [a]).run initial = .error err := by
-  simp only [resumeCandidates, StateT.run_bind, failed]
+  simp only [resumeCandidates, resumeCandidatesWith, StateT.run_bind, failed]
   rfl
 
 theorem turn_stack_busy (worker : Worker) (initial afterPeek : World) (next : Option Nat)
