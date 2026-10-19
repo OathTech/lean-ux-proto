@@ -113,6 +113,7 @@ theorem hooks_safe : Driver.HooksHistorySafe IncreasingReceipts hooks where
   flushedSend := fun _ => Driver.History.state_lift _
   candidateEnter := fun _ _ => Driver.History.product_pure _
   candidateLeave := fun _ => Driver.History.product_pure _
+  stackInput := fun _ _ preserves => preserves
   prepare := Driver.History.product_lift _
   counterCheck := fun _ _ => Driver.History.product_state (Driver.History.state_lift _)
   timerSelected := fun _ _ _ _ _ => Driver.History.product_pure _

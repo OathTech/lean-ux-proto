@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverGroNeutral
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportJournalStaging
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportWorkerFrames
 import Leanux.Proofs.WG.TransmitSecurity.DriverNeutralCalls
@@ -58,6 +59,7 @@ theorem base {g : PrefixM Journal.Event α} (safe : ProductSafe g) :
 
 theorem nativePoll (pid : PeerId) (budget : Nat) :
     ProductSafe (Driver.nativePollObserved Journal.hooks pid budget) := by
+  rw [Driver.nativePoll_neutral _ rfl]
   have carrier := TransportReplay.poll_checked origin? replay? Event.replay (fun _ => rfl) (fun _ => rfl)
     (fun pid pkt ep => liftWGObserver (Driver.consumeObserved Journal.hooks pid pkt ep))
     (napiGroReceivePrefix (Driver.stackFlushObserved Journal.hooks))
@@ -67,6 +69,6 @@ theorem nativePoll (pid : PeerId) (budget : Nat) :
     (fun gro => base (gro_flush _ (TransportCarrier.flush staging front) gro)) pid budget
   unfold TransportReplay.Preserves TransportReplay.Inv at carrier
   simpa only [ProductSafe,TransportCarrier.ProductSafe,and_true,liftWGObserver_lift,
-    Driver.nativePollObserved,Driver.pollObserved,Journal.hooks,CandidatePoll.neutral] using carrier
+    Driver.pollObserved,Journal.hooks,CandidatePoll.neutral] using carrier
 
 end Leanux.Proofs.WG.AuthenticatedEffects.TransportJournal

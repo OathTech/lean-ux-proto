@@ -28,6 +28,7 @@ private theorem quiet_hooks : Driver.HooksHistorySafe Safe quietHooks where
   queueSend := effects_safe.append
   candidateEnter := fun skb packet => product_enter (.candidate skb packet) (fun _ => True.intro)
   candidateLeave := product_leave
+  stackInput := fun _ _ preserves => preserves
   prepare := prepare
   counterCheck := counter
   timerSelected := fun _ _ _ _ _ => Driver.History.product_pure _

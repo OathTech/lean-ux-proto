@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.RoutingFinal
 import Leanux.Proofs.WG.TransmitSecurity.NonceStagingSafety
 import Leanux.Proofs.WG.TransmitSecurity.NonceInitialized
 import Leanux.Proofs.WG.TransmitSecurity.NonceTimers
@@ -759,5 +760,26 @@ theorem initialized_socket_ciphertext_provenance (trace : Runner.Trace) (placeho
         AuthenticatedEffects.CausalJournal.old?) :=
   ⟨CiphertextOrigins.initialized trace placeholders,
     CiphertextOrigins.final_initialized trace placeholders⟩
+
+/-- Security: recorded routing admissions cannot fabricate a destination-peer
+selection; every initialized receipt is the actual native front through its
+completed staged splice, including receipts retained before a later Stop. -/
+theorem initialized_routing_admission_receipts (trace : Runner.Trace) (placeholders : Bool) :
+    Journal.RoutingHistory.Safe (runPrefixOuter (Journal.execute trace placeholders) []).2 ∧
+    Journal.RoutingHistory.Safe
+      ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+        AuthenticatedEffects.CausalJournal.old?) :=
+  ⟨Journal.RoutingHistory.initialized trace placeholders,
+    Journal.RoutingHistory.final_initialized trace placeholders⟩
+
+/-- Security: a successful native admission selects the peer by the packet's
+own destination, before the staged splice; subsequent configuration changes do
+not replace that historical lookup. R3 supplies the separate flat-trie relation. -/
+theorem recorded_admission_destination (receipt : Journal.RoutingHistory.Receipt)
+    (valid : receipt.Valid) (pid : PeerId) (selected : receipt.run.value = .ok pid) :
+    Packets.TxFrontCut receipt.family receipt.addr receipt.packets receipt.mtu
+      receipt.run.before receipt.run.after receipt.run.ambientBefore receipt.run.ambientAfter pid ∧
+    ∀ packet ∈ receipt.packets, Packets.destinationField receipt.family packet.bytes = receipt.addr :=
+  receipt.selection valid pid selected
 
 end Leanux.Proofs.WG.TransmitSecurity

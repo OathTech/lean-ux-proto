@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverGroNeutral
 import Leanux.Proofs.WG.TransmitSecurity.CiphertextOriginDriverReceive
 import Leanux.Proofs.WG.TransmitSecurity.CiphertextOriginFrontFrames
 import Leanux.Proofs.WG.TransmitSecurity.CiphertextOriginProductFrames
@@ -60,7 +61,8 @@ theorem stack_flush (packets : List (List UInt8)) :
     exact PrefixPreserves.bind (stack bytes) (fun _ => ih)
 
 theorem native_poll (pid : PeerId) (budget : Nat) :
-    ProductSafe (Driver.nativePollObserved Journal.hooks pid budget) :=
-  poll pid budget _ stack_flush
+    ProductSafe (Driver.nativePollObserved Journal.hooks pid budget) := by
+  rw [Driver.nativePoll_neutral _ rfl]
+  exact poll pid budget _ stack_flush
 
 end Leanux.Proofs.WG.TransmitSecurity.CiphertextOrigins

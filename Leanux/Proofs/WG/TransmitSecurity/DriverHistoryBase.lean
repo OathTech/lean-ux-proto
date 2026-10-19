@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.GroOccurrenceFrames
 import Leanux.Proofs.WG.TransmitSecurity.DriverSource
 import Leanux.Proofs.Logged.PrefixOuter
 import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsContracts
@@ -26,6 +27,8 @@ structure HooksHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
   queueSend : ∀ pid, StateHistorySafe Safe (hooks.queueSend pid)
   candidateEnter : ∀ skb pkt, ProductHistorySafe Safe (hooks.candidateEnter skb pkt)
   candidateLeave : ∀ token, ProductHistorySafe Safe (hooks.candidateLeave token)
+  stackInput : ∀ entry body, ProductHistorySafe Safe body →
+    ProductHistorySafe Safe (hooks.stackInput entry body)
   prepare : ProductHistorySafe Safe hooks.prepare
   counterCheck : ∀ skb pkt, ProductHistorySafe Safe (hooks.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we, ProductHistorySafe Safe (hooks.timerSelected d j pid t we)
@@ -59,6 +62,8 @@ structure ActorHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
   queueSend : ∀ pid, StateHistorySafe Safe (hooks.queueSend pid)
   candidateEnter : ∀ skb pkt, ProductHistorySafe Safe (hooks.candidateEnter skb pkt)
   candidateLeave : ∀ token, ProductHistorySafe Safe (hooks.candidateLeave token)
+  stackInput : ∀ entry body, ProductHistorySafe Safe body →
+    ProductHistorySafe Safe (hooks.stackInput entry body)
   prepare : ProductHistorySafe Safe hooks.prepare
   counterCheck : ∀ skb pkt, ProductHistorySafe Safe (hooks.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we, ProductHistorySafe Safe (hooks.timerSelected d j pid t we)

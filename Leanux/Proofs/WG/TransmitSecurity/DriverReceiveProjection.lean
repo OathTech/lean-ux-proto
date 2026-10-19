@@ -46,7 +46,7 @@ theorem poll_projects (h : HooksProjects ρ g a) (pid : PeerId) (budget : Nat)
     (cb : List (List UInt8) → PrefixM E Unit) (ca : List (List UInt8) → PrefixM F Unit)
     (hc : ∀ ps, ProjectsPrefix ρ id (cb ps) (ca ps)) :
     ProjectsPrefix ρ id (pollObserved g pid budget cb) (pollObserved a pid budget ca) := by
-  obtain ⟨scopeMap,enter,leave⟩ := h.candidate
+  obtain ⟨scopeMap,enter,leave,_⟩ := h.candidate
   exact AuthenticatedEffects.CandidatePoll.projects ρ scopeMap _ _ _ _ _ _ _ _ _ _ _ _ _ _
     enter leave (fun _ => (Projection.state_lift ρ _).liftWGObserver ρ id)
     h.counterCheck (fun peer pkt ep => (consume_projects h peer pkt ep).liftWGObserver ρ id)
@@ -85,7 +85,13 @@ theorem flush_projects (h : HooksProjects ρ g a) (ps : List (List UInt8)) :
 
 theorem nativePoll_projects (h : HooksProjects ρ g a) (pid : PeerId) (budget : Nat) :
     ProjectsPrefix ρ id (nativePollObserved g pid budget) (nativePollObserved a pid budget) :=
-  poll_projects h pid budget _ _ (flush_projects h)
+by
+  obtain ⟨scopeMap,enter,leave,stackInput⟩ := h.candidate
+  exact AuthenticatedEffects.GroOccurrencePoll.observed_matching ρ scopeMap
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ enter leave
+    (fun _ => (Projection.state_lift ρ _).liftWGObserver ρ id)
+    h.counterCheck (fun peer pkt ep => (consume_projects h peer pkt ep).liftWGObserver ρ id)
+    (stack_projects h) stackInput pid budget
 
 theorem softirq_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (softirqObserved g) (softirqObserved a) := by

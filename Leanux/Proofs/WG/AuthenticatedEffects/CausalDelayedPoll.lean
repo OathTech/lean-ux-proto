@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverGroNeutral
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedEncryption
 
 /-! Actual RX poll and buffered stack callbacks retain the live delayed-effect
@@ -74,8 +75,9 @@ theorem receive_poll (pid : PeerId) (budget : Nat)
     | (causal_delayed_head liftWGPrefix; solve | causal_delayed_poll_native)
     | causal_delayed_product_step
 
-theorem native_poll (pid : PeerId) (budget : Nat) : ProductSafe (Driver.nativePollObserved hooks pid budget) :=
-  receive_poll pid budget _ stack_flush
+theorem native_poll (pid : PeerId) (budget : Nat) : ProductSafe (Driver.nativePollObserved hooks pid budget) := by
+  rw [Driver.nativePoll_neutral _ rfl]
+  exact receive_poll pid budget _ stack_flush
 
 private theorem pending : ProductSafe (liftWGObserver (liftWGPrefix RxNapi.pendingSource)) := by
   apply product_state

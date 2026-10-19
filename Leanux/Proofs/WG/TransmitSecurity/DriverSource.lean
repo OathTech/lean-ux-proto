@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.GroOccurrenceObserved
 import Leanux.Proofs.WG.TransmitSecurity.NonceInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderStagingSource
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerSource
@@ -28,6 +29,8 @@ structure Hooks (E : Type) where
     fun pid => liftWGPrefix (modifyDev fun d => {d with sendWorkQueue := d.sendWorkQueue ++ [pid]})
   candidateEnter : SkbId → RxPacket → PrefixM E Nat := fun _ _ => pure 0
   candidateLeave : Nat → PrefixM E Unit := fun _ => pure ()
+  stackInput : AuthenticatedEffects.GroOccurrence.Entry → PrefixM E Unit → PrefixM E Unit :=
+    fun _ body => body
   prepare : PrefixM E (Option PeerId) := liftPrefix (liftWG RxWorkers.prepareSource)
   counterCheck : SkbId → RxPacket → PrefixM E Bool :=
     fun _ pkt => liftWGObserver (liftWGPrefix (counterValidate pkt.keypair pkt.nonce))
@@ -162,7 +165,11 @@ def stackFlushObserved (hooks : Hooks E) (packets : List (List UInt8)) : PrefixM
   packets.forM (stackObserved hooks)
 
 def nativePollObserved (hooks : Hooks E) (pid : PeerId) (budget : Nat) : PrefixM E Nat :=
-  (pollObserved hooks) pid budget (stackFlushObserved hooks)
+  AuthenticatedEffects.GroOccurrencePoll.observed
+    (fun action => liftWGObserver (liftWGPrefix action))
+    hooks.candidateEnter hooks.candidateLeave hooks.counterCheck
+    (fun peer packet endpoint => liftWGObserver (consumeObserved hooks peer packet endpoint))
+    hooks.stackInput (stackObserved hooks) pid budget
 
 def softirqObserved (hooks : Hooks E) : PrefixM E Unit :=
   RxNapi.softirqWith (liftWGObserver (liftWGPrefix RxNapi.pendingSource)) (nativePollObserved hooks)

@@ -91,6 +91,7 @@ theorem quiet : QuietHooksSafe Good Journal.hooks where
   flushedSend := fun _ => Driver.History.state_lift _
   candidateEnter := fun _ _ => Driver.History.product_pure _
   candidateLeave := fun _ => Driver.History.product_pure _
+  stackInput := fun _ _ preserves => preserves
   prepare := focus_product _ _ (fun _ => rfl) _
   counterCheck := fun _ _ => receipt_product _ _ (fun _ => rfl) (Driver.History.product_lift _)
   timerSelected := timer

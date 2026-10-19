@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.GroConfirmationOrder
 import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationOrderQuiet
 import Leanux.Proofs.WG.AuthenticatedEffects.CandidateOrder
 
@@ -23,6 +24,8 @@ structure QuietHooksSafe (Good : List E → Prop) (hooks : Driver.Hooks E) : Pro
   flushedSend : ∀ pid, StateHistorySafe Good (hooks.flushedSend pid)
   candidateEnter : ∀ skb pkt, ProductHistorySafe Good (hooks.candidateEnter skb pkt)
   candidateLeave : ∀ token, ProductHistorySafe Good (hooks.candidateLeave token)
+  stackInput : ∀ entry body, ProductHistorySafe Good body →
+    ProductHistorySafe Good (hooks.stackInput entry body)
   prepare : ProductHistorySafe Good hooks.prepare
   counterCheck : ∀ skb pkt, ProductHistorySafe Good (hooks.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we, ProductHistorySafe Good (hooks.timerSelected d j pid t we)
@@ -51,6 +54,7 @@ private theorem quiet_hooks (h : QuietHooksSafe Good hooks) :
   flushedSend := h.flushedSend
   candidateEnter := h.candidateEnter
   candidateLeave := h.candidateLeave
+  stackInput := h.stackInput
   prepare := h.prepare
   counterCheck := h.counterCheck
   timerSelected := h.timerSelected
@@ -104,13 +108,21 @@ theorem quiet_nativePoll (record : AuthenticatedEffects.TransportDriver.Replay �
     (counter : hooks.counterCheck = AuthenticatedEffects.TransportDriver.counter record)
     (confirmed : hooks.confirmation = confirmation responder decode) (pid : PeerId) (budget : Nat) :
     ProductHistorySafe (Safe record decode) (Driver.nativePollObserved hooks pid budget) := by
-  unfold Driver.nativePollObserved Driver.pollObserved
+  unfold Driver.nativePollObserved AuthenticatedEffects.GroOccurrencePoll.observed
   rw [counter]
-  exact AuthenticatedEffects.CandidateOrder.shared_poll record responder decode inverse quiet hooks
-    hooks.candidateEnter hooks.candidateLeave h.candidateEnter h.candidateLeave confirmed
-    (fun pid pkt value => (quiet_receiveTail h pid pkt value).liftWGObserver)
-    (Driver.stackFlushObserved hooks)
-    (quiet_groReceive _ (quiet_stackFlush h))
-    (quiet_groFlush _ (quiet_stackFlush h)) pid budget
+  apply GroConfirmationOrder.poll record decode quiet hooks.candidateEnter hooks.candidateLeave
+    _ _ _ h.candidateEnter h.candidateLeave
+  · exact shared_consumer record responder decode inverse hooks confirmed
+      (fun pid pkt value => (quiet_receiveTail h pid pkt value).liftWGObserver)
+  · exact AuthenticatedEffects.GroOccurrence.receive_preserves (Base record decode) (Safe record decode)
+      (fun _ _ hi => hi) _
+      (AuthenticatedEffects.GroOccurrence.stack_preserves (Base record decode) (Safe record decode)
+        (fun _ _ hi => hi) hooks.stackInput (Driver.stackObserved hooks)
+        (fun bytes => by exact Driver.stack_history (g := neutralConfirmation hooks) (quiet_hooks h).actors bytes) h.stackInput)
+  · exact AuthenticatedEffects.GroOccurrence.flushAll_preserves (Base record decode) (Safe record decode)
+      (fun _ _ hi => hi) _
+      (AuthenticatedEffects.GroOccurrence.stack_preserves (Base record decode) (Safe record decode)
+        (fun _ _ hi => hi) hooks.stackInput (Driver.stackObserved hooks)
+        (fun bytes => by exact Driver.stack_history (g := neutralConfirmation hooks) (quiet_hooks h).actors bytes) h.stackInput)
 
 end Leanux.Proofs.WG.HandshakeSecurity.ConfirmationTransportOrder

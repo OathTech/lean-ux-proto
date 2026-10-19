@@ -45,7 +45,8 @@ theorem nonce_projection : Driver.HooksProjects erase Driver.nonceHooks hooks wh
   queueSend := fun _ => Driver.Projection.state_lift erase _
   flushedSend := fun _ => Driver.Projection.state_lift erase _
   candidate := ⟨id,fun _ _ => projectsPrefix_pure erase id 0,
-    fun _ => projectsPrefix_pure erase id ()⟩
+    fun _ => projectsPrefix_pure erase id (),
+    (fun _ _ _ projected => projected)⟩
   prepare := projectsPrefix_lift erase _
   counterCheck := fun _ _ => (Driver.Projection.state_lift erase _).liftWGObserver erase id
   timer := ⟨id,fun _ _ _ _ _ => projectsPrefix_pure erase id 0,

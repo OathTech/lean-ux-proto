@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverGroNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveFrontFrames
 import Leanux.Proofs.WG.TransmitSecurity.NonceStackFrames
 
@@ -60,7 +61,8 @@ theorem stack_flush (packets : List (List UInt8)) :
     exact PrefixPreserves.bind (stack bytes) (fun _ => ih)
 
 theorem native_poll (pid : PeerId) (budget : Nat) :
-    ProductPreserves (Driver.nativePollObserved TimestampDriver.hooks pid budget) :=
-  poll pid budget _ stack_flush
+    ProductPreserves (Driver.nativePollObserved TimestampDriver.hooks pid budget) := by
+  rw [Driver.nativePoll_neutral _ rfl]
+  exact poll pid budget _ stack_flush
 
 end Leanux.Proofs.WG.HandshakeSecurity.TimestampArchive

@@ -35,6 +35,7 @@ theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
   queueSend := queue
   candidateEnter := fun skb packet => product_enter (.candidate skb packet)
   candidateLeave := product_leave
+  stackInput := fun _ _ preserves => preserves
   prepare := old_product _
   counterCheck := fun _ _ => old_product _
   timerSelected := selected

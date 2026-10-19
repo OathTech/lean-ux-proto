@@ -32,6 +32,7 @@ theorem hooks_safe : Driver.HooksHistorySafe HandshakeCausal.Safe hooks := by
   · exact HandshakeWorker.HistorySafety.observed_preserves
   all_goals intros
   all_goals first
+    | assumption
     | (rw [Driver.sendWorker_lift hooks rfl]; exact Driver.History.product_lift _)
     | exact Driver.History.state_lift _
     | exact Driver.History.product_lift _

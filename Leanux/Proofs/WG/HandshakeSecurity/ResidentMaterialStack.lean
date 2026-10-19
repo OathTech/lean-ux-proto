@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverGroNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialPoll
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialFrontFrames
 import Leanux.Proofs.WG.TransmitSecurity.NonceStackFrames
@@ -70,7 +71,8 @@ theorem stack_flush_carrier (packets : List (List UInt8)) :
     exact PrefixPreserves.bind (stack_carrier bytes) (fun _ => ih)
 
 theorem native_poll_carrier (pid : PeerId) (budget : Nat) :
-    ProductSafe (Driver.nativePollObserved Journal.hooks pid budget) :=
-  poll_carrier pid budget _ stack_flush_carrier
+    ProductSafe (Driver.nativePollObserved Journal.hooks pid budget) := by
+  rw [Driver.nativePoll_neutral _ rfl]
+  exact poll_carrier pid budget _ stack_flush_carrier
 
 end Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterial

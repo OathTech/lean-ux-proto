@@ -32,6 +32,7 @@ theorem HooksHistorySafe.actors (h : HooksHistorySafe Safe g) : ActorHistorySafe
   queueSend := h.queueSend
   candidateEnter := h.candidateEnter
   candidateLeave := h.candidateLeave
+  stackInput := h.stackInput
   prepare := h.prepare
   counterCheck := h.counterCheck
   timerSelected := h.timerSelected

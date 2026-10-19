@@ -83,7 +83,12 @@ theorem flush_actor_history (h : ActorHistorySafe Safe g) (ps : List (List UInt8
 
 theorem nativePoll_history (h : ActorHistorySafe Safe g) (pid : PeerId) (budget : Nat) :
     ProductHistorySafe Safe (nativePollObserved g pid budget) :=
-  poll_history h pid budget _ (flush_actor_history h)
+  AuthenticatedEffects.GroOccurrencePoll.observed_preserves (fun history _ => Safe history) Safe
+    (fun _ _ hi => hi) _ _ _ _ _ _ _
+    (fun _ => (History.state_lift _).liftWGObserver)
+    h.candidateEnter h.candidateLeave h.counterCheck
+    (fun peer pkt ep => (consume_history h peer pkt ep).liftWGObserver)
+    (stack_history h) h.stackInput pid budget
 
 theorem softirq_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (softirqObserved g) := by

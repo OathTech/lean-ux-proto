@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.DriverSource
+import Leanux.Proofs.WG.TransmitSecurity.DriverGroNeutral
 import Leanux.Proofs.Logged.ProjectsOuter
 import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeRemovalProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsProjection
@@ -24,7 +24,9 @@ structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop
   queueSend : ∀ pid, StateProjectsPrefix ρ id (g.queueSend pid) (a.queueSend pid)
   candidate : ∃ scopeMap : Nat → Nat,
     (∀ skb pkt, ProjectsPrefix ρ scopeMap (g.candidateEnter skb pkt) (a.candidateEnter skb pkt)) ∧
-    (∀ token, ProjectsPrefix ρ id (g.candidateLeave token) (a.candidateLeave (scopeMap token)))
+    (∀ token, ProjectsPrefix ρ id (g.candidateLeave token) (a.candidateLeave (scopeMap token))) ∧
+    (∀ entry body targetBody, ProjectsPrefix ρ id body targetBody →
+      ProjectsPrefix ρ id (g.stackInput entry body) (a.stackInput (entry.map scopeMap) targetBody))
   prepare : ProjectsPrefix ρ id g.prepare a.prepare
   counterCheck : ∀ skb pkt, ProjectsPrefix ρ id (g.counterCheck skb pkt) (a.counterCheck skb pkt)
   timer : ∃ scopeMap : Nat → Nat,

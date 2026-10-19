@@ -8,6 +8,8 @@ import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialCarrierCallbacks
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialStack
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorkers
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialFinal
+import Leanux.Proofs.WG.HandshakeSecurity.InitializedEncryptionMaterial
+import Leanux.Proofs.WG.HandshakeSecurity.ResponderEncryptionInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.StagingMaterialBank
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
@@ -1344,5 +1346,33 @@ theorem initialized_tx_key_material_history (trace : Runner.Trace) (placeholders
     ResidentMaterial.Safe ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
       AuthenticatedEffects.CausalJournal.old?) :=
   ⟨ResidentMaterial.initialized trace placeholders,ResidentMaterial.final_initialized trace placeholders⟩
+
+/-- Security: in the initialized final journal, no two actual AEAD calls use
+the same key allocation and nonce, and every encrypted nonce is below the
+message limit. Actual key reads, packet allocation, batch selection and the
+canonical reservation bank are joined on this same execution, including Stop.
+No incoming reachability, funding, alignment or H1 premise is assumed. -/
+theorem initialized_encryption_key_nonce_safety (trace : Runner.Trace) (placeholders : Bool) :
+    let h := (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?
+    EncryptionMaterial.Bindings h ∧
+      ((h.filterMap TransmitSecurity.Journal.encryption?).map EncryptionMaterial.token).Nodup ∧
+      ∀ r ∈ h.filterMap TransmitSecurity.Journal.encryption?,
+        r.cipher.packet.nonce < REJECT_AFTER_MESSAGES :=
+  EncryptionMaterial.final_initialized trace placeholders
+
+/-- Security: every actual responder AEAD in the initialized final journal
+has a strictly earlier successful confirmation of that same key allocation.
+The confirmation follows its exact accepted replay and native AEAD receipt;
+the named C2 H1 current-slot edges are the only incoming proof package.
+Receiving-key allocation continuity remains a separate boundary of this claim. -/
+theorem initialized_responder_encryption_follows_confirmation
+    (H1 : H1ResponderCurrentEdges) (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List TransmitSecurity.Journal.Event) (r : TransmitSecurity.WorkerEncryption.Receipt)
+    (position : ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?) = pre ++ .encrypted r :: post)
+    (responder : r.cipher.keyRead.value.iAmTheInitiator = false) :
+    r.Valid ∧ Responder.PriorAuthenticatedConfirmation pre r.cipher.keyRead.value.internalId :=
+  Responder.final_encryption_confirmation H1 trace placeholders pre post r position responder
 
 end Leanux.Proofs.WG.HandshakeSecurity

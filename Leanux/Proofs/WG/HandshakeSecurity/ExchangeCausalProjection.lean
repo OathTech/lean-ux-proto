@@ -107,7 +107,8 @@ theorem hooks_projects : Driver.HooksProjects exchange? hooks ExchangeDriver.hoo
   queueSend := effects_projects.append
   candidate := ⟨(fun _ => 0),
     (fun skb packet => CausalScope.enter_projects Event.scope (.candidate skb packet) exchange? (fun _ => rfl)),
-    (fun token => CausalScope.leave_projects Event.scope token exchange? (fun _ => rfl))⟩
+    (fun token => CausalScope.leave_projects Event.scope token exchange? (fun _ => rfl)),
+    (fun _ _ _ projected => projected)⟩
   timer := ⟨(fun _ => 0),timer_projects,
     (fun token => CausalScope.leave_projects Event.scope token exchange? (fun _ => rfl))⟩
   prepare := product_native _ _ (TransportDriver.prepare_erases _ _)

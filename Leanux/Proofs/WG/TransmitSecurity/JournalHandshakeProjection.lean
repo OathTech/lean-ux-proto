@@ -69,7 +69,8 @@ theorem hooks : Driver.HooksProjects handshake? Journal.hooks HandshakeDriver.ho
   armTimer := fun _ _ _ _ => Driver.Projection.state_lift handshake? _
   queueSend := fun _ => Driver.Projection.state_lift handshake? _
   candidate := ⟨id, (fun _ _ => projectsPrefix_pure handshake? id 0),
-    (fun _ => projectsPrefix_pure handshake? id ())⟩
+    (fun _ => projectsPrefix_pure handshake? id ()),
+    (fun _ _ _ projected => projected)⟩
   prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? handshake? (fun _ => rfl)
   counterCheck := AuthenticatedEffects.TransportDriver.counter_projects_other Event.replay handshake? (fun _ => rfl)
   timer := ⟨id, (fun d j pid t we =>

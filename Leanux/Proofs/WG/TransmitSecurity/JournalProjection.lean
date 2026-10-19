@@ -100,7 +100,8 @@ theorem hooks_projects : Driver.HooksProjects nonce? hooks Driver.nonceHooks whe
   armTimer := fun _ _ _ _ => Driver.Projection.state_lift nonce? _
   queueSend := fun _ => Driver.Projection.state_lift nonce? _
   candidate := ⟨id, (fun _ _ => projectsPrefix_pure nonce? id 0),
-    (fun _ => projectsPrefix_pure nonce? id ())⟩
+    (fun _ => projectsPrefix_pure nonce? id ()),
+    (fun _ _ _ projected => projected)⟩
   prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? nonce? (fun _ => rfl)
   counterCheck := AuthenticatedEffects.TransportDriver.counter_projects_other Event.replay nonce? (fun _ => rfl)
   timer := ⟨id, (fun d j pid t we =>

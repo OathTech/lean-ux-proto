@@ -19,11 +19,11 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 
 | Outcome | Status and remaining obligation |
 | --- | --- |
-| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Each initialized AEAD now has an exclusive allocation-stamped reservation token matching its packet nonce, with no two AEAD occurrences sharing an assigned token. Initialized encryption receipts now bind the head, packet and AEAD key slot. Initialized historical key-material transport is now proved; joining it to the canonical reservation bank for the final actual-key nonce claim is in progress. |
-| T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; initialized encryption head/packet key agreement and socket/packet peer agreement are proved. Nonempty socket-payload provenance is being validated; ready-batch nonemptiness, historical routing linkage and complete TX dispositions remain to prove. |
+| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Each initialized AEAD now has an exclusive allocation-stamped reservation token matching its packet nonce, with no two AEAD occurrences sharing an assigned token. Initialized encryption receipts now bind the head, packet and AEAD key slot. The initialized material/reservation join now proves actual allocation-stamp/nonce uniqueness and the AEAD bound. The message-limit rejection arm still needs its explicit invalidation/restoration contract before T1 closes. |
+| T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; initialized encryption head/packet key agreement and socket/packet peer agreement are proved. Initialized nonempty socket-payload provenance is proved. Ready-batch nonemptiness now survives the native initialized Runner; its internal socket-position join, historical routing linkage and complete TX dispositions remain to prove. |
 | T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts. Initialized exact timer-arm and queued-work occurrence provenance is proved; authentication/fixture roots, including held GRO packet attribution, remain open. |
 | T4 handshake replay resistance | Open. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Direct initialized stale-refusal/no-response remains. Named C2 source assumptions stay visible. |
-| T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Initialized key-material continuity is proved; its join to the actual encryption prohibition remains open. |
+| T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Actual responder AEAD now follows a successful confirmation of the same sending allocation, under named H1 current-slot edges. Receiving allocation continuity from the authenticated packet to that confirmation remains open. |
 | T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized exact holder accounting is proved. Concrete clear-work and final-TX-release retirement are proved under their explicit source/progress conditions; initialized timer-arm provenance and DEAD-RX selection/cleanup are proved. The native conditional retirement chain retains its explicit recorded-run and residual-holder conditions; universal internal-event and authenticated RX final-disposal joins remain open. |
 
 ## C3-F1: invalidation and clearing do not cancel previously admitted encryption
@@ -601,6 +601,31 @@ and the 130-job model build pass. The unit suite completes 131 tests with one
 configured-kernel skip (23.074 seconds). All 2072 frozen proof hashes and
 916 existing main proof files remain unchanged; main and the mirror are
 unchanged. All six full outcomes remain open.
+
+Checkpoint twenty-eight passes complete validation. The shared native GRO poll retains
+candidate identity with each buffered packet and exposes the corresponding
+individual stack callback. Neutral callbacks recover the earlier native poll
+exactly, and projection/history adapters now compile without changing earlier
+initialized signatures. The default final causal callback is still neutral;
+its authenticated-cause closure is separate work.
+The actual initialized key-allocation/nonce join and responder encryption to
+same-allocation confirmation join are adopted from T4 `3947b885`. The latter
+retains `H1ResponderCurrentEdges` and does not assert receiving-allocation
+continuity. T6 `71ec2297` adds native CRYPTED-batch nonemptiness, queue refusal,
+allocation and complete staged-send transport, then derives the readiness
+carrier at each actual syscall entry and normal initialized endpoint. Its
+internal socket-position join, including stopped prefixes, remains separate. T3 `787af68c` supplies the tagged GRO source, neutral laws,
+projections and generic frames. New routing receipts certify each actual native
+front through its completed splice; historical linkage to later encryption and
+full occurrence conservation remain open. Development builds exposed adapter
+obligations and a receipt-proof match shape; both are repaired, and the new
+proof files compile without warnings. The full gate passes 2195 jobs and 1340
+terminal declarations across thirteen roots, using only permitted axioms.
+All twelve witness recipes, fresh-root kernel replay and the 130-job model
+build pass. The unit suite completes 131 tests with one configured-kernel
+skip (22.987 seconds). All 2139 frozen proof-source hashes and 916 existing
+main proof files stayed unchanged; main and the mirror are unchanged. No full
+campaign outcome is newly claimed.
 
 ## Validation
 

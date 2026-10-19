@@ -104,6 +104,7 @@ theorem hooks_safe : ActorHistorySafe Safe Journal.hooks where
   queueSend := fun _ => History.state_lift _
   candidateEnter := fun _ _ => History.product_pure _
   candidateLeave := fun _ => History.product_pure _
+  stackInput := fun _ _ preserves => preserves
   prepare := product_focus _ _ (fun _ => rfl) _
   counterCheck := fun _ _ => product_quiet (Appends.lift _).receiptObserved
     (HistoryFrame.receiptObserved (HistoryFrame.lift _ _) (fun _ => rfl))

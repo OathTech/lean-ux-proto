@@ -92,7 +92,8 @@ theorem native_projection : Driver.HooksProjects NativeDriver.erase hooks Native
   queueSend := fun _ => Driver.Projection.state_lift NativeDriver.erase _
   flushedSend := fun pid => NativeDriver.state_erasure (flushed_erases pid)
   candidate := ⟨id,fun _ _ => projectsPrefix_pure NativeDriver.erase id 0,
-    fun _ => projectsPrefix_pure NativeDriver.erase id ()⟩
+    fun _ => projectsPrefix_pure NativeDriver.erase id (),
+    (fun _ _ _ projected => projected)⟩
   prepare := projectsPrefix_lift NativeDriver.erase _
   counterCheck := fun _ _ => (Driver.Projection.state_lift NativeDriver.erase _).liftWGObserver NativeDriver.erase id
   timer := ⟨id,fun _ _ _ _ _ => projectsPrefix_pure NativeDriver.erase id 0,

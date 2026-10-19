@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverGroNeutral
 import Leanux.Proofs.WG.TransmitSecurity.DriverNeutralCalls
 import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
 
@@ -112,7 +113,9 @@ theorem nonce_stackFlushObserved_eq : stackFlushObserved nonceHooks = Nonce.stac
   all_goals rfl
 
 theorem nonce_nativePollObserved_eq : nativePollObserved nonceHooks = Nonce.nativePollObserved := by
-  unfold nativePollObserved Nonce.nativePollObserved
+  funext pid budget
+  rw [nativePoll_neutral _ rfl]
+  unfold Nonce.nativePollObserved
   simp only [nonce_pollObserved_eq, nonce_stackFlushObserved_eq]
   all_goals rfl
 

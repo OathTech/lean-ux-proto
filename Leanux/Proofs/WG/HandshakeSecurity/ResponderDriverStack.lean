@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverGroNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverFrontFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverPoll
 import Leanux.Proofs.WG.TransmitSecurity.NonceStackFrames
@@ -66,7 +67,8 @@ theorem stack_flush (packets : List (List UInt8)) :
     exact PrefixPreserves.bind (stack bytes) (fun _ => ih)
 
 theorem native_poll (H1 : H1ResponderCurrentEdges) (pid : PeerId) (budget : Nat) :
-    ProductPreserves (Driver.nativePollObserved hooks pid budget) :=
-  poll H1 pid budget _ stack_flush
+    ProductPreserves (Driver.nativePollObserved hooks pid budget) := by
+  rw [Driver.nativePoll_neutral _ rfl]
+  exact poll H1 pid budget _ stack_flush
 
 end Leanux.Proofs.WG.HandshakeSecurity.Responder.DriverCuts

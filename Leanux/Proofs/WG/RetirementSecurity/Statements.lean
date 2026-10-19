@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.RetirementSecurity.ReadyCiphertextNativeInitialized
 import Leanux.Proofs.WG.RetirementSecurity.TimerRetirementOrigin
 import Leanux.Proofs.WG.RetirementSecurity.ConditionalRetirement
 import Leanux.Proofs.WG.RetirementSecurity.UnpublicationWorker
@@ -2227,5 +2228,59 @@ theorem initialized_zero_timer_arm_origin (trace : Runner.Trace) (placeholders :
       AuthenticatedEffects.TimerSlots.Pending arm.run.after receipt.peer .zeroKeyMaterial stamp expires receipt.entry ∧
       AuthenticatedEffects.TimerSlots.Pending receipt.before.wg receipt.peer .zeroKeyMaterial stamp expires receipt.entry :=
   TimerRetirementOrigin.initialized trace placeholders pre post receipt position zero
+
+/-- A successful native encryption tail can publish a CRYPTED head only
+after every member has nonempty wire bytes. Failure publishes DEAD, so a
+partial walk cannot authorize sending the whole batch. This is the concrete
+selected-tail claim; initialized queued-batch transport is separate. -/
+theorem original_crypted_batch_has_ciphertext (items : List SkbId) (first : SkbId)
+    (head : items.head?=some first)
+    (run : (Queues.RxWorkers.encryptStepTailSource (some items)).run w=.ok (result,v))
+    (crypted : Queues.TxDisposition.HeadState first .crypted v.wg) :
+    ReadyCiphertext.Complete items v.wg :=
+  ReadyCiphertext.native_tail items first head run crypted
+
+/-- Exact physical ownership lets native completion preserve every queued
+batch's ready-to-send byte guarantee. The input readiness invariant and
+physical inventory are explicit at this local source cut; this theorem does
+not silently substitute them for initialized driver transport. -/
+theorem original_encrypt_preserves_ready_ciphertext (items : List SkbId)
+    (physical : OccurrenceStack.Ready locals (items::active) w.wg)
+    (before : ReadyCiphertext.Inv w.wg)
+    (run : (Queues.RxWorkers.encryptStepTailSource (some items)).run w=.ok (result,v)) :
+    ReadyCiphertext.Inv v.wg :=
+  ReadyCiphertext.native_tail_preserves items physical before run
+
+
+/-- Native submission cannot make a newly allocated batch ready before its
+members have ciphertext. Peer, queue and ring refusal retain the same ready
+byte guarantee for all surviving queued batches. Physical separation and the
+incoming invariant are explicit at this local admission cut. -/
+theorem original_create_preserves_ready_ciphertext (before : ReadyCiphertext.Inv w)
+    (physical : TxInventory (⟨.unpublished,pid,items⟩::locals) w) (a b : Ambient)
+    (run : ((createData pid items).run w).run a=.ok (((),v),b)) :
+    ReadyCiphertext.Inv v :=
+  ReadyCiphertext.create before physical a b run
+
+
+/-- Full native staged send preserves ready ciphertext through nonce checks,
+fresh allocation and queue admission. The packet frontier and physical census
+are the existing source invariants; their conjunction with readiness is still
+an explicit input until initialized driver transport is complete. -/
+theorem original_staging_preserves_ready_ciphertext (pid : PeerId) :
+    Leanux.Proofs.Framing.Preserves (ReadyCiphertext.Coherent locals active) (sendStagedPackets pid) :=
+  ReadyCiphertext.send_coherent pid
+
+
+/-- At every normally initialized runner endpoint, a queued CRYPTED head
+implies nonempty ciphertext bytes for each resident member of its batch.
+Actual allocation, refusal, encryption, receive, timer, configuration and
+lifecycle callers discharge the invariant; none is an incoming assumption.
+Internal socket receipt positions require the separate journal source join. -/
+theorem initialized_ready_ciphertext (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    (run : Leanux.Proofs.Logged.runPrefixOuter
+      (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=(.ok (result,w),h)) :
+    ReadyCiphertext.Inv w.wg :=
+  (ReadyCiphertext.Initialized.normal trace placeholders run).2.2
 
 end Leanux.Proofs.WG.RetirementSecurity
