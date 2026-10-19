@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Progress.SchedulerRecordSource
+import Leanux.Proofs.WG.Progress.RecordBudgetSource
 
 /-! The original scheduler's supplied-record budget is adequate for its own loop. This excludes reaching that loop's exhaustion continuation after normal turns; every callback Stop remains unchanged. No finite-evaluation, activation-occupancy or global-completion claim is made. -/
 set_option autoImplicit false
@@ -48,24 +49,15 @@ theorem scheduleLoop_normal_done (stack : Option Worker)
     (run : (forIn turns ((none,()) : Option Unit × Unit)
       (fun _ _=>scheduleTurn stack)).run before=.ok (result,after)) :
     result=(some (),()) := by
-  induction turns generalizing records before after result with
-  | nil => simp only [List.length_nil] at enough; omega
-  | cons index turns ih =>
-    rw [List.forIn_cons,StateT.run_bind] at run
-    cases step : (scheduleTurn stack).run before with
-    | error stop => rw [step] at run; cases run
-    | ok pair =>
-      obtain ⟨out,middle⟩:=pair
-      have shape: out=turnReturn ∨ out=turnContinue :=
-        (hoare_iff_run _ _ _).mp (scheduleTurn_result stack) before out middle trivial step
-      rcases shape with rfl | rfl
-      · rw [step] at run
-        cases run
-        rfl
-      · have strict:=scheduleTurn_continue_strict stack records before middle present step
-        obtain ⟨rest,remaining,_,shorter⟩:=strict
-        rw [step] at run
-        exact ih rest middle after result remaining (by simp only [List.length_cons] at enough; omega) run
+  apply forIn_record_budget_done (fun (_ : Nat) (_ : Option Unit×Unit)=>scheduleTurn stack)
+    (fun value=>value=(some (),())) ?_ turns (none,()) records before after result present enough run
+  intro index state input
+  apply (hoare_iff_run _ _ _).mpr
+  intro entry out final stored executed
+  have shape:=(hoare_iff_run _ _ _).mp (scheduleTurn_result stack) entry out final trivial executed
+  rcases shape with rfl | rfl
+  · rfl
+  · exact scheduleTurn_continue_strict stack input entry final stored executed
 
 /-- Exact original outcome and final World with only the unreachable outer exhaustion continuation removed. The body is the existing forIn factor, not a new evaluator; inner Stops are propagated unchanged. -/
 theorem schedule_supplied_source (stack : Option Worker) (records : List HiddenRecord)

@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Progress.BatchBudgetClaims
+import Leanux.Proofs.WG.Progress.SendLoopRecordClaims
+import Leanux.Proofs.WG.Progress.TimerBudgetClaims
+import Leanux.Proofs.WG.Progress.BatchLoopRecordClaims
 import Leanux.Proofs.WG.Progress.TimerTurnRecordClaims
 import Leanux.Proofs.WG.Progress.SchedulerBudgetClaims
 import Leanux.Proofs.WG.Progress.CommittedRecordClaims
@@ -1543,5 +1547,82 @@ theorem original_timer_turn_record_decrease (bound : UInt64) (iteration : Nat)
       (fun result s=>RecordSuffix.Tail records s.ambient.hidden ∧
         ∀ next, result=ForInStep.yield next → RecordSuffix.StrictTail records s.ambient.hidden) :=
   RecordSuffix.timerOuterTurn_record_strict bound iteration control records
+
+
+/-- An actual continuing send-worker turn strictly consumes supplied records. -/
+theorem original_send_turn_record_decrease (records : List HiddenRecord)
+    (index : Nat) (state : Option Unit×Unit) :
+    Campaign2.Product.Ensures (sendCompletionTurn index state)
+      (fun s=>s.ambient.hidden=some records)
+      (fun result s=>RecordSuffix.Tail records s.ambient.hidden ∧
+        (∀ value,result=.yield value→RecordSuffix.StrictTail records s.ambient.hidden)) :=
+  RecordSuffix.sendCompletionTurn_record_suffix records index state
+
+/-- The send loop's recorded budget reaches its actual empty-queue return
+on every normal loop result. -/
+theorem original_send_loop_record_budget_adequate (records : List HiddenRecord) :
+    Campaign2.Product.Ensures
+      (forIn (List.range' 0 (records.length+1)) ((none,()) : Option Unit×Unit) sendCompletionTurn)
+      (fun s=>s.ambient.hidden=some records)
+      (fun result s=>result.1.isSome=true ∧ ∃ d,s.wg.device=some d ∧ d.sendWorkQueue=[]) :=
+  RecordSuffix.sendWorkers_loop_budget_adequate records
+
+/-- The whole original send-worker caller retains a supplied-record suffix. -/
+theorem original_send_workers_record_suffix (records : List HiddenRecord) :
+    Campaign2.Product.Ensures Env.runSendWorkers
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.runSendWorkers_record_suffix records
+
+/-- The original send caller agrees on every outcome with its same prefix
+and captured loop with only the unreachable exhaustion continuation removed. -/
+theorem original_send_workers_record_budget_source (records : List HiddenRecord) :
+    Campaign2.Product.AgreesOn (fun s=>s.ambient.hidden=some records)
+      Env.runSendWorkers
+      (do
+        if (←getWG).dev.isNone then return
+        requireNoCryptWork
+        modifyWG fun g=>{g with queuedThisCall:=[]}
+        let _←forIn (List.range' 0 (records.length+1))
+          ((none,()) : Option Unit×Unit) sendCompletionTurn
+        pure ()) :=
+  RecordSuffix.sendWorkers_record_budget_source records
+
+/-- A normal original timer call has its own valid episode and an actual
+done turn at its captured budget, or the original absent-device branch. -/
+theorem original_timer_record_budget_adequate (bound : UInt64) (records : List HiddenRecord) :
+    Campaign2.Product.Observes (Env.runTimers bound)
+      (fun s=>s.ambient.hidden=some records)
+      (fun entry outcome=>match outcome with
+        | .error _=>True
+        | .ok (result,final)=>∃ receipt,
+            TimerDiscipline.OuterTimerEpisodeValid bound entry receipt result final ∧
+            RecordSuffix.TimerEpisodeBudgetDone records receipt) :=
+  RecordSuffix.runTimers_record_budget bound records
+
+/-- The actual recorded batch loop retains suffixes before its completion guard. -/
+theorem original_batch_loop_record_suffix (records : List HiddenRecord) :
+    Campaign2.Product.Ensures afterBatchRecordedLoop
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.afterBatchRecordedLoop_record_suffix records
+
+/-- The actual batch turn strictly consumes records whenever it continues. -/
+theorem original_batch_turn_record_decrease (iteration : Nat) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (RecordSuffix.afterBatchRecordedTurn iteration ())
+      (fun s=>s.ambient.hidden=some records)
+      (fun result s=>RecordSuffix.Tail records s.ambient.hidden ∧
+        (result=.yield ()→RecordSuffix.StrictTail records s.ambient.hidden)) :=
+  RecordSuffix.batchTurn_record_effect iteration records
+
+/-- Increasing the recorded batch loop's original budget preserves its exact
+outcome and final projected state, before the subsequent drain suffix. -/
+theorem original_batch_loop_record_budget_adequate (records : List HiddenRecord) (extra : Nat) :
+    Campaign2.Product.AgreesOn (fun s=>s.ambient.hidden=some records)
+      afterBatchRecordedLoop
+      (do
+        let _ ← forIn (List.range' 0 (records.length+1+extra)) () RecordSuffix.afterBatchRecordedTurn
+        pure ()) :=
+  RecordSuffix.batch_loop_budget_adequate records extra
 
 end Leanux.Proofs.WG.Progress
