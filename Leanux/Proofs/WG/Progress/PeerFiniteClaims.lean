@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Progress.PeerCreationFiniteSource
+import Leanux.Proofs.WG.Progress.PeerCreationFiniteCoreSource
 import Leanux.Proofs.WG.Campaign2.Bridge
 
 set_option autoImplicit false

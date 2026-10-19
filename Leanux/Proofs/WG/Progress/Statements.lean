@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Progress.FsNamespaceFiniteClaims
+import Leanux.Proofs.WG.Progress.ConfigurationFiniteClaims
+import Leanux.Proofs.WG.Progress.LifecycleFiniteClaims
+import Leanux.Proofs.WG.Progress.DeferredFiniteNativeClaims
 import Leanux.Proofs.WG.Progress.SeccompInstallFiniteClaims
 import Leanux.Proofs.WG.Progress.KeyConfigurationFiniteClaims
 import Leanux.Proofs.WG.Progress.FsFinalCallerFiniteClaims
@@ -2314,5 +2318,52 @@ theorem original_configuration_collision_finite (key : Leanux.WG.Key) :
 theorem original_configuration_key_stage_finite (attrs : Leanux.WG.DeviceAttrs) :
     Campaign2.AgreesOn (fun _ => True) (Config.RequestOrder.keyStage attrs) (KeyConfigurationFinite.stage attrs) :=
   KeyConfigurationFinite.original_key_stage_finite attrs
+
+/-- Complete native peer-command finite evaluation, retaining every error and Stop. -/
+theorem original_set_peer_command_finite (attrs : PeerAttrs) :
+    Campaign2.AgreesOn (fun _ => True) (WG.setPeerCmd attrs) (ConfigurationFinite.command attrs) :=
+  ConfigurationFinite.original_command_finite attrs
+
+/-- Complete native mixed-device setter finite evaluation, retaining every cutoff and partial effect. -/
+theorem original_set_device_finite (attrs : DeviceAttrs) :
+    Campaign2.AgreesOn (fun _ => True) (WG.wgSetDevice attrs) (ConfigurationFinite.device attrs) :=
+  ConfigurationFinite.original_device_finite attrs
+
+/-- Native open has exact finite evaluation with its guarded keepalive calls. -/
+theorem original_device_open_finite :
+    Campaign2.AgreesOn (fun _ => True) WG.wgOpen LifecycleFinite.openDevice :=
+  LifecycleFinite.original_open_finite
+
+/-- Native up retains the exact open result and running-flag rollback. -/
+theorem original_device_up_finite :
+    Campaign2.AgreesOn (fun _ => True) WG.wgUp LifecycleFinite.up :=
+  LifecycleFinite.original_up_finite
+
+/-- The environment up caller retains missing-device and routing outcomes. -/
+theorem original_environment_up_finite :
+    Campaign2.Product.AgreesOn (fun _ => True) Env.wgUp LifecycleFinite.envUp :=
+  LifecycleFinite.original_envUp_finite
+
+/-- The selected send-worker call has exact finite evaluation, including every Stop. -/
+theorem original_selected_send_worker_finite :
+    Campaign2.Product.AgreesOn (fun _ => True) Env.runOneSendWorker DeferredFinite.sendOne :=
+  DeferredFinite.original_sendOne_finite
+
+/-- Crypt-worker scheduling and delivery retain every original result and Stop. -/
+theorem original_crypt_workers_finite :
+    Campaign2.Product.AgreesOn (fun _ => True) Env.runCryptWorkers
+      (fun w => (Leanux.Proofs.Logged.runPrefix DeferredFinite.crypt w []).1) :=
+  DeferredFinite.original_crypt_finite
+
+/-- The complete bounded send drain retains its original exhaustion refusal. -/
+theorem original_send_workers_finite :
+    Campaign2.Product.AgreesOn (fun _ => True) Env.runSendWorkers
+      (fun w => (Leanux.Proofs.Logged.runPrefix DeferredFinite.sendAll w []).1) :=
+  DeferredFinite.original_sendAll_finite
+
+/-- Closing the namespace holders retains all original close and task-work outcomes. -/
+theorem original_namespace_close_finite :
+    Campaign2.Product.AgreesOn (fun _ => True) Leanux.netnsClose FsFinite.netnsClose :=
+  FsFinite.original_netnsClose_finite
 
 end Leanux.Proofs.WG.Progress

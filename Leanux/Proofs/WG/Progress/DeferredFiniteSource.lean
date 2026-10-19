@@ -1,29 +1,11 @@
+import Leanux.Proofs.WG.Progress.DeferredFiniteNativeSource
 import Leanux.Proofs.WG.Progress.TimerFiniteSource
-import Leanux.Proofs.WG.Progress.SchedulerFiniteSource
-import Leanux.Proofs.WG.Progress.InitiationCallerFiniteSource
-import Leanux.Proofs.WG.TimerDiscipline.SendDispatchSource
 
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress.DeferredFinite
 open Leanux Leanux.WG Leanux.Proofs.Logged
 open Leanux.Proofs.WG.Queues Leanux.Proofs.WG.Lifetimes
 open Leanux.Proofs.WG.TimerDiscipline
-
-/-- Native selection/dequeue and worker section with finite handshake sending. -/
-def sendOne : Leanux.M Unit := do
-  let selected ← sendWorkerSelection
-  sendWorkerDequeue selected.2
-  Env.runWorker .sendWorker (HandshakeFinite.sendWorker selected.2)
-
-theorem sendOne_source : Env.runOneSendWorker = sendOne := by
-  rw [runOneSendWorker_source]
-  unfold sendOne
-  simp only [HandshakeFinite.sendWorker_source]
-
-def hooks : Noise.DriverTags.Deferred.Hooks PUnit :=
-  ⟨liftPrefix sendOne, liftPrefix Env.runOneClearWorker,
-    fun w pid timer entry prior=>liftPrefix (TimerFinite.dispatch w pid timer entry prior),
-    fun j=>liftPrefix (TimerFinite.placeholder j)⟩
 
 theorem hooks_erases : Noise.DriverTags.Deferred.HookErases hooks := by
   constructor
@@ -39,23 +21,6 @@ theorem hooks_erases : Noise.DriverTags.Deferred.HookErases hooks := by
     change ErasesPrefix (liftPrefix (TimerFinite.placeholder j)) _
     rw [TimerFinite.placeholder_source]
     exact erasesPrefix_lift _
-
-def schedule : PrefixM PUnit Unit := liftPrefix (SchedulerFinite.schedule none)
-
-theorem schedule_erases : ErasesPrefix schedule (Env.schedule none) := by
-  unfold schedule
-  rw [SchedulerFinite.schedule_source]
-  exact erasesPrefix_lift _
-
-def crypt : PrefixM PUnit Unit := RxHistory.DeferredSource.cryptWith schedule
-
-theorem crypt_erases : ErasesPrefix crypt Env.runCryptWorkers :=
-  Noise.DriverTags.Deferred.crypt_erases _ schedule_erases
-
-def sendAll : PrefixM PUnit Unit := Noise.DriverTags.Deferred.sendWith hooks schedule
-
-theorem sendAll_erases : ErasesPrefix sendAll Env.runSendWorkers :=
-  Noise.DriverTags.Deferred.send_erases _ hooks_erases _ schedule_erases
 
 def afterXmit : PrefixM PUnit Unit :=
   RxHistory.DeferredSource.afterXmitWith (fun {_} a=>HookScheduler.old a) crypt sendAll

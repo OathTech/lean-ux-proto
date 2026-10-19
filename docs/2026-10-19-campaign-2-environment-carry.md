@@ -109,3 +109,25 @@ audits and fresh KeyInstallReplay at exit zero. Complete native activation/sched
 carried owned sources: 303 scoped jobs, 47 standard-axiom audits and fresh
 ActivationCarryReplay. This preserves five existing claims but leaves the
 shared-enum observer wrapper dependencies lagging.
+
+## Concrete caller boundary, 2026-10-19
+
+The owned route now checks complete mixed peer/device configuration,
+open/up, native send/crypt/drain and namespace-holder close. Peer creation's
+CoreSource extraction recovers four existing public claims without the
+BaseCreation observer closure. The two old BaseCreation-facing factors and
+the shared-enum/placeholder deferred wrappers remain retained and lagging.
+The new aggregate gate has 3,109 planned jobs and fails only in the same
+five shared modules, with no reported owned failure.
+
+Traffic needs existing Lifetimes.TrafficSource factories injectWith,
+afterBatchWith, floodWith and batchWith, plus Lifetimes.batchItemWith.
+TrafficSource imports RxTrafficAppends, whose syscall/dump observer chain
+reaches NetlinkDump.DeviceSource. BatchItemSource imports RxEnvBatchHistory,
+whose worker/scheduler chain reaches Lifetimes.BatchActivation. The owned
+Noise/DriverTagTrafficSource and Progress/CommittedTrafficSource merely
+instantiate these same factories; moving the owned erasure tactic cannot
+remove the dependencies. Both architectures were inspected. Copying all
+five factories and their erasure layer would exceed a few local variants,
+so no such copy is made. The existing shared carry, or a campaign-1 light
+source extraction, unblocks the held concrete instance.

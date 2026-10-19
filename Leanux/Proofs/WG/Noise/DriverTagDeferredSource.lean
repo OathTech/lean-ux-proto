@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.Queues.DeferredPreservation
+import Leanux.Proofs.WG.Noise.DriverTagDeferredFactors
 
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Noise.DriverTags.Deferred
@@ -6,29 +7,10 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queue
 open RxHistory.SchedulerSource RxHistory.DeferredSource
 universe u
 
-/-- These four actual executions must be explicit callbacks. The other old
-atoms contain no owner invocation relevant to the tag journal. -/
-structure Hooks (E : Type) where
-  sendOne : PrefixM E Unit
-  clearOne : PrefixM E Unit
-  timer : Worker → PeerId → PeerTimer → WheelEntry → Option UInt64 → PrefixM E Unit
-  placeholder : UInt64 → PrefixM E Unit
-
 def originalHooks {E : Type} (old : {α : Type} → RxHistory.Obs α → PrefixM E α) : Hooks E :=
   ⟨old (RxHistory.audit runOneSendWorkerAudit), old (RxHistory.audit runOneClearWorkerAudit),
     fun w pid timer entry prior => old (RxHistory.audit (timerDispatchAudit w pid timer entry prior)),
     fun j => old (RxHistory.audit (RxHistory.placeholderTimerPassAudit j))⟩
-
-def sendWith {E : Type} (hooks : Hooks E)
-    (schedule : PrefixM E Unit) : PrefixM E Unit := do
-  if (← liftPrefix getWG).dev.isNone then return
-  liftPrefix Env.requireNoCryptWork
-  liftPrefix (modifyWG fun w => {w with queuedThisCall := []})
-  for _ in [0:(← liftPrefix recordBudget)] do
-    if (← liftPrefix (liftWG getDev)).sendWorkQueue.isEmpty then liftPrefix Env.deliverSent; return
-    hooks.sendOne
-    schedule
-  liftPrefix (budgetExhausted "the send work queue")
 
 def timersWith {E : Type} (old : {α : Type} → RxHistory.Obs α → PrefixM E α) (hooks : Hooks E)
     (cryptWork : PrefixM E Unit) (jPass : UInt64) : PrefixM E Bool := do
@@ -262,17 +244,8 @@ theorem suffix_erases {F α : Type} (hook : PrefixM E Unit) (original : PrefixM 
 
 theorem send_erases (hooks : Hooks E) (contracts : HookErases hooks)
     (schedule : PrefixM E Unit) (hs : ErasesPrefix schedule (Env.schedule none)) :
-    ErasesPrefix (sendWith hooks schedule) Env.runSendWorkers := by
-  unfold sendWith Env.runSendWorkers
-  repeat' first
-    | exact hs
-    | exact contracts.sendOne
-    | exact erasesPrefix_lift _
-    | with_reducible exact erasesPrefix_pure _
-    | with_reducible apply erasesPrefix_range
-    | with_reducible apply erasesPrefix_bind
-    | (with_reducible split; all_goals try simp_all only []; all_goals try subst_vars)
-    | (with_reducible intro x; try dsimp only)
+    ErasesPrefix (sendWith hooks schedule) Env.runSendWorkers :=
+  send_erases_native hooks contracts.sendOne schedule hs
 
 /-- Select a source rule without changing the goal or constructing a proof. -/
 elab "tag_deferred_erase_at " mode:ident wanted:ident : tactic => Lean.Elab.Tactic.withMainContext do
