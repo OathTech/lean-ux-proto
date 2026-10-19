@@ -1,3 +1,12 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedEntryRetired
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedEntryTimerCallbacks
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedEntryReceiveTail
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedEntryKeyObserved
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedEntryReceiveFinish
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationTxSelectionObserved
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationDeadEntryContract
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationCompletionIndexedSend
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationCompletionIndexedRelease
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedEntryTransmitSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedEntryEncryptSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedEntryPurgeSource

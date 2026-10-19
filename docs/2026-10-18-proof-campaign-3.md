@@ -302,6 +302,8 @@ Source-48 local joins retain full Entry through native queue admission, both pee
 
 Source-49 local joins derive pending-ticket evidence at the actual allocator and discharge the real creation callback, including exact original-debt restoration after refusal. Full transmit and keepalive now compose without an assumed creation or queued-initiation callback. Counted purge, encryption, receive maintenance and the family-selected completion send retain the full Entry bundle. Stop certificates remain local source frontiers; initialized transport and the converse historical terminal relation are still open. The 3321-job combined root build and eleven focused standard-axiom queries pass. Source-49 has not yet repeated the aggregate gate or fresh root replay; the last fully validated checkpoint is `13d285cf`.
 
+Source-50 local joins cover actual TX selection and DEAD repayment, all send-result arms and nested completion release, receive finishing and timer callbacks, and native key creation, confirmation and clearing. Idle selection derives its pending batch from empty cleanup debts. Retirement algebra proves that empty native staged/TX ownership leaves no pending ticket; the lifecycle caller must still establish that quiescence before reset. The combined root build passes 3344 jobs and fourteen focused queries use only standard axioms. Whole initialized conservation and the converse historical terminal relation remain open. The last fully validated checkpoint remains `13d285cf` pending the source-50 aggregate checks.
+
 ## Validation
 
 Source-48 checkpoint `13d285cf` passes the 3295-job aggregate build and 1523-declaration gate across
