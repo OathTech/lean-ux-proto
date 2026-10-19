@@ -2,7 +2,7 @@
 
 Status: in progress on `task/binary-pair-runner`. Start 2026-10-19 17:24:01 UTC,
 baseline `d61a8027`. The [charter](2026-10-19-charter-paired-callbacks.md) governs
-the scope and budget. The BH-enable image contract is locally proved; external acceptance of this increment is pending.
+the scope and budget. All five image contracts and remove/replace first-return headlines are locally proved; lookup first-return and closing validation remain in progress. External acceptance of this increment is pending.
 
 ## Review and dependency
 
@@ -117,3 +117,43 @@ ordinary proof-development failure, not a changed ISA or hidden assumption.
 New-module lints were repaired, including a deprecated theorem alias. External
 export acceptance is still pending and no campaign coverage percentage changes
 as a result of these shared-service proofs.
+
+### First-return mechanism and mutators, 18:34 UTC
+
+Removal and replacement now export their unchanged physical/reconstruction
+postcondition, the actual instruction history, `BeforeOuterReturn`, and
+`RunEnvironment` for that same history. The named hypothesis is
+`FirstReturnCallPermissions`: access safety on actual prefixes before the
+first state with both the supplied return PC and the consumed outer stack
+word. The proof establishes the stronger interior stack exclusion, even if
+the supplied return PC aliases an image address. Removal's tail-call to
+BH-enable is included. No entry predicate, reconstruction or physical
+separation premise changed.
+
+`StackCps`, `StackPath` and `region_guarded` retain instruction stack effects
+while reusing the physical region calculations. The five callback proofs
+supply the same guard through their interiors. There is no executable
+certificate classifier or classifier soundness assumption: the small tactic
+selects a candidate stack delta, then proves its instruction-semantic lemma.
+The first-return compositions currently duplicate the original composition
+scripts, sharing their state, frame, arithmetic and source lemmas. This is a
+real maintenance cost, not counted as new physical proof discovery.
+
+The local build of `PairRemoveFirstEnvironment` and
+`PairReplaceFirstEnvironment` passed (254 jobs), and both headlines print
+only the three standard axioms. Approximate elapsed development since the
+18:09 integration checkpoint is 25 minutes; a material portion diagnosed
+stack automation. Nested machine subtraction expanded into expensive modular
+integer cases under `omega`. Direct bit-vector cancellation replaced it and
+checks wraparound without an extra range hypothesis. The region tactic also
+now chooses stack deltas deterministically before proving them. These fixes
+made each new mutator composition module build in approximately 0.7–2.2 s.
+
+Failures in this stage include ordinary elaboration/name-resolution errors,
+deterministic heartbeat/recursion failures, and manually terminated diagnostic
+Lean runs after their owned PIDs were checked. The `capped` direct-Lean runs
+printed KILLED with exit 143 on termination; these are failures, not passes,
+and no OOM is inferred from that banner. A wrong-directory edit/build command
+also failed without changing the intended file. The final checked mutator
+proofs contain no admitted theorem. Lookup first-return, sequence integration,
+closing review and external export acceptance remain outstanding.

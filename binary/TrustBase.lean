@@ -131,6 +131,27 @@ def Returned (entry final : MachineState) (returnAddress : UInt64) : Prop :=
   final.data.regs.r14 = entry.data.regs.r14 ∧
   final.data.regs.r15 = entry.data.regs.r15
 
+/-- No earlier state has reached the outer ABI boundary. Both the supplied
+return PC and consumed return-word stack position matter; internal RETs and
+an alias between the return PC and image code do not define this boundary. -/
+def BeforeOuterReturn (initial : MachineState) (returnAddress : UInt64)
+    (history : List MachineState) : Prop :=
+  ∀ s ∈ history.dropLast, ¬(s.pc=returnAddress.toInt64 ∧
+    s.data.regs.rsp=initial.data.regs.rsp+8)
+
+/-- Access safety only for actual prefixes before the first outer ABI
+return, including the instruction that reaches it. This assumes neither
+termination nor a source result, and omits the unexecuted continuation. -/
+def FirstReturnCallPermissions (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (initial : MachineState) (returnAddress : UInt64) : Prop :=
+  ∀ history, ActualHistory fetch initial history → BeforeOuterReturn initial returnAddress history →
+    RunAccessAllowed fetch permissions history
+
+/-- The same prefix permission premise for caller-prepared entry states. -/
+def FirstReturnDomainPermissions (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (returnAddress : UInt64) (domain : MachineState → Prop) : Prop :=
+  ∀ initial, domain initial → FirstReturnCallPermissions fetch permissions initial returnAddress
+
 /-- External access safety for actual finite histories completing this ABI
 call, including service interiors. It asserts no run exists, no source
 result, and no reconstruction. The unexecuted caller continuation is omitted.
