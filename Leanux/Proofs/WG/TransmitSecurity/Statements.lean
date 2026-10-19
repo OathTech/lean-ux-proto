@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCreatePointContract
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConsumePointNapi
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDispatchPointComposition
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerPointScheduler
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedQueuePeekInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingPointInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNapiPointComposition
@@ -2473,6 +2477,75 @@ theorem initialized_runner_source_points_conditional (trace : Trace) (placeholde
     (children : ChildContracts native inside Good) :
     Covered native Good (executeShape trace placeholders) [] :=
   initialized_covered trace placeholders carrierGood children
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Leanux.Runner Queues AuthenticatedEffects.CausalJournal RunnerSource AllocatedObligation
+open EncryptionPacket EncryptionInterior PeerRetirement
+
+/-- Security: every fixed peer-release point in initialized encryption
+publication retains the same packet ledger or its exact pending counted
+receipt. The original encryption and runner continuations remain attached,
+including points before a later native Stop. -/
+theorem initialized_publication_release_source_points {state : PacketState}
+    (entry : EncryptionRun.Entry trace placeholders operationIndex (some items) world history)
+    (path : PublicationPath items world history ledger [] [] headId head state v after)
+    (published : PublicationPoint .scheduled items state ledger [] [] v after first pid next last)
+    (point : Points.LiftedPoint (some pid) next last cut middle) :
+    Points.Evidence ledger [] [] middle cut.wg ∧
+    runPrefixOuter (RoutingJoint.executeTraceWith (Driver.syscallObserved hooks)
+      (fun result w=>(result,w)) trace placeholders) [] =
+      runPrefixOuter (entry.resume cut
+        (EncryptionRun.returned world items (do point.remainder; pure true))) middle :=
+  entry.publication_release_point path published point
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open PeerRetirement.Points
+variable {native inside : Napi.Points.ChildPoints}
+  {nativeOther insideOther : Iteration.Points.ChildPoints} {G : PeerRetirement.Points.History→World→Prop}
+
+/-- Security: initialized scheduling uses the concrete peer-release account
+and pending-receipt proof in both NAPI and worker iteration. Other interiors
+remain nine explicit source contracts; no global T2 completion is inferred
+from these structural joins. -/
+theorem initialized_scheduler_release_source_points_conditional
+    (entry : ScheduledSource.Entry trace placeholders operationIndex world history)
+    (carrierGood : ∀h w,Napi.Points.Carrier h w→G h w)
+    (accept : ∀ledger h w,Evidence ledger [] [] h w.wg→G h w)
+    (napi : NapiOther native inside G)
+    (workers : WorkerOther native inside nativeOther insideOther G) :
+    Scheduler.Points.Covered (schedulerPoints native nativeOther) G
+      (Scheduler.Points.scheduleShape none) world history ∧
+    Scheduler.Points.Remainders
+      (Napi.Composition.schedulerChildren carrierGood (napiChildren accept napi) (workerChildren accept workers))
+      (Scheduler.Points.scheduleShape none) world history :=
+  initialized_scheduler entry carrierGood accept napi workers
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Dispatch.Composition
+variable {native inside : Dispatch.Points.ChildPoints}
+  {nativeOther insideOther : Reached.Runner.Points.ChildPoints}
+  {Good : Dispatch.Composition.History→World→Prop}
+
+/-- Security: initialized runner points now use the literal syscall dispatch
+source and its original deletion companion. The fourteen deeper dispatch
+families and four service families remain visible conservation obligations. -/
+theorem initialized_runner_dispatch_source_points_conditional
+    (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    (carrierGood : ∀h w,CompleteProduct.Carrier h w→Good h w)
+    (children : Dispatch.Points.ChildContracts native inside Good)
+    (other : OtherChildren native inside nativeOther insideOther Good) :
+    Reached.Runner.Points.Covered (runnerPoints native nativeOther) Good
+      (Reached.Runner.Points.executeShape trace placeholders) [] :=
+  Dispatch.Composition.initialized trace placeholders carrierGood children other
 
 end
 
