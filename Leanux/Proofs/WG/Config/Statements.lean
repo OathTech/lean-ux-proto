@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Config.RequestKeyHeaderClaims
+import Leanux.Proofs.WG.Config.ScalarFinishClaims
+import Leanux.Proofs.WG.Config.AllowedOrderClaims
 import Leanux.Proofs.WG.Config.KeyIdentityReadbackClaims
 import Leanux.Proofs.WG.Config.PeerScalarRetentionClaims
 import Leanux.Proofs.WG.Config.ScalarPrefixClaims
@@ -3132,5 +3135,110 @@ theorem original_mixed_device_key_readback (cs : Queues.RxCredits.Ledger)
         final.wg.nlSock7=socketReadbackFinal middle.wg.nlSock7 d ∧
         CursorHeld d (mixedPagesDevice d pages) none :=
   certificate_key_mixed_readback cs loans attrs initial inspected certificate pre ret middle normal r member kind d present data selected ready headerFits cursorData idle emptyQueue within outcome matched
+
+
+open AllowedOrder AllowedIps Configuration in
+/-- The actual acquired update retains ordered allowed-IP completions, replacement/removal precedence and exact normal or stopped outcome for arbitrary attributes. -/
+theorem original_acquired_allowed_ip_order (attrs : PeerAttrs) (peer : Option PeerId) (flags : UInt32)
+    (psk : Option Key) (pid : PeerId) :
+    Campaign2.Observes (peerConfigUpdateSource attrs peer flags psk pid) (fun _=>True)
+      (fun entry outcome=>∃result:Inspection,result.outcome=outcome ∧
+        Facts attrs peer flags psk pid entry result) :=
+  AllowedOrder.original_update_order attrs peer flags psk pid
+
+open AllowedOrder AllowedIps Configuration in
+/-- The same acquired update combines completion order with the exact represented routing fold under explicit initial routing and address-shape premises. -/
+theorem original_acquired_routed_allowed_ip_order (tables : FlatTable×FlatTable) (attrs : PeerAttrs)
+    (shape : PeerAddressShape attrs) (peer : Option PeerId) (flags : UInt32)
+    (psk : Option Key) (pid : PeerId) :
+    Campaign2.Observes (peerConfigUpdateSource attrs peer flags psk pid) (RoutedTarget tables pid)
+      (fun entry outcome=>∃result:Inspection,result.outcome=outcome ∧
+        Facts attrs peer flags psk pid entry result ∧ RoutedFacts tables result) :=
+  AllowedOrder.original_update_routed_order tables attrs shape peer flags psk pid
+
+open AllowedOrder AllowedIps Configuration in
+/-- Every completed allowed-IP event occupies its actual input position in the original acquired update. -/
+theorem original_allowed_ip_completion_position (attrs : PeerAttrs) (peer : Option PeerId)
+    (flags : UInt32) (psk : Option Key) (pid : PeerId)
+    (entry : Campaign2.Snapshot) (result : Inspection)
+    (facts : Facts attrs peer flags psk pid entry result)
+    (i : Nat) (e : RoutingCompletion) (ip : AllowedIpAttrs) (ret : Int)
+    (selected : (allowedEvents result.completions)[i]?=some e)
+    (call : e.call=.allowedIp pid ip ret) :
+    (attrs.allowedIps.getD [])[i]?=some (.attrs ip) :=
+  AllowedOrder.certificate_allowed_position attrs peer flags psk pid entry result facts i e ip ret selected call
+
+open AllowedOrder AllowedIps Configuration in
+/-- The first negative completed allowed-IP result is the last completed allowed-IP event, including prefixes before later Stops. -/
+theorem original_allowed_ip_negative_cutoff (attrs : PeerAttrs) (peer : Option PeerId)
+    (flags : UInt32) (psk : Option Key) (pid : PeerId)
+    (entry : Campaign2.Snapshot) (result : Inspection)
+    (facts : Facts attrs peer flags psk pid entry result)
+    (i : Nat) (e : RoutingCompletion) (ip : AllowedIpAttrs) (ret : Int)
+    (selected : (allowedEvents result.completions)[i]?=some e)
+    (call : e.call=.allowedIp pid ip ret) (negative : ret<0) :
+    i+1=(allowedEvents result.completions).length :=
+  AllowedOrder.certificate_negative_last attrs peer flags psk pid entry result facts i e ip ret selected call negative
+
+open ScalarFinish PeerScalarRetention Queues.RxCredits in
+/-- The actual finish derives selected-peer survival from the same reference account, preserves its incarnation, PSK and full endpoint, writes the optional interval and pays the caller. -/
+theorem original_acquired_finish_scalar_effect (cs : Ledger) (loans : Reservations) (paid : Owner)
+    (attrs : PeerAttrs) (ret : Int) (expected : Cell) :
+    Campaign2.Ensures (Configuration.peerTailFinishSource attrs (some paid.slot) paid.slot ret)
+      (FinishInput cs loans paid expected)
+      (fun result s=>result=ret ∧ Index.View.ConfigurationInput cs loans s ∧
+        observation s paid.slot=some (finishCell attrs expected)) :=
+  ScalarFinish.original_finish cs loans paid attrs ret expected
+
+open RequestOrder RequestOrder.KeyHeader in
+/-- The original mixed request connects every completed key-stage entry to its actual original header and successful port receipt, including before later Stops. -/
+theorem original_request_key_entry_history (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (fun _=>True)
+      (fun initial outcome=>∃ result : Inspection,result.outcome=outcome ∧
+        Certificate attrs initial result ∧ History attrs initial.wg result.receipts) :=
+  RequestOrder.KeyHeader.original_request attrs
+
+open RequestOrder RequestOrder.KeyHeader in
+/-- Every completed key-stage entry has the original name, index and identity, the single generation increment, selected mark and actual same-request port origin. -/
+theorem original_request_key_entry_fields (attrs : DeviceAttrs) (initial : Campaign2.Snapshot)
+    (result : Inspection) (certificate : Certificate attrs initial result)
+    (r : Receipt) (member : r∈result.receipts) (key : r.kind=.keyStage)
+    (d : Device) (device : initial.wg.device=some d) :
+    ∃ current,r.before.wg.device=some current ∧ Fields attrs d current ∧
+      PortOrigin attrs initial.wg result.receipts (some current.incomingPort) :=
+  RequestOrder.KeyHeader.certificate_key_fields attrs initial result certificate r member key d device
+
+open RequestOrder RequestOrder.KeyHeader in
+/-- With no port attribute, the actual key-stage entry retains the original port along with the derived header fields. -/
+theorem original_request_key_entry_unchanged_port (attrs : DeviceAttrs) (initial : Campaign2.Snapshot)
+    (result : Inspection) (certificate : Certificate attrs initial result)
+    (r : Receipt) (member : r∈result.receipts) (key : r.kind=.keyStage)
+    (d : Device) (device : initial.wg.device=some d)
+    (selected : attrs.listenPort=none) :
+    ∃ current,r.before.wg.device=some current ∧ Fields attrs d current ∧
+      current.incomingPort=d.incomingPort :=
+  RequestOrder.KeyHeader.certificate_key_no_port attrs initial result certificate r member key d device selected
+
+open RequestOrder RequestOrder.KeyHeader in
+/-- A selected nonzero port is the exact actual key-stage entry port; no successful-request or initial namespace premise is supplied. -/
+theorem original_request_key_entry_selected_port (attrs : DeviceAttrs) (initial : Campaign2.Snapshot)
+    (result : Inspection) (certificate : Certificate attrs initial result)
+    (r : Receipt) (member : r∈result.receipts) (key : r.kind=.keyStage)
+    (d : Device) (device : initial.wg.device=some d)
+    (port : Nat) (selected : attrs.listenPort=some port) (nonzero : port≠0) :
+    ∃ current,r.before.wg.device=some current ∧ Fields attrs d current ∧
+      current.incomingPort=port :=
+  RequestOrder.KeyHeader.certificate_key_nonzero_port attrs initial result certificate r member key d device port selected nonzero
+
+open RequestOrder RequestOrder.KeyHeader in
+/-- Zero-port selection at an actual completed key stage follows the original same/down or running allocation branch, with the actual ephemeral bounds. -/
+theorem original_request_key_entry_zero_port (attrs : DeviceAttrs) (initial : Campaign2.Snapshot)
+    (result : Inspection) (certificate : Certificate attrs initial result)
+    (r : Receipt) (member : r∈result.receipts) (key : r.kind=.keyStage)
+    (d : Device) (device : initial.wg.device=some d)
+    (selected : attrs.listenPort=some 0) :
+    ∃ current,r.before.wg.device=some current ∧ Fields attrs d current ∧
+      ZeroPortRequestChoice d current.incomingPort :=
+  RequestOrder.KeyHeader.certificate_key_zero_port attrs initial result certificate r member key d device selected
 
 end Leanux.Proofs.WG.Config

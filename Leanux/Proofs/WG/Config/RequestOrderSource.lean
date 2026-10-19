@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Config.RemainingLoopSource
 import Leanux.Proofs.WG.Config.RequestOrderEffects
 import Leanux.Proofs.WG.Config.RequestOrderFrames
 import Leanux.Proofs.WG.Config.ClearedSources
@@ -214,20 +215,7 @@ private theorem forIn_remaining {α β : Type} (xs : List α) (b : β)
     (step : ∀ x rest b, StatePrefixEnsures (I (x :: rest) b) S (body x b)
       (fun out => match out with | .done b => Q b | .yield b => I rest b)) :
     StatePrefixEnsures (I xs b) S (forIn xs b body) Q := by
-  induction xs generalizing b with
-  | nil =>
-    exact StatePrefixEnsures.pure b (fun h w a hi => (done b h w a hi).1)
-      (fun h w a hi => (done b h w a hi).2)
-  | cons x rest ih =>
-    rw [List.forIn_cons]
-    apply StatePrefixEnsures.bind (step x rest b)
-    intro out
-    cases out with
-    | done b =>
-      exact StatePrefixEnsures.pure b
-        (safe b)
-        (fun _ _ _ hi => hi)
-    | yield b => exact ih b
+  exact Config.RemainingLoop.forIn_remaining xs b body I S Q safe done step
 
 private theorem quiet {α : Type} (a : WG.M α) (P S : List Receipt → Prop)
     (safe : ∀ h, P h → S h) :
