@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.EpisodeJournalClaims
 import Leanux.Proofs.WG.TimerDiscipline.InitializedGiveUpCurveSource
 import Leanux.Proofs.WG.TimerDiscipline.OutgoingTraversalAllModeClaims
 import Leanux.Proofs.WG.TimerDiscipline.DataTraversalAllModeClaims
@@ -916,5 +917,25 @@ theorem original_consume_data_done_traversal_all_modes (pid : PeerId) (pkt : RxP
   · intro entry pre
     rw [observedRxDataTimers_erase pid pkt e]
   · exact observedRxDataTimers_all_modes pid pkt e
+
+
+/-- Every reached original runTimers invocation retains its actual bound, source
+entry and exact outcome. Normal receipts carry every original wheel turn;
+failed episodes retain their Stop without a completed turn-list claim. -/
+theorem original_initialized_wheel_episode_journal (trace : Runner.Trace) (placeholders : Bool) :
+    (EpisodeJournal.Initialized.inspection trace placeholders).1.map Prod.fst =
+      Runner.executeTrace trace placeholders ∧
+    ∀ receipt ∈ (EpisodeJournal.Initialized.inspection trace placeholders).2,
+      EpisodeJournal.Valid receipt :=
+  EpisodeJournal.Initialized.original_initialized_episodes trace placeholders
+
+/-- Original deferred callers preserve timer-episode receipts before later
+failures, with the exact original outcome and successful wheel-chain facts. -/
+theorem original_deferred_wheel_episode_journal (call : Lifetimes.EnvDeferredCall) :
+    (do let result←EpisodeJournal.inspectDeferred call; pure result.1) =
+      Campaign2.Product.inspect call.original ∧
+    Campaign2.Product.Returns (EpisodeJournal.inspectDeferred call) (fun _=>True)
+      (fun result _=>∀receipt∈result.2,EpisodeJournal.Valid receipt) :=
+  EpisodeJournal.original_deferred_episodes call
 
 end Leanux.Proofs.WG.TimerDiscipline

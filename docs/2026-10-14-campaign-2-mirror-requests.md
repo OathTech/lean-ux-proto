@@ -67,6 +67,10 @@ The optional pending-identity review above is not a second established defect.
 
 ## 2. Account for nested queue refill in activation budgets
 
+Current disposition (2026-10-19): confirmed mirror-lane defect, under repair
+on `task/env-requests`; not yet landed in this proof branch. See the campaign
+report's resumption scope.
+
 Status: reproduced by executable model evaluation on `ca6b22e`, independently
 reviewed against the mirror and pristine C. This is an environment-bound
 finding. It is **not** an accepted-run nontermination counterexample, a captured
@@ -137,6 +141,10 @@ explicit rather than counting it as a proved termination counterexample.
 
 ## 3. Restore pre-nest tailroom when cancelling the device peers nest
 
+Current disposition (2026-10-19): confirmed mirror-lane defect, under repair
+on `task/env-requests`; not yet landed in this proof branch. See the campaign
+report's resumption scope.
+
 Status: source correspondence error over `ca6b22e`, with a kernel-checked
 reachable model witness and two independent read-only source reviews. No
 externally compared output difference is established, and this is not a kernel
@@ -189,6 +197,10 @@ fixture and exact callback equation, retaining the internal-only observability
 limit instead of claiming an output or kernel defect.
 
 ## 4. Reconcile supplied-record pending identities after nested requeue
+
+Current disposition (2026-10-19): confirmed mirror-lane defect, under repair
+on `task/env-requests`; not yet landed in this proof branch. See the campaign
+report's resumption scope.
 
 Status: new accepted initialized runtime counterexample over main 783510e8;
 [full report and reproducer](2026-10-19-proof-campaign-2-supplied-pending.md).
