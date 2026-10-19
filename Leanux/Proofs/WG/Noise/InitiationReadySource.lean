@@ -7,11 +7,17 @@ that these cuts compose to the unmodified original call. Native Device and Ambie
 intermediate posts stay in this source file; public claims use the projection. -/
 namespace Leanux.Proofs.WG.Noise.InitiationReady
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Leanux.Proofs.WG.Config Std.Do
-def afterRandom (pid : PeerId) (staticPublic precomputed remote hash : List UInt8) :
+def afterRandomWith (makePublic : Key → WG.M (Option Key × Bool))
+    (dh : Bool → Key → Key → Key → WG.M (Option (Key × Key)))
+    (pid : PeerId) (staticPublic precomputed remote hash : List UInt8) :
     WG.M (Option (List UInt8)) := do
   let secret := clamp (← hidden .initEphemeral)
   setSecret pid secret
-  afterPublic pid staticPublic precomputed secret remote hash
+  afterPublicWith makePublic dh pid staticPublic precomputed secret remote hash
+
+def afterRandom (pid : PeerId) (staticPublic precomputed remote hash : List UInt8) :
+    WG.M (Option (List UInt8)) :=
+  afterRandomWith WG.generatePublic WG.mixDh pid staticPublic precomputed remote hash
 
 def randomEffect (pid : PeerId) (d : Device) (p : Peer)
     (staticPublic precomputed remote hash ephemeral clock : List UInt8)
@@ -58,10 +64,15 @@ theorem afterRandom_returns (pid : PeerId)
   exact tailRun
 
 
-def body (pid : PeerId) (staticPublic : List UInt8) (p : Peer) : WG.M (Option (List UInt8)) := do
+def bodyWith (makePublic : Key → WG.M (Option Key × Bool))
+    (dh : Bool → Key → Key → Key → WG.M (Option (Key × Key)))
+    (pid : PeerId) (staticPublic : List UInt8) (p : Peer) : WG.M (Option (List UInt8)) := do
   let h := noiseHash (handshakeInitHash ++ p.remoteStatic)
   setChain pid handshakeInitChainingKey h
-  afterRandom pid staticPublic p.precomputedStaticStatic p.remoteStatic h
+  afterRandomWith makePublic dh pid staticPublic p.precomputedStaticStatic p.remoteStatic h
+
+def body (pid : PeerId) (staticPublic : List UInt8) (p : Peer) : WG.M (Option (List UInt8)) :=
+  bodyWith WG.generatePublic WG.mixDh pid staticPublic p
 
 def bodyEffect (pid : PeerId) (d : Device) (p : Peer) (ephemeral clock : List UInt8)
     (index : Nat) (rest : List HiddenRecord) : Option (List UInt8) → WGWorld → Ambient → Prop :=
@@ -109,8 +120,9 @@ theorem createInitiation_factored (pid : PeerId) :
       if ← branch .initNoIdentity !identity.hasIdentity then return none
       let p ← getPeer pid
       body pid identity.staticPublic p) := by
-  simp only [createInitiation, body, afterRandom, setSecret, afterPublic,
-    afterEphemeral, afterDh, afterPrecomputed, afterClock, finish, bind_assoc]
+  simp only [createInitiation, body, bodyWith, afterRandomWith, setSecret,
+    afterPublicWith, afterEphemeralWith, afterDhWith, afterPrecomputed, afterClock, finish,
+    bind_assoc]
   rfl
 
 theorem createInitiation_ready (pid : PeerId) (d : Device) (p : Peer)

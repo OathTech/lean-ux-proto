@@ -77,7 +77,7 @@ theorem initiationTraversalFinish_tag_frame (pid : PeerId) (message : List UInt8
       (do let p ← getPeer pid; setPeer pid {p with lastSentHandshake := now})
       sendBufferToPeer pid message
       timersHandshakeInitiated pid) := by
-    simp only [initiationTraversalFinish,bind_assoc]
+    simp only [initiationTraversalFinish,initiationTraversalFinishWith,bind_assoc]
   rw [source]
   refine ensures_bind _ _ (ResponseSuffix.delTimer_tag_frame pid .sendKeepalive entry) ?_
   intro u

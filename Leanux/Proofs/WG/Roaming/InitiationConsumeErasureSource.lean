@@ -3,8 +3,6 @@ import Leanux.Proofs.WG.Roaming.InitiationLookupSource
 
 set_option autoImplicit false
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
-set_option maxRecDepth 2048
 namespace Leanux.Proofs.WG.Roaming
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Std.Do
 
@@ -39,7 +37,8 @@ def initiationFinish (msg : List UInt8) (identity : StaticIdentity) (s : Key)
 
 /-- Decorate the actual consumer's reads and successful commit. Both failed
 decrypt exits and the post-lookup release paths keep the original out helper. -/
-def initiationConsume (msg : List UInt8) : WG.M (Option InitiationConsumed) := do
+def initiationConsumeWithDh (dh : Bool → List UInt8 → List UInt8 → List UInt8 → WG.M (Option (List UInt8 × List UInt8)))
+    (msg : List UInt8) : WG.M (Option InitiationConsumed) := do
   let fail (peer : Option PeerId) : WG.M (Option InitiationConsumed) := do
     let _ ← initiationOut peer none
     return none
@@ -48,7 +47,7 @@ def initiationConsume (msg : List UInt8) : WG.M (Option InitiationConsumed) := d
   let hash := noiseHash (handshakeInitHash ++ identity.staticPublic)
   let e := (msg.drop 8).take 32
   let (ck, hash) ← messageEphemeral true e handshakeInitChainingKey hash
-  let es ← mixDh true ck identity.staticPrivate e
+  let es ← dh true ck identity.staticPrivate e
   if ← branch .consumeEsFailed es.isNone then return ← fail none
   let some (ck, key) := es | invariant "unreachable"
   let st ← messageDecrypt ((msg.drop 40).take 48) key hash
@@ -68,6 +67,13 @@ def initiationConsume (msg : List UInt8) : WG.M (Option InitiationConsumed) := d
   let some (t, hashT) := ts | invariant "unreachable"
   initiationFinish msg identity s pid lookup dhPeer beforeDh ckSs t hashT
 
+/-- Original observer retained as the actual DH specialization. -/
+def initiationConsume (msg : List UInt8) : WG.M (Option InitiationConsumed) :=
+  initiationConsumeWithDh mixDh msg
+
+theorem initiationConsumeWithDh_original (msg : List UInt8) :
+    initiationConsumeWithDh mixDh msg = initiationConsume msg := rfl
+
 def initiationPeer (out : Option InitiationConsumed) : Option PeerId := out.map (·.pid)
 
 /-- Exact original consumer, with all rejection and error paths retained. -/
@@ -83,7 +89,7 @@ theorem initiationConsume_erase (msg : List UInt8) :
     have fn : next = fun _ => a := funext same
     rw [fn]
     rfl
-  simp only [initiationConsume, initiationFinish, consumeInitiation, initiationOut, initiationPeer,
+  simp only [initiationConsume, initiationConsumeWithDh, initiationFinish, consumeInitiation, initiationOut, initiationPeer,
     bind_assoc, pure_bind, bind_if, Option.map_none]
   congr 1
   funext d

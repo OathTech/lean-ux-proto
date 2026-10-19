@@ -34,7 +34,8 @@ theorem source (pid : PeerId) :
   apply bind_congr
   intro message
   cases message <;>
-    simp only [initiationTraversalSuffix,initiationTraversalFinish,sendInterval,action,bind_assoc]
+    simp only [initiationTraversalSuffix,initiationTraversalSuffixWith,
+      initiationTraversalFinish,initiationTraversalFinishWith,sendInterval,action,bind_assoc]
 
 def observed (pid : PeerId) : WGPrefix Receipt Unit :=
   withHooks (fun {_} a=>liftWGPrefix a) HookJournal.observed pid

@@ -155,7 +155,7 @@ theorem initiationTraversalFinish_frame (pid : PeerId) (message : List UInt8) :
       modifyPeer pid fun p => {p with lastSentHandshake := now}
       sendBufferToPeer pid message
       timersHandshakeInitiated pid) := by
-    simp only [initiationTraversalFinish,modify_eq,bind_assoc]
+    simp only [initiationTraversalFinish,initiationTraversalFinishWith,modify_eq,bind_assoc]
   rw [source]
   exact (timersAnyAuthenticatedPacketSent_frame pid).bind (fun _ =>
     (frame_ambient (AmbientM.hiddenClock64 .initLastSentAgain)).bind (fun now =>

@@ -1,3 +1,11 @@
+import Leanux.Proofs.WG.Progress.CookieFiniteClaims
+import Leanux.Proofs.WG.Progress.ReceptionFiniteClaims
+import Leanux.Proofs.WG.Progress.InitiationFiniteClaims
+import Leanux.Proofs.WG.Progress.ConsumerFiniteClaims
+import Leanux.Proofs.WG.Progress.SendBufferFiniteClaims
+import Leanux.Proofs.WG.Progress.ResponseSenderFiniteClaims
+import Leanux.Proofs.WG.Progress.InitiationCallerFiniteClaims
+import Leanux.Proofs.WG.Progress.KeepaliveFiniteClaims
 import Leanux.Proofs.WG.Progress.BatchBudgetClaims
 import Leanux.Proofs.WG.Progress.SendLoopRecordClaims
 import Leanux.Proofs.WG.Progress.TimerBudgetClaims
@@ -1624,5 +1632,109 @@ theorem original_batch_loop_record_budget_adequate (records : List HiddenRecord)
         let _ ← forIn (List.range' 0 (records.length+1+extra)) () RecordSuffix.afterBatchRecordedTurn
         pure ()) :=
   RecordSuffix.batch_loop_budget_adequate records extra
+
+/-- Exact finite evaluation of the original create initiation call,
+for every entry and input mode, retaining all original refusals and Stops. -/
+theorem original_create_initiation_finite (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.createInitiation pid)
+      (HandshakeFinite.createInitiation pid) :=
+  HandshakeFinite.original_createInitiation_finite pid
+
+/-- Exact finite evaluation of the original create response call,
+for every entry and input mode, retaining all original refusals and Stops. -/
+theorem original_create_response_finite (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.createResponse pid)
+      (HandshakeFinite.createResponse pid) :=
+  HandshakeFinite.original_createResponse_finite pid
+
+/-- Exact finite evaluation of the original consume initiation call,
+for every entry and input mode, retaining all original refusals and Stops. -/
+theorem original_consume_initiation_finite (msg : List UInt8) :
+    Campaign2.AgreesOn (fun _ => True) (WG.consumeInitiation msg)
+      (ConsumerFinite.initiation msg) :=
+  ConsumerFinite.original_initiation_finite msg
+
+/-- Exact finite evaluation of the original consume response call,
+for every entry and input mode, retaining all original refusals and Stops. -/
+theorem original_consume_response_finite (msg : List UInt8) :
+    Campaign2.AgreesOn (fun _ => True) (WG.consumeResponse msg)
+      (ConsumerFinite.response msg) :=
+  ConsumerFinite.original_response_finite msg
+
+/-- Exact finite evaluation of the original send buffer call,
+for every entry and input mode, retaining all original refusals and Stops. -/
+theorem original_send_buffer_finite (pid : PeerId) (bytes : List UInt8) :
+    Campaign2.AgreesOn (fun _ => True) (WG.sendBufferToPeer pid bytes)
+      (HandshakeFinite.sendBuffer pid bytes) :=
+  HandshakeFinite.original_sendBuffer_finite pid bytes
+
+/-- Exact finite evaluation of the original send response call,
+for every entry and input mode, retaining all original refusals and Stops. -/
+theorem original_send_response_finite (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.sendHandshakeResponse pid)
+      (HandshakeFinite.sendResponse pid) :=
+  HandshakeFinite.original_sendResponse_finite pid
+
+/-- Exact finite evaluation of the original send initiation call,
+for every entry and input mode, retaining all original refusals and Stops. -/
+theorem original_send_initiation_finite (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.sendHandshakeInitiation pid)
+      (HandshakeFinite.sendInitiation pid) :=
+  HandshakeFinite.original_sendInitiation_finite pid
+
+/-- Exact finite evaluation of the original handshake send worker call,
+for every entry and input mode, retaining all original refusals and Stops. -/
+theorem original_handshake_send_worker_finite (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.handshakeSendWorker pid)
+      (HandshakeFinite.sendWorker pid) :=
+  HandshakeFinite.original_sendWorker_finite pid
+
+/-- Exact finite evaluation of the original keepalive call,
+for every entry and input mode, retaining all original refusals and Stops. -/
+theorem original_keepalive_finite (pid : PeerId) :
+    Campaign2.AgreesOn (fun _ => True) (WG.sendKeepalive pid)
+      (HandshakeFinite.keepalive pid) :=
+  HandshakeFinite.original_keepalive_finite pid
+
+/-- Exact finite evaluation of the whole original ratelimiter
+for every input mode, preserving all refusals and Stops. -/
+theorem original_ratelimiter_finite (src : SkbSource) :
+    Campaign2.AgreesOn (fun _ => True) (WG.ratelimiterAllow src)
+      (HandshakeFinite.ratelimiter src) :=
+  HandshakeFinite.original_ratelimiter_finite src
+
+/-- Exact finite evaluation of the whole original cookie validation
+for every input mode, preserving all refusals and Stops. -/
+theorem original_cookie_validation_finite (msg : List UInt8) (src : SkbSource) (checkCookie : Bool) :
+    Campaign2.AgreesOn (fun _ => True) (WG.cookieValidatePacket msg src checkCookie)
+      (HandshakeFinite.validateCookie msg src checkCookie) :=
+  HandshakeFinite.original_validateCookie_finite msg src checkCookie
+
+/-- Exact finite evaluation of the whole original reply sender
+for every input mode, preserving all refusals and Stops. -/
+theorem original_reply_sender_finite (src : SkbSource) (bytes : List UInt8) :
+    Campaign2.AgreesOn (fun _ => True) (WG.sendBufferAsReplyToSkb src bytes)
+      (HandshakeFinite.sendReply src bytes) :=
+  HandshakeFinite.original_sendReply_finite src bytes
+
+/-- Exact finite evaluation of the whole original cookie sender
+for every input mode, preserving all refusals and Stops. -/
+theorem original_cookie_sender_finite (msg : List UInt8) (src : SkbSource) :
+    Campaign2.AgreesOn (fun _ => True) (WG.sendHandshakeCookie msg src)
+      (HandshakeFinite.sendCookie msg src) :=
+  HandshakeFinite.original_sendCookie_finite msg src
+
+/-- Exact finite evaluation of the whole original handshake reception
+for every input mode, preserving all refusals and Stops. -/
+theorem original_handshake_reception_finite (msg : List UInt8) (src : SkbSource) :
+    Campaign2.AgreesOn (fun _ => True) (WG.receiveHandshakePacket msg src)
+      (HandshakeFinite.reception msg src) :=
+  HandshakeFinite.original_reception_finite msg src
+
+/-- Complete original receive-step finite evaluation, including empty-ring,
+callback refusal and every original Stop outcome. -/
+theorem original_receive_step_finite :
+    Campaign2.AgreesOn (fun _ => True) WG.receiveStep HandshakeFinite.receiveStep :=
+  HandshakeFinite.original_receiveStep_finite
 
 end Leanux.Proofs.WG.Progress

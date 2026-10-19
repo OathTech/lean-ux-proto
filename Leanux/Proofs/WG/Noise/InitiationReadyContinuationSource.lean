@@ -58,15 +58,20 @@ theorem afterPrecomputed_returns (pid : PeerId) (e encStatic ck precomputed hash
   exact tailRun
 
 
-def afterDh (pid : PeerId) (staticPublic precomputed e ck secret remote hash : List UInt8) :
+def afterDhWith (dh : Bool → Key → Key → Key → WG.M (Option (Key × Key)))
+    (pid : PeerId) (staticPublic precomputed e ck secret remote hash : List UInt8) :
     WG.M (Option (List UInt8)) := do
-  let es ← mixDh true ck secret remote
+  let es ← dh true ck secret remote
   if ← branch .initEsFailed es.isNone then return none
   let some (ck, key) := es | invariant "unreachable"
   let encStatic := aeadEncrypt key noiseNonce staticPublic hash
   let h := noiseHash (hash ++ encStatic)
   setChain pid ck h
   afterPrecomputed pid e encStatic ck precomputed h
+
+def afterDh (pid : PeerId) (staticPublic precomputed e ck secret remote hash : List UInt8) :
+    WG.M (Option (List UInt8)) :=
+  afterDhWith WG.mixDh pid staticPublic precomputed e ck secret remote hash
 
 def dhEffect (pid : PeerId) (d : Device) (p : Peer)
     (staticPublic precomputed e ck secret remote hash clock : List UInt8)
@@ -120,11 +125,16 @@ theorem afterDh_returns (pid : PeerId)
   exact tailRun
 
 
-def afterEphemeral (pid : PeerId) (staticPublic precomputed e secret remote hash : List UInt8) :
+def afterEphemeralWith (dh : Bool → Key → Key → Key → WG.M (Option (Key × Key)))
+    (pid : PeerId) (staticPublic precomputed e secret remote hash : List UInt8) :
     WG.M (Option (List UInt8)) := do
   let (ck, h) ← messageEphemeral false e handshakeInitChainingKey hash
   setChain pid ck h
-  afterDh pid staticPublic precomputed e ck secret remote h
+  afterDhWith dh pid staticPublic precomputed e ck secret remote h
+
+def afterEphemeral (pid : PeerId) (staticPublic precomputed e secret remote hash : List UInt8) :
+    WG.M (Option (List UInt8)) :=
+  afterEphemeralWith WG.mixDh pid staticPublic precomputed e secret remote hash
 
 def ephemeralEffect (pid : PeerId) (d : Device) (p : Peer)
     (staticPublic precomputed e secret remote hash clock : List UInt8)
@@ -173,12 +183,18 @@ theorem afterEphemeral_returns (pid : PeerId)
   exact tailRun
 
 
-def afterPublic (pid : PeerId) (staticPublic precomputed secret remote hash : List UInt8) :
+def afterPublicWith (makePublic : Key → WG.M (Option Key × Bool))
+    (dh : Bool → Key → Key → Key → WG.M (Option (Key × Key)))
+    (pid : PeerId) (staticPublic precomputed secret remote hash : List UInt8) :
     WG.M (Option (List UInt8)) := do
-  let (pub, ok) ← generatePublic secret
+  let (pub, ok) ← makePublic secret
   if ← branch .initNoEphemeral !ok then return none
   let some e := pub | invariant "unreachable"
-  afterEphemeral pid staticPublic precomputed e secret remote hash
+  afterEphemeralWith dh pid staticPublic precomputed e secret remote hash
+
+def afterPublic (pid : PeerId) (staticPublic precomputed secret remote hash : List UInt8) :
+    WG.M (Option (List UInt8)) :=
+  afterPublicWith WG.generatePublic WG.mixDh pid staticPublic precomputed secret remote hash
 
 theorem afterPublic_returns (pid : PeerId)
     (staticPublic precomputed secret remote hash : List UInt8)
