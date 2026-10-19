@@ -192,5 +192,10 @@ source finding.
    total suffix, rather than an invalid claim that the erased cell remains
    resident. These bridges pass the aggregate gate, fresh root replay and
    twelve recipes; complete initialized internal-cut coverage remains open.
+   Source-67 `7e1ea08f` adds initialized routed-front and pre-receipt cuts,
+   original scheduler selection/run prefixes, and initialized TX-worker
+   entry after crypt-ahead. The gate, fresh root replay and twelve recipes
+   pass. Other caller roots and native interiors remain open; finding 2
+   is not closed by these supporting connections.
 
 No mirror change or narrower T2 outcome is adopted.
