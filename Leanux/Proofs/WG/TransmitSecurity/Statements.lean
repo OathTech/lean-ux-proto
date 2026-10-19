@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedQueueInteriorInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIterationPointInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingInteriorInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSocketInteriorInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerFinishInitialized
@@ -2311,6 +2313,63 @@ theorem initialized_publication_release_finish_interiors
               liftWGObserver (liftWGPrefix (Finish.tailAt site owner))
               pure true))) recorded) :=
   entry.publication_finish_interiors path point native
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Leanux.Runner Queues Queues.RxCredits AuthenticatedEffects.CausalJournal RunnerSource
+open QueueInterior RetirementSecurity ScheduledSource
+
+/-- Security: initialized dequeue moves the exact cached packet cohort into its
+selected worker local at the native setter. The same complete ledger remains
+valid before and after the existing write/removal events, and the original
+runner continues from that precise cut without repeating the dequeue. -/
+theorem initialized_native_dequeue_interval
+    (entry : TxEntry trace placeholders operationIndex pid world history)
+    (selected : runPrefix (workerSelection pid) world history=(.ok (some picked,v),last)) :
+    ∃ ledger u middle d p,
+      runPrefix (headPrefix pid) world history=(.ok (some (picked.items,picked.head),u),middle) ∧
+      u.wg.dev=some d ∧ d.peers[pid]?=some p ∧ p.txQueue.peeked=some picked.items ∧
+      let after := replacePeer u.wg d pid {p with txQueue:=p.txQueue.dropPeeked}
+      let reads := middle++[readEvent pid p,readEvent pid p]
+      runPrefix (workerMutation pid) world history=(.ok (some (p,p),{u with wg:=after}),reads) ∧
+      CompleteConsequences.Cut reads ledger [] [⟨.selected,pid,picked.items⟩] after ∧
+      AllocatedObligation.CreateDisposal.PendingBatch reads ledger picked.items ∧
+      p.txQueue.all=picked.items::p.txQueue.dropPeeked.all ∧
+      CompleteConsequences.Cut (reads++[writeEvent pid p]) ledger [] [⟨.selected,pid,picked.items⟩] after ∧
+      CompleteConsequences.Cut (reads++[writeEvent pid p,removedEvent pid picked.items]) ledger []
+        [⟨.selected,pid,picked.items⟩] after ∧
+      runPrefixOuter (RoutingJoint.executeTraceWith (Driver.syscallObserved hooks)
+        (fun result w=>(result,w)) trace placeholders) [] =
+        runPrefixOuter (entry.resume {u with wg:=after} (do
+          dropDue pid picked.items (p,p)
+          afterDrop pid picked.items picked.head)) reads :=
+  entry.dequeue_interval selected
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open Iteration.Points
+variable {native inside : Iteration.Points.ChildPoints}
+  {nativeNapi insideNapi : NapiPoints} {Good : Iteration.Points.History → World → Prop}
+
+/-- Security: initialized scheduler coverage uses the actual canonical worker
+iteration and source-built continuations. Its eight interior child contracts
+and external NAPI contract remain explicit; this conditional composition does
+not claim complete T2 native coverage. -/
+theorem initialized_iteration_source_points_conditional
+    (entry : ScheduledSource.Entry trace placeholders operationIndex world history)
+    (carrierGood : ∀ h w, CompleteProduct.Carrier h w → Good h w)
+    (children : Iteration.Points.ChildContracts native inside Good)
+    (napi : Scheduler.Points.ChildSourceContract (schedulerPoints native nativeNapi)
+      (schedulerPoints inside insideNapi) Good .napi) :
+    Scheduler.Points.Covered (schedulerPoints native nativeNapi) Good
+      (Scheduler.Points.scheduleShape none) world history ∧
+    Scheduler.Points.Remainders (scheduler_children carrierGood children napi)
+      (Scheduler.Points.scheduleShape none) world history :=
+  entry.source_points carrierGood (scheduler_children carrierGood children napi)
 
 end
 
