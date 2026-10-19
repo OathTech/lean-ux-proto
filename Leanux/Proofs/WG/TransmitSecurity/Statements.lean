@@ -32,6 +32,7 @@ import Leanux.Proofs.WG.TransmitSecurity.BatchWorker
 import Leanux.Proofs.WG.TransmitSecurity.BatchNativeStaging
 import Leanux.Proofs.WG.TransmitSecurity.ReservationBankEncryption
 import Leanux.Proofs.WG.TransmitSecurity.BatchNativeTx
+import Leanux.Proofs.WG.TransmitSecurity.BatchNativeInitialized
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Exclusive reservation tokens now reach every initialized AEAD occurrence;
@@ -701,5 +702,18 @@ theorem original_traffic_batch_alignment (family addr : Nat) (packets : List WG.
     Framing.Preserves (BatchCoherence.Native.Coherent locals active) (txStep pid) :=
   ⟨BatchCoherence.Transmit.transmit family addr packets mtu,
     BatchCoherence.Receive.coherent msg src,BatchCoherence.Tx.step pid⟩
+
+/-- A mixed-key queued batch could encrypt a packet under its neighbour's key.
+Every normal initialized execution has aligned batches at each actual syscall
+entry and the returned world, with no incoming alignment or callback premise.
+Binding every internal encryption receipt, including stopped prefixes, remains
+a separate shared-journal obligation. -/
+theorem initialized_native_batch_alignment (trace : Runner.Trace) (placeholders : Bool)
+    (run : runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) [] =
+      (.ok (result,w),h)) :
+    BatchCoherence.Native.Coherent [] [] w.wg ∧
+    ∀ index, index < trace.ops.size → BatchCoherence.Runner.OperationEntry trace placeholders index :=
+  ⟨(BatchCoherence.Initialized.normal trace placeholders run).2,
+    BatchCoherence.Initialized.entries trace placeholders run⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

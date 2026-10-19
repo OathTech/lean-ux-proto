@@ -24,7 +24,7 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 | T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts, not causal closure of all delayed effects. |
 | T4 handshake replay resistance | Open. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Direct initialized stale-refusal/no-response remains. Named C2 source assumptions stay visible. |
 | T5 responder confirmation | Open. Initialized responder selections have earlier successful confirmations, each immediately preceded by a certified replay and earlier AEAD publication in the same journal. Key-allocation continuity and the actual encryption prohibition remain open. |
-| T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized holder accounting and conditional cleanup remain open. |
+| T6 key retirement | C3-F1 concerns the literal actual-encryption clause. R5 supplies the admission/attempt checks. New native put/clear contracts prove exact reference payment, retention and final removal; initialized exact holder accounting is proved; conditional cleanup remains open. |
 
 ## C3-F1: invalidation and clearing do not cancel previously admitted encryption
 
@@ -506,6 +506,33 @@ the unit suite completes 131 tests with one configured-kernel skip (23.104
 seconds). All 1910 frozen proof-source hashes and all 916 existing main proof
 files remain unchanged. Main and the mirror remain unchanged. No mirror
 finding is asserted; all six outcomes remain open.
+
+
+Checkpoint twenty-four passes complete validation. Batch alignment now survives native
+configuration, peer removal, device creation/destruction, all scheduler and
+deferred paths, traffic, dump calls and every syscall. Normal initialized
+Runner execution derives physical ownership and batch alignment at each actual
+syscall entry and the returned world without entry or callback assumptions.
+The shared-journal encryption cuts, including stopped prefixes, still need to
+join this state carrier to the existing worker alignment theorem.
+Initialized exact key-reference accounting now follows the original C1
+syscall/Runner spine; acceptance recovers the same actual endpoint without
+incoming funding, slot-liveness, physical-ownership or coverage assumptions.
+An empty exact credit list alone does not imply that a hypothetical resident
+zero-reference cell is absent; conditional retirement remains tied to actual
+source release/disposal. No mirror defect follows from that distinction.
+The delayed-effect carrier now covers routing, worker/NAPI/poll/stack paths,
+scheduling, drains and both timer modes; initialized authorization remains
+open. Resident-material frames cover native borrow/release/reservation/refusal,
+allocation/publication and the exact Journal encryption hook through Stop.
+Adopted owned pins are T3 `f32d8f40`, T4 `98a1a4a5`, and T6 `d9189dca`.
+The gate passes 2001 jobs and 1302 terminal declarations across thirteen root
+modules, with only permitted axioms. All twelve witness recipes, fresh-root
+kernel replay and the 130-job model build pass. The unit command accidentally
+listed `harness.test_wg` twice: all 140 executions pass (131 distinct tests,
+one configured-kernel skip, 22.816 seconds). All 1945 frozen proof hashes,
+916 existing main proof files, main and the mirror remain unchanged. All six
+outcomes remain open.
 
 ## Validation
 

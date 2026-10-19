@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.RetirementSecurity.HolderInitialized
 import Leanux.Proofs.WG.RetirementSecurity.HolderDumpDispatch
 import Leanux.Proofs.WG.RetirementSecurity.HolderOuterControls
 import Leanux.Proofs.WG.RetirementSecurity.HolderOuterTraffic
@@ -1957,5 +1958,25 @@ theorem original_dump_joint_key_accounts (ref : DeviceRef) :
     Leanux.Proofs.Logged.PrefixPreserves (HolderOuter.Inv carriers loans temporary [] [])
       OwnerChecks.Safe (Queues.RxHistory.syscallDispatch .wgGetRecv) :=
   ⟨HolderOuter.dump_get ref,HolderOuter.dump_start ref,HolderOuter.dump_receive⟩
+
+
+/-- Every normal initialized Runner endpoint accounts exactly for every
+keypair reference using actual published slots, queued TX batches and queued
+RX packets. No initial ownership, credit, slot-liveness or source-coverage
+premise is assumed. Residual packet holders remain explicit retirement debts;
+normal acceptance does not imply that all references have drained. -/
+theorem initialized_exact_key_reference_account (trace : Runner.Trace) (placeholders : Bool)
+    (run : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h)) : HolderAccount [] w.wg :=
+  HolderInitialized.account trace placeholders run
+
+/-- Acceptance by the original executable Runner yields its same actual
+endpoint and exact native key-holder account. Device-ring aliases and work
+notifications add no credit; the theorem assumes no separate ledger invariant. -/
+theorem accepted_exact_key_reference_account (trace : Runner.Trace) (placeholders : Bool)
+    (run : Runner.executeTrace trace placeholders=.ok result) :
+    ∃w h,Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders) []=
+      (.ok (result,w),h) ∧ HolderAccount [] w.wg :=
+  HolderInitialized.accepted trace placeholders run
 
 end Leanux.Proofs.WG.RetirementSecurity

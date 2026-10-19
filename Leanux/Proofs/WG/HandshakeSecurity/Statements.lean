@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalSessionInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorkerEntry
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialWorker
+import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialJournal
 import Leanux.Proofs.WG.HandshakeSecurity.StagingMaterialBank
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
@@ -1251,5 +1252,15 @@ theorem native_worker_reservation_key_binding (history : List TransmitSecurity.J
     ∃ token, TransmitSecurity.ReservationAssignments.Bank.Assigned (StagingMaterial.bank history) history receipt token ∧
       token.stamp = receipt.cipher.keyRead.value.internalId ∧ token.nonce = receipt.read.value.nonce :=
   StagingMaterial.assigned_of_binding safe bound
+
+/-- Security: the shared driver's native encryption callback records each
+actual AEAD against an allocation in its strict preceding journal prefix,
+retaining that evidence through a later Stop. The resident-material carrier
+and batch key equality remain explicit until initialized transport closes. -/
+theorem native_journal_encryption_retains_key_material
+    (item : Option (List SkbId)) :
+    PrefixPreserves (fun h w => ResidentMaterial.JournalInv h w.wg)
+      ResidentMaterial.Safe (TransmitSecurity.Journal.encrypt item) :=
+  ResidentMaterial.encrypt item
 
 end Leanux.Proofs.WG.HandshakeSecurity
