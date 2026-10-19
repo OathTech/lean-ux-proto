@@ -43,7 +43,7 @@ theorem initiation_frame_of_send_native {α : Type} (action : WG.M α) (pid : Pe
   exact congrArg Prod.snd h
 
 def sendWorkKernel (k : WGWorld) (pid : PeerId) : SendWorkView :=
-  (k.dev.map sendWorkDevice, (k.dev.bind fun d => d.peers[pid]?).map sendWorkPeer)
+  (k.dev.map (sendWorkDevice k.nlSock7 k.fixtureNetDevices), (k.dev.bind fun d => d.peers[pid]?).map sendWorkPeer)
 
 def sendWorkAt (w : WGWorld) (pid : PeerId) : SendWorkView := sendWorkKernel w pid
 
@@ -192,7 +192,7 @@ theorem setPeer_sendWorkView (pid : PeerId) (q : Option SendWorkDevice) (v : Opt
         have cell := congrArg (Option.map (fun x : SendWorkPeer => x.2.2)) old
         simpa [Option.map_map, Function.comp_def, sendWorkPeer] using cell.symm
       · simp [Std.TreeMap.getElem?_insert, same]
-    simpa [sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, workQueues,
+    simpa [sendWorkAt, sendWorkKernel, sendWorkDevice, sendConfiguration, tableCursor, workQueues,
       device, value, cells]
       using congrArg Prod.fst before
 
@@ -302,7 +302,7 @@ theorem tunnelXmit_sendWorkView (pid : PeerId) (e : Endpoint) (bytes : List UInt
     intro g ambient y final after pre run
     cases run
     cases device : g.dev <;>
-      simpa [P, sendWorkAt, sendWorkKernel, sendWorkDevice, tableCursor, workQueues, device] using pre
+      simpa [P, sendWorkAt, sendWorkKernel, sendWorkDevice, sendConfiguration, tableCursor, workQueues, device] using pre
   have hsent (sport : Nat) :
       Ensures (modify fun g : WGWorld => {g with sent := g.sent ++ [{
         family := e.family, addr := e.addr, port := e.port, bytes, ds, sport, src := r.src}]}) P (fun _ => P) := by

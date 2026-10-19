@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Config.ReplacementCompletionClaims
+import Leanux.Proofs.WG.Config.GetterMetadataFrames
+import Leanux.Proofs.WG.Config.ConfiguredRemovalClaims
 import Leanux.Proofs.WG.Config.InitializedRoutingClaims
 import Leanux.Proofs.WG.Config.ConfiguredOwnerClaims
 import Leanux.Proofs.WG.Config.RoutingReadbackClaims
@@ -2481,5 +2484,39 @@ theorem original_initialized_configuration_endpoint (input : Lean.Json)
       Index.InitializedBounds.EndpointSafe final.toSnapshot ∧
       Index.ReachedInitialized.ActualAccount trace placeholders json final :=
   InitializedRouting.parsed_accepted input trace parsed placeholders json run
+
+/-- The actual complete peer removal retains configured ownership of all
+represented routes at normal return, including through queued cleanup and
+reference payments. No empty-work or supplied successor-state premise is used. -/
+theorem original_peer_remove_configured_owners (d : Device) (t4 t6 : AllowedIps.Tree)
+    (peer : Option PeerId) (routing : AllowedIps.RoutingInvariant d t4 t6)
+    (owners : ConfiguredOwners d t4 t6) :
+    Campaign2.Ensures (peerRemove peer) (fun s => s.wg.device = some d)
+      (fun _ s => ∃ out u4 u6, s.wg.device = some out ∧
+        AllowedIps.RoutingInvariant out u4 u6 ∧ ConfiguredOwners out u4 u6) :=
+  peerRemove_configured_owners d t4 t6 peer routing owners
+
+/-- The original flag-only replacement completes both saved removal passes and
+their queued work. A normal return derives zero status and an empty configured
+peer list, public-key table and represented routes from initial funding,
+stability, base coherence and routing. Allocated stores need not be empty. -/
+theorem original_replace_peers_completion (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations)
+    (tables : AllowedIps.FlatTable × AllowedIps.FlatTable) (d : Device) :
+    Campaign2.Ensures (wgSetDevice (replacePeersAttrs (byIndex d)))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d ∧
+        ReplaceCompletion.View.Input cs loans tables s)
+      (fun result s => result = 0 ∧ ReplaceCompletion.View.Empty s) :=
+  ReplaceCompletion.request_completion cs loans tables d
+
+/-- Actual whole bulk removal derives the same empty configured endpoint
+through its real cleanup, without requiring initially empty work queues. -/
+theorem original_peer_remove_all_completion (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations)
+    (tables : AllowedIps.FlatTable × AllowedIps.FlatTable) :
+    Campaign2.Ensures peerRemoveAll (ReplaceCompletion.View.Input cs loans tables)
+      (fun _ s => ReplaceCompletion.View.Empty s) :=
+  ReplaceCompletion.removal_completion cs loans tables
+
 
 end Leanux.Proofs.WG.Config

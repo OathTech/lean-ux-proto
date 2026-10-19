@@ -18,7 +18,7 @@ theorem remotes_frame_of_sendWork {α : Type} (action : WG.M α) (pid : PeerId)
     (frame (TimerDiscipline.sendWorkAt g pid).1 (TimerDiscipline.sendWorkAt g pid).2)
     g ambient result final after rfl run
   have projected := congrArg (fun x : TimerDiscipline.SendWorkView =>
-    fun target => x.1.bind fun d => (d.2.2 target).bind fun c => c.2.2.2.2.2.2.2.2) same
+    fun target => x.1.bind fun d => (d.2.2.1 target).bind fun c => c.2.2.2.2.2.2.2.2) same
   funext target
   have point := congrFun projected target
   simpa [destinationAt,peerAt,TimerDiscipline.sendWorkAt,TimerDiscipline.sendWorkKernel,

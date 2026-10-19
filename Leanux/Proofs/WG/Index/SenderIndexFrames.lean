@@ -31,7 +31,7 @@ theorem sender_fields_of_sendWork_material {α : Type} (action : WG.M α) (pid :
   case some.some d e =>
     have table : e.indexTable = d.indexTable :=
       congrArg (fun x : TimerDiscipline.SendWorkDevice => x.1.1) (Option.some.inj (congrArg Prod.fst socket))
-    have cells := congrArg (fun x : TimerDiscipline.SendWorkDevice => x.2.2)
+    have cells := congrArg (fun x : TimerDiscipline.SendWorkDevice => x.2.2.1)
       (Option.some.inj (congrArg Prod.fst socket))
     have km : (e.ifindex,fun kid : KeypairId => e.keypairs[kid]?) = (d.ifindex,fun kid : KeypairId => d.keypairs[kid]?) := by
       simpa [Origins.view,before,after] using material
