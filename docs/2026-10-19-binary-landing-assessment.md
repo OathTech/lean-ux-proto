@@ -484,9 +484,9 @@ passed separately, as recorded above.
 Landing hygiene: main remains `3f3879e0` and the experiment branch remains
 `272104798c4c0cd0acd34212e1ec4712d52d0d66`. `AGENTS.md` and the mirror campaign's
 `scripts/proof-gate` match main. The separate binary gate is executable and
-self-contained. The historical removal of the mirror package's `-j1` option
-is retained, consistent with the authorized parallel builds; the library and
-executable targets remain separate from the default mirror build. No shared
+self-contained. At that checkpoint the historical removal of the mirror
+package's `-j1` option was retained; the landing conditions below restore it.
+The library and executable targets remain separate from the default mirror build. No shared
 Kraken checkout, oracle image, machine-global configuration, main ref or remote
 was changed.
 
@@ -570,3 +570,9 @@ carry without changing `binary/`, the harness, or the evaluator relative to
 in `docs/README.md`, `harness/linux.py`, and `scripts/proof-gate`; none of those
 files changed in the shared carry. The mirror proof tree, `AGENTS.md`, and the
 mirror gate match `3308c49a`. The experiment branch remains at `272104798c4c0cd0acd34212e1ec4712d52d0d66`.
+
+[AGENT 2026-10-19] Restore the mirror package's `moreLeanArgs = ["-j1"]`
+rather than carry a build-policy change as part of this experiment. The root
+`lakefile.toml` now matches main `3308c49a` exactly; the binary package's own
+settings are unchanged. The coordinator's rerun will validate this restored
+setting on the final head.
