@@ -207,12 +207,19 @@ def Activation.iter (a : Activation) : M IterResult := do
   | .receiveWorker => workerIter .receiveWorker none WG.receiveStep (condResched .receiveWorker)
   | w => invariant s!"{w.symbol} is not a draining worker"
 
-/-- The items the activation's loop can consume before it finds its queue
-    empty: the queue's occupancy now (review item 7). The C loop runs while
-    the ring or queue yields an item; on the modelled paths nothing refills a
-    worker's own queue inside its run (refills happen while it is suspended,
-    and each resumption is a new run), so a run makes at most one iteration
-    per item present at its start, plus the poll that finds none. -/
+/-- The items in the activation's queue now (review item 7): the C loop
+    runs while the ring or queue yields an item, so a run makes one
+    iteration per item present at its start, plus the poll that finds none,
+    plus one per item queued into it during the run (`Activation.refills`):
+    the encrypt worker's ring poll runs the pending NET_RX softirq at its
+    `spin_unlock_bh` (ptr_ring.h:365-369, `napiSoftirq`), and the poll's
+    delivery can transmit into the ring it is draining (a reply the stack
+    sends, `Stack.receive4` → `wgXmit` → send.c:388 → queueing.h:174), which
+    the same run's next `ptr_ring_consume_bh` (send.c:293) takes. The old
+    premise that nothing refills a worker's own queue inside its run was
+    campaign 2's request 2 (2026-10-14; the typed prefix in its
+    `Progress/QueueRefill.lean`): the refill made the run consume one item
+    more than its start held and the bound reported an invariant. -/
 def Activation.occupancy (a : Activation) : M Nat := do
   let d ← getDev
   match a.worker with
@@ -224,22 +231,38 @@ def Activation.occupancy (a : Activation) : M Nat := do
     return (← getPeer pid).txQueue.all.length
   | w => invariant s!"{w.symbol} is not a draining worker"
 
+/-- The items a run can still queue into its own ring after it started: a
+    bound derived from what can produce them. Every production inside a run
+    comes through a NET_RX poll (`napiSoftirq`, `napiIrqExit`), which with
+    records consumes a NET_RX section start, and without records runs once
+    per pending poll at the first hook (the poll clears `napiScheduled`);
+    a poll delivers at most `NAPI_POLL_WEIGHT` packets per pending peer, and
+    a delivered packet transmits at most one reply. So the refills are
+    bounded by the records left plus the pending polls' weight, and the
+    bound is the state's and the records', not a constant. -/
+def Activation.refills : M Nat := do
+  let polls := (← getDev).peers.toList.countP (·.2.napiScheduled)
+  return (← recordsLeft) + polls * WG.NAPI_POLL_WEIGHT
+
 /-- Run the activation from its loop position until its loop ends (its
     section stop, consumed where the records have it) or it yields
     (suspended, `World.suspended`). The fuel is derived from the state the
-    loop drains (`Activation.occupancy`), so its exhaustion is a genuine
-    invariant: more items consumed than were ever queued. -/
+    loop drains (`Activation.occupancy`) and from what can refill it during
+    the run (`Activation.refills`), so its exhaustion is a genuine invariant:
+    more items consumed than were queued at the start or could have been
+    queued meanwhile. -/
 def Activation.run (a : Activation) : M Unit := do
   let occupancy ← Activation.occupancy a
+  let refills ← Activation.refills
   let mut act := a
-  for _ in [0:occupancy + 1] do
+  for _ in [0:occupancy + refills + 1] do
     match ← Activation.iter act with
     | .ended => _ ← hidden (.sectionStop act.worker); return
     | .continued => act := { act with iterations := act.iterations + 1 }
     | .yielded =>
       modifyAmbient fun s => { s with suspended := s.suspended ++ [{ act with iterations := act.iterations + 1 }] }
       return
-  invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run"
+  invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})"
 
 /-- Whether the records are consistent with the activation resuming now: its
     run from here, to its yield or its stop, on a copy of the world, reads

@@ -425,6 +425,86 @@ class BatchBacklog(unittest.TestCase):
         self.assertIn("work the batch queued outlived the guest's wait", replay_raw(BATCH_BACKLOG) or '')
 
 
+# Campaign 2's requests 2 and 4 (.worktrees/proofs-campaign-2/docs/
+# 2026-10-14-campaign-2-mirror-requests.md, sections 2 and 4; the typed forms
+# in its Progress/QueueRefill.lean and Progress/RecordedPending.lean): the
+# corpus trace w6_rst_syn's first four operations (the peer configured, wg_up,
+# an observe, the handshake response injected), then a wg_batch of the
+# corpus's authenticated SYN and one transmit, with constructed records in
+# the legacy mode (no arm records, no dst-cache records), not a capture.
+# Operation 4: the decrypt worker's dispatch yields after one iteration; the
+# encrypt worker's dispatch runs its ring poll, whose NET_RX section delivers
+# the SYN and the stack's reply transmits into the encrypt ring it is
+# draining (a requeue during the unit's own run, send.c:293, queueing.h:174).
+# - QUEUE_REFILL ends its records at the encrypt worker's stop. Until
+#   2026-10-19 the activation's bound (the ring's occupancy at the start plus
+#   one) stopped the run as an invariant, "consumed more items than its queue
+#   held (1)", where the C's loop re-reads the ring and drains the refill; the
+#   bound now counts the refills a run can take, and the trace ends outside
+#   the domain where its records end (the tx worker's work undrained).
+# - RECORDED_PENDING yields the encrypt worker after its first item, resumes
+#   it to drain the refill, and completes the operation. The requeue set the
+#   encrypt unit's PENDING bit again, so the kernel runs the function once
+#   more after the run returns (kernel/workqueue.c:2322-2325, 2374, 3230), a
+#   dispatch with its own section whose ring poll finds nothing; the stream
+#   omits it and was accepted with the identity dangling (request 4). Refused
+#   since 2026-10-19 by the batch's completion guard.
+# - EMPTY_REDISPATCH is that stream with the redispatch's section present:
+#   the empty-ring dispatch guard refused it before ("expected jiffies_end
+#   (site 128), the record is site 44"); it is the C's schedule and is
+#   accepted since 2026-10-19.
+def _c(n):
+    return _word(n * 1000000000)
+
+
+def _j(n):
+    return [128, _word(100000 + n)]
+
+
+_SEC = dict(sendWorker=(40, 41), receiveWorker=(42, 43), encryptWorker=(44, 45), txWorker=(46, 47), netRx=(48, 49), decryptWorker=(50, 51))
+
+
+def _start(w):
+    return [_SEC[w][0], _word(0) + _word(0)]
+
+
+def _stop(w):
+    return [_SEC[w][1], _word(0)]
+
+
+_RST_SYN = json.loads((Path(__file__).resolve().parents[1] / 'corpus/wireguard/w6_rst_syn.json').read_text())
+_REFILL_ROWS = [
+    [[5, _c(100)], _j(0)],
+    [[6, _c(101)], _start('sendWorker'), [6, _c(101)], [7, _c(101)], [1, bytes(129 + n for n in range(32)).hex()],
+     [3, bytes([128, 59, 177, 106, 0, 0, 0, 0, 177, 104, 222, 58, 0, 0, 0, 0]).hex()],
+     [4, bytes([13, 12, 11, 10, 0, 0, 0, 0]).hex()], [8, _c(101)],
+     _start('netRx'), _stop('netRx'), [14, bytes([200, 0, 0, 0, 0, 0, 0, 0]).hex()], _stop('sendWorker'), _j(1)],
+    [_j(2)],
+    [_start('netRx'), _stop('netRx'), _start('receiveWorker'), [13, _c(102)], [15, _word(102) + _word(0)], [6, _c(102)],
+     _stop('receiveWorker'), _start('encryptWorker'), _stop('encryptWorker'), _start('txWorker'),
+     _start('netRx'), _stop('netRx'), [6, _c(102)], _stop('txWorker'), _j(3)],
+    [_start('netRx'), _stop('netRx'), [6, _c(103)], _start('decryptWorker'), [6, _c(103)], [63, _word(0)],
+     _start('encryptWorker'), _start('netRx'), [6, _c(103)], [6, _c(103)], _stop('netRx'), _stop('encryptWorker')]]
+_REFILL_OPS = _RST_SYN['ops'][:4] + [{"op": "wg_batch", "wait_ms": 100, "items": [
+    {"kind": "inject", "family": 4, "port": 51820, "message": _RST_SYN['ops'][4]['message']},
+    {"kind": "xmit", "packet": {"family": 4, "dst": "0a000001", "payload": "01"}}]}]
+QUEUE_REFILL = {"version": 1, "id": "campaign2-encrypt-refill", "ops": _REFILL_OPS, "hidden": _REFILL_ROWS, "dst_cache_records": False}
+_PENDING_ROW = _REFILL_ROWS[4][:11] + [[61, _word(0)], _stop('encryptWorker'), _stop('decryptWorker'), _start('txWorker'),
+                                       _start('netRx'), _stop('netRx'), [16, _word(1)], [6, _c(103)],
+                                       _start('netRx'), _stop('netRx'), [6, _c(103)], _stop('txWorker'), _j(4)]
+RECORDED_PENDING = dict(QUEUE_REFILL, id="campaign2-recorded-encrypt-requeue", hidden=_REFILL_ROWS[:4] + [_PENDING_ROW])
+EMPTY_REDISPATCH = dict(RECORDED_PENDING, id="campaign2-empty-redispatch",
+                        hidden=_REFILL_ROWS[:4] + [_PENDING_ROW[:-1] + [_start('encryptWorker'), _stop('encryptWorker'), _j(4)]])
+
+
+class EncryptRequeue(unittest.TestCase):
+    def test_a_refill_during_the_run_is_drained_by_the_run(self):
+        out = replay_raw(QUEUE_REFILL) or ''
+        self.assertNotIn('consumed more items than its queue held', out)
+        self.assertIn("work the batch queued outlived the guest's wait", out)
+
+
+
 def _replay_prepared(trace):
     """Run the model on a trace whose caller reads are already in place (no second synthesis)."""
     if not MODEL.is_file():
