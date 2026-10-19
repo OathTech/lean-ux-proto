@@ -17,6 +17,8 @@ the replacement source-selected order contract and its conditional reversal
 helper. Chronological post-GRO order remains refuted by the accepted distinct-flow
 replay. The mirror is unchanged by this carry.
 
+Lag [AGENT 2026-10-19]: the environment fixes for campaign 2's requests 2, 3 and 4 landed on `main` after this tree (`Activation.run`'s fuel as occupancy plus refills, the pending-work lifecycle with the end-of-wait and end-of-operation refusal, the dump's nest cancellation restoring the pre-header snapshot); by `git grep` on this tree 18 files unfold `Activation.run`, 106 name `dispatch`, 75 `schedule`, 35 `requireDrained`, 78 `AmbientM.hidden`, 3 `pendingWork`, 48 `executeTrace`, 13 `wgGetDeviceDump` (`Framing/Batch.lean` and `Logged/Scheduler.lean` the deepest), so every result lags at that commit until the campaign's next carry; campaign 2's own witnesses now refute or pass differently and campaign 3's `AuthenticatedEffects` and `RetirementSecurity` scheduler frames move, repaired on their carries.
+
 The complete 973-job build, the 895-declaration proof gate over nine root modules,
 fresh root kernel replay and all twelve executable witness recipes pass.
 The unit suite passes 131 tests with one skip. The tree still has 916 proof
