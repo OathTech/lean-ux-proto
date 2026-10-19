@@ -1,3 +1,23 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAfterXmitScheduler
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCleanupPrimitiveFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCleanupPrimitivePath
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCleanupPrimitivePending
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCleanupPrimitiveRuns
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCleanupPrimitiveSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCompletionCases
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCompletionFinish
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCompletionPassive
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCompletionPrefixes
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCompletionPrelude
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeadPrimitiveWorker
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWorkerCompletionAccounted
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWorkerCompletionCuts
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWorkerCompletionSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWorkerCompletionWorker
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedXmitCaller
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedXmitFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedXmitInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedXmitSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAfterXmitFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAfterXmitPath
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAfterXmitSource
@@ -1835,5 +1855,20 @@ theorem initialized_return_callback_accounted
     ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
       history ledger [] [] world.wg :=
   path.cut
+
+/-- Security: the selected initialized routed-send operation carries complete
+packet accounting at its actual transmit entry, after its native route,
+packet-preparation and fixture-entry prefix. The account names that same
+world and requires no incoming carrier or callback assumption. -/
+theorem initialized_routed_transmit_entry_accounted
+    (caller : AuthenticatedEffects.StagedEntry.Reached.Xmit.Caller
+      trace placeholders operationIndex world history)
+    (path : AuthenticatedEffects.StagedEntry.Reached.Xmit.Path
+      caller.family caller.addr caller.payload caller.opts history world
+      fd acquired packets mtu worldAt) :
+    ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
+      (AuthenticatedEffects.StagedEntry.Reached.Xmit.entryHistory
+        caller.family caller.addr packets mtu history) ledger [] [] worldAt.wg :=
+  caller.transmit_cut path
 
 end Leanux.Proofs.WG.TransmitSecurity
