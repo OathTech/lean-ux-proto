@@ -11,9 +11,7 @@ claims, premises and mirror pins.
 ## Campaign 3
 
 The [campaign-3 report](2026-10-18-proof-campaign-3.md) tracks
-`proofs/campaign-3` over `783510e8`, with mirror `77c9b555` unchanged.
-T1, T3, T4, T5 and amended T6 are complete and validated; T2 remains open. Existing campaign-1 results remain current. Campaign-2 source
-facts are named hypotheses, not silently discharged dependencies.
+`proofs/campaign-3` now carries main `3f3879e0`. Validation at source-77 `795e8829` applies to the previous mirror `77c9b555`; all results currently lag the new environment and dump fixes while the source frames are repaired. T1, T3, T4, T5 and amended T6 were complete at that earlier checkpoint; T2 remains open. The separate inherited C1 carry is `74b03922`, `0c8f59fb`, `7a189c9e` (48 repaired modules, two helpers; six public native frames added, three repaired, none deleted, plus two private read frames). The isolated carry passes 975 build jobs, 895 terminal axiom queries over nine roots, eight focused public-declaration queries, fresh kernel replay and all twelve recipes; all 983 frozen source hashes match. Main has not received this series. Separate C3 repair `38efba22` passes the 4181-job root build; combined C3 trust checks remain pending. Campaign-2 source facts remain named hypotheses, not silently discharged dependencies.
 
 | Outcome | Result, assumptions and remaining boundary |
 | --- | --- |

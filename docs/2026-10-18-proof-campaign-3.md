@@ -2,12 +2,12 @@
 
 ## Progress
 
-Current carry: main `3f3879e0` is merged into this branch at `adc57aca`. All result claims below are validated only against the previous mirror until the carry repairs pass. The inherited source-equation failures and proposed repair are listed below; the 916 inherited proof files remain unchanged. New refill and pending-work frames at `74b03922` elaborate and their four public axiom queries use only standard axioms.
+Current carry: main `3f3879e0` is merged at `adc57aca`. The inherited C1 repair series is `74b03922`, `0c8f59fb`, `7a189c9e`; it changes only landed layers and two new helpers. Existing theorem signatures are retained. The isolated carry gate, fresh kernel replay and all twelve counterexamples pass. The separate C3 repair `38efba22` builds all 4181 jobs; its aggregate trust checks remain pending, so C3 result claims still cite the previous fully validated mirror.
 
 [AGENT 2026-10-18] Work begins on `proofs/campaign-3` at `783510e8`, under
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
-proof tree includes campaign 1's GRO carry. No mirror definition or landed
-proof has been changed. The source contracts now cover staged nonce allocation, encryption receipts,
+proof tree includes campaign 1's GRO carry. At campaign start, no mirror
+definition or landed proof had been changed. The source contracts now cover staged nonce allocation, encryption receipts,
 cookie egress, native handshake histories and session reference payments. T1, T3, T4, T5 and the amended T6 are complete and validated; T2 remains open.
 
 **C3-F1 is dispositioned as a statement artefact.** The original T6 wording
@@ -29,23 +29,54 @@ stops the work. The last validated checkpoint and the current integration status
 
 ## Carry to main `3f3879e0`
 
-The initial aggregate rebuild has reported these inherited source-alignment
-failures; it is still running, so this is not a final failure inventory.
+The separate inherited-layer carry consists of `74b03922`, `0c8f59fb`
+and `7a189c9e`, in that order. It repairs 48 landed modules and adds two
+helpers. No mirror file, C3 result directory or existing theorem signature
+is changed by those commits; no theorem or frame is deleted.
 
-| Inherited module | Required source alignment |
+| Landed change | Carry |
 | --- | --- |
-| `WG/NetlinkDump/DeviceSource.lean` | Save the peers-nest snapshot before the header reservation, matching the landed cancel path. |
-| `Logged/Checkpoints.lean` | Include the new pending-unit completion refusal in the operation source and its erasure equation. |
-| `Logged/Scheduler.lean` | Read the refill allowance, include it in the original finite loop, and retain pending empty-ring dispatch. |
-| `WG/Lifetimes/BatchActivation.lean` | Align the activation observer and its erasure equation with occupancy plus refills. |
+| Occupancy plus refills | Align activation copies and exact source equations; record each saved-peer read in the lifetime refill observer. |
+| Pending-work lifecycle | Retain pending empty-ring dispatch, propagate its store frames, and include pending-unit refusal in wait and operation completion copies. |
+| Dump cancellation | Capture the peers-nest snapshot before reserving the header and align the dump observer and source factors. |
+| Dependent proofs | Transport the new atoms through existing preservation contracts; give two expanded runner proofs local heartbeat budgets. |
 
-These failures do not establish a mirror defect. The proposed repair updates
-observer copies and source equations to the landed control flow, then carries
-the dependent frames without weakening the security outcomes. Charter section
-6 requires changes to existing landed definitions or lemmas to be proposed
-separately; clarification of that scope is pending. Existing inherited files
-have not been edited. `Framing/BatchRefills.lean` adds separate store frames for
-the new refill and pending queries and the stronger completion check.
+The public native store/view frame delta is six additions, three repairs
+and zero deletions, plus two private read-frame helpers. Source-equation and observer-preservation repairs are separate
+from that count. The five scoped C1 result targets pass 970 build jobs; the
+anti-replay `Bounds` follow-up passes 102 jobs. The former runner proof
+budgets failed before the local increases; these were elaboration and
+compilation failures, not mirror findings. The mirror's existing `String.mk`
+deprecation remains outside this proof-only scope.
+
+Validation used a detached copy of `3f3879e0` with exactly the three carry
+commits, in the order above. Its final gate passes 975 build jobs and 895
+terminal declarations across nine roots, with only `propext`, `Classical.choice`
+and `Quot.sound`. All eight additional public-declaration axiom queries pass;
+fresh root kernel replay exits zero; all twelve counterexample recipes pass,
+including both retained-key witnesses. All 983 frozen Lean-source hashes match,
+and the clean validation tree matches the parent series on all fifty carry
+paths. The earlier two-commit gate failed solely at the old `Bounds` heartbeat
+limit; `7a189c9e` repairs that failure.
+
+Reproduction on a detached copy of main `3f3879e0` with only `74b03922`,
+`0c8f59fb` and `7a189c9e` applied:
+
+```sh
+capped -- scripts/in-bundle scripts/proof-gate
+capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
+capped -- scripts/in-bundle scripts/proof-counterexamples
+```
+
+The coordinator owns integration into main; no main update or push has been
+performed. The separate C3 commit `38efba22` repairs twenty-six campaign
+modules and passes the 4181-job root build. Its native source paths retain
+both occupancy and refill reads, pending-device selection, section-start
+pending-bit clearing and the new completion guards. No security outcome
+statement changes. Combined C3 axiom/replay validation is still pending;
+source-77 remains the last full campaign checkpoint. The source-78 helpers
+and forty-seven saved handoff modules still await combined integration and
+validation. T2's initialized native-cut obligation remains open.
 
 ## C3-F1: invalidation and clearing do not cancel previously admitted encryption
 
@@ -139,7 +170,8 @@ lifecycle, timer wheel, deferred drains and initialized Runner. Its observers
 retain internal cuts and stopped prefixes, and exact projections recover the
 prior observers and original execution. Endpoint equality alone never supplies
 an internal invariant. Claims use projections of WGWorld; frame proofs remain
-in separate files. The mirror and all existing campaign-1 lemmas are unchanged.
+in separate files. The mirror is unchanged. The separate C1 carry repairs
+observer definitions and proof bodies while retaining existing theorem signatures.
 
 The source structure records these choices:
 
