@@ -28,7 +28,7 @@ theorem create_history (pid : PeerId) (items : List SkbId) : Driver.StateHistory
 
 theorem staging_history (pid : PeerId) : Driver.StateHistorySafe Safe (Driver.stagingObserved Journal.hooks pid) := by
   unfold Driver.stagingObserved
-  simp only [Driver.noKey_lift Journal.hooks rfl]
+  simp only [Driver.restore_noKey_lift Journal.hooks rfl rfl rfl]
   repeat' first
     | (driver_history_head Driver.Hooks.selection; exact selection_history _)
     | (driver_history_head Driver.Hooks.reserve; exact reserve_history _)
@@ -65,7 +65,7 @@ theorem receive_tail (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     StateSafe (Driver.receiveTailObserved Journal.hooks pid pkt confirmed) := by
   change StatePrefixPreserves (fun h w _ => Carrier h w) Safe _
   unfold Driver.receiveTailObserved
-  simp only [Driver.prepare_lift Journal.hooks rfl]
+  simp only [Driver.nested_prepare_lift Journal.hooks rfl rfl,Driver.rxFinish_lift Journal.hooks rfl]
   repeat' first
     | (nonce_source_head Driver.stagingObserved; exact staging _)
     | (nonce_source_head timersHandshakeComplete; exact state_native _ (fun _ => bounded_complete _ _))

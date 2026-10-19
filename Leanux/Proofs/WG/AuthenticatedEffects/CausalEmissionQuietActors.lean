@@ -3,6 +3,8 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionQuietSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionQuietCompletion
 import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryReceive
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionFront
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptQuietHistory
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalCallbackQuietActors
 
 /-! Independent history contracts for ordinary actors which never call the
 delivery hook. The surrogate changes only that hook; actual delivery uses the
@@ -26,9 +28,19 @@ private theorem selected (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
     (product_emit (.old (.timerSelected ⟨d,j,pid,timer,entry,w⟩)) rfl)
     (fun _ => product_enter (.timer j pid timer entry) (fun _ => rfl)) w h hi
 
+
+private theorem state_callback {body : WGPrefix Event α}
+    (quiet : CallbackQuiet.StateQuiet delivery? body) : Driver.StateHistorySafe Safe body :=
+  CallbackQuiet.state_safe quiet (fun _ _ safe quiet => safe.quiet quiet)
+
+private theorem product_callback {body : PrefixM Event α}
+    (quiet : CallbackQuiet.ProductQuiet delivery? body) : Driver.ProductHistorySafe Safe body :=
+  CallbackQuiet.product_safe quiet (fun _ _ safe quiet => safe.quiet quiet)
+
 def quietHooks : Driver.Hooks Event := {hooks with deliver := liftPrefix Env.deliverSent}
 
 theorem quiet_hooks : Driver.HooksHistorySafe Safe quietHooks where
+  stagedRestore := fun pid packets => state_callback (CallbackQuiet.restore delivery? (fun _ => rfl) pid packets)
   stagedPurge := staged_purge
   peerRelease := peer_release
   deliver := Driver.History.product_lift _
@@ -47,15 +59,15 @@ theorem quiet_hooks : Driver.HooksHistorySafe Safe quietHooks where
   counterCheck := fun _ _ => old_product _
   timerSelected := selected
   timerFinished := product_leave
-  selection := fun _ => old_state _
+  selection := fun pid => state_callback (CallbackQuiet.selection delivery? (fun _ => rfl) (fun _ _ => rfl) pid)
   confirmation := fun _ _ => old_state _
   session := session
   reserve := fun _ => old_state _
   allocate := fun _ => old_state _
-  create := fun _ _ => old_state _
+  create := fun pid items => state_callback (CallbackQuiet.create delivery? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid items)
   front := front_observed
   poll := old_product _
-  encrypt := fun _ => old_product _
+  encrypt := fun item => product_callback (CallbackQuiet.encrypt delivery? (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl) item)
   transmit := transmit
 
 theorem staging_history (pid : PeerId) : Driver.StateHistorySafe Safe (Driver.stagingObserved hooks pid) :=

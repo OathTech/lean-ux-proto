@@ -17,6 +17,7 @@ private def quietHooks : Driver.Hooks Event :=
                timerSelected := fun _ _ _ _ _ => pure 0 }
 
 private theorem quiet_hooks : Driver.HooksHistorySafe Safe quietHooks where
+  stagedRestore := restore
   stagedPurge := fun _ => disposal_history _
   peerRelease := fun _ => disposal_history _
   deliver := by

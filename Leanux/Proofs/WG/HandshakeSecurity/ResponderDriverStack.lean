@@ -68,7 +68,7 @@ theorem stack_flush (packets : List (List UInt8)) :
 
 theorem native_poll (H1 : H1ResponderCurrentEdges) (pid : PeerId) (budget : Nat) :
     ProductPreserves (Driver.nativePollObserved hooks pid budget) := by
-  rw [Driver.nativePoll_neutral _ rfl]
+  rw [Driver.nativePoll_neutral _ rfl rfl]
   exact poll H1 pid budget _ stack_flush
 
 end Leanux.Proofs.WG.HandshakeSecurity.Responder.DriverCuts

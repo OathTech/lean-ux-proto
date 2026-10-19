@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionDisposal
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCallbackFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionEffects
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCookie
 import Leanux.Proofs.WG.AuthenticatedEffects.EmissionHandshakeFrames
@@ -12,6 +13,22 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Std.D
 open HandshakeSecurity Origins.HandshakeSources TimerSlots
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
+
+
+private theorem nested_initiation (mac : HandshakeMac) : StateSafe
+    (RetirementSecurity.NestedPeerRelease.admitInitiationWith CallbackFrames.nested CallbackFrames.admissionRecord mac) :=
+  state_callback _ (CallbackFrames.initiation_quiet contributing? (fun _ => rfl) (fun _ => rfl) mac)
+    (CallbackFrames.initiation_erases mac) (consumeInitiation_sent mac.input)
+
+private theorem nested_response (mac : HandshakeMac) : StateSafe
+    (RetirementSecurity.NestedPeerRelease.admitResponseWith CallbackFrames.nested CallbackFrames.admissionRecord mac) :=
+  state_callback _ (CallbackFrames.response_quiet contributing? (fun _ => rfl) (fun _ => rfl) mac)
+    (CallbackFrames.response_erases mac) (consumeResponse_sent mac.input)
+
+private theorem nested_cookie (msg : Key) : StateSafe
+    (RetirementSecurity.NestedPeerRelease.cookieObserved CallbackFrames.nested Event.cookieConsumed msg) :=
+  state_callback _ (CallbackFrames.cookie_quiet contributing? (fun _ => rfl) (fun _ => rfl) msg)
+    (CallbackFrames.cookie_erases msg) (cookieMessageConsume_sent msg)
 
 private theorem callback (kind : HandshakeCausal.Kind) (pid : PeerId) (body : WGPrefix Event α)
     (preserves : StateSafe body) : StateSafe
@@ -80,6 +97,9 @@ macro "emission_handshake_frame" : tactic => `(tactic| first
   | (emission_frame_head Bind.bind; sent_frame [] using [getPeer_sent_spec,setPeer_sent_spec]))
 
 macro "emission_handshake_native" : tactic => `(tactic| first
+  | (emission_head RetirementSecurity.NestedPeerRelease.admitInitiationWith; exact nested_initiation _)
+  | (emission_head RetirementSecurity.NestedPeerRelease.admitResponseWith; exact nested_response _)
+  | (emission_head RetirementSecurity.NestedPeerRelease.cookieObserved; exact nested_cookie _)
   | (emission_head ProtocolSocket.observed; exact protocol_buffer _ _)
   | (emission_head CookieSocket.observed; exact cookie _ _ _)
   | (emission_native_head createResponse; exact state_native _ (EmissionFrames.create_response _))
@@ -101,13 +121,11 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
-              (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
+            (CausalJournal.receiveOps session keepalive mac)
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
+    CausalJournal.receiveOps,StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
     | (emission_head CausalScope.scope; apply state_scope)
     | (emission_head receiptWGObserved; refine state_receipt _ ?_ _ (fun _ => rfl))
@@ -126,15 +144,13 @@ private theorem after_mac
 private theorem receive
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, StateSafe (session pid)) (hk : ∀ pid, StateSafe (keepalive pid))
-    (msg : Key) (src : SkbSource) : StateSafe (CookieConsumption.receiveWith (CookieConsumption.observed Event.cookieConsumed)
+    (msg : Key) (src : SkbSource) : StateSafe (CookieConsumption.receiveWith (RetirementSecurity.NestedPeerRelease.cookieObserved CallbackFrames.nested Event.cookieConsumed)
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
-              (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-              handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
+            (CausalJournal.receiveOps session keepalive mac)
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src) := by
-  unfold CookieConsumption.receiveWith CookieConsumption.observed
+  unfold CookieConsumption.receiveWith
   repeat' first
     | (emission_head receiptWGObserved; refine state_receipt _ ?_ _ (fun _ => rfl))
     | (emission_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)

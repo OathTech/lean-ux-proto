@@ -13,24 +13,27 @@ set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
 theorem poll_source
+    (release : Option PeerId → PrefixM Event Unit)
     (consumer : PeerId → RxPacket → Endpoint → PrefixM Event (Option (List UInt8)))
     (receive : GroOccurrence.Buffer → GroOccurrence.Entry → PrefixM Event GroOccurrence.Buffer)
     (flush : GroOccurrence.Buffer → PrefixM Event Unit)
+    (hl : ∀ peer, ProductClosed (release peer))
     (hu : ∀ pid pkt ep, ProductGuarded (consumer pid pkt ep))
     (hr : ∀ gro entry, ProductClosed (receive gro entry))
     (hf : ∀ gro, ProductClosed (flush gro))
     (pid : PeerId) (budget : Nat) :
-    ProductAt frames (GroOccurrencePoll.sourceWith (fun action => liftWGObserver (liftWGPrefix action))
+    ProductAt frames (RetirementSecurity.NestedPeerRelease.pollWith (fun action => liftWGObserver (liftWGPrefix action)) release
       (CausalSources.candidateEnter Event.scope) (CausalScope.leavePrefix Event.scope)
       (TransportDriver.counter replay) consumer receive flush pid budget) := by
   change PrefixEnsures (fun h (_ : World) => Inv frames h) Safe
-    (GroOccurrencePoll.sourceWith (fun action => liftPrefix (liftWG action))
+    (RetirementSecurity.NestedPeerRelease.pollWith (fun action => liftPrefix (liftWG action)) release
       (CausalSources.candidateEnter Event.scope) (CausalScope.leavePrefix Event.scope)
       (TransportDriver.counter replay) consumer receive flush pid budget)
     (fun _ h (_ : World) => Inv frames h)
-  unfold GroOccurrencePoll.sourceWith
+  unfold RetirementSecurity.NestedPeerRelease.pollWith
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
+    | (replay_callback release; exact hl _ _)
     | (replay_callback consumer
        apply candidate_consume_bind (success := by simp_all)
        exact hu _ _ _ _ (by simp))
@@ -72,10 +75,11 @@ private theorem batch_stack (entries : List GroOccurrence.Entry) :
       (fun _ => ih)
 
 theorem native_poll (pid : PeerId) (budget : Nat) : ProductAt frames (Driver.nativePollObserved hooks pid budget) := by
-  unfold Driver.nativePollObserved GroOccurrencePoll.observed
+  unfold Driver.nativePollObserved
   rw [show hooks.counterCheck = TransportDriver.counter replay from
     funext fun skb => funext fun packet => StackOrigins.counter_eq skb packet]
   apply poll_source
+  · intro peer frames; exact product_state _ (peer_release peer)
   · intro peer packet endpoint frames live; exact product_state _ (consume peer packet endpoint live)
   · intro gro entry frames
     exact GroOccurrence.receive_preserves (I := fun h _ => Inv frames h) (S := Safe)

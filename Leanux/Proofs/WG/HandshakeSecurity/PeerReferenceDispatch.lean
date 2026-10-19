@@ -18,7 +18,7 @@ theorem retained_dispatch (call : Syscall) (retained : DispatchRetained call) :
         cases call <;> unfold Driver.retainedObserved
         case wgUp => exact False.elim (up rfl)
         case wgDown => exact False.elim (down rfl)
-        all_goals rfl
+        all_goals simp only [Driver.dumpDispatch_lift EntrySource.hooks (E := E) rfl]
       rw [native]
       exact Outer.lift_spec _ (fun h => DispatchFrames.quiet_dispatch call h retained up down)
 

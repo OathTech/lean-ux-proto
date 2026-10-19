@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalCallbackQuiet
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalOldProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEffectsFrames
 
@@ -96,24 +97,28 @@ private theorem data_history (rho : Event → Option F)
 
 private theorem queue_history (rho : Event → Option F)
     (oldQuiet : ∀ e, rho (Event.old (Journal.completionEvent e)) = none)
-    (queueQuiet : ∀ e, rho (Event.queued e) = none) (pid : PeerId) (retry : Bool) :
-    StateHistoryFrame rho (LifetimeEffects.queuedWith lifetimeOps pid retry) := by
+    (queueQuiet : ∀ e, rho (Event.queued e) = none)
+    (disposalQuiet : ∀ e, rho (Event.stagedDisposal e) = none) (pid : PeerId) (retry : Bool) :
+    StateHistoryFrame rho (LifetimeEffects.queuedWith CausalJournal.completionLifetime pid retry) := by
   unfold LifetimeEffects.queuedWith
-  repeat' exchange_lifetime_frame rho oldQuiet armQuiet queueQuiet
+  repeat' first
+    | (exchange_frame_head LifetimeEffects.Ops.put
+       exact (CallbackQuiet.peer rho _ _
+         (fun e => oldQuiet (CompletionEffects.lifetimeEvent (.peer e))) disposalQuiet _).2)
+    | exchange_lifetime_frame rho oldQuiet armQuiet queueQuiet
 
 private theorem fresh_history (rho : Event → Option F)
     (oldQuiet : ∀ e, rho (Event.old (Journal.completionEvent e)) = none)
-    (queueQuiet : ∀ e, rho (Event.queued e) = none) (pid : PeerId) :
-    StateHistoryFrame rho (LifetimeEffects.freshWith lifetimeOps pid) := by
+    (queueQuiet : ∀ e, rho (Event.queued e) = none)
+    (disposalQuiet : ∀ e, rho (Event.stagedDisposal e) = none) (pid : PeerId) :
+    StateHistoryFrame rho (LifetimeEffects.freshWith CausalJournal.completionLifetime pid) := by
   unfold LifetimeEffects.freshWith
   simp only [andPrefix,orPrefix]
   repeat' first
-    | (exchange_frame_head LifetimeEffects.queuedWith; exact queue_history rho oldQuiet queueQuiet _ _)
+    | (exchange_frame_head LifetimeEffects.queuedWith; exact queue_history rho oldQuiet queueQuiet disposalQuiet _ _)
     | exchange_lifetime_frame rho oldQuiet armQuiet queueQuiet
 
-private def completionOps := StagedConservation.SendResult.decorate Event.sendResult
-  (CompletionEffects.observed
-    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
+private abbrev completionOps := CausalJournal.completionOps
 
 private theorem capture_history (rho : Event → Option F) (g : PrefixM Event α) (h : HistoryFrame rho g) :
     HistoryFrame rho (captureObserved g) := by
@@ -135,10 +140,10 @@ private theorem send_history (rho : Event → Option F)
     HistoryFrame rho (completionOps.send pid skb packet) :=
   (old_history rho oldQuiet _).receiptObserved (fun _ => sendQuiet _)
 
-macro "exchange_completion_frame " rho:ident oldQuiet:ident armQuiet:ident queueQuiet:ident sendQuiet:ident : tactic => `(tactic| first
+macro "exchange_completion_frame " rho:ident oldQuiet:ident armQuiet:ident queueQuiet:ident sendQuiet:ident disposalQuiet:ident : tactic => `(tactic| first
   | (exchange_frame_head CompletionEffects.Ops.traversal; exact lifted_history $rho _ (traversal_history $rho $oldQuiet $armQuiet _))
   | (exchange_frame_head CompletionEffects.Ops.dataSent; exact lifted_history $rho _ (data_history $rho $oldQuiet $armQuiet _))
-  | (exchange_frame_head CompletionEffects.Ops.fresh; exact lifted_history $rho _ (fresh_history $rho $oldQuiet $queueQuiet _))
+  | (exchange_frame_head CompletionEffects.Ops.fresh; exact lifted_history $rho _ (fresh_history $rho $oldQuiet $queueQuiet $disposalQuiet _))
   | (exchange_frame_head CompletionEffects.Ops.step; exact old_history $rho $oldQuiet _)
   | (exchange_frame_head CompletionEffects.Ops.peer; exact old_history $rho $oldQuiet _)
   | (exchange_frame_head CompletionEffects.Ops.modifyPeer; exact old_history $rho $oldQuiet _)
@@ -146,7 +151,8 @@ macro "exchange_completion_frame " rho:ident oldQuiet:ident armQuiet:ident queue
   | (exchange_frame_head CompletionEffects.Ops.completion; exact old_history $rho $oldQuiet _)
   | (exchange_frame_head CompletionEffects.Ops.send; exact send_history $rho $oldQuiet $sendQuiet _ _ _)
   | (exchange_frame_head CompletionEffects.Ops.drop; exact old_history $rho $oldQuiet _)
-  | (exchange_frame_head CompletionEffects.Ops.dispose; exact old_history $rho $oldQuiet _)
+  | (exchange_frame_head CompletionEffects.Ops.dispose
+     exact (CallbackQuiet.dispose $rho (fun e => $oldQuiet (.disposition e)) $disposalQuiet _ _ _).2)
   | (exchange_frame_head CompletionEffects.Ops.sent; exact old_history $rho $oldQuiet _)
   | (exchange_frame_head captureObserved; apply capture_history $rho)
   | (exchange_frame_head Pure.pure; exact HistoryFrame.pure $rho _)
@@ -160,10 +166,11 @@ private theorem complete_history (rho : Event → Option F)
     (oldQuiet : ∀ e, rho (Event.old (Journal.completionEvent e)) = none)
     (armQuiet : ∀ e, rho (Event.armed e) = none)
     (queueQuiet : ∀ e, rho (Event.queued e) = none)
-    (sendQuiet : ∀ e, rho (Event.sendResult e) = none) (pid : PeerId) (item : List SkbId) :
+    (sendQuiet : ∀ e, rho (Event.sendResult e) = none)
+    (disposalQuiet : ∀ e, rho (Event.stagedDisposal e) = none) (pid : PeerId) (item : List SkbId) :
     HistoryFrame rho (CompletionEffects.completeWith completionOps pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  repeat' exchange_completion_frame rho oldQuiet armQuiet queueQuiet sendQuiet
+  repeat' exchange_completion_frame rho oldQuiet armQuiet queueQuiet sendQuiet disposalQuiet
 
 private theorem scope_history (rho : Event → Option F)
     (scopeQuiet : ∀ e, rho (Event.scope e) = none) (cause : Cause) (g : PrefixM Event α)
@@ -183,28 +190,36 @@ private theorem body_history (rho : Event → Option F)
     (armQuiet : ∀ e, rho (Event.armed e) = none)
     (queueQuiet : ∀ e, rho (Event.queued e) = none)
     (scopeQuiet : ∀ e, rho (Event.scope e) = none)
-    (sendQuiet : ∀ e, rho (Event.sendResult e) = none) (pid : PeerId) (first : Option (List SkbId)) :
-    HistoryFrame rho (CompletionEffects.bodySourceWith completionOps
-      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion completionOps) pid first) := by
-  unfold CompletionEffects.bodySourceWith TxDisposition.andObs
+    (sendQuiet : ∀ e, rho (Event.sendResult e) = none)
+    (disposalQuiet : ∀ e, rho (Event.stagedDisposal e) = none)
+    (terminalQuiet : ∀ e, rho (Event.terminalDrop e) = none) (pid : PeerId) (first : Option (List SkbId)) :
+    HistoryFrame rho (StagedConservation.Terminal.bodyWith completionOps
+      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion completionOps)
+      (StagedConservation.Terminal.deadObserved txEvent txEvent? Event.stagedDisposal Event.terminalDrop) pid first) := by
+  unfold StagedConservation.Terminal.bodyWith TxDisposition.andObs
   repeat' first
-    | (exchange_frame_head CompletionEffects.completeScoped; exact scope_history rho scopeQuiet _ _ (complete_history rho oldQuiet armQuiet queueQuiet sendQuiet _ _))
-    | exchange_completion_frame rho oldQuiet armQuiet queueQuiet sendQuiet
+    | (exchange_frame_head StagedConservation.Terminal.deadObserved
+       exact (CallbackQuiet.dead rho (fun e => oldQuiet (.disposition e)) disposalQuiet terminalQuiet _ _ _).2)
+    | (exchange_frame_head CompletionEffects.completeScoped; exact scope_history rho scopeQuiet _ _ (complete_history rho oldQuiet armQuiet queueQuiet sendQuiet disposalQuiet _ _))
+    | exchange_completion_frame rho oldQuiet armQuiet queueQuiet sendQuiet disposalQuiet
 
 theorem transmit_history_of_quiet (rho : Event → Option F)
     (oldQuiet : ∀ e, rho (Event.old (Journal.completionEvent e)) = none)
     (armQuiet : ∀ e, rho (Event.armed e) = none)
     (queueQuiet : ∀ e, rho (Event.queued e) = none)
     (scopeQuiet : ∀ e, rho (Event.scope e) = none)
-    (sendQuiet : ∀ e, rho (Event.sendResult e) = none) (pid : PeerId) : HistoryFrame rho (transmit pid) := by
-  change HistoryFrame rho (CompletionEffects.stepSourceWith completionOps
-    (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion completionOps) pid)
-  unfold CompletionEffects.stepSourceWith
+    (sendQuiet : ∀ e, rho (Event.sendResult e) = none)
+    (disposalQuiet : ∀ e, rho (Event.stagedDisposal e) = none)
+    (terminalQuiet : ∀ e, rho (Event.terminalDrop e) = none) (pid : PeerId) : HistoryFrame rho (transmit pid) := by
+  change HistoryFrame rho (StagedConservation.Terminal.stepWith completionOps
+    (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion completionOps)
+    (StagedConservation.Terminal.deadObserved txEvent txEvent? Event.stagedDisposal Event.terminalDrop) pid)
+  unfold StagedConservation.Terminal.stepWith
   repeat' first
-    | (exchange_frame_head CompletionEffects.bodySourceWith; exact body_history rho oldQuiet armQuiet queueQuiet scopeQuiet sendQuiet _ _)
-    | exchange_completion_frame rho oldQuiet armQuiet queueQuiet sendQuiet
+    | (exchange_frame_head StagedConservation.Terminal.bodyWith; exact body_history rho oldQuiet armQuiet queueQuiet scopeQuiet sendQuiet disposalQuiet terminalQuiet _ _)
+    | exchange_completion_frame rho oldQuiet armQuiet queueQuiet sendQuiet disposalQuiet
 
 theorem transmit_history (pid : PeerId) : HistoryFrame exchange? (transmit pid) :=
-  transmit_history_of_quiet exchange? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
+  transmit_history_of_quiet exchange? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
 
 end Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausal

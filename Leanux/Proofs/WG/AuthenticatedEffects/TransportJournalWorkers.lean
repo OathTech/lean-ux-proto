@@ -59,7 +59,7 @@ theorem base {g : PrefixM Journal.Event α} (safe : ProductSafe g) :
 
 theorem nativePoll (pid : PeerId) (budget : Nat) :
     ProductSafe (Driver.nativePollObserved Journal.hooks pid budget) := by
-  rw [Driver.nativePoll_neutral _ rfl]
+  rw [Driver.nativePoll_neutral _ rfl rfl]
   have carrier := TransportReplay.poll_checked origin? replay? Event.replay (fun _ => rfl) (fun _ => rfl)
     (fun pid pkt ep => liftWGObserver (Driver.consumeObserved Journal.hooks pid pkt ep))
     (napiGroReceivePrefix (Driver.stackFlushObserved Journal.hooks))

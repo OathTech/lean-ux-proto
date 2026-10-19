@@ -58,6 +58,7 @@ theorem quiet_checked (event : Event) (quiet : Quiet event) (pre : List Event) :
     cases scope with
     | entered token => cases token with | mk index cause => cases cause <;> first | exact quiet.elim | trivial
     | exited index => trivial
+  | stagingTaken _ | stagedRestored _ | terminalDrop _ => trivial
   | transmitInput _ | stagedDisposal _ | sendResult _ => trivial
   | delivery _ | cookieConsumed _ | armed _ | queued _ | exchange _ | keepalivePrepared _ _ | protocolSocket _ | cookieSocket _ => trivial
 

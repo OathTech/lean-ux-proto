@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionCallbacks
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionQuiet
 
 /-! The actual completion lifetime callbacks emit no work/timer selection.
@@ -10,7 +11,7 @@ set_option maxRecDepth 4096
 private abbrev base := CompletionEffects.lifetimeBase
   (Event.old ∘ Journal.completionEvent) completion?
 
-def lifetime := LifetimeEffects.decorate base scope? Event.armed Event.queued
+def lifetime := CausalJournal.completionLifetime
 
 private theorem base_safe (body : MixedM α) : Driver.StateHistorySafe Safe
     (focusStatePrefix ((Event.old ∘ Journal.completionEvent) ∘ CompletionEffects.lifetimeEvent)
@@ -37,7 +38,8 @@ private theorem lifetime_modify (pid : PeerId) (f : Peer → Peer) :
     Driver.StateHistorySafe Safe (lifetime.modifyPeer pid f) := base_safe _
 private theorem lifetime_guard (pid : PeerId) : Driver.StateHistorySafe Safe (lifetime.guard pid) := base_safe _
 private theorem lifetime_get (pid : PeerId) : Driver.StateHistorySafe Safe (lifetime.get pid) := base_safe _
-private theorem lifetime_put (peer : Option PeerId) : Driver.StateHistorySafe Safe (lifetime.put peer) := base_safe _
+private theorem lifetime_put (peer : Option PeerId) : Driver.StateHistorySafe Safe (lifetime.put peer) :=
+  callback_state (CallbackFrames.lifetime_put_quiet protected? (fun _ => rfl) (fun _ => rfl) peer)
 
 macro "selection_lifetime_step" : tactic => `(tactic| first
   | (driver_history_head LifetimeEffects.Ops.step; exact lifetime_step _)

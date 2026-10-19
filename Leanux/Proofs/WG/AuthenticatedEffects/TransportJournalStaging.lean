@@ -88,7 +88,14 @@ theorem keepalive_prepare (pid : PeerId) : StateSafe (Journal.hooks.keepalivePre
   all_goals (split <;> transport_native_rx)
   all_goals (split <;> transport_native_rx)
 
+theorem stagedRestore (pid : PeerId) (packets : List Packet) :
+    StateSafe (Journal.hooks.stagedRestore pid packets) := by
+  apply state_rx
+  unfold HandshakeSecurity.StagedConservation.Restore.nativeRestore
+  transport_native_rx
+
 theorem staging : StagingSafe (fun _ => True) origin? replay? Journal.hooks where
+  stagedRestore := stagedRestore
   keepalivePrepare := keepalive_prepare
   fixtureEnter := fun _ => state_pure _
   fixtureLeave := fun _ => state_pure _

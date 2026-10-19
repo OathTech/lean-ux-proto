@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionOld
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCallbackFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.EmissionStagingFrames
 
 /-! Actual key selection, confirmation, reservation and allocation callbacks
@@ -17,7 +18,10 @@ private theorem responder (body : WGPrefix Responder.DriverCuts.Event α) (nativ
     (fun w a h => focusPrefix_other _ _ oldSocket? (fun _ => rfl) (body.run w) a h) frame
 
 theorem selection (pid : PeerId) : StateSafe (hooks.selection pid) :=
-  responder _ _ (Responder.DriverCuts.selection_erases pid) (EmissionFrames.selection pid)
+  state_callback _ (CallbackQuiet.selection contributing? (fun _ => rfl) (fun _ _ => rfl) pid)
+    (RetirementSecurity.NestedPeerRelease.projects_erases old? (CausalJournal.selection_projects pid)
+      (focusStatePrefix_erases _ _ (Responder.DriverCuts.selection_erases pid)))
+    (EmissionFrames.selection pid)
 
 theorem confirmation (pid : PeerId) (key : KeypairId) : StateSafe (hooks.confirmation pid key) :=
   responder _ _ (Responder.DriverCuts.confirmation_erases pid key) (EmissionFrames.confirmed pid key)
@@ -40,15 +44,11 @@ theorem allocate (packets : List DataPacket) : StateSafe (hooks.allocate packets
     (StateHistoryFrame.receiptWGObserved (fun _ _ _ => rfl) _ (fun _ => rfl))
     (EmissionFrames.allocate packets)
 
-theorem create (pid : PeerId) (items : List SkbId) : StateSafe (hooks.create pid items) := by
-  apply old_state _ _ (Delayed.projected_erases _ _ Journal.nonce? (Journal.create_projects pid items))
-  · intro w a h
-    exact Appends.focus Journal.Event.disposition Journal.disposition? (Queues.TxDisposition.create pid items)
-      (NativeAdapter.world w a) h
-  · intro w a h
-    exact focusPrefix_other Journal.Event.disposition Journal.disposition? oldSocket? (fun _ => rfl)
-      (Queues.TxDisposition.create pid items) (NativeAdapter.world w a) h
-  · exact EmissionFrames.create pid items
+theorem create (pid : PeerId) (items : List SkbId) : StateSafe (hooks.create pid items) :=
+  state_callback _ (CallbackQuiet.create contributing? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid items)
+    (RetirementSecurity.NestedPeerRelease.projects_erases old? (CausalJournal.create_projects pid items)
+      (Delayed.projected_erases _ _ Journal.nonce? (Journal.create_projects pid items)))
+    (EmissionFrames.create pid items)
 
 theorem keepalive_prepare (pid : PeerId) : StateSafe (hooks.keepalivePrepare pid) :=
   state_receipt _ (state_native _ (EmissionFrames.keepalive pid)) _ (fun _ => rfl)

@@ -111,6 +111,23 @@ theorem clear_one : ProductSafe (liftPrefix Env.runOneClearWorker) := by
       rw [(pinned_const _private.Leanux.Proofs.WG.Lifetimes.EnvWorkersAudit.«0».Leanux.Proofs.WG.Lifetimes.runFlushedClearWork_lift) pid]
       exact native pid
 
+
+theorem flushed_clear_observed (pid : PeerId) :
+    StateSafe (RetirementSecurity.NestedPeerRelease.flushedClearWith (Driver.nestedOps hooks) pid) :=
+  observed_native _ _ (CallbackFrames.flushed_clear_erases pid)
+    (CallbackFrames.flushed_clear_quiet (fun _ : Event => (none : Option Empty)) (fun _ => rfl) pid).1
+    (flushed_clear pid)
+
+theorem clear_worker : ProductSafe (Driver.clearWorkerObserved hooks) := by
+  apply observed_product _ Env.runOneClearWorker CallbackFrames.clear_worker_erases
+    (CallbackFrames.clear_worker_quiet (fun _ : Event => (none : Option Empty)) (fun _ => rfl)).1
+  intro h
+  apply (hoare_iff_run _ _ _).mpr
+  intro w value v hi run
+  obtain ⟨_,_,_,kept⟩ := clear_one w h hi
+  simpa only [runPrefix_lift,run] using kept
+
+
 theorem product_range (r : Std.Legacy.Range) (initial : β) (body : Nat → β → PrefixM Event (ForInStep β))
     (safe : ∀ value state, ProductSafe (body value state)) : ProductSafe (forIn r initial body) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']

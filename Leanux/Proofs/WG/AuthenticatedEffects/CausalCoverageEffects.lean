@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageScopes
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDisposalCoverageFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageQuietCallbacks
 
 /-! Native timer/work effects require the caller's existing lexical context.
 The requirement is explicit at staging and receive entry and is discharged only
@@ -74,14 +75,31 @@ theorem no_key (pid : PeerId) (packets : List Packet) (keypair : Option KeypairI
     | (coverage_head TimerEffects.queuedWith; exact queued _ _ live)
     | coverage_effect_step live
 
+theorem restore_queued (pid : PeerId) (retry : Bool) (live : frames ≠ []) :
+    StateAt frames (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects hooks.peerRelease pid retry) := by
+  unfold HandshakeSecurity.StagedDisposal.Effects.queuedWith
+  repeat' first
+    | (coverage_head Driver.Hooks.peerRelease; exact peer_release _)
+    | coverage_effect_step live
+
+theorem no_key_restored (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) (invalid : Bool)
+    (live : frames ≠ []) :
+    StateAt frames (HandshakeSecurity.StagedConservation.Restore.noKeyWith effects hooks.stagedRestore
+      (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects hooks.peerRelease) pid packets keypair invalid) := by
+  unfold HandshakeSecurity.StagedConservation.Restore.noKeyWith
+  repeat' first
+    | (coverage_head Driver.Hooks.stagedRestore; exact quiet_restore _ _)
+    | (coverage_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact restore_queued _ _ live)
+    | coverage_effect_step live
+
 theorem staging (pid : PeerId) (live : frames ≠ []) : StateAt frames (Driver.stagingObserved hooks pid) := by
   unfold Driver.stagingObserved
   repeat' first
-    | (coverage_head PacketEffects.noKeyWith; exact no_key _ _ _ _ live)
-    | (coverage_head Driver.Hooks.selection; exact old_state _ live)
+    | (coverage_head HandshakeSecurity.StagedConservation.Restore.noKeyWith; exact no_key_restored _ _ _ _ live)
+    | (coverage_head Driver.Hooks.selection; exact quiet_selection _)
     | (coverage_head Driver.Hooks.reserve; exact old_state _ live)
     | (coverage_head Driver.Hooks.allocate; exact old_state _ live)
-    | (coverage_head Driver.Hooks.create; exact old_state _ live)
+    | (coverage_head Driver.Hooks.create; exact quiet_create _ _)
     | coverage_state_step
 
 theorem keepalive (pid : PeerId) (live : frames ≠ []) : StateAt frames (Driver.keepaliveObserved hooks pid) := by

@@ -25,6 +25,7 @@ theorem send_drain (upTo : Option PeerId) : StateSafe (sendDrainObserved hooks u
   unfold sendDrainObserved SendExchange.drainWith
   repeat' first
     | (staged_origin_head Hooks.flushedSend; exact flushed_send_observed _)
+    | (staged_origin_head RetirementSecurity.NestedPeerRelease.flushedClearWith; exact flushed_clear _)
     | staged_configuration_step
 
 theorem timers_stop (pid : PeerId) :

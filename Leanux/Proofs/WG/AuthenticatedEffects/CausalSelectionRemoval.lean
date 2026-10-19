@@ -15,7 +15,8 @@ macro "selection_removal_step" : tactic => `(tactic| first
 
 theorem sendDrain (upTo : Option PeerId) : StateSafe (sendDrainObserved hooks upTo) :=
   SendCallers.drain_preserves Inv Safe (fun _ _ hi => hi.2) _ _ Selections.flushed_send
-    (fun pid => state_native _ (Delayed.flushed_clear pid)) upTo
+    (fun pid => state_combine _ (Delayed.flushed_clear_observed pid)
+      (Selections.callback_state (CallbackFrames.flushed_clear_quiet Selections.protected? (fun _ => rfl) pid))) upTo
 
 theorem removeAfter (pid : PeerId) : StateSafe
       (HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith liftWGPrefix (sendDrainObserved hooks) hooks.peerRelease pid) := by

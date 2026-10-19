@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityDeferredFrames
+import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityClearFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryPreservation
 
 /-! The actual deferred and timer loops carry the same staged-origin carrier
@@ -44,6 +44,7 @@ macro "available_deferred_native" : tactic => `(tactic| first
      exact product_ambient _))
 
 macro "available_deferred_step" : tactic => `(tactic| first
+  | (available_origin_product_head clearWorkerObserved; exact clear_worker)
   | solve | available_deferred_native
   | (available_origin_product_head ForIn.forIn; first | apply product_range | apply product_forIn)
   | available_origin_product_step)

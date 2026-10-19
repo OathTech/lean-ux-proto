@@ -60,6 +60,7 @@ macro "ready_socket_journal_deferred_step" : tactic => `(tactic| first
      rw [Driver.sendWorker_lift Journal.hooks rfl]
      exact send_one)
   | (scheduler_preserve_at Env.runOneClearWorker; exact clear_one)
+  | (nonce_product_head Driver.clearWorkerObserved; rw [Driver.clearWorker_lift Journal.hooks rfl]; exact clear_one)
   | (scheduler_preserve_at Env.requireDrained; exact product_store _ (Nonce.Frames.drained _ _))
   | (scheduler_preserve_at Env.requireNoCryptWork; exact product_store _ requireNoCryptWork_sameKernel)
   | (scheduler_preserve_at Env.deliverSent; exact product_store _ deliverSent_sameKernel)

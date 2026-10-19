@@ -37,6 +37,7 @@ theorem ordered_callbacks : DeferredSafe Order.Good origin? replay? Journal.hook
   keepalivePrepare := fun pid => state_join (keepalive_prepare pid) (Order.quiet.keepalivePrepare pid)
   fixtureEnter := fun _ => state_pure _
   fixtureLeave := fun _ => state_pure _
+  stagedRestore := fun pid packets => state_join (stagedRestore pid packets) (Order.quiet.stagedRestore pid packets)
   stagedPurge := fun pid => state_join (stagedPurge pid) (Order.quiet.stagedPurge pid)
   peerRelease := fun peer => state_join (peerRelease peer) (Order.quiet.peerRelease peer)
   armTimer := fun pid timer delay caller => state_join (armTimer pid timer delay caller) (Order.quiet.armTimer pid timer delay caller)

@@ -17,8 +17,9 @@ theorem product_wg_store (h : List Event) (w v : World)
 
 private theorem safe (h : List Event) (w : World) (hi : ProductInv h w) : Safe h := hi.2
 
-theorem ingress (msg : List UInt8) (src : SkbSource) : ProductSafe (receiveEntryObserved msg src) := by
-  simpa only [receiveEntryObserved,liftWGObserver_lift] using
+theorem ingress (msg : List UInt8) (src : SkbSource) : ProductSafe (receiveEntryObserved hooks msg src) := by
+  rw [receiveEntry_lift hooks rfl]
+  simpa only [liftWGObserver_lift] using
     product_state (state_native _ (WGMore.wgReceive_ordinary msg src))
 
 theorem multicast (family addr : Nat) : ProductSafe (multicastObserved family addr) :=

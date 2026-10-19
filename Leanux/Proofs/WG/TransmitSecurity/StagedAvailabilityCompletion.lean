@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityCompletionAppendFrames
+import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityCompletionNativeFrames
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalProjection
 import Leanux.Proofs.WG.HandshakeSecurity.StagedAvailableWorkers
 import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityLifetime
 import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityFocusedProduct
@@ -153,10 +156,16 @@ private theorem body (pid : PeerId) (first : Option (List SkbId)) : ProductSafe
     | available_completion_step
 
 theorem transmit (pid : PeerId) : ProductSafe (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
-  repeat' first
-    | (available_origin_product_head CompletionEffects.bodySourceWith; exact body _ _)
-    | available_completion_step
+  apply product_quiet (CallbackQuiet.transmit_appends pid)
+    (HandshakeSecurity.ExchangeCausal.transmit_history_of_quiet allocation?
+      (fun event => by cases event <;> rfl) (fun _ => rfl) (fun _ => rfl)
+      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid) _
+    (fun _ => Native.product _ (Native.transmit pid))
+  intro w h
+  have projected := congrArg Prod.fst
+    (HandshakeSecurity.ExchangeCausal.transmit_projects pid w h)
+  change (liftWG (txStep pid)) w =
+    (runPrefix (CausalJournal.transmit pid) w h).1.map id at projected
+  simpa only [Except.map_id,id_eq,StateT.run] using projected.symm
 
 end Leanux.Proofs.WG.TransmitSecurity.Staged.Availability

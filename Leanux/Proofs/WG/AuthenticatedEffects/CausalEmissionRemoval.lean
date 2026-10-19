@@ -9,7 +9,13 @@ open Configuration TransmitSecurity.Driver HandshakeSecurity HandshakeSecurity.S
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
 
+private theorem flushed_clear (pid : PeerId) :
+    StateSafe (RetirementSecurity.NestedPeerRelease.flushedClearWith (nestedOps hooks) pid) :=
+  state_callback _ (CallbackFrames.flushed_clear_quiet contributing? (fun _ => rfl) pid)
+    (CallbackFrames.flushed_clear_erases pid) (EmissionClearing.clear_work pid)
+
 macro "emission_removal_step" : tactic => `(tactic| first
+  | (emission_head RetirementSecurity.NestedPeerRelease.flushedClearWith; exact flushed_clear _)
   | (emission_native_head runFlushedClearWork; exact state_native _ (EmissionClearing.clear_work _))
   | (emission_native_head keypairsClear; exact state_native _ (EmissionClearing.keypairs _))
   | (emission_native_head delTimer; exact state_native _ (EmissionFrames.delete _ _))

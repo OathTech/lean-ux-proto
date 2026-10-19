@@ -164,7 +164,7 @@ theorem staging (pid : PeerId) :
     StatePrefixEnsures (With CurrentSlots.Inv) Safe (Driver.stagingObserved Journal.hooks pid)
       (fun _ h w _ => JournalInv h w) := by
   unfold Driver.stagingObserved
-  simp only [Driver.noKey_lift Journal.hooks rfl]
+  simp only [Driver.restore_noKey_lift Journal.hooks rfl rfl rfl]
   dsimp only [Journal.hooks]
   apply StatePrefixEnsures.bind (owner_selection pid)
   intro chosen

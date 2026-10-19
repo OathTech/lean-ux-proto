@@ -1,4 +1,6 @@
 import Leanux.Proofs.WG.RetirementSecurity.ReceiveOccurrences
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseReceiveErasure
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalSource
 
 /-! Full native receive-entry ownership contracts and the shared-driver cut.
 The incoming allocation witness is campaign 1's source-derived invariant;
@@ -24,11 +26,18 @@ theorem joint (before : Joint temporary locals active w) (msg : List UInt8)
     w a () v b before.1.2 run
   exact ⟨⟨keys.1,packets⟩,keys.2⟩
 
-theorem shared {E : Type} (before : Joint temporary locals active w.wg)
-    (msg : List UInt8) (src : SkbSource) (h : List E)
-    (run : (runPrefix (TransmitSecurity.Driver.receiveEntryObserved msg src) w h).1 = .ok ((),v)) :
+theorem shared (before : Joint temporary locals active w.wg)
+    (msg : List UInt8) (src : SkbSource) (h : List AuthenticatedEffects.CausalJournal.Event)
+    (run : (runPrefix (TransmitSecurity.Driver.receiveEntryObserved AuthenticatedEffects.CausalJournal.hooks msg src) w h).1 = .ok ((),v)) :
     Joint temporary locals active v.wg := by
-  change (liftWG (wgReceive msg src)).run w = .ok ((),v) at run
+  have erases : ErasesPrefix
+      (TransmitSecurity.Driver.receiveEntryObserved AuthenticatedEffects.CausalJournal.hooks msg src)
+      (liftWG (wgReceive msg src)) := by
+    apply liftWGObserver_erases
+    apply NestedPeerRelease.receive_erases
+    refine ⟨fun _ => erasesStatePrefix_lift _, fun peer => ?_⟩
+    exact focusStatePrefix_erases _ _ (HandshakeSecurity.StagedDisposal.release_erases peer)
+  rw [erases w h] at run
   rw [liftWG_run] at run
   cases native : ((wgReceive msg src).run w.wg).run w.ambient with
   | error e => simp [native,Except.map] at run

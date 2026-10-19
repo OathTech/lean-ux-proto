@@ -1117,11 +1117,11 @@ theorem original_receive_entry_ownership
 key and TX occurrence accounts, with campaign 1 allocation freshness. Native
 RX allocation and decrypt aliases cannot duplicate a TX occurrence. The
 incoming accounts remain visible until their complete initialized transport. -/
-theorem shared_driver_receive_entry_ownership {E : Type}
+theorem shared_driver_receive_entry_ownership
     (before : ReceiveEntry.Joint temporary locals active w.wg)
-    (msg : List UInt8) (src : SkbSource) (h : List E)
+    (msg : List UInt8) (src : SkbSource) (h : List AuthenticatedEffects.CausalJournal.Event)
     (run : (Leanux.Proofs.Logged.runPrefix
-      (TransmitSecurity.Driver.receiveEntryObserved msg src) w h).1 = .ok ((),v)) :
+      (TransmitSecurity.Driver.receiveEntryObserved AuthenticatedEffects.CausalJournal.hooks msg src) w h).1 = .ok ((),v)) :
     ReceiveEntry.Joint temporary locals active v.wg := ReceiveEntry.shared before msg src h run
 
 /-- Native RX polling preserves exclusive TX packet occurrences and pending

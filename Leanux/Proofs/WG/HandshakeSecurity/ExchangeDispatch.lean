@@ -17,7 +17,7 @@ theorem retained_dispatch (facts : H1DriverSourceFacts) (traffic : H1TrafficTagF
         cases call <;> unfold Driver.retainedObserved
         case wgUp => exact False.elim (up rfl)
         case wgDown => exact False.elim (down rfl)
-        all_goals rfl
+        all_goals simp only [Driver.dumpDispatch_lift ExchangeDriver.hooks rfl]
       rw [native]
       exact product_lift _ (fun h => DispatchFrames.quiet_dispatch traffic call h retained up down)
 

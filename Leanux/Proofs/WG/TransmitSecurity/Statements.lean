@@ -1,3 +1,10 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationStoppedTake
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedAdmissionNative
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedAdmissionOverflow
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationRestoreCompositionFromTake
+import Leanux.Proofs.WG.AuthenticatedEffects.CompletionFirstTerminalSource
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationReceipts
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationInjectiveAllocation
 import Leanux.Proofs.WG.TransmitSecurity.StagedObligationDisposalReceipts
 import Leanux.Proofs.WG.TransmitSecurity.StagedObligationQueueFramesNative
 import Leanux.Proofs.WG.TransmitSecurity.StagedObligationQueueFramesTimers

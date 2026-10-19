@@ -44,6 +44,7 @@ theorem receive_poll (pid : PeerId) (budget : Nat)
   unfold Driver.pollObserved CandidatePoll.sourceWith
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
+    | (emission_poll_head Driver.Hooks.peerRelease; exact product_state (peer_release _))
     | (emission_head Driver.Hooks.candidateEnter; exact candidate_enter _ _)
     | (emission_head Driver.Hooks.candidateLeave; exact candidate_leave _)
     | (emission_head Driver.Hooks.counterCheck; exact counter _ _)
@@ -61,9 +62,10 @@ theorem tagged_poll (pid : PeerId) (budget : Nat)
   have callback := GroOccurrence.stack_preserves (fun h w => Inv h w.wg) (fun _ => True)
     (fun _ _ _ => True.intro) hooks.stackInput (Driver.stackObserved hooks) safe
     (fun entry _ bodySafe => product_scope (.stackInput entry) _ (fun _ => bodySafe))
-  unfold Driver.nativePollObserved GroOccurrencePoll.observed GroOccurrencePoll.sourceWith
+  unfold Driver.nativePollObserved RetirementSecurity.NestedPeerRelease.pollWith
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
+    | (emission_poll_head Driver.Hooks.peerRelease; exact product_state (peer_release _))
     | (emission_head Driver.Hooks.candidateEnter; exact candidate_enter _ _)
     | (emission_head Driver.Hooks.candidateLeave; exact candidate_leave _)
     | (emission_head Driver.Hooks.counterCheck; exact counter _ _)

@@ -58,7 +58,7 @@ theorem native_poll
       (napiGroFlushAllPrefix (Driver.stackFlushObserved Journal.hooks) gro))
     (pid : PeerId) (budget : Nat) :
     ProductSafe (Driver.nativePollObserved Journal.hooks pid budget) := by
-  rw [Driver.nativePoll_neutral _ rfl]
+  rw [Driver.nativePoll_neutral _ rfl rfl]
   exact shared_poll tail _ receive flush pid budget
 
 end Leanux.Proofs.WG.HandshakeSecurity.ReceiveMaterial.Execution

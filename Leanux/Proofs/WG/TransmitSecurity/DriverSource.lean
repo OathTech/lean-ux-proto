@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.HandshakeSecurity.StagedDisposalPacketProjection
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseDumpDispatchContracts
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationRestoreProjection
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseReceiveContracts
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleasePollProjection
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseWorkerFrames
 import Leanux.Proofs.WG.TransmitSecurity.KeepalivePreparation
 import Leanux.Proofs.WG.AuthenticatedEffects.GroOccurrenceObserved
 import Leanux.Proofs.WG.TransmitSecurity.NonceInitialized
@@ -22,6 +28,8 @@ open Leanux.Proofs.WG.Origins.HandshakeSources
 open HandshakeSecurity.Confirmation.Poll
 
 structure Hooks (E : Type) where
+  stagedRestore : PeerId → List Packet → WGPrefix E Unit :=
+    fun pid packets => liftWGPrefix (HandshakeSecurity.StagedConservation.Restore.nativeRestore pid packets)
   stagedPurge : PeerId → WGPrefix E Unit := fun pid => liftWGPrefix (purgeStagedPackets pid)
   peerRelease : Option PeerId → WGPrefix E Unit := fun peer => liftWGPrefix (peerPut peer)
   deliver : PrefixM E Unit := liftPrefix Env.deliverSent
@@ -65,6 +73,15 @@ def fixtureOps (hooks : Hooks E) : AuthenticatedEffects.FixtureEffects.Hooks E w
 def effectOps (hooks : Hooks E) : AuthenticatedEffects.TimerEffects.Ops (WGPrefix E) :=
   AuthenticatedEffects.TimerEffects.observed hooks.armTimer hooks.queueSend
 
+/-- All exposed nested repayments use the same actual release callback. -/
+def nestedOps (hooks : Hooks E) : RetirementSecurity.NestedPeerRelease.Ops (WGPrefix E) where
+  step := liftWGPrefix
+  release := hooks.peerRelease
+
+def clearWorkerObserved (hooks : Hooks E) : PrefixM E Unit :=
+  RetirementSecurity.NestedPeerRelease.oneClearWith liftPrefix runWorkerPrefix
+    (fun pid => liftWGObserver (RetirementSecurity.NestedPeerRelease.clearWith (nestedOps hooks) pid))
+
 /-- Scheduled and directly flushed sends share the same native callback. -/
 def sendWorkerObserved (hooks : Hooks E) : PrefixM E Unit :=
   HandshakeSecurity.SendExchange.oneWith liftPrefix (fun pid => liftWGObserver (hooks.flushedSend pid))
@@ -72,7 +89,10 @@ def sendWorkerObserved (hooks : Hooks E) : PrefixM E Unit :=
 def stagingObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit := do
   let some (p,keypair) ← hooks.selection pid | return
   let packets := p.staged
-  let outNokey (invalid : Bool) := AuthenticatedEffects.PacketEffects.noKeyWith (effectOps hooks) pid packets keypair invalid
+  let outNokey (invalid : Bool) := HandshakeSecurity.StagedConservation.Restore.noKeyWith
+    (effectOps hooks) hooks.stagedRestore
+    (HandshakeSecurity.StagedDisposal.Effects.queuedWith (effectOps hooks) hooks.peerRelease)
+    pid packets keypair invalid
   if ← liftWGPrefix (branch .stagedNoKeypair keypair.isNone) then return ← outNokey false
   let some id := keypair | liftWGPrefix (invariant "unreachable")
   let k ← liftWGPrefix (getKeypair id)
@@ -192,9 +212,9 @@ def receiveTailObserved (hooks : Hooks E) (pid : PeerId) (pkt : RxPacket) (confi
   if ← liftWGPrefix (branch .doneReceivedNew confirmed) then
     liftWGPrefix (timersHandshakeComplete pid .walltimeLastHandshakeData)
     (stagingObserved hooks) pid
-  match ← AuthenticatedEffects.PacketEffects.prepareWith (effectOps hooks) pid pkt with
+  match ← HandshakeSecurity.StagedDisposal.PacketSource.prepareWith (effectOps hooks) hooks.peerRelease pid pkt with
   | none => pure none
-  | some ready => liftWGPrefix (Packets.rxFinish pid ready)
+  | some ready => RetirementSecurity.NestedPeerRelease.rxFinishWith (nestedOps hooks) pid ready
 
 def consumeObserved (hooks : Hooks E) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
     WGPrefix E (Option (List UInt8)) := do
@@ -217,11 +237,15 @@ def stackFlushObserved (hooks : Hooks E) (packets : List (List UInt8)) : PrefixM
   packets.forM (stackObserved hooks)
 
 def nativePollObserved (hooks : Hooks E) (pid : PeerId) (budget : Nat) : PrefixM E Nat :=
-  AuthenticatedEffects.GroOccurrencePoll.observed
+  RetirementSecurity.NestedPeerRelease.pollWith
     (fun action => liftWGObserver (liftWGPrefix action))
+    (fun peer => liftWGObserver (hooks.peerRelease peer))
     hooks.candidateEnter hooks.candidateLeave hooks.counterCheck
     (fun peer packet endpoint => liftWGObserver (consumeObserved hooks peer packet endpoint))
-    hooks.stackInput (stackObserved hooks) pid budget
+    (AuthenticatedEffects.GroOccurrence.receiveWith liftPrefix
+      (AuthenticatedEffects.GroOccurrence.stackWith hooks.stackInput (stackObserved hooks)))
+    (AuthenticatedEffects.GroOccurrence.flushAllWith
+      (AuthenticatedEffects.GroOccurrence.stackWith hooks.stackInput (stackObserved hooks))) pid budget
 
 def softirqObserved (hooks : Hooks E) : PrefixM E Unit :=
   RxNapi.softirqWith (liftWGObserver (liftWGPrefix RxNapi.pendingSource)) (nativePollObserved hooks)
@@ -340,7 +364,7 @@ def timersObserved (hooks : Hooks E) (jPass : UInt64) : PrefixM E Bool := do
           liftPrefix (Env.requireStepComplete b)
           step := none
         if d.clearWorkQueue.isEmpty then break
-        liftPrefix Env.runOneClearWorker
+        clearWorkerObserved hooks
       else
         let some (pid, t, we) := TimerWheel.nextDue d jPass
           | liftPrefix (throw (.hidden s!"a section of {w.symbol}, but no modeled timer's bucket is due by jiffies {jPass}"))
@@ -395,7 +419,7 @@ def placeholderTimersObserved (hooks : Hooks E) (jHi : UInt64) : PrefixM E Unit 
   (sendWorkersObserved hooks)
   for _ in [0:(← liftPrefix (liftWG getDev)).clearWorkQueue.length + 1] do
     if (← liftPrefix (liftWG getDev)).clearWorkQueue.isEmpty then break
-    liftPrefix Env.runOneClearWorker
+    clearWorkerObserved hooks
 
 def idleTimersObserved (hooks : Hooks E) : PrefixM E Unit := do
   let w ← liftPrefix getWG
@@ -429,8 +453,8 @@ def afterAdvanceObserved (hooks : Hooks E) : PrefixM E Unit := do
   if j != jEnd then liftPrefix (invariant "the end-of-wait jiffies record changed between the peek and the read")
   liftPrefix (modifyWG fun w => {w with jiffiesLast := some j})
 
-def receiveEntryObserved {E : Type} (msg : List UInt8) (src : SkbSource) : PrefixM E Unit :=
-  liftPrefix (liftWG (wgReceive msg src))
+def receiveEntryObserved (hooks : Hooks E) (msg : List UInt8) (src : SkbSource) : PrefixM E Unit :=
+  liftWGObserver (RetirementSecurity.NestedPeerRelease.receive (nestedOps hooks) msg src)
 
 def multicastObserved {E : Type} (family addr : Nat) : PrefixM E Unit :=
   liftPrefix (Env.xmitMulticastLoop family addr)
@@ -439,17 +463,17 @@ def drainObserved {E : Type} (what : String) (flags : List Bool) : PrefixM E Uni
   liftPrefix (Env.requireDrained what flags)
 
 def injectObserved (hooks : Hooks E) (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) : PrefixM E Int :=
-  TrafficSource.injectWith receiveEntryObserved (cryptObserved hooks) drainObserved family port msg tos ll dest
+  TrafficSource.injectWith (receiveEntryObserved hooks) (cryptObserved hooks) drainObserved family port msg tos ll dest
 
 def afterBatchObserved (hooks : Hooks E) : PrefixM E Unit :=
   AuthenticatedEffects.DeliverySource.afterBatchWith (cryptObserved hooks) (sendWorkersObserved hooks)
     ((sendWorkerObserved hooks)) (fun stack => (scheduleObserved hooks) stack) drainObserved hooks.deliver
 
 def floodObserved (hooks : Hooks E) (count port family : Nat) (messages : List (List UInt8)) : PrefixM E Int :=
-  TrafficSource.floodWith receiveEntryObserved (inlinePollObserved hooks) (afterBatchObserved hooks) drainObserved count port family messages
+  TrafficSource.floodWith (receiveEntryObserved hooks) (inlinePollObserved hooks) (afterBatchObserved hooks) drainObserved count port family messages
 
 def batchItemObserved (hooks : Hooks E) (d : Device) (cqes : List Int) (item : Env.BatchItem) : PrefixM E (ForInStep (List Int)) :=
-  batchItemWith receiveEntryObserved (inlinePollObserved hooks) multicastObserved
+  batchItemWith (receiveEntryObserved hooks) (inlinePollObserved hooks) multicastObserved
     (fun family addr packets mtu => liftWGObserver
       (AuthenticatedEffects.FixtureEffects.runWith (fixtureOps hooks) (.transmit family addr packets mtu)
         (transmitObserved hooks family addr packets mtu))) d cqes item
@@ -465,7 +489,7 @@ def syscallXmitObserved (hooks : Hooks E) (family addr : Nat) (payload : List UI
 
 def sendDrainObserved (hooks : Hooks E) (upTo : Option PeerId) : WGPrefix E Unit :=
   HandshakeSecurity.SendExchange.drainWith liftWGPrefix hooks.flushedSend
-    (fun pid => liftWGPrefix (runFlushedClearWork pid)) upTo
+    (fun pid => RetirementSecurity.NestedPeerRelease.flushedClearWith (nestedOps hooks) pid) upTo
 
 def removeObserved (hooks : Hooks E) (peer : Option PeerId) : WGPrefix E Unit :=
   HandshakeSecurity.StagedDisposal.Lifecycle.removeWith liftWGPrefix (sendDrainObserved hooks) hooks.peerRelease peer
@@ -554,7 +578,7 @@ def retainedObserved (hooks : Hooks E) (call : Syscall) : PrefixM E Int :=
   match call with
   | .wgUp => socketCallOnWith (fun {_} a => liftPrefix a) SENDER_FD (envUpObserved hooks)
   | .wgDown => socketCallOnWith (fun {_} a => liftPrefix a) SENDER_FD (envDownObserved hooks)
-  | _ => liftPrefix (Leanux.dispatch call)
+  | _ => RetirementSecurity.NestedPeerRelease.dumpDispatch (nestedOps hooks) call
 
 def observeObserved (hooks : Hooks E) : PrefixM E (Int × Lean.Json) := do
   (idleTimersObserved hooks)

@@ -37,15 +37,14 @@ theorem poll : ProductSafe hooks.poll := by
   · exact EmissionOuter.wg _ EmissionFrames.ring_poll
 
 theorem encrypt (item : Option (List SkbId)) : ProductSafe (hooks.encrypt item) := by
-  apply old_native (Journal.encrypt item) (RxWorkers.encryptStepTailSource item)
-  · intro w h
+  apply product_native_callback (RxWorkers.encryptStepTailSource item)
+  · exact CallbackQuiet.encrypt contributing? (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl) item
+  · apply CallbackFrames.product_erases old? (CausalJournal.encrypt_projects item)
+    intro w h
     have projected := congrArg Prod.fst (Journal.encrypt_projects item w h)
     have maps : (fun x : Bool × World => (id x.1,x.2)) = id := by funext ⟨value,v⟩; rfl
     rw [maps,Except.map_id] at projected
     exact projected.symm
-  · exact (Appends.focus _ _ _).receiptObserved
-  · exact HistoryFrame.receiptObserved
-      (fun w h => focusPrefix_other _ _ oldSocket? (fun _ => rfl) _ w h) (fun _ => rfl)
   · exact EmissionFrames.encrypt_tail item
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Emissions

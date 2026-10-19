@@ -50,6 +50,7 @@ private theorem front (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     receipt_quiet _ (front_body family addr packets mtu) _ (fun _=>True.intro)
 
 theorem quiet_hooks : Driver.HooksHistorySafe Safe (Journal.quietHooks CausalJournal.hooks) where
+  stagedRestore := fun _ _=>callback_state (CallbackQuiet.restore cookieOnly (fun _=>rfl) _ _)
   stagedPurge := fun _=>quiet_state Event.stagedDisposal stagedDisposal? (fun _=>True.intro) _
   peerRelease := fun _=>quiet_state Event.stagedDisposal stagedDisposal? (fun _=>True.intro) _
   deliver := by
@@ -72,15 +73,15 @@ theorem quiet_hooks : Driver.HooksHistorySafe Safe (Journal.quietHooks CausalJou
   counterCheck := fun _ _=>old_product _
   timerSelected := selected
   timerFinished := product_leave
-  selection := fun _=>old_state _
+  selection := fun _=>callback_state (CallbackQuiet.selection cookieOnly (fun _=>rfl) (fun _ _=>rfl) _)
   confirmation := fun _ _=>old_state _
   session := session
   reserve := fun _=>old_state _
   allocate := fun _=>old_state _
-  create := fun _ _=>old_state _
+  create := fun _ _=>callback_state (CallbackQuiet.create cookieOnly (fun _=>rfl) (fun _=>rfl) (fun _=>rfl) _ _)
   front := front
   poll := old_product _
-  encrypt := fun _=>old_product _
+  encrypt := fun _=>callback_product (CallbackQuiet.encrypt cookieOnly (fun _=>rfl) (fun _=>rfl) (fun _ _=>rfl) _)
   transmit := transmit
 
 theorem keepalive (pid : PeerId) : Driver.StateHistorySafe Safe (Driver.keepaliveObserved CausalJournal.hooks pid) :=

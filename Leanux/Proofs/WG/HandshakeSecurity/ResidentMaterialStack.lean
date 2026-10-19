@@ -72,7 +72,7 @@ theorem stack_flush_carrier (packets : List (List UInt8)) :
 
 theorem native_poll_carrier (pid : PeerId) (budget : Nat) :
     ProductSafe (Driver.nativePollObserved Journal.hooks pid budget) := by
-  rw [Driver.nativePoll_neutral _ rfl]
+  rw [Driver.nativePoll_neutral _ rfl rfl]
   exact poll_carrier pid budget _ stack_flush_carrier
 
 end Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterial

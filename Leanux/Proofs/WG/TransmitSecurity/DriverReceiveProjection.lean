@@ -87,11 +87,15 @@ theorem nativePoll_projects (h : HooksProjects ρ g a) (pid : PeerId) (budget : 
     ProjectsPrefix ρ id (nativePollObserved g pid budget) (nativePollObserved a pid budget) :=
 by
   obtain ⟨scopeMap,enter,leave,stackInput⟩ := h.candidate
-  exact AuthenticatedEffects.GroOccurrencePoll.observed_matching ρ scopeMap
-    _ _ _ _ _ _ _ _ _ _ _ _ _ _ enter leave
+  have callback := AuthenticatedEffects.GroOccurrence.stack_matching ρ scopeMap
+    g.stackInput a.stackInput (stackObserved g) (stackObserved a) (stack_projects h) stackInput
+  exact RetirementSecurity.NestedPeerRelease.poll_projects ρ scopeMap
+    _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ enter leave
     (fun _ => (Projection.state_lift ρ _).liftWGObserver ρ id)
+    (fun peer => (h.peerRelease peer).liftWGObserver ρ id)
     h.counterCheck (fun peer pkt ep => (consume_projects h peer pkt ep).liftWGObserver ρ id)
-    (stack_projects h) stackInput pid budget
+    (AuthenticatedEffects.GroOccurrence.receive_matching ρ scopeMap _ _ callback)
+    (AuthenticatedEffects.GroOccurrence.flushAll_matching ρ scopeMap _ _ callback) pid budget
 
 theorem softirq_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (softirqObserved g) (softirqObserved a) := by

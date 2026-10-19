@@ -55,7 +55,7 @@ theorem retained (call : Syscall) : ProductSafe (Driver.retainedObserved hooks c
   cases call <;> unfold Driver.retainedObserved
   case wgUp => exact socket_call _ _ env_up
   case wgDown => exact socket_call _ _ env_down
-  all_goals exact product_lift _
+  all_goals exact callback_product (CallbackQuiet.dump_dispatch scope? (fun _ => rfl) _)
 
 theorem observe : ProductSafe (Driver.observeObserved hooks) :=
   product_bind idle_timers (fun _ frames => DeliverySource.observe_preserves

@@ -31,6 +31,15 @@ theorem fresh_receive (pid : PeerId) : StateSafe (PacketEffects.freshReceiveWith
        sent_frame [] using [getKeypair_sent_spec,expired_sent_spec])
     | emission_effect_step
 
+theorem fresh_receive_release (pid : PeerId) : StateSafe (HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith effects hooks.peerRelease pid) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith
+  repeat' first
+    | (emission_head TimerEffects.Ops.step; change StateSafe (liftWGPrefix _))
+    | (emission_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact queued_release _ _)
+    | (emission_native_head WG.andM; apply state_native
+       sent_frame [] using [getKeypair_sent_spec,expired_sent_spec])
+    | emission_effect_step
+
 private theorem stats (pid : PeerId) (len : Nat) : StateSafe (effects.step (updateRxStats pid len)) := by
   apply state_native
   sent_frame [updateRxStats] using [getPeer_sent_spec,setPeer_sent_spec]
@@ -57,14 +66,33 @@ theorem prepare (pid : PeerId) (packet : RxPacket) : StateSafe (PacketEffects.pr
     | (emission_native_head inetEcnDecapsulate; exact ecn _ _ _)
     | emission_effect_step
 
+theorem prepare_release (pid : PeerId) (packet : RxPacket) : StateSafe (HandshakeSecurity.StagedDisposal.PacketSource.prepareWith effects hooks.peerRelease pid packet) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.prepareWith
+  repeat' first
+    | (emission_head TimerEffects.Ops.step; change StateSafe (liftWGPrefix _))
+    | (emission_head HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith; exact fresh_receive_release _)
+    | (emission_native_head timersAnyAuthenticatedPacketReceived; exact state_native _ (EmissionFrames.delete _ _))
+    | (emission_head TimerEffects.traversalWith; exact traversal _)
+    | (emission_head TimerEffects.dataReceivedWith; exact data_received _)
+    | (emission_native_head updateRxStats; exact stats _ _)
+    | (emission_native_head dishonest; exact dishonest_frame _)
+    | (emission_native_head inetEcnDecapsulate; exact ecn _ _ _)
+    | emission_effect_step
+
+
+theorem receive_finish_observed (pid : PeerId) (ready : Packets.RxReady) :
+    StateSafe (RetirementSecurity.NestedPeerRelease.rxFinishWith (Driver.nestedOps hooks) pid ready) :=
+  state_callback _ (CallbackFrames.rx_finish_quiet contributing? (fun _ => rfl) pid ready)
+    (CallbackFrames.rx_finish_erases pid ready) (EmissionFrames.receive_finish pid ready)
+
 theorem receive_tail (pid : PeerId) (packet : RxPacket) (confirmed : Bool) :
     StateSafe (Driver.receiveTailObserved hooks pid packet confirmed) := by
   unfold Driver.receiveTailObserved
   repeat' first
     | (emission_head Driver.stagingObserved; exact staging _)
-    | (emission_head PacketEffects.prepareWith; exact prepare _ _)
+    | (emission_head HandshakeSecurity.StagedDisposal.PacketSource.prepareWith; exact prepare_release _ _)
     | (emission_native_head timersHandshakeComplete; exact state_native _ (EmissionFrames.completed _ _))
-    | (emission_native_head Packets.rxFinish; exact state_native _ (EmissionFrames.receive_finish _ _))
+    | (emission_head RetirementSecurity.NestedPeerRelease.rxFinishWith; exact receive_finish_observed _ _)
     | emission_effect_native
     | emission_step
 

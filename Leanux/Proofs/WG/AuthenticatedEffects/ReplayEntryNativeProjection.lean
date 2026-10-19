@@ -9,6 +9,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity
 open HandshakeSecurity
 
 theorem native_projects : Driver.HooksProjects NativeDriver.erase hooks NativeDriver.hooks where
+  stagedRestore := fun _ _ => Driver.Projection.state_lift NativeDriver.erase _
   stagedPurge := fun _ => Driver.Projection.state_lift _ _
   peerRelease := fun _ => Driver.Projection.state_lift _ _
   deliver := projectsPrefix_lift _ _

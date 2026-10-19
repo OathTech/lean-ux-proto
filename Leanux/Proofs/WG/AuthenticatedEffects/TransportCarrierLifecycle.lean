@@ -31,7 +31,7 @@ theorem down (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pi
     HandshakeSecurity.StagedDisposal.Lifecycle.stopWith timersStopWith
   repeat' first
     | (transport_carrier_head Hooks.stagedPurge; exact effects.stagedPurge _)
-    | (transport_carrier_head sendDrainObserved; exact sendDrain flushed _)
+    | (transport_carrier_head sendDrainObserved; exact sendDrain effects flushed _)
     | transport_lifecycle_state_step
 
 theorem destruct (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :

@@ -10,9 +10,7 @@ open TransmitSecurity Queues TimerSlots
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
-private abbrev observed := HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
-  (CompletionEffects.observed
-    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
+private abbrev observed := completionOps
 
 private theorem old (body : PrefixM Completion.Event α) (native : WG.M α)
     (erases : ErasesPrefix body (liftWG native)) (safe : StateSafe (liftWGPrefix native)) :
@@ -57,6 +55,20 @@ private theorem dispose (pid : PeerId) (item : List SkbId) (key : KeypairId) : P
       (focusPrefix Completion.Event.disposition Completion.disposition? (TxDisposition.dispose pid item key))) :=
   old _ _ (focusPrefix_erases _ _ (TxDisposition.dispose_erases pid item key)) (dispose_completion pid item key)
 
+private theorem actual_dispose (pid : PeerId) (item : List SkbId) (key : KeypairId) :
+    ProductSafe (completionOps.dispose pid item key) :=
+  product_observed _ _ (CallbackFrames.dispose_erases pid item key)
+    (CallbackQuiet.dispose (fun _ : Event => (none : Option Empty)) (fun _ => rfl) (fun _ => rfl) pid item key).1
+    (dispose_completion pid item key)
+
+private theorem actual_dead (pid : PeerId) (item : List SkbId) (head : DataPacket) :
+    ProductSafe (HandshakeSecurity.StagedConservation.Terminal.deadObserved
+      txEvent txEvent? Event.stagedDisposal Event.terminalDrop pid item head) :=
+  product_observed _ _ (CallbackFrames.dead_erases pid item head)
+    (CallbackQuiet.dead (fun _ : Event => (none : Option Empty))
+      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid item head).1
+    (dispose_completion pid item head.keypair)
+
 private theorem native (action : WG.M α) (safe : StateSafe (liftWGPrefix action)) : ProductSafe
     (focusPrefix (Event.old ∘ Journal.completionEvent) completion? (liftPrefix (liftWG action))) :=
   old _ _ (erasesPrefix_lift _) safe
@@ -90,6 +102,8 @@ private theorem result_receipt (body : PrefixM Event α) (safe : ProductSafe bod
     product_bind (product_emit (record r)) (fun _ => product_pure r.value))
 
 macro "causal_delayed_completion_step" : tactic => `(tactic| first
+  | (causal_delayed_head HandshakeSecurity.StagedDisposal.TxSource.dispose; exact actual_dispose _ _ _)
+  | (causal_delayed_head HandshakeSecurity.StagedConservation.Terminal.deadObserved; exact actual_dead _ _ _)
   | (causal_delayed_head receiptObserved; apply result_receipt)
   | (causal_delayed_completion_head getPeerMixed; exact peer _)
   | (causal_delayed_completion_head getTxSkbPrefix; exact packet _)
@@ -106,13 +120,13 @@ macro "causal_delayed_completion_step" : tactic => `(tactic| first
   | (causal_delayed_head liftWGPrefix; solve | causal_delayed_native)
   | (causal_delayed_head LifetimeEffects.traversalWith; exact product_state (lifetime_traversal _))
   | (causal_delayed_head LifetimeEffects.dataSentWith; exact product_state (lifetime_data_sent _))
-  | (causal_delayed_head LifetimeEffects.freshWith; exact product_state (lifetime_fresh _))
+  | (causal_delayed_head LifetimeEffects.freshWith; exact product_state (lifetime_actual_fresh _))
   | causal_delayed_product_step)
 
 private theorem complete (pid : PeerId) (item : List SkbId) :
     ProductSafe (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  simp only [observed,completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' causal_delayed_completion_step
 
 private theorem complete_scope (pid : PeerId) (item : List SkbId) : ProductSafe
@@ -120,19 +134,20 @@ private theorem complete_scope (pid : PeerId) (item : List SkbId) : ProductSafe
   product_scope (.completion pid item) _ (fun _ => complete pid item)
 
 private theorem body (pid : PeerId) (first : Option (List SkbId)) : ProductSafe
-    (CompletionEffects.bodySourceWith observed
-      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
-  unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+    (HandshakeSecurity.StagedConservation.Terminal.bodyWith observed
+      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed)
+      (HandshakeSecurity.StagedConservation.Terminal.deadObserved txEvent txEvent? Event.stagedDisposal Event.terminalDrop) pid first) := by
+  unfold HandshakeSecurity.StagedConservation.Terminal.bodyWith TxDisposition.andObs
+  simp only [observed,completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
     | (causal_delayed_head CompletionEffects.completeScoped; exact complete_scope _ _)
     | causal_delayed_completion_step
 
 theorem transmit (pid : PeerId) : ProductSafe (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  unfold CausalJournal.transmit HandshakeSecurity.StagedConservation.Terminal.stepWith
+  simp only [completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
-    | (causal_delayed_head CompletionEffects.bodySourceWith; exact body _ _)
+    | (causal_delayed_head HandshakeSecurity.StagedConservation.Terminal.bodyWith; exact body _ _)
     | causal_delayed_completion_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Delayed

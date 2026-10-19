@@ -11,8 +11,13 @@ set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 set_option pp.structureInstances false
 
-theorem ingress (msg : List UInt8) (src : SkbSource) : ProductSafe (receiveEntryObserved msg src) :=
-  wg _ (EmissionFrames.receive msg src)
+theorem ingress (msg : List UInt8) (src : SkbSource) : ProductSafe (receiveEntryObserved hooks msg src) :=
+  product_combine _
+    (Emissions.product_state (Emissions.state_callback _
+      (CallbackFrames.receive_quiet contributing? (fun _ => rfl) msg src)
+      (CallbackFrames.receive_erases msg src) (EmissionFrames.receive msg src)))
+    (CallbackQuiet.product_safe (CallbackQuiet.receive_entry delivery? (fun _ => rfl) msg src)
+      (fun _ _ safe quiet => safe.quiet quiet))
 
 theorem multicast (family addr : Nat) : ProductSafe (multicastObserved family addr) :=
   native _ (EmissionFrames.multicast family addr)

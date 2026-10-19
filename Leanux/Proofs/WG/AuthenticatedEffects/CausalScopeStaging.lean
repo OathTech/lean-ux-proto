@@ -24,14 +24,30 @@ theorem no_key (pid : PeerId) (packets : List Packet) (keypair : Option KeypairI
     | (scope_balance_head TimerEffects.queuedWith; exact queued _ _)
     | scope_effect_step
 
+theorem restore_queued (pid : PeerId) (retry : Bool) :
+    StateSafe (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects hooks.peerRelease pid retry) := by
+  unfold HandshakeSecurity.StagedDisposal.Effects.queuedWith
+  repeat' first
+    | (scope_balance_head Driver.Hooks.peerRelease; exact peer_release _)
+    | scope_effect_step
+
+theorem no_key_restored (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) (invalid : Bool) :
+    StateSafe (HandshakeSecurity.StagedConservation.Restore.noKeyWith effects hooks.stagedRestore
+      (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects hooks.peerRelease) pid packets keypair invalid) := by
+  unfold HandshakeSecurity.StagedConservation.Restore.noKeyWith
+  repeat' first
+    | (scope_balance_head Driver.Hooks.stagedRestore; exact restore _ _)
+    | (scope_balance_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact restore_queued _ _)
+    | scope_effect_step
+
 theorem staging (pid : PeerId) : StateSafe (Driver.stagingObserved hooks pid) := by
   unfold Driver.stagingObserved
   repeat' first
-    | (scope_balance_head PacketEffects.noKeyWith; exact no_key _ _ _ _)
-    | (scope_balance_head Driver.Hooks.selection; exact old_state _)
+    | (scope_balance_head HandshakeSecurity.StagedConservation.Restore.noKeyWith; exact no_key_restored _ _ _ _)
+    | (scope_balance_head Driver.Hooks.selection; exact selection _)
     | (scope_balance_head Driver.Hooks.reserve; exact old_state _)
     | (scope_balance_head Driver.Hooks.allocate; exact old_state _)
-    | (scope_balance_head Driver.Hooks.create; exact old_state _)
+    | (scope_balance_head Driver.Hooks.create; exact create _ _)
     | scope_state_step
 
 theorem keepalive (pid : PeerId) : StateSafe (Driver.keepaliveObserved hooks pid) := by

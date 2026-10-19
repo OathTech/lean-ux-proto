@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.RawAppendFinalSource
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalCallbackProjection
 
 /-! Non-sending final callbacks retain their native effects and produce no raw
 socket append. These are exact callback projections, including stopped runs,
@@ -22,9 +23,7 @@ theorem product_native (body : PrefixM Journal.Event α) (native : Leanux.M α)
 
 theorem selection (pid : PeerId) :
     StateProjectsPrefix raw? id (CausalJournal.hooks.selection pid) (RawAppend.hooks.selection pid) :=
-  state_native _ _ (StateAppends.focus _ _ _)
-    (fun w => projectsPrefix_focus_other Journal.Event.responder Journal.responder? journal? (fun _ => rfl)
-      (HandshakeSecurity.Responder.DriverCuts.selection_erases pid w))
+  HandshakeSecurity.ExchangeCausal.Callbacks.selection raw? (fun _ => rfl) (fun _ _ => rfl) pid
 
 theorem confirmation (pid : PeerId) (kid : KeypairId) :
     StateProjectsPrefix raw? id (CausalJournal.hooks.confirmation pid kid) (RawAppend.hooks.confirmation pid kid) :=
@@ -52,15 +51,8 @@ theorem allocate (packets : List DataPacket) :
     (Journal.state_receipt_projects journal? _ _ _ (fun _ => rfl) (Driver.Projection.state_lift journal? _))
 
 theorem create (pid : PeerId) (item : List SkbId) :
-    StateProjectsPrefix raw? id (CausalJournal.hooks.create pid item) (RawAppend.hooks.create pid item) := by
-  apply state_native
-  · intro w a h
-    exact Appends.focus Journal.Event.disposition Journal.disposition? (TxDisposition.create pid item)
-      (NativeAdapter.world w a) h
-  · rw [← NativeAdapter.lower_lift (createData pid item)]
-    exact NativeAdapter.lower_projects journal?
-      (projectsPrefix_focus_other Journal.Event.disposition Journal.disposition? journal? (fun _ => rfl)
-        (TxDisposition.create_erases pid item))
+    StateProjectsPrefix raw? id (CausalJournal.hooks.create pid item) (RawAppend.hooks.create pid item) :=
+  HandshakeSecurity.ExchangeCausal.Callbacks.create raw? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid item
 
 theorem prepare : ProjectsPrefix raw? id CausalJournal.hooks.prepare RawAppend.hooks.prepare :=
   product_native _ _ (Appends.focus _ _ _)
@@ -78,10 +70,13 @@ theorem poll : ProjectsPrefix raw? id CausalJournal.hooks.poll RawAppend.hooks.p
 
 theorem encrypt (item : Option (List SkbId)) :
     ProjectsPrefix raw? id (CausalJournal.hooks.encrypt item) (RawAppend.hooks.encrypt item) :=
-  product_native _ _ ((Appends.focus _ _ _).receiptObserved)
-    (receiptObserved_projects (fun _ => rfl)
-      (projectsPrefix_focus_other Journal.Event.encrypted Journal.encryption? journal? (fun _ => rfl)
-        (WorkerEncryption.tail_erases item)))
+  HandshakeSecurity.ExchangeCausal.Callbacks.encrypt raw? (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl) item
+
+theorem restore (pid : PeerId) (packets : List Packet) :
+    StateProjectsPrefix raw? id (CausalJournal.hooks.stagedRestore pid packets) (RawAppend.hooks.stagedRestore pid packets) :=
+  HandshakeSecurity.Exchange.quiet_native_projection raw? _ _
+    (HandshakeSecurity.StagedConservation.Restore.observed_erases CausalJournal.Event.stagedRestored pid packets)
+    (CausalJournal.CallbackQuiet.restore raw? (fun _ => rfl) pid packets).2
 
 theorem front (family address : Nat) (packets : List Packet) (mtu : Nat) :
     StateProjectsPrefix raw? id (CausalJournal.hooks.front family address packets mtu)

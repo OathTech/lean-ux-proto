@@ -12,7 +12,9 @@ theorem staging_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     StateProjectsPrefix ρ id (stagingObserved g pid) (stagingObserved a pid) := by
   unfold stagingObserved
   repeat' first
-    | (maintenance_head AuthenticatedEffects.PacketEffects.noKeyWith; exact AuthenticatedEffects.PacketEffects.noKey_projects ρ (effectOps_projects h) _ _ _ _)
+    | (maintenance_head HandshakeSecurity.StagedConservation.Restore.noKeyWith
+       exact HandshakeSecurity.StagedConservation.Restore.noKey_projects ρ (effectOps_projects h)
+         h.stagedRestore (HandshakeSecurity.StagedDisposal.Effects.queued_projects ρ (effectOps_projects h) _ _ h.peerRelease) _ _ _ _)
     | (maintenance_head Hooks.selection; exact h.selection _)
     | (maintenance_head Hooks.reserve; exact h.reserve _)
     | (maintenance_head Hooks.allocate; exact h.allocate _)
@@ -107,7 +109,8 @@ theorem receiveTail_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : Rx
     StateProjectsPrefix ρ id (receiveTailObserved g pid pkt confirmed) (receiveTailObserved a pid pkt confirmed) := by
   unfold receiveTailObserved
   repeat' first
-    | (maintenance_head AuthenticatedEffects.PacketEffects.prepareWith; exact AuthenticatedEffects.PacketEffects.prepare_projects ρ (effectOps_projects h) _ _)
+    | (maintenance_head RetirementSecurity.NestedPeerRelease.rxFinishWith; exact RetirementSecurity.NestedPeerRelease.rx_rxFinish_projects ρ (nestedOps_projects h) _ _)
+    | (maintenance_head HandshakeSecurity.StagedDisposal.PacketSource.prepareWith; exact HandshakeSecurity.StagedDisposal.PacketSource.prepare_projects ρ (effectOps_projects h) _ _ h.peerRelease _ _)
     | (maintenance_head stagingObserved; exact staging_projects h _)
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)

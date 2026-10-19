@@ -5,8 +5,9 @@ variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues TransmitSecurity
 
 theorem receive_entry (msg : List UInt8) (src : SkbSource) :
-    ProductPreserves (E := E) (Driver.receiveEntryObserved msg src) :=
-  product_native _ (rx_entry msg src)
+    ProductPreserves (E := E) (Driver.receiveEntryObserved EntrySource.hooks msg src) := by
+  rw [Driver.receiveEntry_lift EntrySource.hooks rfl,liftWGObserver_lift]
+  exact product_native _ (rx_entry msg src)
 
 theorem multicast (family addr : Nat) :
     ProductPreserves (E := E) (Driver.multicastObserved family addr) :=

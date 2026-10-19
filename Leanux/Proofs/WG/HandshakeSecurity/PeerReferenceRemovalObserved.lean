@@ -46,6 +46,7 @@ macro "peer_reference_removal_step" : tactic => `(tactic| first
 theorem drain_observed (upTo : Option PeerId) :
     Observed (E := E) (Driver.sendDrainObserved EntrySource.hooks (E := E) upTo) := by
   unfold Driver.sendDrainObserved SendExchange.drainWith
+  simp only [Driver.flushedClear_lift EntrySource.hooks (E := E) rfl]
   repeat' peer_reference_removal_step
 
 theorem timers_stop_observed (pid : PeerId) :

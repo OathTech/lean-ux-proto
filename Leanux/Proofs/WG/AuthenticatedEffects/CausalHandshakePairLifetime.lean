@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptNestedHistory
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalHandshakePairFrames
 
 /-! Native lifetime effects preserve handshake-scope/callback pairing. -/
@@ -78,6 +79,30 @@ theorem lifetime_fresh (pid : PeerId) :
   unfold LifetimeEffects.freshWith andPrefix orPrefix
   repeat' first
     | (driver_history_head LifetimeEffects.queuedWith; exact lifetime_queued _ _)
+    | handshake_pair_lifetime_step
+
+private theorem actual_lifetime_put (peer : Option PeerId) :
+    Driver.StateHistorySafe Safe (completionLifetime.put peer) :=
+  CallbackHistory.lifetime_put
+    (fun body => quiet_state
+      (HandshakeSecurity.StagedDisposal.LifetimeSource.peerEncode (Event.old ∘ Journal.completionEvent))
+      (HandshakeSecurity.StagedDisposal.LifetimeSource.peerDecode completion?)
+      (fun _ => rfl) body)
+    (fun event => emit_quiet (.stagedDisposal event) rfl) peer
+
+private theorem actual_lifetime_queued (pid : PeerId) (retry : Bool) :
+    Driver.StateHistorySafe Safe (LifetimeEffects.queuedWith completionLifetime pid retry) := by
+  unfold LifetimeEffects.queuedWith
+  repeat' first
+    | (driver_history_head LifetimeEffects.Ops.put; exact actual_lifetime_put _)
+    | handshake_pair_lifetime_step
+
+theorem lifetime_actual_fresh (pid : PeerId) :
+    Driver.StateHistorySafe Safe (LifetimeEffects.freshWith completionLifetime pid) := by
+  unfold LifetimeEffects.freshWith andPrefix orPrefix
+  repeat' first
+    | (driver_history_head LifetimeEffects.queuedWith; exact actual_lifetime_queued _ _)
+    | (driver_history_head LifetimeEffects.Ops.put; exact actual_lifetime_put _)
     | handshake_pair_lifetime_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.HandshakePairs

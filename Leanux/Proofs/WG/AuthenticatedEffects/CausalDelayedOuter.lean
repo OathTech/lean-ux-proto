@@ -136,10 +136,13 @@ theorem retained
   · by_cases stopped : call = .wgDown
     · subst call
       exact socketCall _ _ envDown
-    · have same : retainedObserved hooks call = liftPrefix (Leanux.dispatch call) := by
+    · have same : retainedObserved hooks call =
+          RetirementSecurity.NestedPeerRelease.dumpDispatch (nestedOps hooks) call := by
         cases call <;> simp_all only [retainedObserved] <;> contradiction
       rw [same]
-      exact product_native _ (fun history => OuterNative.quiet_dispatch call history kept up stopped)
+      exact observed_product _ _ (CallbackFrames.dump_dispatch_erases call)
+        (CallbackFrames.dump_dispatch_quiet (fun _ : Event => (none : Option Empty)) (fun _ => rfl) call).1
+        (fun history => OuterNative.quiet_dispatch call history kept up stopped)
 
 theorem observe :
     ProductSafe (observeObserved hooks) :=

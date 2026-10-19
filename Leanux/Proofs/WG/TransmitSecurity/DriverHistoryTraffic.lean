@@ -12,7 +12,7 @@ theorem inject_history (h : ActorHistorySafe Safe g) (family port : Nat)
     (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
     ProductHistorySafe Safe (injectObserved g family port msg tos ll dest) :=
   TrafficSource.inject_preserves history_safe (fun _ _ _ _ hi => hi) _ _ _
-    (fun _ _ => History.product_lift _) (crypt_history h) (fun _ _ => History.product_lift _)
+    (receiveEntry_history g h.peerRelease) (crypt_history h) (fun _ _ => History.product_lift _)
     family port msg tos ll dest
 
 theorem afterBatch_history (h : ActorHistorySafe Safe g) :
@@ -25,13 +25,13 @@ theorem flood_history (h : ActorHistorySafe Safe g) (count port family : Nat)
     (messages : List (List UInt8)) :
     ProductHistorySafe Safe (floodObserved g count port family messages) :=
   TrafficSource.flood_preserves history_safe (fun _ _ _ _ hi => hi) _ _ _ _
-    (fun _ _ => History.product_lift _) (inline_history h) (afterBatch_history h)
+    (receiveEntry_history g h.peerRelease) (inline_history h) (afterBatch_history h)
     (fun _ _ => History.product_lift _) count port family messages
 
 theorem batchItem_history (h : ActorHistorySafe Safe g) (d : Device) (cqes : List Int) (item : Env.BatchItem) :
     ProductHistorySafe Safe (batchItemObserved g d cqes item) :=
   batchItemWith_preserves history_safe (fun _ _ _ _ hi => hi) _ _ _ _
-    (fun _ _ => History.product_lift _) (inline_history h) (fun _ _ => History.product_lift _)
+    (receiveEntry_history g h.peerRelease) (inline_history h) (fun _ _ => History.product_lift _)
     (fun family addr packets mtu => (fixture_history h _ _ (transmit_history h family addr packets mtu)).liftWGObserver) d cqes item
 
 theorem batch_history (h : ActorHistorySafe Safe g) (items : List Env.BatchItem) :

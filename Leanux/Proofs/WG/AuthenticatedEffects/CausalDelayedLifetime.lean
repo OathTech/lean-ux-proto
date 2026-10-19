@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptNativeCallbacks
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedEffects
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptLifetime
 
@@ -131,6 +132,28 @@ theorem lifetime_fresh (pid : PeerId) :
   unfold LifetimeEffects.freshWith andPrefix orPrefix
   repeat' first
     | (causal_delayed_head LifetimeEffects.queuedWith; exact lifetime_queued _ _)
+    | causal_delayed_lifetime_step
+
+private theorem actual_put (peer : Option PeerId) : StateSafe (completionLifetime.put peer) :=
+  state_observed _ _ (CallbackFrames.lifetime_put_erases peer)
+    (CallbackFrames.lifetime_put_quiet (fun _ : Event => (none : Option Empty))
+      (fun _ => rfl) (fun _ => rfl) peer).1
+    (DelayedEffects.native_retained _ (peerPut_retained peer)
+      (DelayedEffects.queue_of_frame (peerPut_frame peer)))
+
+private theorem actual_queued (pid : PeerId) (retry : Bool) :
+    StateSafe (LifetimeEffects.queuedWith completionLifetime pid retry) := by
+  unfold LifetimeEffects.queuedWith
+  repeat' first
+    | (causal_delayed_head LifetimeEffects.Ops.put; exact actual_put _)
+    | causal_delayed_lifetime_step
+
+theorem lifetime_actual_fresh (pid : PeerId) :
+    StateSafe (LifetimeEffects.freshWith completionLifetime pid) := by
+  unfold LifetimeEffects.freshWith andPrefix orPrefix
+  repeat' first
+    | (causal_delayed_head LifetimeEffects.queuedWith; exact actual_queued _ _)
+    | (causal_delayed_head LifetimeEffects.Ops.put; exact actual_put _)
     | causal_delayed_lifetime_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Delayed

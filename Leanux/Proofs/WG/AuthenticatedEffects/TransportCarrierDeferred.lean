@@ -82,10 +82,30 @@ theorem timerSection (worker : Worker) (body : PrefixM E Unit)
   · exact product_bind (product_ambient _) (fun _ =>
       runWorkerPrefix_preserves (fun _ _ hi => hi.2) product_store worker safe)
 
+theorem clear_nested (h : DeferredSafe extra origin replay hooks) (pid : PeerId) :
+    StateSafe extra origin replay (RetirementSecurity.NestedPeerRelease.clearWith (nestedOps hooks) pid) := by
+  unfold RetirementSecurity.NestedPeerRelease.clearWith
+  simp only [nestedOps]
+  exact state_bind (state_rx _ (clearHandshake_rx pid)) (fun _ =>
+    state_bind (state_rx _ (clearKeys_rx pid)) (fun _ => h.peerRelease (some pid)))
+
+theorem clear_worker (h : DeferredSafe extra origin replay hooks) :
+    ProductSafe extra origin replay (clearWorkerObserved hooks) := by
+  unfold clearWorkerObserved RetirementSecurity.NestedPeerRelease.oneClearWith runWorkerPrefix
+  repeat' first
+    | (transport_carrier_head RetirementSecurity.NestedPeerRelease.clearWith; exact product_state (clear_nested h _))
+    | (transport_product_native liftWG
+       apply product_wg
+       apply modifyDev_rx <;> intro d <;> rfl)
+    | (first | transport_product_native resolveUnit | transport_product_native hidden
+       exact product_ambient _)
+    | transport_deferred_step
+
 theorem timers (h : DeferredSafe extra origin replay hooks) (j : UInt64) :
     ProductSafe extra origin replay (timersObserved hooks j) := by
   unfold timersObserved
   repeat' first
+    | (transport_carrier_head clearWorkerObserved; exact clear_worker h)
     | (transport_carrier_head Hooks.deliver; exact h.deliver)
     | (transport_carrier_head sendWorkerObserved; exact h.sendWorker)
     | (transport_carrier_head Hooks.timerSelected; exact h.selected _ _ _ _ _)
@@ -100,6 +120,7 @@ theorem placeholderTimers (h : DeferredSafe extra origin replay hooks) (j : UInt
     ProductSafe extra origin replay (placeholderTimersObserved hooks j) := by
   unfold placeholderTimersObserved
   repeat' first
+    | (transport_carrier_head clearWorkerObserved; exact clear_worker h)
     | (transport_carrier_head Hooks.deliver; exact h.deliver)
     | (transport_carrier_head Hooks.timerSelected; exact h.selected _ _ _ _ _)
     | (transport_carrier_head Hooks.timerFinished; exact h.finished _)
@@ -115,6 +136,7 @@ theorem idleTimers (h : DeferredSafe extra origin replay hooks) :
   unfold idleTimersObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (transport_carrier_head clearWorkerObserved; exact clear_worker h)
     | (transport_carrier_head Hooks.deliver; exact h.deliver)
     | (transport_carrier_head timersObserved; exact timers h _)
     | (transport_carrier_head placeholderTimersObserved; exact placeholderTimers h _)
@@ -125,6 +147,7 @@ theorem afterAdvance (h : DeferredSafe extra origin replay hooks) :
   unfold afterAdvanceObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (transport_carrier_head clearWorkerObserved; exact clear_worker h)
     | (transport_carrier_head Hooks.deliver; exact h.deliver)
     | (transport_carrier_head timersObserved; exact timers h _)
     | (transport_carrier_head placeholderTimersObserved; exact placeholderTimers h _)

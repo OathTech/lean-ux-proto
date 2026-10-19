@@ -69,7 +69,7 @@ theorem stack_flush (quiet : H1PendingQuietFrames) (frames : H1PendingStackFrame
 theorem native_poll (edges : H1PendingPromotionEdges) (quiet : H1PendingQuietFrames)
     (frames : H1PendingPollFrames) (stackFrames : H1PendingStackFrames) (pid : PeerId) (budget : Nat) :
     ProductPreserves (Driver.nativePollObserved hooks pid budget) := by
-  rw [Driver.nativePoll_neutral _ rfl]
+  rw [Driver.nativePoll_neutral _ rfl rfl]
   exact poll edges quiet frames pid budget _ (stack_flush quiet stackFrames)
 
 end Leanux.Proofs.WG.HandshakeSecurity.PendingPromotion

@@ -10,7 +10,7 @@ theorem receive_tail (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     Observed (E := E) (Driver.receiveTailObserved EntrySource.hooks (E := E) pid pkt confirmed) := by
   change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold Driver.receiveTailObserved
-  simp only [Driver.prepare_lift EntrySource.hooks (E := E) rfl]
+  simp only [Driver.nested_prepare_lift EntrySource.hooks (E := E) rfl rfl,Driver.rxFinish_lift EntrySource.hooks (E := E) rfl]
   repeat' first
     | (nonce_source_head Driver.stagingObserved; exact staging _)
     | (nonce_source_head timersHandshakeComplete; exact lift _ (complete _ _))

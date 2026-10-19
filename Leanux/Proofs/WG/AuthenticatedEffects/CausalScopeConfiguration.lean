@@ -10,9 +10,18 @@ open HandshakeSecurity.SendExchange
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
 
+theorem clear_work (pid : PeerId) :
+    StateSafe (RetirementSecurity.NestedPeerRelease.flushedClearWith (Driver.nestedOps hooks) pid) := by
+  unfold RetirementSecurity.NestedPeerRelease.flushedClearWith RetirementSecurity.NestedPeerRelease.clearWith
+  simp only [Driver.nestedOps]
+  repeat' first
+    | (scope_balance_head Driver.Hooks.peerRelease; exact peer_release _)
+    | scope_state_step
+
 theorem send_drain (upTo : Option PeerId) : StateSafe (Driver.sendDrainObserved hooks upTo) := by
   unfold Driver.sendDrainObserved drainWith
   repeat' first
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.flushedClearWith; exact clear_work _)
     | (scope_balance_head Driver.Hooks.flushedSend; exact flushed_send _)
     | (scope_balance_head Driver.Hooks.peerRelease; exact peer_release _)
     | scope_state_step

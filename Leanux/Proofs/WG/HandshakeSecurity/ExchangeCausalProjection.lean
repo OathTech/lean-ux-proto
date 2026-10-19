@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalCallbackProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeJointCookieWorker
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSenderOther
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalFrames
@@ -49,7 +50,8 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
     StateProjectsPrefix exchange? id (handshake sg kg) (ExchangeDriver.worker st kt) := by
   apply ExchangeCookieJoint.worker_target exchange? _ _ (ExchangeDriver.receiveOps st kt) (fun _ => rfl)
   · intro msg
-    exact CookieConsumption.observed_projects exchange? Event.cookieConsumed (fun _ => rfl) msg
+    exact Exchange.quiet_native_projection exchange? _ _ (CallbackFrames.cookie_erases msg)
+      (CallbackFrames.cookie_quiet exchange? (fun _ => rfl) (fun _ => rfl) msg).2
   intro mac
   apply HandshakeEffects.scopeOps_projects exchange? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
   apply ExchangeJoint.receive_native exchange? Event.exchange (fun _ => rfl)
@@ -59,6 +61,12 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
     (Event.old ∘ Journal.Event.handshake) handshake? (fun _ => rfl)
     sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
   exact {base with
+    initiation := fun msg => Exchange.quiet_native_projection exchange? _ _
+      (CallbackFrames.initiation_erases {mac with input := msg})
+      (CallbackFrames.initiation_quiet exchange? (fun _ => rfl) (fun _ => rfl) _).2
+    response := fun msg => Exchange.quiet_native_projection exchange? _ _
+      (CallbackFrames.response_erases {mac with input := msg})
+      (CallbackFrames.response_quiet exchange? (fun _ => rfl) (fun _ => rfl) _).2
     send := protocol.send
     cookie := protocol.cookie
     put := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
@@ -150,6 +158,7 @@ theorem front_projects_of_quiet (rho : Event → Option F)
       rho id id entryProjection (fun _ => body))
 
 theorem hooks_projects : Driver.HooksProjects exchange? hooks ExchangeDriver.hooks where
+  stagedRestore := StagedConservation.Restore.observed_projects Event.stagedRestored exchange? (fun _ => rfl)
   stagedPurge := ExchangeCausal.stagedPurge_projects_of_quiet exchange? (fun _ => rfl)
   peerRelease := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
     exchange? (fun _ => rfl)
@@ -172,18 +181,17 @@ theorem hooks_projects : Driver.HooksProjects exchange? hooks ExchangeDriver.hoo
     (fun token => CausalScope.leave_projects Event.scope token exchange? (fun _ => rfl))⟩
   prepare := product_native _ _ (TransportDriver.prepare_erases _ _)
   counterCheck := fun skb packet => product_native _ _ (TransportDriver.counter_erases _ skb packet)
-  selection := fun pid => state_native _ _ (focusStatePrefix_erases Journal.Event.responder Journal.responder?
-    (Responder.DriverCuts.selection_erases pid))
+  selection := ExchangeCausal.Callbacks.selection exchange? (fun _ => rfl) (fun _ _ => rfl)
   confirmation := fun pid kid => state_native _ _ (focusStatePrefix_erases Journal.Event.responder Journal.responder?
     (Responder.DriverCuts.confirmation_erases pid kid))
   session := session_projects
   reserve := fun slot => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.reserve slot))
   allocate := fun packets => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.allocate packets))
-  create := fun pid item => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.create pid item))
+  create := ExchangeCausal.Callbacks.create exchange? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
   front := ExchangeCausal.front_projects_of_quiet exchange? (fun _ => rfl) (fun _ => rfl)
     (fun _ _ => rfl)
   poll := product_native _ _ (native_result Journal.responder? _ _ Journal.ResponderProjection.poll)
-  encrypt := fun item => product_native _ _ (native_result Journal.responder? _ _ (Journal.ResponderProjection.encrypt item))
+  encrypt := ExchangeCausal.Callbacks.encrypt exchange? (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl)
   transmit := transmit_projects
 
 /-- The complete initialized exchange history is an exact ordered projection

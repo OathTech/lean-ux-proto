@@ -30,6 +30,14 @@ theorem timer_selected (d : Device) (bound : UInt64) (pid : PeerId) (timer : Pee
 theorem timer_finished (token : Nat) : ProductSafe (hooks.timerFinished token) :=
   product_combine _ (Emissions.product_emit _ rfl) (quiet_hooks.timerFinished token)
 
+theorem clear_worker : ProductSafe (Driver.clearWorkerObserved hooks) :=
+  product_combine _
+    (Emissions.product_native_callback _
+      (CallbackFrames.clear_worker_quiet contributing? (fun _ => rfl))
+      CallbackFrames.clear_worker_erases EmissionFrames.clear_one)
+    (CallbackQuiet.product_safe (CallbackFrames.clear_worker_quiet delivery? (fun _ => rfl))
+      (fun _ _ safe quiet => safe.quiet quiet))
+
 open Lean Meta Elab Tactic in
 elab "emission_carrier_native_head " wanted:ident : tactic => withMainContext do
   let target := (← instantiateMVars (← getMainTarget)).consumeMData
@@ -50,6 +58,7 @@ macro "emission_deferred_native" : tactic => `(tactic| first
   | (emission_carrier_native_head liftWG; apply wg; first
       | (emission_frame_head delTimer; exact EmissionFrames.delete _ _)
       | sent_frame [] using [getPeer_sent_spec,setPeer_sent_spec])
+  | (emission_carrier_native_head Driver.clearWorkerObserved; exact clear_worker)
   | (emission_carrier_native_head Env.runOneClearWorker; exact native _ EmissionFrames.clear_one)
   | (emission_carrier_native_head Env.requireDrained; exact native _ (EmissionFrames.drained _ _))
   | (emission_carrier_native_head Env.requireNoCryptWork; exact native _ EmissionFrames.no_crypt)

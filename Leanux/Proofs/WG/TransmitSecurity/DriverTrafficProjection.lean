@@ -6,11 +6,15 @@ variable {E F : Type} {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
 set_option maxHeartbeats 600000
 set_option pp.structureInstances false
 
+theorem receiveEntry_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : SkbSource) :
+    ProjectsPrefix ρ id (receiveEntryObserved g msg src) (receiveEntryObserved a msg src) :=
+  (RetirementSecurity.NestedPeerRelease.receive_projects ρ (nestedOps_projects h) msg src).liftWGObserver ρ id
+
 theorem inject_projects (h : HooksProjects ρ g a) (family port : Nat)
     (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
     ProjectsPrefix ρ id (injectObserved g family port msg tos ll dest)
       (injectObserved a family port msg tos ll dest) :=
-  TrafficSource.inject_projects ρ _ _ _ _ _ _ (fun _ _ => projectsPrefix_lift ρ _)
+  TrafficSource.inject_projects ρ _ _ _ _ _ _ (receiveEntry_projects h)
     (crypt_projects h) (fun _ _ => projectsPrefix_lift ρ _) _ _ _ _ _ _
 
 theorem afterBatch_projects (h : HooksProjects ρ g a) :
@@ -23,12 +27,12 @@ theorem flood_projects (h : HooksProjects ρ g a) (count port family : Nat)
     (messages : List (List UInt8)) :
     ProjectsPrefix ρ id (floodObserved g count port family messages)
       (floodObserved a count port family messages) :=
-  TrafficSource.flood_projects ρ _ _ _ _ _ _ _ _ (fun _ _ => projectsPrefix_lift ρ _)
+  TrafficSource.flood_projects ρ _ _ _ _ _ _ _ _ (receiveEntry_projects h)
     (inline_projects h) (afterBatch_projects h) (fun _ _ => projectsPrefix_lift ρ _) _ _ _ _
 
 theorem batchItem_projects (h : HooksProjects ρ g a) (d : Device) (cqes : List Int) (item : Env.BatchItem) :
     ProjectsPrefix ρ id (batchItemObserved g d cqes item) (batchItemObserved a d cqes item) :=
-  batchItemWith_projects ρ _ _ _ _ _ _ _ _ (fun _ _ => projectsPrefix_lift ρ _)
+  batchItemWith_projects ρ _ _ _ _ _ _ _ _ (receiveEntry_projects h)
     (inline_projects h) (fun _ _ => projectsPrefix_lift ρ _)
     (fun family addr packets mtu => (fixture_projects h _ _ _ (transmit_projects h family addr packets mtu)).liftWGObserver ρ id) d cqes item
 

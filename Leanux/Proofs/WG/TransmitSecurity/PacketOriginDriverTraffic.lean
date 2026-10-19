@@ -10,8 +10,8 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 open Lifetimes Queues
 
 theorem ingress (msg : List UInt8) (src : SkbSource) :
-    ProductSafe (Driver.receiveEntryObserved msg src) := by
-  simpa only [Driver.receiveEntryObserved,liftWGObserver_lift] using
+    ProductSafe (Driver.receiveEntryObserved Journal.hooks msg src) := by
+  simpa only [Driver.receiveEntry_lift Journal.hooks rfl,liftWGObserver_lift] using
     product_state (state_lift _ (fun _ => NativeFrames.receive msg src))
 
 theorem multicast (family addr : Nat) :

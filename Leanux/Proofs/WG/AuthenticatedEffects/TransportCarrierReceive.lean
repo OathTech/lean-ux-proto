@@ -43,12 +43,25 @@ theorem timer (h : StagingSafe extra origin replay hooks) (pid : PeerId) (t : Pe
   · exact state_rx _ (timer_rx pid .zeroKeyMaterial)
   · exact persistent h pid
 
+theorem finish_nested (h : StagingSafe extra origin replay hooks) (pid : PeerId) (ready : Packets.RxReady) :
+    StateSafe extra origin replay (RetirementSecurity.NestedPeerRelease.rxFinishWith (nestedOps hooks) pid ready) := by
+  unfold RetirementSecurity.NestedPeerRelease.rxFinishWith RetirementSecurity.NestedPeerRelease.rxAfterLookupWith
+  simp only [nestedOps]
+  repeat' first
+    | (transport_carrier_head Hooks.peerRelease; exact h.peerRelease _)
+    | (transport_carrier_head liftWGPrefix; solve
+       | transport_carrier_native lookupSrc
+         exact state_rx _ (((pinned_const _private.Leanux.Proofs.WG.Origins.OwnerCompletion.«0».Leanux.Proofs.WG.OwnerCompletion.lookup_geometry) _ _).factor Prod.snd))
+    | (transport_carrier_head liftWGPrefix; solve | apply state_rx; transport_effect_rx)
+    | transport_carrier_state_step
+
 theorem receiveTail (h : StagingSafe extra origin replay hooks) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     StateSafe extra origin replay (receiveTailObserved hooks pid pkt confirmed) := by
   unfold receiveTailObserved
   repeat' first
+    | (transport_carrier_head RetirementSecurity.NestedPeerRelease.rxFinishWith; exact finish_nested h _ _)
     | (transport_carrier_head stagingObserved; exact staging h _)
-    | (transport_carrier_head PacketEffects.prepareWith; exact effects_prepare h.toEffectsSafe _ _)
+    | (transport_carrier_head HandshakeSecurity.StagedDisposal.PacketSource.prepareWith; exact effects_prepare h.toEffectsSafe _ _)
     | (transport_carrier_head liftWGPrefix; first
        | solve | transport_carrier_native RxCredits.prepareRest; exact state_rx _ (prepareRest_rx _ _)
        | solve | transport_carrier_native Packets.rxFinish; exact state_rx _ (finish_rx _ _)

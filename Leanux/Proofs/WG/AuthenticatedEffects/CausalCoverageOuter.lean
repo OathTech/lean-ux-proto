@@ -55,7 +55,7 @@ theorem retained (call : Syscall) : ProductAt frames (Driver.retainedObserved ho
   cases call <;> unfold Driver.retainedObserved
   case wgUp => exact socket_call _ _ env_up
   case wgDown => exact socket_call _ _ env_down
-  all_goals exact product_lift _
+  all_goals exact quiet_product (CallbackQuiet.dump_dispatch observed? (fun _ => rfl) _)
 
 theorem observe : ProductAt frames (Driver.observeObserved hooks) :=
   product_bind idle_timers (fun _ => DeliverySource.observe_preserves

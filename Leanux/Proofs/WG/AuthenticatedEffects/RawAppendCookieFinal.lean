@@ -12,14 +12,13 @@ abbrev receiverOps (session : PeerId → WGPrefix CausalJournal.Event Bool)
   HandshakeEffects.scopeOps CausalJournal.Event.scope CausalSources.Cause.handshake
     (HandshakeSecurity.ExchangeJoint.receiveOps CausalJournal.Event.exchange
       (HandshakeEffects.withEffects
-        (HandshakeSecurity.StagedDisposal.Decoration.receive CausalJournal.Event.stagedDisposal CausalJournal.stagedDisposal?
-          (ProtocolSender.receiveOps (CausalJournal.Event.old ∘ Journal.Event.handshake) CausalJournal.handshake? session keepalive mac
-            CausalJournal.Event.protocolSocket CausalJournal.scope? CausalJournal.Event.cookieSocket))
+        (CausalJournal.receiveOps session keepalive mac)
         (CausalJournal.Event.old ∘ Journal.Event.handshake) CausalJournal.effects))
 
 def receiver (session : PeerId → WGPrefix CausalJournal.Event Bool)
     (keepalive : PeerId → WGPrefix CausalJournal.Event Unit) (msg : Key) (source : SkbSource) :=
-  CookieConsumption.receiveWith (CookieConsumption.observed CausalJournal.Event.cookieConsumed)
+  CookieConsumption.receiveWith (RetirementSecurity.NestedPeerRelease.cookieObserved
+    CausalJournal.CallbackFrames.nested CausalJournal.Event.cookieConsumed)
     (receiverOps session keepalive) msg source
 
 theorem receiver_factor (session : PeerId → WGPrefix CausalJournal.Event Bool)
@@ -36,17 +35,27 @@ theorem receiver_projects
         (fun _ => RawAppend.receiveOps st kt) msg source) := by
   apply CookieConsumption.receive_projects raw? _ _ _ _
   · intro input
-    exact CookieConsumption.observed_projects raw? CausalJournal.Event.cookieConsumed (fun _ => rfl) input
+    exact HandshakeSecurity.Exchange.quiet_native_projection raw? _ _
+      (CausalJournal.CallbackFrames.cookie_erases input)
+      (CausalJournal.CallbackFrames.cookie_quiet raw? (fun _ => rfl) (fun _ => rfl) input).2
   intro mac
   apply HandshakeEffects.scopeOps_projects raw? CausalJournal.Event.scope CausalSources.Cause.handshake (fun _ => rfl)
   apply HandshakeSecurity.ExchangeJoint.receive_ignored raw? CausalJournal.Event.exchange (fun _ => rfl)
   refine {receive_effects_projects raw? (CausalJournal.Event.old ∘ Journal.Event.handshake)
     CausalJournal.handshake? (fun _ => rfl) CausalJournal.effects effects sg st kg kt hs hk mac
     CausalJournal.Event.protocolSocket CausalJournal.scope? CausalJournal.Event.cookieSocket
-    (fun _ => rfl) (fun _ => rfl) with put := ?_}
-  intro peer
-  exact HandshakeSecurity.StagedDisposal.Decoration.release_projects CausalJournal.Event.stagedDisposal
-    CausalJournal.stagedDisposal? raw? (fun _ => rfl) peer
+    (fun _ => rfl) (fun _ => rfl) with initiation := ?_, response := ?_, put := ?_}
+  · intro input
+    exact HandshakeSecurity.Exchange.quiet_native_projection raw? _ _
+      (CausalJournal.CallbackFrames.initiation_erases {mac with input := input})
+      (CausalJournal.CallbackFrames.initiation_quiet raw? (fun _ => rfl) (fun _ => rfl) _).2
+  · intro input
+    exact HandshakeSecurity.Exchange.quiet_native_projection raw? _ _
+      (CausalJournal.CallbackFrames.response_erases {mac with input := input})
+      (CausalJournal.CallbackFrames.response_quiet raw? (fun _ => rfl) (fun _ => rfl) _).2
+  · intro peer
+    exact HandshakeSecurity.StagedDisposal.Decoration.release_projects CausalJournal.Event.stagedDisposal
+      CausalJournal.stagedDisposal? raw? (fun _ => rfl) peer
 
 /-- The actual final receiver emits at most one original datagram per
 qualifying input occurrence. This all-entry source claim needs no initialized

@@ -7,9 +7,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity Queues
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
 
-private abbrev observed := HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
-  (CompletionEffects.observed
-    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
+private abbrev observed := CausalJournal.completionOps
 
 private theorem old_completion (body : PrefixM Completion.Event α) : Driver.ProductHistorySafe Safe
     (focusPrefix (Event.old ∘ Journal.completionEvent) completion? body) :=
@@ -33,6 +31,8 @@ private theorem result_receipt (body : PrefixM Event α)
 
 macro "selection_completion_step" : tactic => `(tactic| first
   | (driver_history_head receiptObserved; refine result_receipt _ ?_ _ (fun _ => True.intro))
+  | (driver_history_head HandshakeSecurity.StagedDisposal.TxSource.dispose
+     exact callback_product (CallbackQuiet.dispose protected? (fun _ => rfl) (fun _ => rfl) _ _ _))
   | (driver_history_head focusPrefix; exact old_completion _)
   | (driver_history_head LifetimeEffects.traversalWith; exact Driver.History.product_state (lifetime_traversal _))
   | (driver_history_head LifetimeEffects.dataSentWith; exact Driver.History.product_state (lifetime_data_sent _))
@@ -43,7 +43,7 @@ macro "selection_completion_step" : tactic => `(tactic| first
 private theorem complete (pid : PeerId) (item : List SkbId) :
     Driver.ProductHistorySafe Safe (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
+  simp only [observed,CausalJournal.completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' selection_completion_step
 
 private theorem complete_scope (pid : PeerId) (item : List SkbId) :
@@ -52,19 +52,22 @@ private theorem complete_scope (pid : PeerId) (item : List SkbId) :
   product_scope (.completion pid item) (fun _ => True.intro) _ (fun _ => complete pid item)
 
 private theorem body (pid : PeerId) (first : Option (List SkbId)) :
-    Driver.ProductHistorySafe Safe (CompletionEffects.bodySourceWith observed
-      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
-  unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
+    Driver.ProductHistorySafe Safe (HandshakeSecurity.StagedConservation.Terminal.bodyWith observed
+      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed)
+      (HandshakeSecurity.StagedConservation.Terminal.deadObserved txEvent txEvent? Event.stagedDisposal Event.terminalDrop) pid first) := by
+  unfold HandshakeSecurity.StagedConservation.Terminal.bodyWith TxDisposition.andObs
+  simp only [observed,CausalJournal.completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' first
+    | (driver_history_head HandshakeSecurity.StagedConservation.Terminal.deadObserved
+       exact callback_product (CallbackQuiet.dead protected? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) _ _ _))
     | (driver_history_head CompletionEffects.completeScoped; exact complete_scope _ _)
     | selection_completion_step
 
 theorem transmit (pid : PeerId) : Driver.ProductHistorySafe Safe (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
+  unfold CausalJournal.transmit HandshakeSecurity.StagedConservation.Terminal.stepWith
+  simp only [CausalJournal.completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' first
-    | (driver_history_head CompletionEffects.bodySourceWith; exact body _ _)
+    | (driver_history_head HandshakeSecurity.StagedConservation.Terminal.bodyWith; exact body _ _)
     | selection_completion_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Selections

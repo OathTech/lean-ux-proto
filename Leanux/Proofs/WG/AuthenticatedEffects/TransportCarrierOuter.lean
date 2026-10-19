@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierLifecycle
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierDump
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportOuterNative
 import Leanux.Proofs.WG.Origins.RunnerInvariant
 
@@ -73,6 +73,7 @@ macro "transport_outer_step" : tactic => `(tactic| first
   | (transport_product_native modifyFiles; exact product_modifyFiles _)
   | (transport_product_native modify; apply product_modify; intro w; rfl)
   | (transport_product_native skipCut; exact product_ambient _)
+  | (transport_product_native skipCutExactly; exact product_ambient _)
   | (transport_product_native modifyEnv; exact product_editEnv _)
   | solve | transport_deferred_native
   | (transport_carrier_head liftPrefix; first
@@ -143,16 +144,31 @@ theorem rtnetlink (body : PrefixM E Int) (hb : ProductSafe extra origin replay b
 theorem retained (h : StagingSafe extra origin replay hooks)
     (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) (call : Syscall)
     (kept : DispatchRetained call) : ProductSafe extra origin replay (retainedObserved hooks call) := by
-  by_cases up : call = .wgUp
-  · subst call
-    exact socketCall _ _ (envUp h)
-  · by_cases stopped : call = .wgDown
-    · subst call
-      exact socketCall _ _ (envDown h.toEffectsSafe flushed)
-    · have same : retainedObserved hooks call = liftPrefix (Leanux.dispatch call) := by
-        cases call <;> simp_all only [retainedObserved] <;> contradiction
-      rw [same]
-      exact product_native _ (fun history => TransportOuterNative.quiet_dispatch call history kept up)
+  cases call <;> simp only [retainedObserved]
+  case wgUp => exact socketCall _ _ (envUp h)
+  case wgDown => exact socketCall _ _ (envDown h.toEffectsSafe flushed)
+  case wgGet ref =>
+    unfold RetirementSecurity.NestedPeerRelease.dumpDispatch RetirementSecurity.NestedPeerRelease.dumpDispatchWith
+    apply netlink
+    repeat' first
+      | (transport_carrier_head RetirementSecurity.NestedPeerRelease.dumpDeviceWith; exact product_state (dump_device h.toEffectsSafe _))
+      | transport_outer_step
+  case wgGetStart ref =>
+    unfold RetirementSecurity.NestedPeerRelease.dumpDispatch RetirementSecurity.NestedPeerRelease.dumpDispatchWith
+    apply socketCall
+    repeat' first
+      | (transport_carrier_head RetirementSecurity.NestedPeerRelease.dumpStartWith; exact product_state (dump_start h.toEffectsSafe _ _))
+      | (transport_product_native liftWG; apply product_wg; first
+          | (snapshot_head getNlSock; exact (getNlSock_sameWGWorld _).factor RxDisposition.nativeRxStore)
+          | (snapshot_head setNlSock; exact TransportOuterNative.dump_rx _ (setNlSock_sameDump _ _)))
+      | transport_outer_step
+  case wgGetRecv =>
+    unfold RetirementSecurity.NestedPeerRelease.dumpDispatch RetirementSecurity.NestedPeerRelease.dumpDispatchWith
+    apply socketCall
+    repeat' first
+      | (transport_carrier_head RetirementSecurity.NestedPeerRelease.dumpReceiveWith; exact product_state (dump_receive h.toEffectsSafe _))
+      | transport_outer_step
+  all_goals exact product_native _ (fun history => TransportOuterNative.quiet_dispatch _ history kept (by intro impossible; cases impossible))
 
 theorem observe (h : DeferredSafe extra origin replay hooks) :
     ProductSafe extra origin replay (observeObserved hooks) :=

@@ -28,7 +28,7 @@ theorem quiet_dispatch (call : Syscall)
 
 private theorem quiet_up : envUpObserved hooks = envUpObserved quietHooks := rfl
 private theorem quiet_down : envDownObserved hooks = envDownObserved quietHooks := by
-  rw [envDown_lift hooks rfl rfl,envDown_lift quietHooks rfl rfl]
+  rw [envDown_lift hooks rfl rfl rfl,envDown_lift quietHooks rfl rfl rfl]
 private theorem quiet_delete : envDeleteObserved hooks = envDeleteObserved quietHooks := by
   rw [envDelete_lift hooks rfl rfl rfl,envDelete_lift quietHooks rfl rfl rfl]
 private theorem quiet_config (attrs : DeviceAttrs) : configDevice hooks attrs = configDevice quietHooks attrs := rfl
@@ -39,7 +39,7 @@ theorem retained (call : Syscall) (kept : DispatchRetained call) :
     cases call <;> simp_all only [DispatchRetained,dispatchObserved,dispatchWith] <;> contradiction
   rw [source]
   apply quiet_dispatch
-  · cases call <;> simp_all only [DispatchRetained,dispatchObserved,dispatchWith,retainedObserved,quiet_up,quiet_down] <;> contradiction
+  · cases call <;> simp_all only [DispatchRetained,dispatchObserved,dispatchWith,retainedObserved,quiet_up,quiet_down,dumpDispatch_lift hooks rfl,dumpDispatch_lift quietHooks rfl] <;> contradiction
   · cases call <;> simp_all only [DispatchRetained,SyscallObservers.NoReceiveDispatch] <;> contradiction
 
 theorem product_fs (action : FS.M α) : ProductSafe (liftPrefix (liftFS action)) :=

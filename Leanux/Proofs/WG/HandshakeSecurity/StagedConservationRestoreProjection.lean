@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationRestoreSource
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationRestoreCore
 
 /-! Callback projection for restoration and the following queue operation.
 The original no-key source is recovered without changing the order of effects. -/

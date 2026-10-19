@@ -44,7 +44,7 @@ theorem envUp : ProductSafe (Driver.envUpObserved hooks) := by
   exact Driver.envUp_history (quiet_history Safe).actors
 
 theorem envDown : ProductSafe (Driver.envDownObserved hooks) := by
-  rw [Driver.envDown_lift hooks rfl rfl]
+  rw [Driver.envDown_lift hooks rfl rfl rfl]
   exact product_native _ EnvFrames.wgDown_ordinary
 
 theorem envDelete : ProductSafe (Driver.envDeleteObserved hooks) := by

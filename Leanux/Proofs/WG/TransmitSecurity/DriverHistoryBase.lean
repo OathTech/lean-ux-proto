@@ -16,6 +16,7 @@ abbrev ProductHistorySafe (Safe : List E → Prop) (g : PrefixM E α) : Prop :=
   PrefixPreserves (fun h _ => Safe h) Safe g
 
 structure HooksHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop where
+  stagedRestore : ∀ pid packets, StateHistorySafe Safe (hooks.stagedRestore pid packets)
   stagedPurge : ∀ pid, StateHistorySafe Safe (hooks.stagedPurge pid)
   peerRelease : ∀ peer, StateHistorySafe Safe (hooks.peerRelease peer)
   deliver : ProductHistorySafe Safe hooks.deliver

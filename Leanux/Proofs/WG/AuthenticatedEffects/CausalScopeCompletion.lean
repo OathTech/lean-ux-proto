@@ -7,9 +7,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity Queues
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
 
-private abbrev observed := HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
-  (CompletionEffects.observed
-    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
+private abbrev observed := completionOps
 
 private theorem old_completion (body : PrefixM Completion.Event α) : ProductSafe
     (focusPrefix (Event.old ∘ Journal.completionEvent) completion? body) :=
@@ -37,7 +35,7 @@ macro "scope_balanced_completion_step" : tactic => `(tactic| first
 private theorem complete (pid : PeerId) (item : List SkbId) :
     ProductSafe (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
+  simp only [observed,completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' scope_balanced_completion_step
 
 private theorem complete_scope (pid : PeerId) (item : List SkbId) :
@@ -46,19 +44,25 @@ private theorem complete_scope (pid : PeerId) (item : List SkbId) :
   product_scope (.completion pid item) _ (fun _ => complete pid item)
 
 private theorem body (pid : PeerId) (first : Option (List SkbId)) :
-    ProductSafe (CompletionEffects.bodySourceWith observed
-      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
-  unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
+    ProductSafe (HandshakeSecurity.StagedConservation.Terminal.bodyWith observed
+      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed)
+      (HandshakeSecurity.StagedConservation.Terminal.deadObserved txEvent txEvent? Event.stagedDisposal Event.terminalDrop)
+      pid first) := by
+  unfold HandshakeSecurity.StagedConservation.Terminal.bodyWith TxDisposition.andObs
+  simp only [observed,completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' first
     | (scope_balance_head CompletionEffects.completeScoped; exact complete_scope _ _)
+    | (scope_balance_head HandshakeSecurity.StagedDisposal.TxSource.dispose;
+        exact callback_product (CallbackQuiet.dispose scope? (fun _ => rfl) (fun _ => rfl) _ _ _))
+    | (scope_balance_head HandshakeSecurity.StagedConservation.Terminal.deadObserved;
+        exact callback_product (CallbackQuiet.dead scope? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) _ _ _))
     | scope_balanced_completion_step
 
 theorem transmit (pid : PeerId) : ProductSafe (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
+  unfold CausalJournal.transmit HandshakeSecurity.StagedConservation.Terminal.stepWith
+  simp only [completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused]
   repeat' first
-    | (scope_balance_head CompletionEffects.bodySourceWith; exact body _ _)
+    | (scope_balance_head HandshakeSecurity.StagedConservation.Terminal.bodyWith; exact body _ _)
     | scope_balanced_completion_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.ScopeBalance

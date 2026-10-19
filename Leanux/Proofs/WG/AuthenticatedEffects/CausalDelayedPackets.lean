@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedEffects
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedTimerCallbacks
 
 /-! Packet-side key refresh and receive maintenance preserve the final
 journal's live timer/work occurrences. Native retirement, statistics and
@@ -28,6 +29,28 @@ theorem no_key (pid : PeerId) (packets : List Packet) (keypair : Option KeypairI
     | (causal_delayed_head TimerEffects.queuedWith; exact queued _ _)
     | causal_delayed_effect_step
 
+
+theorem restore (pid : PeerId) (packets : List Packet) : StateSafe (hooks.stagedRestore pid packets) := by
+  apply state_receipt
+  unfold HandshakeSecurity.StagedConservation.Restore.nativeRestore
+  causal_delayed_native
+
+theorem no_key_restore (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) (invalid : Bool) :
+    StateSafe (HandshakeSecurity.StagedConservation.Restore.noKeyWith effects hooks.stagedRestore
+      (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects hooks.peerRelease) pid packets keypair invalid) := by
+  unfold HandshakeSecurity.StagedConservation.Restore.noKeyWith
+  repeat' first
+    | (causal_delayed_head TransmitSecurity.Driver.Hooks.stagedRestore; exact restore _ _)
+    | (causal_delayed_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact queued_disposal _ _)
+    | causal_delayed_effect_step
+
+theorem fresh_receive_disposal (pid : PeerId) :
+    StateSafe (HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith effects hooks.peerRelease pid) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith
+  repeat' first
+    | (causal_delayed_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact queued_disposal _ _)
+    | causal_delayed_effect_step
+
 private theorem stats (pid : PeerId) (len : Nat) : StateSafe (effects.step (updateRxStats pid len)) := by
   apply state_framed
   · intro initial
@@ -52,6 +75,19 @@ theorem prepare (pid : PeerId) (packet : RxPacket) :
   unfold PacketEffects.prepareWith
   repeat' first
     | (causal_delayed_head PacketEffects.freshReceiveWith; exact fresh_receive _)
+    | (causal_delayed_native_head timersAnyAuthenticatedPacketReceived; exact delete _ _)
+    | (causal_delayed_head TimerEffects.traversalWith; exact traversal _)
+    | (causal_delayed_head TimerEffects.dataReceivedWith; exact data_received _)
+    | (causal_delayed_native_head updateRxStats; exact stats _ _)
+    | (causal_delayed_native_head dishonest; exact dishonest_frame _)
+    | (causal_delayed_native_head inetEcnDecapsulate; exact ecn _ _ _)
+    | causal_delayed_effect_step
+
+theorem prepare_disposal (pid : PeerId) (packet : RxPacket) :
+    StateSafe (HandshakeSecurity.StagedDisposal.PacketSource.prepareWith effects hooks.peerRelease pid packet) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.prepareWith
+  repeat' first
+    | (causal_delayed_head HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith; exact fresh_receive_disposal _)
     | (causal_delayed_native_head timersAnyAuthenticatedPacketReceived; exact delete _ _)
     | (causal_delayed_head TimerEffects.traversalWith; exact traversal _)
     | (causal_delayed_head TimerEffects.dataReceivedWith; exact data_received _)

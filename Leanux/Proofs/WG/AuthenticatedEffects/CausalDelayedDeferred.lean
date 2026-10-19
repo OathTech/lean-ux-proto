@@ -18,6 +18,7 @@ macro "causal_delayed_deferred_native" : tactic => `(tactic| first
       | (causal_delayed_native_head delTimer; exact delete _ _)
       | solve | causal_delayed_native)
   | (causal_delayed_product_native Env.runOneClearWorker; exact clear_one)
+  | (causal_delayed_head clearWorkerObserved; exact clear_worker)
   | (causal_delayed_product_native Env.requireDrained; exact product_store_lift _ (TransmitSecurity.Nonce.Frames.drained _ _))
   | (causal_delayed_product_native Env.requireNoCryptWork; exact product_store_lift _ requireNoCryptWork_sameKernel)
   | (causal_delayed_product_native Env.deliverSent; exact product_store_lift _ deliverSent_sameKernel)

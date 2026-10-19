@@ -13,6 +13,7 @@ namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
 
 structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop where
+  stagedRestore : ∀ pid packets, StateProjectsPrefix ρ id (g.stagedRestore pid packets) (a.stagedRestore pid packets)
   stagedPurge : ∀ pid, StateProjectsPrefix ρ id (g.stagedPurge pid) (a.stagedPurge pid)
   peerRelease : ∀ peer, StateProjectsPrefix ρ id (g.peerRelease peer) (a.peerRelease peer)
   deliver : ProjectsPrefix ρ id g.deliver a.deliver
@@ -140,6 +141,17 @@ theorem effectOps_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
   arm := h.armTimer
   append := h.queueSend
 
+theorem nestedOps_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
+    (h : HooksProjects ρ g a) :
+    RetirementSecurity.NestedPeerRelease.Ops.Projects ρ (nestedOps g) (nestedOps a) where
+  step := fun _ => Projection.state_lift ρ _
+  release := h.peerRelease
+
+theorem clearWorker_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
+    (h : HooksProjects ρ g a) : ProjectsPrefix ρ id (clearWorkerObserved g) (clearWorkerObserved a) :=
+  RetirementSecurity.NestedPeerRelease.oneClear_projects ρ fun pid =>
+    (RetirementSecurity.NestedPeerRelease.clear_projects ρ (nestedOps_projects h) pid).liftWGObserver ρ id
+
 theorem sendWorker_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
     (h : HooksProjects ρ g a) : ProjectsPrefix ρ id (sendWorkerObserved g) (sendWorkerObserved a) :=
   HandshakeSecurity.SendExchange.one_projects ρ liftPrefix liftPrefix
@@ -150,7 +162,7 @@ theorem sendDrain_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
     StateProjectsPrefix ρ id (sendDrainObserved g upTo) (sendDrainObserved a upTo) :=
   HandshakeSecurity.SendExchange.drain_projects ρ liftWGPrefix liftWGPrefix
     (fun _ => Projection.state_lift ρ _) _ _ h.flushedSend _ _
-    (fun _ => Projection.state_lift ρ _) upTo
+    (fun pid => RetirementSecurity.NestedPeerRelease.flushedClear_projects ρ (nestedOps_projects h) pid) upTo
 
 theorem remove_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
     (h : HooksProjects ρ g a) (peer : Option PeerId) :

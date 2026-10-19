@@ -40,6 +40,7 @@ theorem source_history (Good : List E → Prop)
 
 theorem quiet_history (Good : List Event → Prop) : Driver.HooksHistorySafe Good quietHooks := by
   constructor
+  · intro pid packets; exact Driver.History.state_lift _
   · intro pid; exact Driver.History.state_lift _
   · intro peer; exact Driver.History.state_lift _
   · exact Driver.History.product_lift _

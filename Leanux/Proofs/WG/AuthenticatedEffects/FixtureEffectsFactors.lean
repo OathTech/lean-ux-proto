@@ -41,7 +41,7 @@ theorem syscall_factor (hooks : Driver.Hooks E) (family addr : Nat)
 theorem batchItem_factor (hooks : Driver.Hooks E) (device : Device)
     (cqes : List Int) (item : Env.BatchItem) :
     Driver.batchItemObserved hooks device cqes item =
-      batchItemWith Driver.receiveEntryObserved (Driver.inlinePollObserved hooks) Driver.multicastObserved
+      batchItemWith (Driver.receiveEntryObserved hooks) (Driver.inlinePollObserved hooks) Driver.multicastObserved
         (fun family addr packets mtu => liftWGObserver
           (runWith (Driver.fixtureOps hooks) (.transmit family addr packets mtu)
             (Driver.transmitObserved hooks family addr packets mtu))) device cqes item := by

@@ -37,7 +37,7 @@ theorem down (c : Contracts Valid Safe hooks ρ) : StateSafe Valid Safe (Driver.
   have history : Driver.StateHistorySafe Safe (Driver.downObserved hooks) :=
     (show Driver.downObserved (quietHooks hooks)=Driver.downObserved hooks from rfl) ▸ Driver.down_history c.quiet
   have projected:=Projection.state (Driver.down_projects c.projects) (Driver.down_projects TransmitSecurity.Journal.hooks_projects)
-  rw [Driver.down_lift Driver.nonceHooks rfl rfl] at projected
+  rw [Driver.down_lift Driver.nonceHooks rfl rfl rfl] at projected
   exact state_native history projected (erasesStatePrefix_lift _) (frame down_cell)
 
 theorem destroy (c : Contracts Valid Safe hooks ρ) : StateSafe Valid Safe (Driver.destructObserved hooks) := by

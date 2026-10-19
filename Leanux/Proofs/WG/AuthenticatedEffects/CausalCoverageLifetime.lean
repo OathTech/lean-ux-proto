@@ -10,7 +10,7 @@ set_option maxRecDepth 4096
 private abbrev base := CompletionEffects.lifetimeBase
   (Event.old ∘ Journal.completionEvent) completion?
 
-def lifetime := LifetimeEffects.decorate base scope? Event.armed Event.queued
+def lifetime := completionLifetime
 
 private theorem base_safe (body : MixedM α) : StateAt frames
     (focusStatePrefix ((Event.old ∘ Journal.completionEvent) ∘ CompletionEffects.lifetimeEvent)
@@ -37,7 +37,8 @@ private theorem lifetime_modify (pid : PeerId) (f : Peer → Peer) :
     StateAt frames (lifetime.modifyPeer pid f) := base_safe _
 private theorem lifetime_guard (pid : PeerId) : StateAt frames (lifetime.guard pid) := base_safe _
 private theorem lifetime_get (pid : PeerId) : StateAt frames (lifetime.get pid) := base_safe _
-private theorem lifetime_put (peer : Option PeerId) : StateAt frames (lifetime.put peer) := base_safe _
+private theorem lifetime_put (peer : Option PeerId) : StateAt frames (lifetime.put peer) :=
+  quiet_state (CallbackQuiet.peer observed? _ _ (fun _ => rfl) (fun _ => rfl) peer)
 
 macro "coverage_lifetime_step" live:ident : tactic => `(tactic| first
   | (coverage_head LifetimeEffects.Ops.step; exact lifetime_step _)

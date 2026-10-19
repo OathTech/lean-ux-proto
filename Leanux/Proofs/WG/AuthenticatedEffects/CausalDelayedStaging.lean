@@ -19,7 +19,7 @@ private theorem ecn (packet : Packet) : StateSafe (liftWGPrefix (ipTunnelEcnEnca
 theorem staging (pid : PeerId) : StateSafe (Driver.stagingObserved hooks pid) := by
   unfold Driver.stagingObserved
   repeat' first
-    | (causal_delayed_head PacketEffects.noKeyWith; exact no_key _ _ _ _)
+    | (causal_delayed_head HandshakeSecurity.StagedConservation.Restore.noKeyWith; exact no_key_restore _ _ _ _)
     | (causal_delayed_head Driver.Hooks.selection; exact selection _)
     | (causal_delayed_head Driver.Hooks.reserve; exact reserve _)
     | (causal_delayed_head Driver.Hooks.allocate; exact allocate _)

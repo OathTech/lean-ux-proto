@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedConfiguration
-import Leanux.Proofs.WG.AuthenticatedEffects.TransportLifecycleSourceFrames
+import Leanux.Proofs.Framing.WGDeviceLifecycle
+import Leanux.Proofs.WG.Configuration.LifecycleCompletion
 
 /-! Native shutdown drains the same observed work callbacks. Deletion retires
 all resident obligations; creation establishes an empty pending-timer and

@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedStaging
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptNativeCallbacks
 import Leanux.Proofs.WG.Queues.RxConsumeProtection
 
 /-! Actual receive completion preserves the same live delayed-effect carrier.
@@ -68,14 +69,21 @@ theorem receive_finish (pid : PeerId) (ready : Packets.RxReady) :
          all_goals intro d; rfl)
       | queue_callback_step initial
 
+
+theorem receive_finish_observed (pid : PeerId) (ready : Packets.RxReady) :
+    StateSafe (RetirementSecurity.NestedPeerRelease.rxFinishWith (Driver.nestedOps hooks) pid ready) :=
+  observed_native _ _ (CallbackFrames.rx_finish_erases pid ready)
+    (CallbackFrames.rx_finish_quiet (fun _ : Event => (none : Option Empty)) (fun _ => rfl) pid ready).1
+    (receive_finish pid ready)
+
 theorem receive_tail (pid : PeerId) (packet : RxPacket) (confirmed : Bool) :
     StateSafe (Driver.receiveTailObserved hooks pid packet confirmed) := by
   unfold Driver.receiveTailObserved
   repeat' first
     | (causal_delayed_head Driver.stagingObserved; exact staging _)
-    | (causal_delayed_head PacketEffects.prepareWith; exact prepare _ _)
+    | (causal_delayed_head HandshakeSecurity.StagedDisposal.PacketSource.prepareWith; exact prepare_disposal _ _)
     | (causal_delayed_native_head timersHandshakeComplete; exact handshake_complete _ _)
-    | (causal_delayed_native_head Packets.rxFinish; exact receive_finish _ _)
+    | (causal_delayed_head RetirementSecurity.NestedPeerRelease.rxFinishWith; exact receive_finish_observed _ _)
     | (causal_delayed_head liftWGPrefix; solve | causal_delayed_native)
     | causal_delayed_step
 

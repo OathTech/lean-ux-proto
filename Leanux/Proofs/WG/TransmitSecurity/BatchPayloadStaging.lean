@@ -39,7 +39,7 @@ private def Done (acc : Option Unit × List DataPacket) (h : List Journal.Event)
 
 theorem staging (pid : PeerId) : Driver.StateHistorySafe Safe (Driver.stagingObserved Journal.hooks pid) := by
   unfold Driver.stagingObserved
-  simp only [Driver.noKey_lift Journal.hooks rfl]
+  simp only [Driver.restore_noKey_lift Journal.hooks rfl rfl rfl]
   dsimp only [Journal.hooks]
   apply StatePrefixEnsures.bind (selection pid)
   intro chosen

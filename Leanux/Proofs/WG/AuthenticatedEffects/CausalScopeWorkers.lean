@@ -40,7 +40,7 @@ theorem resched (worker : Worker) (site : Decision) : ProductSafe (Driver.resche
 theorem encrypt_tail (item : Option (List SkbId)) : ProductSafe (Driver.encryptTailObserved hooks item) := by
   intro frames
   exact workerIterPrefix_preserves .encryptWorker none (fun _ _ ready => ⟨frames,ready⟩)
-    (old_product _ frames) (resched .encryptWorker .encWorkerNeedResched frames)
+    (encrypt _ frames) (resched .encryptWorker .encWorkerNeedResched frames)
 
 theorem encrypt_iter : ProductSafe (Driver.encryptIterObserved hooks) :=
   product_bind (old_product _) (fun item => product_bind softirq (fun _ => encrypt_tail item))

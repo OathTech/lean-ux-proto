@@ -12,6 +12,7 @@ theorem crypt_projects (h : HooksProjects ρ g a) :
   repeat' first
     | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head clearWorkerObserved; exact clearWorker_projects h)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head scheduleObserved; exact schedule_projects h _)
     | driver_product_step ρ
@@ -22,6 +23,7 @@ theorem sendWorkers_projects (h : HooksProjects ρ g a) :
   repeat' first
     | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head clearWorkerObserved; exact clearWorker_projects h)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head scheduleObserved; exact schedule_projects h _)
     | driver_product_step ρ
@@ -32,6 +34,7 @@ theorem afterXmit_projects (h : HooksProjects ρ g a) :
   repeat' first
     | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head clearWorkerObserved; exact clearWorker_projects h)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head cryptObserved; exact crypt_projects h)
     | (maintenance_head sendWorkersObserved; exact sendWorkers_projects h)
@@ -55,6 +58,7 @@ theorem timers_projects (h : HooksProjects ρ g a) (j : UInt64) :
   repeat' first
     | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head clearWorkerObserved; exact clearWorker_projects h)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head cryptObserved; exact crypt_projects h)
     | (maintenance_head timerSectionObserved
@@ -71,6 +75,7 @@ theorem placeholder_projects (h : HooksProjects ρ g a) (j : UInt64) :
   repeat' first
     | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head clearWorkerObserved; exact clearWorker_projects h)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head cryptObserved; exact crypt_projects h)
     | (maintenance_head sendWorkersObserved; exact sendWorkers_projects h)
@@ -88,6 +93,7 @@ theorem idleTimers_projects (h : HooksProjects ρ g a) :
   repeat' first
     | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head clearWorkerObserved; exact clearWorker_projects h)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head timersObserved; exact timers_projects h _)
     | (maintenance_head placeholderTimersObserved; exact placeholder_projects h _)
@@ -100,6 +106,7 @@ theorem afterAdvance_projects (h : HooksProjects ρ g a) :
   repeat' first
     | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
+    | (maintenance_head clearWorkerObserved; exact clearWorker_projects h)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head timersObserved; exact timers_projects h _)
     | (maintenance_head placeholderTimersObserved; exact placeholder_projects h _)

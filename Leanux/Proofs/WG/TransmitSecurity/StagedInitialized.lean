@@ -92,10 +92,13 @@ theorem retained (call : Syscall) (kept : DispatchRetained call) :
   · by_cases isDown : call = .wgDown
     · subst call
       exact socketCall _ _ env_down
-    · have eq : retainedObserved hooks call = liftPrefix (Leanux.dispatch call) := by
+    · have eq : retainedObserved hooks call =
+          RetirementSecurity.NestedPeerRelease.dumpDispatch (nestedOps hooks) call := by
         cases call <;> first | contradiction | rfl
       rw [eq]
-      exact product_lift _ (fun history => OuterNative.quiet_dispatch call history kept isUp isDown)
+      have quiet := CallbackFrames.dump_dispatch_quiet selection? (fun _ => rfl) call
+      exact product_quiet quiet.1 quiet.2 (CallbackFrames.dump_dispatch_erases call)
+        (fun history => OuterNative.quiet_dispatch call history kept isUp isDown)
 
 theorem observe : ProductSafe (observeObserved hooks) :=
   product_bind idleTimers (fun _ => DeliverySource.observe_preserves

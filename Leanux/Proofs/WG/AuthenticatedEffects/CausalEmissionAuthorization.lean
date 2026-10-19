@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsSockets
 
 /-! Positional native append receipts inherit their own initialized cause.
 The cookie exception is the native under-load/MAC1 path; repeated equal-valued

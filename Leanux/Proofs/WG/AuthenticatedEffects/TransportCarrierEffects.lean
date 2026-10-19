@@ -88,29 +88,32 @@ theorem effects_expiredNew (h : EffectsSafe extra origin replay hooks) (pid : Pe
     | transport_effect_step h
 
 theorem effects_freshReceive (h : EffectsSafe extra origin replay hooks) (pid : PeerId) :
-    StateSafe extra origin replay (PacketEffects.freshReceiveWith (effectOps hooks) pid) := by
-  unfold PacketEffects.freshReceiveWith
+    StateSafe extra origin replay (HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith (effectOps hooks) hooks.peerRelease pid) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith
   simp only [effectOps,TimerEffects.observed]
   repeat' first
     | (transport_carrier_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact effects_queued_disposal h _ _)
     | (transport_carrier_head queuedWith; exact effects_queued h _ _)
     | transport_effect_step h
 
-theorem effects_noKey (h : EffectsSafe extra origin replay hooks) (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) (invalid : Bool) :
-    StateSafe extra origin replay (PacketEffects.noKeyWith (effectOps hooks) pid packets keypair invalid) := by
-  unfold PacketEffects.noKeyWith
+theorem effects_noKey (h : EffectsSafe extra origin replay hooks)
+    (restore : ∀ pid packets, StateSafe extra origin replay (hooks.stagedRestore pid packets)) (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) (invalid : Bool) :
+    StateSafe extra origin replay (HandshakeSecurity.StagedConservation.Restore.noKeyWith (effectOps hooks) hooks.stagedRestore
+      (HandshakeSecurity.StagedDisposal.Effects.queuedWith (effectOps hooks) hooks.peerRelease) pid packets keypair invalid) := by
+  unfold HandshakeSecurity.StagedConservation.Restore.noKeyWith
   simp only [effectOps,TimerEffects.observed]
   repeat' first
+    | (transport_carrier_head Hooks.stagedRestore; exact restore _ _)
     | (transport_carrier_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact effects_queued_disposal h _ _)
     | (transport_carrier_head queuedWith; exact effects_queued h _ _)
     | transport_effect_step h
 
 theorem effects_prepare (h : EffectsSafe extra origin replay hooks) (pid : PeerId) (pkt : RxPacket) :
-    StateSafe extra origin replay (PacketEffects.prepareWith (effectOps hooks) pid pkt) := by
-  unfold PacketEffects.prepareWith
+    StateSafe extra origin replay (HandshakeSecurity.StagedDisposal.PacketSource.prepareWith (effectOps hooks) hooks.peerRelease pid pkt) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.prepareWith
   simp only [effectOps,TimerEffects.observed]
   repeat' first
-    | (transport_carrier_head PacketEffects.freshReceiveWith; exact effects_freshReceive h _)
+    | (transport_carrier_head HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith; exact effects_freshReceive h _)
     | (transport_carrier_head traversalWith; exact effects_traversal h _)
     | (transport_carrier_head dataReceivedWith; exact effects_dataReceived h _)
     | transport_effect_step h

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionCallbacks
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionFrontFrames
 
 /-! The embedded journal's ordinary hooks cannot add timer selections. This
@@ -53,7 +54,10 @@ private theorem native_appends (action : WG.M α) : StateAppends (liftWGPrefix a
   fun _ _ _ => ⟨[],by simp only [List.append_nil]; rfl⟩
 
 theorem selection (pid : PeerId) : Driver.StateHistorySafe Safe (hooks.selection pid) :=
-  focus_state Journal.Event.responder Journal.responder? (fun _ => rfl) _
+  callback_state (CallbackQuiet.selection protected? (fun _ => rfl) (fun _ _ => rfl) pid)
+
+theorem restore (pid : PeerId) (packets : List Packet) : Driver.StateHistorySafe Safe (hooks.stagedRestore pid packets) :=
+  callback_state (CallbackQuiet.restore protected? (fun _ => rfl) pid packets)
 
 theorem confirmation (pid : PeerId) (kid : KeypairId) :
     Driver.StateHistorySafe Safe (hooks.confirmation pid kid) :=
@@ -76,14 +80,8 @@ theorem front (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     Driver.StateHistorySafe Safe (hooks.front family addr packets mtu) :=
   disposal_front family addr packets mtu
 
-theorem create (pid : PeerId) (items : List SkbId) : Driver.StateHistorySafe Safe (hooks.create pid items) := by
-  apply old_state
-  · intro w a h
-    exact Appends.focus Journal.Event.disposition Journal.disposition? (Queues.TxDisposition.create pid items)
-      (NativeAdapter.world w a) h
-  · intro w a h
-    exact focusPrefix_other Journal.Event.disposition Journal.disposition? oldTimer? (fun _ => rfl)
-      (Queues.TxDisposition.create pid items) (NativeAdapter.world w a) h
+theorem create (pid : PeerId) (items : List SkbId) : Driver.StateHistorySafe Safe (hooks.create pid items) :=
+  callback_state (CallbackQuiet.create protected? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid items)
 
 theorem prepare : Driver.ProductHistorySafe Safe hooks.prepare :=
   old_product _ (Appends.focus _ _ _)
@@ -98,7 +96,6 @@ theorem poll : Driver.ProductHistorySafe Safe hooks.poll :=
     (HistoryFrame.receiptObserved (fun w h => focusPrefix_other _ _ oldTimer? (fun _ => rfl) _ w h) (fun _ => rfl))
 
 theorem encrypt (items : Option (List SkbId)) : Driver.ProductHistorySafe Safe (hooks.encrypt items) :=
-  old_product _ (Appends.receiptObserved (Appends.focus _ _ _))
-    (HistoryFrame.receiptObserved (fun w h => focusPrefix_other _ _ oldTimer? (fun _ => rfl) _ w h) (fun _ => rfl))
+  callback_product (CallbackQuiet.encrypt protected? (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl) items)
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Selections

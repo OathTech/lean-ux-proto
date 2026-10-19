@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedSend
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalCallbackQuietActors
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalOldProjection
 import Leanux.Proofs.WG.TransmitSecurity.JournalProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.SendQueueDataFrames
@@ -49,7 +50,10 @@ private theorem selection_native (pid : PeerId) : StateSafe (liftWGPrefix (Respo
       | queue_callback_step initial
 
 theorem selection (pid : PeerId) : StateSafe (hooks.selection pid) :=
-  old_state _ _ (focusStatePrefix_erases _ _ (Responder.DriverCuts.selection_erases pid))
+  observed_native _ _
+    (RetirementSecurity.NestedPeerRelease.projects_erases old? (CausalJournal.selection_projects pid)
+      (focusStatePrefix_erases _ _ (Responder.DriverCuts.selection_erases pid)))
+    (CallbackQuiet.selection (fun _ : Event => (none : Option Empty)) (fun _ => rfl) (fun _ _ => rfl) pid).1
     (selection_native pid)
 
 private theorem confirmation_native (pid : PeerId) (kid : KeypairId) :
@@ -103,7 +107,11 @@ theorem allocate (packets : List DataPacket) : StateSafe (hooks.allocate packets
     exact (SendWorkCauses.skb_frame (SkbStore.newTx packet)).wp (fun q => q = initial)
 
 theorem create (pid : PeerId) (items : List SkbId) : StateSafe (hooks.create pid items) := by
-  apply old_state _ _ (projected_erases _ _ Journal.nonce? (Journal.create_projects pid items))
+  apply observed_native _ _
+    (RetirementSecurity.NestedPeerRelease.projects_erases old? (CausalJournal.create_projects pid items)
+      (projected_erases _ _ Journal.nonce? (Journal.create_projects pid items)))
+    (CallbackQuiet.create (fun _ : Event => (none : Option Empty))
+      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid items).1
   exact state_framed _ (createData_retained pid items) (SendWorkCauses.create_data_frame pid items)
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Delayed

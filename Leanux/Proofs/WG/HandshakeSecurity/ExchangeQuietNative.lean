@@ -36,7 +36,7 @@ macro "exchange_quiet_step " rho:ident : tactic => `(tactic| first
 
 theorem staging_quiet (pid : PeerId) : StateHistoryFrame some (Driver.stagingObserved hooks pid) := by
   unfold Driver.stagingObserved
-  simp only [Driver.noKey_lift hooks rfl]
+  simp only [Driver.restore_noKey_lift hooks rfl rfl rfl]
   dsimp only [hooks]
   let rho : Exchange.Event → Option Exchange.Event := some
   change StateHistoryFrame rho _
@@ -84,7 +84,7 @@ theorem keepalive_lift (pid : PeerId) :
 theorem receiveTail_quiet (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     StateHistoryFrame some (Driver.receiveTailObserved hooks pid pkt confirmed) := by
   unfold Driver.receiveTailObserved
-  simp only [Driver.prepare_lift hooks rfl,staging_lift]
+  simp only [Driver.nested_prepare_lift hooks rfl rfl,Driver.rxFinish_lift hooks rfl,staging_lift]
   let rho : Exchange.Event → Option Exchange.Event := some
   change StateHistoryFrame rho _
   repeat' exchange_quiet_step rho
@@ -117,6 +117,7 @@ private def quietHooks : Driver.Hooks Exchange.Event :=
 
 private theorem quietHooks_history (good : List Exchange.Event → Prop) :
     Driver.HooksHistorySafe good quietHooks where
+  stagedRestore := fun _ _ => TransmitSecurity.Driver.History.state_lift _
   stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := Driver.History.product_lift _

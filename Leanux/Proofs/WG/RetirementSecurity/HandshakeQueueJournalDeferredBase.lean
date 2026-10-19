@@ -44,6 +44,14 @@ theorem send_one (c : Contracts Valid Safe hooks ρ) :
 theorem clear_one : ProductSafe Valid Safe (liftPrefix Env.runOneClearWorker) :=
   product_lift Valid Safe _ (product_frame clear_one_cell)
 
+theorem clear_observed (c : Contracts Valid Safe hooks ρ) :
+    ProductSafe Valid Safe (Driver.clearWorkerObserved hooks) := by
+  have projected := Projection.product (Driver.clearWorker_projects c.projects)
+    (Driver.clearWorker_projects TransmitSecurity.Journal.hooks_projects)
+  rw [Driver.clearWorker_lift Driver.nonceHooks rfl] at projected
+  exact product_native (Driver.clearWorker_history hooks c.quiet.peerRelease)
+    projected (erasesPrefix_lift _) (product_frame clear_one_cell)
+
 theorem deliver (c : Contracts Valid Safe hooks ρ) : ProductSafe Valid Safe hooks.deliver :=
   product_native c.quiet.deliver c.projects.deliver (erasesPrefix_lift _)
     (product_frame (deliverSent_sameKernel.of_factor

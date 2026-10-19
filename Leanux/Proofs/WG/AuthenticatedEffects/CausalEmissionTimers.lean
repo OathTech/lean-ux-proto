@@ -34,14 +34,6 @@ theorem retransmit (pid : PeerId) : StateSafe (TimerEffects.retransmitWith effec
     | (emission_head TimerEffects.queuedWith; exact queued _ _)
     | emission_effect_step
 
-theorem queued_release (pid : PeerId) (retry : Bool) :
-    StateSafe (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects hooks.peerRelease pid retry) := by
-  unfold HandshakeSecurity.StagedDisposal.Effects.queuedWith
-  repeat' first
-    | (emission_head Driver.Hooks.peerRelease; exact peer_release _)
-    | (emission_head TimerEffects.Ops.step; change StateSafe (liftWGPrefix _))
-    | emission_effect_step
-
 theorem retransmit_observed (pid : PeerId) : StateSafe
     (HandshakeSecurity.StagedDisposal.Effects.retransmitWith effects hooks.peerRelease hooks.stagedPurge pid) := by
   unfold HandshakeSecurity.StagedDisposal.Effects.retransmitWith

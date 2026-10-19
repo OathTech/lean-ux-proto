@@ -6,8 +6,9 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queue
 open Responder.DriverCuts (hooks)
 
 theorem receive_entry (frames : H1IngressFrames) (msg : List UInt8) (src : SkbSource) :
-    ProductPreserves (Driver.receiveEntryObserved msg src) :=
-  product_native _ (Carrier.rx_entry frames msg src)
+    ProductPreserves (Driver.receiveEntryObserved hooks msg src) := by
+  rw [Driver.receiveEntry_lift hooks rfl,liftWGObserver_lift]
+  exact product_native _ (Carrier.rx_entry frames msg src)
 
 theorem multicast (family addr : Nat) :
     ProductPreserves (Driver.multicastObserved family addr) :=

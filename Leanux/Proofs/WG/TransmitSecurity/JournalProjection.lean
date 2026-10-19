@@ -92,6 +92,7 @@ theorem session_projects (pid : PeerId) :
     (HandshakeSecurity.Responder.DriverCuts.session_erases pid wg)
 
 theorem hooks_projects : Driver.HooksProjects nonce? hooks Driver.nonceHooks where
+  stagedRestore := fun _ _ => Driver.Projection.state_lift nonce? _
   stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift nonce? _
   peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift nonce? _
   deliver := projectsPrefix_lift nonce? _

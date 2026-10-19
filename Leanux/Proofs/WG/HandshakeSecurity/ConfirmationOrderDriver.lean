@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TransmitSecurity.GroConfirmationOrder
+import Leanux.Proofs.WG.TransmitSecurity.NestedGroConfirmationOrder
 import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationOrderQuiet
 import Leanux.Proofs.WG.AuthenticatedEffects.CandidateOrder
 
@@ -12,6 +13,7 @@ open Confirmation.Poll
 variable {E : Type} {Good : List E → Prop} {hooks : Driver.Hooks E}
 
 structure QuietHooksSafe (Good : List E → Prop) (hooks : Driver.Hooks E) : Prop where
+  stagedRestore : ∀ pid packets, StateHistorySafe Good (hooks.stagedRestore pid packets)
   stagedPurge : ∀ pid, StateHistorySafe Good (hooks.stagedPurge pid)
   peerRelease : ∀ peer, StateHistorySafe Good (hooks.peerRelease peer)
   deliver : ProductHistorySafe Good hooks.deliver
@@ -49,6 +51,7 @@ private def neutralConfirmation (hooks : Driver.Hooks E) : Driver.Hooks E :=
 
 private theorem quiet_hooks (h : QuietHooksSafe Good hooks) :
     HooksHistorySafe Good (neutralConfirmation hooks) where
+  stagedRestore := h.stagedRestore
   stagedPurge := h.stagedPurge
   peerRelease := h.peerRelease
   deliver := h.deliver
@@ -116,10 +119,11 @@ theorem quiet_nativePoll (record : AuthenticatedEffects.TransportDriver.Replay �
     (counter : hooks.counterCheck = AuthenticatedEffects.TransportDriver.counter record)
     (confirmed : hooks.confirmation = confirmation responder decode) (pid : PeerId) (budget : Nat) :
     ProductHistorySafe (Safe record decode) (Driver.nativePollObserved hooks pid budget) := by
-  unfold Driver.nativePollObserved AuthenticatedEffects.GroOccurrencePoll.observed
+  unfold Driver.nativePollObserved
   rw [counter]
-  apply GroConfirmationOrder.poll record decode quiet hooks.candidateEnter hooks.candidateLeave
-    _ _ _ h.candidateEnter h.candidateLeave
+  apply NestedGroConfirmationOrder.poll record decode quiet
+    (fun peer => liftWGObserver (hooks.peerRelease peer)) hooks.candidateEnter hooks.candidateLeave
+    _ _ _ (fun peer => (h.peerRelease peer).liftWGObserver) h.candidateEnter h.candidateLeave
   · exact shared_consumer record responder decode inverse hooks confirmed
       (fun pid pkt value => (quiet_receiveTail h pid pkt value).liftWGObserver)
   · exact AuthenticatedEffects.GroOccurrence.receive_preserves (Base record decode) (Safe record decode)

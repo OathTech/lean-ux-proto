@@ -10,21 +10,24 @@ set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
 theorem poll_source
+    (release : Option PeerId → PrefixM Event Unit)
     (counter : SkbId → RxPacket → PrefixM Event Bool)
     (consumer : PeerId → RxPacket → Endpoint → PrefixM Event (Option (List UInt8)))
     (receive : GroOccurrence.Buffer → GroOccurrence.Entry → PrefixM Event GroOccurrence.Buffer)
     (flush : GroOccurrence.Buffer → PrefixM Event Unit)
+    (hl : ∀ peer, ProductSafe (release peer))
     (hc : ∀ skb pkt, ProductSafe (counter skb pkt))
     (hu : ∀ pid pkt ep, ProductSafe (consumer pid pkt ep))
     (hr : ∀ gro entry, ProductSafe (receive gro entry))
     (hf : ∀ gro, ProductSafe (flush gro))
     (pid : PeerId) (budget : Nat) :
-    ProductSafe (GroOccurrencePoll.sourceWith (fun action => liftWGObserver (liftWGPrefix action))
+    ProductSafe (RetirementSecurity.NestedPeerRelease.pollWith (fun action => liftWGObserver (liftWGPrefix action)) release
       (CausalSources.candidateEnter Event.scope) (CausalScope.leavePrefix Event.scope)
       counter consumer receive flush pid budget) := by
-  unfold GroOccurrencePoll.sourceWith
+  unfold RetirementSecurity.NestedPeerRelease.pollWith
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
+    | exact hl _
     | exact hc _ _
     | exact hu _ _ _
     | exact hr _ _
@@ -43,8 +46,9 @@ private theorem batch_stack (entries : List GroOccurrence.Entry) :
       (fun _ => ih)
 
 theorem native_poll (pid : PeerId) (budget : Nat) : ProductSafe (Driver.nativePollObserved hooks pid budget) := by
-  unfold Driver.nativePollObserved GroOccurrencePoll.observed
+  unfold Driver.nativePollObserved
   apply poll_source
+  · intro peer; exact product_state _ (peer_release peer)
   · intro skb packet; exact old_product _
   · intro peer packet endpoint; exact product_state _ (consume peer packet endpoint)
   · intro gro entry frames

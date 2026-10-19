@@ -84,6 +84,7 @@ theorem quiet : QuietHooksSafe Good Journal.hooks where
   keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   fixtureEnter := fun _ => Driver.History.state_pure _
   fixtureLeave := fun _ => Driver.History.state_pure _
+  stagedRestore := fun _ _ => TransmitSecurity.Driver.History.state_lift _
   stagedPurge := fun _ => Driver.History.state_lift _
   peerRelease := fun _ => Driver.History.state_lift _
   armTimer := fun _ _ _ _ => Driver.History.state_lift _

@@ -45,7 +45,7 @@ theorem poll (pid : PeerId) (budget : Nat) (callback : List (List UInt8) → Pre
     | replay_entry_product_step
 
 theorem native_poll (pid : PeerId) (budget : Nat) : ProductSafe (nativePollObserved hooks pid budget) := by
-  rw [nativePoll_neutral hooks rfl]
+  rw [nativePoll_neutral hooks rfl rfl]
   exact poll pid budget _ flush
 
 private theorem pending : SameSnapshot RxNapi.pendingSource := by

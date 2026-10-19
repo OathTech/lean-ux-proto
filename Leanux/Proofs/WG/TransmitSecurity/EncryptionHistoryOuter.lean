@@ -154,11 +154,11 @@ theorem retained (call : Syscall)
   · by_cases down : call = .wgDown
     · subst call
       unfold retainedObserved
-      rw [envDown_lift Journal.hooks rfl rfl,socketCall_lift]
+      rw [envDown_lift Journal.hooks rfl rfl rfl,socketCall_lift]
       exact product_lift _ (fun past => product_join
         (EncryptionPast.OuterNative.quiet_dispatch .wgDown past kept up)
         (OccurrenceSyscall.dispatch_native .wgDown))
-    · simp only [retainedObserved]
+    · simp only [retainedObserved,Driver.dumpDispatch_lift Journal.hooks rfl]
       exact product_lift _ (fun past => product_join
         (EncryptionPast.OuterNative.quiet_dispatch call past kept up)
         (OccurrenceSyscall.dispatch_native call))

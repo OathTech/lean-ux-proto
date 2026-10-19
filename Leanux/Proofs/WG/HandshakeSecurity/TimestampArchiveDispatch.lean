@@ -13,9 +13,9 @@ theorem retained_dispatch (call : Syscall)
       cases call <;> unfold Driver.retainedObserved
       case wgUp => exact False.elim (up rfl)
       case wgDown =>
-        rw [Driver.envDown_lift TimestampDriver.hooks rfl rfl,Driver.socketCall_lift]
+        rw [Driver.envDown_lift TimestampDriver.hooks rfl rfl rfl,Driver.socketCall_lift]
         rfl
-      all_goals rfl
+      all_goals exact Driver.dumpDispatch_lift TimestampDriver.hooks rfl _
     rw [native]
     exact product_lift _ (fun h => Frames.quiet_dispatch call h retained up)
 

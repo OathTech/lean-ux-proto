@@ -62,7 +62,7 @@ theorem stack_flush (packets : List (List UInt8)) :
 
 theorem native_poll (pid : PeerId) (budget : Nat) :
     ProductSafe (Driver.nativePollObserved Journal.hooks pid budget) := by
-  rw [Driver.nativePoll_neutral _ rfl]
+  rw [Driver.nativePoll_neutral _ rfl rfl]
   exact poll pid budget _ stack_flush
 
 end Leanux.Proofs.WG.TransmitSecurity.PacketOrigins

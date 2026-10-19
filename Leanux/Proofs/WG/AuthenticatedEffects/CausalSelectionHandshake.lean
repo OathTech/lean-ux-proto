@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionCallbacks
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionDisposalFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalSelectionQuiet
 
@@ -27,12 +28,18 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
+            (CausalJournal.receiveOps session keepalive mac)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
-    StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
+    CausalJournal.receiveOps,StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.admitInitiationWith
+       exact callback_state (CallbackFrames.initiation_quiet protected? (fun _ => rfl) (fun _ => rfl) _))
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.admitResponseWith
+       exact callback_state (CallbackFrames.response_quiet protected? (fun _ => rfl) (fun _ => rfl) _))
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.cookieObserved
+       exact callback_state (CallbackFrames.cookie_quiet protected? (fun _ => rfl) (fun _ => rfl) _))
     | (driver_history_head StagedDisposal.Decoration.release; exact disposal_history _)
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
     | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
@@ -51,14 +58,21 @@ private theorem receive
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, Driver.StateHistorySafe Safe (session pid))
     (hk : ∀ pid, Driver.StateHistorySafe Safe (keepalive pid)) (msg : Key) (src : SkbSource) :
-    Driver.StateHistorySafe Safe (CookieConsumption.receiveWith (CookieConsumption.observed Event.cookieConsumed)
+    Driver.StateHistorySafe Safe (CookieConsumption.receiveWith (RetirementSecurity.NestedPeerRelease.cookieObserved
+      (RetirementSecurity.NestedPeerRelease.observedOps Event.stagedDisposal stagedDisposal?) Event.cookieConsumed)
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
+            (CausalJournal.receiveOps session keepalive mac)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
-  unfold CookieConsumption.receiveWith CookieConsumption.observed
+  unfold CookieConsumption.receiveWith
   repeat' first
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.admitInitiationWith
+       exact callback_state (CallbackFrames.initiation_quiet protected? (fun _ => rfl) (fun _ => rfl) _))
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.admitResponseWith
+       exact callback_state (CallbackFrames.response_quiet protected? (fun _ => rfl) (fun _ => rfl) _))
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.cookieObserved
+       exact callback_state (CallbackFrames.cookie_quiet protected? (fun _ => rfl) (fun _ => rfl) _))
     | (driver_history_head StagedDisposal.Decoration.release; exact disposal_history _)
     | (driver_history_head receiptWGObserved; refine receipt_quiet _ ?_ _ (fun _ => True.intro))
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
@@ -74,6 +88,12 @@ theorem handshake
     Driver.StateHistorySafe Safe (CausalJournal.handshake session keepalive) := by
   unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.admitInitiationWith
+       exact callback_state (CallbackFrames.initiation_quiet protected? (fun _ => rfl) (fun _ => rfl) _))
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.admitResponseWith
+       exact callback_state (CallbackFrames.response_quiet protected? (fun _ => rfl) (fun _ => rfl) _))
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.cookieObserved
+       exact callback_state (CallbackFrames.cookie_quiet protected? (fun _ => rfl) (fun _ => rfl) _))
     | (driver_history_head StagedDisposal.Decoration.release; exact disposal_history _)
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
     | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)

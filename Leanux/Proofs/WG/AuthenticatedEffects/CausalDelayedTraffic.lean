@@ -7,8 +7,11 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Delayed
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 open Lifetimes Queues TransmitSecurity.Driver
 theorem ingress (msg : List UInt8) (src : SkbSource) :
-    ProductSafe (receiveEntryObserved msg src) := by
-  simpa only [receiveEntryObserved,liftWGObserver_lift] using product_state (udp_receive msg src)
+    ProductSafe (receiveEntryObserved hooks msg src) := by
+  apply product_state
+  exact observed_native _ _ (CallbackFrames.receive_erases msg src)
+    (CallbackFrames.receive_quiet (fun _ : Event => (none : Option Empty)) (fun _ => rfl) msg src).1
+    (udp_receive msg src)
 
 theorem multicast (family addr : Nat) :
     ProductSafe (multicastObserved family addr) := by

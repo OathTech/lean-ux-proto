@@ -209,8 +209,8 @@ so deletion cannot hide an obligation by falsifying a residency premise.
 The local ledger and new source factors are included in the current aggregate
 build. The factors expose staging take/restore, TX publication and nested
 consumer/RX/dump repayments. Allocation is total from a resident device;
-there is no fictitious partial-allocation event. The shared final driver still
-uses the preceding source version pending the coordinated new-cut integration.
+there is no fictitious partial-allocation event. The new cuts and their carrier adapters are integrated into the shared final
+driver and pass the aggregate gate and fresh kernel replay.
 T2 remains open: selected and allocated tickets need native backing, terminal
 classification and stopped-frontier transport through the initialized Runner.
 The algebra alone is not a conservation claim.
@@ -225,17 +225,33 @@ from the protected timer/work-event predicate. The package assumes no entry
 funding, replay coherence, causal well-formedness or C2 hypothesis. The aggregate
 gate and fresh kernel replay pass; T3 is complete with the stated boundaries.
 
+The source-44 integration exposes actual staging take/restore, TX publication,
+terminal disposal and nested reference release in the final Driver. Exact
+native and old-journal projections preserve the completed outcomes. Local
+allocation assignment joins selected tickets to the actual distinct allocator
+IDs, preserves older pending cells and retains all terminal entries. Native
+admission appends fresh source-position/ordinal tickets; refusal and overflow
+retain their exact invocation-level counter charges.
+
+A stopped take/borrow result retains the completed take receipt and its exact
+selected tickets even when the outer selection receipt never appears. This
+closes that local stopped cut. Normal restoration composition still has a
+trivial error postcondition and is not a proof of general stopped-frontier
+conservation. The first-terminal source facts and local allocation backing
+remain conditional on explicit incoming carriers. T2 still needs their
+transport through the initialized Runner and the complete fixed-ticket
+pending/terminal partition.
+
 ## Validation
 
-The current T3 outcome and local fixed-ledger disposal tranche passes the
-3039-job aggregate build and 1523-declaration gate across thirteen roots, with
-only `propext`, `Classical.choice` and `Quot.sound`. All twelve counterexample
-recipes and fresh root kernel replay pass. The model build passes 130 jobs;
-the unit suite passes 131 tests (one configured-kernel skip, 22.483 seconds).
-All 2993 frozen proof-source hashes match; all 916 inherited proof modules,
-main at `783510e8` and mirror `77c9b555` are unchanged. The preceding validated
-checkpoint is `ccbd8eba`; its smaller declaration set does not replace this run.
-Owned source pins are T3 `f7370e9d`, T4 `a5888523` and T6 `dcd4acf2`.
+The current source-44 checkpoint passes the 3107-job aggregate build and
+1523-declaration gate across thirteen roots, with only `propext`,
+`Classical.choice` and `Quot.sound`. All twelve counterexample recipes and
+fresh root kernel replay pass. The default model build passes 66 jobs; the unit
+suite passes 131 tests (one configured-kernel skip, 22.756 seconds). All 3061
+frozen proof-source hashes match; all 916 inherited proof modules, main at
+`783510e8` and mirror `77c9b555` are unchanged. The preceding validated
+checkpoint is `3db44e32`.
 
 Reproduce the proof and model checks from the campaign worktree:
 
@@ -243,7 +259,7 @@ Reproduce the proof and model checks from the campaign worktree:
 capped -- scripts/in-bundle scripts/proof-gate
 capped -- scripts/in-bundle scripts/proof-counterexamples
 capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
-capped -- scripts/in-bundle lake build leanux-model
+capped -- scripts/in-bundle lake build
 capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation evaluator.test_model_replay harness.test_trace harness.test_wg harness.test_linux
 ```
 
@@ -258,7 +274,10 @@ exceeded their caps; the fresh-root command above passes. Ordinary local
 elaboration, frame and projection failures were repaired without changing the
 mirror or weakening statements. In this tranche, the first gate stopped on a
 nested terminal namespace; flattening the exports and resolving their names
-repairs it, and the complete gate passes. New source files have no warnings.
+repairs it, and the complete gate passes. Source-44 aggregate attempts also failed on downstream callback adapters,
+missing imports and exhaustive event cases. Those failures were repaired before
+the successful complete rebuild; scoped passes did not replace them. New source
+files have no warnings.
 
 The earlier unchecked tactic-array panic and later SIGBUS were preserved in
 snapshot refs before repair. The SIGBUS followed replacement of a dependency
@@ -266,6 +285,18 @@ artifact while Lean had it mapped; all dependency synchronization now occurs
 outside active builds. These were infrastructure/development failures, not
 counterexamples to the security statements. Their diagnoses and validation
 are retained in the branch history.
+
+During this later source integration a worker mistakenly invoked
+`lake env leanchecker --help` without `capped`. The tool treated it as work,
+grew to about 81 GB and reported a `CausalStackHistory` checking problem.
+The verified process was terminated (exit 143); this is a failed invocation,
+not validation evidence. All twelve worktrees were audited and the six dirty
+trees, including untracked files, preserved under
+`refs/snapshots/c3-checker-help-interruption-20261019T100705Z/` before further
+edits or builds. Branches and normal indexes were unchanged. The current source passes a coherent rebuild and the documented capped
+fresh-root replay; no checker help/flag probes will be used. The dependency-output
+audit also identified one child's live links to mutable parent artifacts; those
+links were replaced and its dependency closure rebuilt with private output files.
 
 The branch is preserved without merging or pushing. Completed checkpoint
 history and its individual validation counts remain in the branch commits.

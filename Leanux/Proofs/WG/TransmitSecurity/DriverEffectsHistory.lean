@@ -111,6 +111,43 @@ theorem effects_noKey_history (h : EffectsHistory Safe ops) (pid : PeerId) (pack
     | (driver_history_head queuedWith; exact effects_queued_history h _ _)
     | effect_history_step h
 
+theorem disposal_restore_history (h : EffectsHistory Safe ops)
+    (restore : PeerId → List Packet → WGPrefix E Unit)
+    (release : Option PeerId → WGPrefix E Unit)
+    (ht : ∀ pid packets, StateHistorySafe Safe (restore pid packets))
+    (hr : ∀ peer, StateHistorySafe Safe (release peer))
+    (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) (invalid : Bool) :
+    StateHistorySafe Safe (HandshakeSecurity.StagedConservation.Restore.noKeyWith ops restore
+      (HandshakeSecurity.StagedDisposal.Effects.queuedWith ops release) pid packets keypair invalid) := by
+  unfold HandshakeSecurity.StagedConservation.Restore.noKeyWith
+  repeat' first
+    | exact ht _ _
+    | (driver_history_head HandshakeSecurity.StagedDisposal.Effects.queuedWith;
+       exact disposal_queued_history h release hr _ _)
+    | effect_history_step h
+
+theorem disposal_freshReceive_history (h : EffectsHistory Safe ops)
+    (release : Option PeerId → WGPrefix E Unit)
+    (hr : ∀ peer, StateHistorySafe Safe (release peer)) (pid : PeerId) :
+    StateHistorySafe Safe (HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith ops release pid) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith
+  repeat' first
+    | (driver_history_head HandshakeSecurity.StagedDisposal.Effects.queuedWith;
+       exact disposal_queued_history h release hr _ _)
+    | effect_history_step h
+
+theorem disposal_prepare_history (h : EffectsHistory Safe ops)
+    (release : Option PeerId → WGPrefix E Unit)
+    (hr : ∀ peer, StateHistorySafe Safe (release peer)) (pid : PeerId) (pkt : RxPacket) :
+    StateHistorySafe Safe (HandshakeSecurity.StagedDisposal.PacketSource.prepareWith ops release pid pkt) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.prepareWith
+  repeat' first
+    | (driver_history_head HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith;
+       exact disposal_freshReceive_history h release hr _)
+    | (driver_history_head traversalWith; exact effects_traversal_history h _)
+    | (driver_history_head dataReceivedWith; exact effects_dataReceived_history h _)
+    | effect_history_step h
+
 theorem effects_prepare_history (h : EffectsHistory Safe ops) (pid : PeerId) (pkt : RxPacket) :
     StateHistorySafe Safe (PacketEffects.prepareWith ops pid pkt) := by
   unfold PacketEffects.prepareWith

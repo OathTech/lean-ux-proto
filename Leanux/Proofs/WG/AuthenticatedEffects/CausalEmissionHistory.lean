@@ -1,4 +1,5 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsSockets
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalSource
+import Leanux.Proofs.Logged.PrefixState
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSocketCut
 
 /-! Egress coverage is distinct from receipt validity and authorization.

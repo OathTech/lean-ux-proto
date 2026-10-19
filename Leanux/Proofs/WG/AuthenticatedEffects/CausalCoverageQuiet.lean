@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageScopes
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageQuietCallbacks
 
 /-! Unscoped observers are admitted only when their actual appended event range
 contains no delayed effect, allocation or socket receipt. This cannot authorize arbitrary old
@@ -72,9 +73,6 @@ theorem poll : ProductAt frames hooks.poll := by
       (focusPrefix_other Journal.Event.ring Journal.ring? effect? (fun _ => rfl) _) (fun _ => rfl)
 
 theorem encrypt (item : Option (List SkbId)) : ProductAt frames (hooks.encrypt item) := by
-  apply old_product_quiet
-  · exact Appends.receiptObserved (Appends.focus _ _ _)
-  · exact HistoryFrame.receiptObserved
-      (focusPrefix_other Journal.Event.encrypted Journal.encryption? effect? (fun _ => rfl) _) (fun _ => rfl)
+  exact quiet_encrypt item
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Coverage

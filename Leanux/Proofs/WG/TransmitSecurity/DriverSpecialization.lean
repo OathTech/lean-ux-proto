@@ -31,7 +31,7 @@ private theorem lift_ite (p : Prop) [Decidable p] (a b : WG.M α) :
 theorem nonce_staging_specialization (pid : PeerId) :
     stagingObserved nonceHooks pid = Nonce.stagingObserved pid := by
   unfold stagingObserved Nonce.stagingObserved
-  simp only [noKey_lift nonceHooks rfl]
+  simp only [restore_noKey_lift nonceHooks rfl rfl rfl]
   dsimp only [nonceHooks]
   unfold HandshakeSecurity.Responder.selectionPrefix
   simp only [lift_bind,lift_pure,lift_ite,bind_assoc,Queues.RxCredits.bind_if_source,pure_bind]
@@ -86,7 +86,7 @@ theorem nonce_handshakeObserved_eq : handshakeObserved nonceHooks = Nonce.Handsh
 
 theorem nonce_receiveTailObserved_eq : receiveTailObserved nonceHooks = Nonce.receiveTailObserved := by
   unfold receiveTailObserved Nonce.receiveTailObserved
-  simp only [nonce_staging_function,prepare_lift nonceHooks rfl]
+  simp only [nonce_staging_function,nested_prepare_lift nonceHooks rfl rfl,rxFinish_lift nonceHooks rfl]
   all_goals rfl
 
 theorem nonce_consumeObserved_eq : consumeObserved nonceHooks = Nonce.consumeObserved := by
@@ -116,7 +116,7 @@ theorem nonce_stackFlushObserved_eq : stackFlushObserved nonceHooks = Nonce.stac
 
 theorem nonce_nativePollObserved_eq : nativePollObserved nonceHooks = Nonce.nativePollObserved := by
   funext pid budget
-  rw [nativePoll_neutral _ rfl]
+  rw [nativePoll_neutral _ rfl rfl]
   unfold Nonce.nativePollObserved
   simp only [nonce_pollObserved_eq, nonce_stackFlushObserved_eq]
   all_goals rfl
@@ -213,12 +213,12 @@ private theorem timer_finished_neutral (token : Nat) :
 
 theorem nonce_timersObserved_eq : timersObserved nonceHooks = Nonce.timersObserved := by
   unfold timersObserved Nonce.timersObserved
-  simp only [nonce_timerObserved_eq, nonce_cryptObserved_eq, nonce_timerSectionObserved_eq,timer_selected_neutral,timer_finished_neutral,pure_bind,sendWorker_lift nonceHooks rfl]
+  simp only [nonce_timerObserved_eq, nonce_cryptObserved_eq, nonce_timerSectionObserved_eq,timer_selected_neutral,timer_finished_neutral,clearWorker_lift nonceHooks rfl,pure_bind,sendWorker_lift nonceHooks rfl]
   all_goals rfl
 
 theorem nonce_placeholderTimersObserved_eq : placeholderTimersObserved nonceHooks = Nonce.placeholderTimersObserved := by
   unfold placeholderTimersObserved Nonce.placeholderTimersObserved
-  simp only [nonce_timerObserved_eq, nonce_cryptObserved_eq, nonce_sendWorkersObserved_eq, nonce_timerSectionObserved_eq,timer_selected_neutral,timer_finished_neutral,pure_bind]
+  simp only [nonce_timerObserved_eq, nonce_cryptObserved_eq, nonce_sendWorkersObserved_eq, nonce_timerSectionObserved_eq,timer_selected_neutral,timer_finished_neutral,clearWorker_lift nonceHooks rfl,pure_bind]
   all_goals rfl
 
 theorem nonce_idleTimersObserved_eq : idleTimersObserved nonceHooks = Nonce.idleTimersObserved := by
@@ -231,9 +231,10 @@ theorem nonce_afterAdvanceObserved_eq : afterAdvanceObserved nonceHooks = Nonce.
   simp only [nonce_timersObserved_eq, nonce_placeholderTimersObserved_eq]
   all_goals rfl
 
-theorem nonce_receiveEntryObserved_eq : (@receiveEntryObserved Nonce.Allocation) = Nonce.receiveEntryObserved := by
-  unfold receiveEntryObserved Nonce.receiveEntryObserved
-  all_goals rfl
+theorem nonce_receiveEntryObserved_eq : receiveEntryObserved nonceHooks = Nonce.receiveEntryObserved := by
+  funext msg src
+  rw [receiveEntry_lift nonceHooks rfl]
+  rfl
 
 theorem nonce_multicastObserved_eq : (@multicastObserved Nonce.Allocation) = Nonce.multicastObserved := by
   unfold multicastObserved Nonce.multicastObserved
@@ -345,8 +346,9 @@ theorem nonce_retainedObserved_eq : retainedObserved nonceHooks = Nonce.retained
   cases call <;> unfold retainedObserved Nonce.retainedObserved
   case wgUp => rw [nonce_envUpObserved_eq]
   case wgDown =>
-    rw [envDown_lift nonceHooks rfl rfl,socketCall_lift]
+    rw [envDown_lift nonceHooks rfl rfl rfl,socketCall_lift]
     rfl
+  all_goals rw [dumpDispatch_lift nonceHooks rfl]
   all_goals rfl
 
 theorem nonce_observeObserved_eq : observeObserved nonceHooks = Nonce.observeObserved := by

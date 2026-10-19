@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.StagedRichSourceOrigins
+import Leanux.Proofs.WG.TransmitSecurity.StagedRichNoKey
 import Leanux.Proofs.WG.TransmitSecurity.StagingProcessed
 
 /-! The complete shared staging source preserves occurrence origins. Early
@@ -19,7 +19,7 @@ private def Done (acc : Option Unit × List DataPacket) (h : List Event)
 
 theorem staging_observed (pid : PeerId) : StateSafe (Driver.stagingObserved hooks pid) := by
   unfold Driver.stagingObserved
-  apply StatePrefixEnsures.bind (selection_observed pid)
+  apply StatePrefixEnsures.bind (rich_selection pid)
   intro chosen
   cases chosen with
   | none =>
@@ -30,7 +30,7 @@ theorem staging_observed (pid : PeerId) : StateSafe (Driver.stagingObserved hook
     · apply StatePrefixEnsures.bind (held_ambient (AmbientM.branch .stagedNoKeypair kp.isNone))
       intro missing
       split
-      · exact no_key_observed pid p kp false
+      · exact rich_no_key pid p kp false
       · cases kp with
         | none => exact forget_held (held_ambient (AmbientM.invariant "unreachable"))
         | some id =>
@@ -39,11 +39,11 @@ theorem staging_observed (pid : PeerId) : StateSafe (Driver.stagingObserved hook
           apply StatePrefixEnsures.bind (held_ambient (AmbientM.branch .stagedKeyInvalid !key.sending.isValid))
           intro invalid
           split
-          · exact no_key_observed pid p (some id) false
+          · exact rich_no_key pid p (some id) false
           · apply StatePrefixEnsures.bind (held_world _ (branchExpired_sameWGWorld _ _ _ _))
             intro expired
             split
-            · exact no_key_observed pid p (some id) true
+            · exact rich_no_key pid p (some id) true
             · apply StatePrefixEnsures.bind
               · apply forIn_processed p.staged [] (none,[]) _ (fun _ _ => Held pid p) Done Safe
                   (fun _ _ _ _ _ before => before.1.2) (fun _ _ _ _ before => before.1.2)
@@ -59,7 +59,7 @@ theorem staging_observed (pid : PeerId) : StateSafe (Driver.stagingObserved hook
                 intro rejected
                 cases rejected with
                 | true =>
-                  apply StatePrefixEnsures.bind (no_key_observed pid p (some id) true)
+                  apply StatePrefixEnsures.bind (rich_no_key pid p (some id) true)
                   intro out
                   exact StatePrefixEnsures.pure _ (fun _ _ _ before => before.2)
                     (fun _ _ _ before => ⟨before,rfl⟩)
@@ -81,7 +81,7 @@ theorem staging_observed (pid : PeerId) : StateSafe (Driver.stagingObserved hook
                     apply StatePrefixEnsures.bind (held_peer_get owner)
                     intro _
                     exact (StatePrefixEnsures.bind (allocate_observed packets)
-                      (fun items => create_observed pid items)).consequence
+                      (fun items => rich_create pid items)).consequence
                         (fun _ _ _ before => before.1) (fun _ _ _ _ after => after)
                   · intro h w a before
                     rcases before with done | held

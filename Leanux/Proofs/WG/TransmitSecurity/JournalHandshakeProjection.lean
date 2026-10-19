@@ -62,6 +62,7 @@ theorem transmit (pid : PeerId) :
     (fun e => by cases e <;> rfl) (Completion.step_erases pid)
 
 theorem hooks : Driver.HooksProjects handshake? Journal.hooks HandshakeDriver.hooks where
+  stagedRestore := fun _ _ => Driver.Projection.state_lift handshake? _
   stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift handshake? _
   peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift handshake? _
   deliver := projectsPrefix_lift handshake? _

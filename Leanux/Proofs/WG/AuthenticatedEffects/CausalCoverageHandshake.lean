@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageEffects
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptNestedFrames
 
 /-! The actual authenticated handshake callbacks establish their own scopes
 before any delayed effect or staging. Native refusal/consumer observations do
@@ -37,12 +38,16 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
+            (CausalJournal.receiveOps session keepalive mac)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
+    CausalJournal.receiveOps,
     StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
+    | (coverage_head RetirementSecurity.NestedPeerRelease.admitInitiationWith; exact quiet_state (CallbackFrames.initiation_quiet observed? (fun _ => rfl) (fun _ => rfl) _))
+    | (coverage_head RetirementSecurity.NestedPeerRelease.admitResponseWith; exact quiet_state (CallbackFrames.response_quiet observed? (fun _ => rfl) (fun _ => rfl) _))
+    | (coverage_head RetirementSecurity.NestedPeerRelease.cookieObserved; exact quiet_state (CallbackFrames.cookie_quiet observed? (fun _ => rfl) (fun _ => rfl) _))
     | (coverage_head StagedDisposal.Decoration.release; exact state_focus Event.stagedDisposal stagedDisposal? (fun _ => rfl) (fun _ h => h.elim) _)
     | (coverage_head ProtocolSocket.observed; exact protocol_send _ _ (by assumption))
     | (coverage_head CookieSocket.observed; exact cookie_send _ _ _)
@@ -61,14 +66,17 @@ private theorem after_mac
 private theorem receive
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, StateGuarded (session pid)) (hk : ∀ pid, StateGuarded (keepalive pid))
-    (msg : Key) (src : SkbSource) : StateAt frames (CookieConsumption.receiveWith (CookieConsumption.observed Event.cookieConsumed)
+    (msg : Key) (src : SkbSource) : StateAt frames (CookieConsumption.receiveWith (RetirementSecurity.NestedPeerRelease.cookieObserved CallbackFrames.nested Event.cookieConsumed)
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
+            (CausalJournal.receiveOps session keepalive mac)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
-  unfold CookieConsumption.receiveWith CookieConsumption.observed
+  unfold CookieConsumption.receiveWith
   repeat' first
+    | (coverage_head RetirementSecurity.NestedPeerRelease.admitInitiationWith; exact quiet_state (CallbackFrames.initiation_quiet observed? (fun _ => rfl) (fun _ => rfl) _))
+    | (coverage_head RetirementSecurity.NestedPeerRelease.admitResponseWith; exact quiet_state (CallbackFrames.response_quiet observed? (fun _ => rfl) (fun _ => rfl) _))
+    | (coverage_head RetirementSecurity.NestedPeerRelease.cookieObserved; exact quiet_state (CallbackFrames.cookie_quiet observed? (fun _ => rfl) (fun _ => rfl) _))
     | (coverage_head StagedDisposal.Decoration.release; exact state_focus Event.stagedDisposal stagedDisposal? (fun _ => rfl) (fun _ h => h.elim) _)
     | (coverage_head receiptWGObserved; refine state_receipt _ ?_ _ (fun _ => rfl) (fun _ impossible => impossible.elim))
     | (coverage_head ProtocolSocket.observed; exact protocol_send _ _ (by assumption))
@@ -83,6 +91,9 @@ theorem handshake
     StateAt frames (CausalJournal.handshake session keepalive) := by
   unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
+    | (coverage_head RetirementSecurity.NestedPeerRelease.admitInitiationWith; exact quiet_state (CallbackFrames.initiation_quiet observed? (fun _ => rfl) (fun _ => rfl) _))
+    | (coverage_head RetirementSecurity.NestedPeerRelease.admitResponseWith; exact quiet_state (CallbackFrames.response_quiet observed? (fun _ => rfl) (fun _ => rfl) _))
+    | (coverage_head RetirementSecurity.NestedPeerRelease.cookieObserved; exact quiet_state (CallbackFrames.cookie_quiet observed? (fun _ => rfl) (fun _ => rfl) _))
     | (coverage_head StagedDisposal.Decoration.release; exact state_focus Event.stagedDisposal stagedDisposal? (fun _ => rfl) (fun _ h => h.elim) _)
     | (coverage_head ProtocolSocket.observed; exact protocol_send _ _ (by assumption))
     | (coverage_head CookieSocket.observed; exact cookie_send _ _ _)

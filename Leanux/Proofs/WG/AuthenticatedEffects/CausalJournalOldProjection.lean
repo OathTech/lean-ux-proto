@@ -14,6 +14,37 @@ private theorem product_projects (body : PrefixM Journal.Event α) (appends : Ap
     ProjectsPrefix old? id (product body) body :=
   appends.project_focus Event.old old? (fun _ => rfl)
 
+private theorem receipt_matching (ρ : E → Option F) (g : PrefixM E α) (t : PrefixM F α)
+    (record : RunWitness α → E) (target : RunWitness α → F)
+    (projects : ProjectsPrefix ρ id g t) (same : ∀ r, ρ (record r) = some (target r)) :
+    ProjectsPrefix ρ id (receiptObserved g record) (receiptObserved t target) := by
+  intro w h
+  have base := projects w h
+  change runPrefix t w (h.filterMap ρ) = _ at base
+  simp only [id_eq,Prod.eta] at base
+  change runPrefix (receiptObserved t target) w (h.filterMap ρ) = _
+  rw [runPrefix_receiptObserved,base,runPrefix_receiptObserved]
+  cases run : runPrefix g w h with
+  | mk result hist =>
+    cases result with
+    | error stop => rfl
+    | ok out => rcases out with ⟨x,v⟩; simp [List.filterMap_append,same,Except.map]
+
+private theorem focus_native_receipt (record : E → F) (decode : F → Option E)
+    (action : WG.M α) (make : WGRunWitness α → E) :
+    focusStatePrefix record decode (receiptWGObserved (liftWGPrefix action) make) =
+      receiptWGObserved (liftWGPrefix action) (record ∘ make) := by
+  funext w b h
+  change ((runWGPrefix (receiptWGObserved (liftWGPrefix action) make) w b (h.filterMap decode)).1,
+    h ++ ((runWGPrefix (receiptWGObserved (liftWGPrefix action) make) w b (h.filterMap decode)).2.drop
+      (h.filterMap decode).length).map record) = _
+  rw [runWGPrefix_receiptWGObserved,runWGPrefix_lift]
+  change _ = runWGPrefix (receiptWGObserved (liftWGPrefix action) (record ∘ make)) w b h
+  rw [runWGPrefix_receiptWGObserved,runWGPrefix_lift]
+  cases run : (action.run w).run b with
+  | error stop => simp
+  | ok out => rcases out with ⟨⟨x,v⟩,c⟩; simp
+
 theorem effects_projects : TimerEffects.Ops.Projects old? effects TimerEffects.lifted :=
   CausalEffects.ops_projects scope? Event.armed Event.queued old? (fun _ => rfl) (fun _ => rfl)
 
@@ -28,7 +59,13 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
   rw [HandshakeWorker.observed_factor]
   rw [← CookieConsumption.worker_native]
   apply CookieConsumption.worker_projects old? _ _ _ _
-  · intro msg; exact CookieConsumption.observed_projects old? Event.cookieConsumed (fun _ => rfl) msg
+  · intro msg
+    unfold RetirementSecurity.NestedPeerRelease.cookieObserved
+    apply HandshakeSecurity.Exchange.receipt_ignored old? _ _ _ ?_ (fun _ => rfl)
+    simpa only [RetirementSecurity.NestedPeerRelease.cookie_lifted,
+      RetirementSecurity.NestedPeerRelease.cookie_native] using
+      RetirementSecurity.NestedPeerRelease.cookie_projects old?
+        (RetirementSecurity.NestedPeerRelease.observedOps_projects Event.stagedDisposal stagedDisposal? old? (fun _ => rfl)) msg
   intro mac
   apply HandshakeEffects.scopeOps_projects old? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
   apply HandshakeSecurity.ExchangeJoint.receive_ignored old? Event.exchange (fun _ => rfl)
@@ -37,8 +74,17 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
     sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
   have repayment := HandshakeSecurity.StagedDisposal.Decoration.receive_projects Event.stagedDisposal
     stagedDisposal? old? (fun _ => rfl) base (fun _ => rfl)
+  have accepted : HandshakeWorker.OpsProjects old? (receiveOps sg kg mac)
+      (HandshakeWorker.observedOps Journal.Event.handshake Journal.handshake? st kt mac) :=
+    {repayment with
+      initiation := fun msg => RetirementSecurity.NestedPeerRelease.initiation_focused_old
+        Event.stagedDisposal stagedDisposal? old? (fun _ => rfl) _
+        Journal.Event.handshake Journal.handshake? (fun _ => rfl) {mac with input := msg}
+      response := fun msg => RetirementSecurity.NestedPeerRelease.response_focused_old
+        Event.stagedDisposal stagedDisposal? old? (fun _ => rfl) _
+        Journal.Event.handshake Journal.handshake? (fun _ => rfl) {mac with input := msg}}
   have projected := HandshakeEffects.withEffects_projects old? (Event.old ∘ Journal.Event.handshake)
-    Journal.Event.handshake (fun _ => rfl) _ _ effects TimerEffects.lifted repayment effects_projects
+    Journal.Event.handshake (fun _ => rfl) _ _ effects TimerEffects.lifted accepted effects_projects
   rwa [HandshakeEffects.withEffects_neutral] at projected
 
 theorem flushed_projects (pid : PeerId) :
@@ -50,19 +96,85 @@ theorem flushed_projects (pid : PeerId) :
         (ProtocolSender.send_projects old? Event.protocolSocket scope? (fun _ => rfl))
         (fun _ => rfl))) effects_projects pid
 
-theorem transmit_projects (pid : PeerId) :
-    ProjectsPrefix old? id (transmit pid) (Journal.transmit pid) := by
+private theorem dispose_focused (pid : PeerId) (item : List SkbId) (key : KeypairId) :
+    (CompletionEffects.focused Journal.completionEvent Journal.completion?).dispose pid item key =
+      focusPrefix Journal.Event.disposition Journal.disposition? (Queues.TxDisposition.dispose pid item key) := by
+  simp only [CompletionEffects.focused,CompletionEffects.native,CompletionEffects.focus_composed]
+  have decode : (fun e => (Journal.completion? e).bind Completion.disposition?) = Journal.disposition? := by
+    funext e; cases e <;> rfl
+  change focusPrefix Journal.Event.disposition _ _ = _
+  rw [decode]
+
+theorem completionLifetime_projects : LifetimeEffects.Ops.Projects old? completionLifetime
+    (CompletionEffects.lifetimeBase Journal.completionEvent Journal.completion?) :=
+  HandshakeSecurity.StagedDisposal.LifetimeSource.decorate_projects old?
+    (Event.old ∘ Journal.completionEvent) completion? Journal.completionEvent Journal.completion?
+    (fun _ => rfl) (fun _ => rfl) (fun event => by cases event <;> rfl)
+    scope? Event.armed Event.queued (fun _ => rfl) (fun _ => rfl) Event.stagedDisposal (fun _ => rfl)
+
+theorem completionOps_projects : CompletionEffects.Ops.Projects old? completionOps
+    (CompletionEffects.focused Journal.completionEvent Journal.completion?) := by
   have original := CompletionEffects.observed_matching old?
     (Event.old ∘ Journal.completionEvent) completion? Journal.completionEvent Journal.completion?
     (fun _ => rfl) (fun _ => rfl) (fun event => by cases event <;> rfl)
     scope? Event.armed Event.queued (fun _ => rfl) (fun _ => rfl)
+  have sent := HandshakeSecurity.StagedConservation.SendResult.decorate_projects Event.sendResult old?
+    (fun _ => rfl) original
+  refine {sent with dispose := ?_, fresh := ?_}
+  · intro pid item key
+    rw [dispose_focused]
+    exact HandshakeSecurity.StagedDisposal.TxSource.dispose_observed_projects old? txEvent txEvent?
+      Journal.Event.disposition Journal.disposition? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
+      Event.stagedDisposal (fun _ => rfl) pid item key
+  · intro pid
+    change ProjectsPrefix old? id (liftWGObserver (LifetimeEffects.freshWith completionLifetime pid))
+      ((CompletionEffects.focused Journal.completionEvent Journal.completion?).fresh pid)
+    have projected := (LifetimeEffects.fresh_projects old? completionLifetime_projects pid).liftWGObserver old? id
+    simpa only [HandshakeSecurity.StagedDisposal.LifetimeSource.fresh_target
+      Journal.completionEvent Journal.completion? (fun event => by cases event <;> rfl)] using projected
+
+theorem transmit_projects (pid : PeerId) :
+    ProjectsPrefix old? id (transmit pid) (Journal.transmit pid) := by
   change ProjectsPrefix old? id (transmit pid)
     (focusPrefix Journal.completionEvent Journal.completion? (Completion.step pid))
   rw [← CompletionEffects.step_focus Journal.completionEvent Journal.completion? (fun event => by cases event <;> rfl)]
-  exact CompletionEffects.stepScoped_projects old? Event.scope CausalSources.Cause.completion
-    (fun _ => rfl)
-    (HandshakeSecurity.StagedConservation.SendResult.decorate_projects Event.sendResult old?
-      (fun _ => rfl) original) pid
+  rw [← CompletionEffects.stepSource_factor]
+  apply HandshakeSecurity.StagedConservation.Terminal.step_projects old? completionOps_projects _ _
+    (CompletionEffects.completeScoped_projects old? Event.scope CausalSources.Cause.completion
+      (fun _ => rfl) completionOps_projects) _ ?_ pid
+  intro peer item head
+  rw [dispose_focused]
+  exact HandshakeSecurity.StagedConservation.Terminal.deadObserved_projects old? txEvent txEvent?
+    Journal.Event.disposition Journal.disposition? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
+    Event.stagedDisposal (fun _ => rfl) Event.terminalDrop (fun _ => rfl) peer item head
+
+theorem selection_projects (pid : PeerId) :
+    StateProjectsPrefix old? id (selection pid) (Journal.selection pid) := by
+  simp only [Journal.selection,HandshakeSecurity.Responder.DriverCuts.selection,focus_native_receipt]
+  unfold selection
+  exact HandshakeSecurity.StagedConservation.Take.selection_projects (E := Event) (F := Journal.Event)
+    Event.stagingTaken old? (fun _ => rfl)
+    (fun peer run => .old (.responder (.selected peer run)))
+    (fun peer run => .responder (.selected peer run)) (fun _ _ => rfl) pid
+
+theorem stagedRestore_projects (pid : PeerId) (packets : List Packet) :
+    StateProjectsPrefix old? id (stagedRestore pid packets) (Journal.hooks.stagedRestore pid packets) :=
+  HandshakeSecurity.StagedConservation.Restore.observed_projects Event.stagedRestored old? (fun _ => rfl) pid packets
+
+theorem create_projects (pid : PeerId) (item : List SkbId) :
+    StateProjectsPrefix old? id (create pid item) (Journal.create pid item) :=
+  NativeAdapter.lower_projects old?
+    (HandshakeSecurity.StagedConservation.Terminal.createObserved_projects old? txEvent txEvent?
+      Journal.Event.disposition Journal.disposition? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
+      Event.stagedDisposal (fun _ => rfl) Event.terminalDrop (fun _ => rfl) pid item)
+
+theorem encrypt_projects (item : Option (List SkbId)) :
+    ProjectsPrefix old? id (encrypt item) (Journal.encrypt item) :=
+  receipt_matching old? _ _ _ _
+    (HandshakeSecurity.StagedDisposal.EncryptionSource.observed_tail_projects old?
+      (Event.old ∘ Journal.Event.encrypted) (fun event => (old? event).bind Journal.encryption?)
+      Journal.Event.encrypted Journal.encryption? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
+      Event.stagedDisposal stagedDisposal? (fun _ => rfl) item) (fun _ => rfl)
 
 theorem front_projects (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     StateProjectsPrefix old? id (front family addr packets mtu) (Journal.front family addr packets mtu) := by
@@ -116,6 +228,7 @@ private theorem create_appends (pid : PeerId) (item : List SkbId) : StateAppends
     (NativeAdapter.world w a) h
 
 theorem hooks_projects : Driver.HooksProjects old? hooks Journal.hooks where
+  stagedRestore := stagedRestore_projects
   stagedPurge := stagedPurge_projects
   peerRelease := peerRelease_projects
   deliver := DeliverySource.observed_projects old? Event.delivery (fun _ => rfl)
@@ -137,16 +250,16 @@ theorem hooks_projects : Driver.HooksProjects old? hooks Journal.hooks where
     (fun token => CausalScope.leave_projects Event.scope token old? (fun _ => rfl))⟩
   prepare := product_projects _ (Appends.focus _ _ _)
   counterCheck := fun _ _ => product_projects _ ((Appends.lift _).receiptObserved)
-  selection := fun _ => state_projects _ (StateAppends.focus _ _ _)
+  selection := selection_projects
   confirmation := fun _ _ => state_projects _ (StateAppends.focus _ _ _)
   session := fun pid => HandshakeSecurity.ExchangeJoint.session_ignored old? Event.exchange (fun _ => rfl)
     pid _ _ (state_projects _ (StateAppends.focus _ _ _))
   reserve := fun slot => state_projects _ (reserve_appends slot)
   allocate := fun packets => state_projects _ (allocate_appends packets)
-  create := fun pid item => state_projects _ (create_appends pid item)
+  create := create_projects
   front := front_projects
   poll := product_projects _ ((Appends.focus _ _ _).receiptObserved)
-  encrypt := fun _ => product_projects _ ((Appends.focus _ _ _).receiptObserved)
+  encrypt := encrypt_projects
   transmit := transmit_projects
 
 /-- Each actual syscall preserves the complete old native state and history,

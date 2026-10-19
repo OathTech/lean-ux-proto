@@ -21,6 +21,7 @@ macro "handshake_journal_deferred_step " c:ident : tactic => `(tactic| first
   | (nonce_product_head Driver.sendWorkerObserved
      exact send_one $c)
   | (scheduler_preserve_at Env.runOneClearWorker; exact clear_one)
+  | (nonce_product_head Driver.clearWorkerObserved; exact clear_observed $c)
   | (scheduler_preserve_at Env.requireDrained; exact product_store _ (Nonce.Frames.drained _ _))
   | (scheduler_preserve_at Env.requireNoCryptWork; exact product_store _ requireNoCryptWork_sameKernel)
   | (scheduler_preserve_at Env.deliverSent; exact product_store _ deliverSent_sameKernel)

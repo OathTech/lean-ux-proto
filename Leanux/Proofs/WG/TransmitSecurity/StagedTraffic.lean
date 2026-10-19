@@ -9,8 +9,10 @@ namespace Leanux.Proofs.WG.TransmitSecurity.Staged.Origins
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
 open Lifetimes Queues Driver AuthenticatedEffects AuthenticatedEffects.CausalJournal
 theorem ingress (msg : List UInt8) (src : SkbSource) :
-    ProductSafe (receiveEntryObserved msg src) := by
-  simpa only [receiveEntryObserved,liftWGObserver_lift] using product_state (state_lift _ (fun _ => Native.receive msg src))
+    ProductSafe (receiveEntryObserved hooks msg src) := by
+  have quiet := CallbackFrames.receive_quiet selection? (fun _ => rfl) msg src
+  exact product_state (state_quiet quiet.1 quiet.2 (CallbackFrames.receive_erases msg src)
+    (fun _ => Native.receive msg src))
 
 theorem multicast (family addr : Nat) :
     ProductSafe (multicastObserved family addr) := by

@@ -4,8 +4,9 @@ namespace Leanux.Proofs.WG.HandshakeSecurity.TimestampArchive
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues TransmitSecurity
 
 theorem receive_entry (msg : List UInt8) (src : SkbSource) :
-    ProductPreserves (Driver.receiveEntryObserved msg src) :=
-  product_native _ (rx_entry msg src)
+    ProductPreserves (Driver.receiveEntryObserved TimestampDriver.hooks msg src) := by
+  rw [Driver.receiveEntry_lift TimestampDriver.hooks rfl,liftWGObserver_lift]
+  exact product_native _ (rx_entry msg src)
 
 theorem multicast (family addr : Nat) :
     ProductPreserves (Driver.multicastObserved family addr) :=

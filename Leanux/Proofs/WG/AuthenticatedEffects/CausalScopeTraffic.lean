@@ -8,13 +8,17 @@ local-operation label. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.ScopeBalance
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity Lifetimes Queues
 
+theorem receive_entry (msg : Key) (src : SkbSource) :
+    ProductSafe (Driver.receiveEntryObserved hooks msg src) :=
+  callback_product (CallbackQuiet.receive_entry scope? (fun _ => rfl) msg src)
+
 theorem inject (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
     ProductSafe (Driver.injectObserved hooks family port msg tos ll dest) := by
   intro frames
   exact TrafficSource.inject_preserves
     (I := fun h _ => CausalScope.stack (h.filterMap scope?) = .ok frames)
     (S := CausalScope.WellFormed scope?) (fun _ _ ready => ⟨frames,ready⟩)
-    (fun _ _ _ _ ready => ready) _ _ _ (fun _ _ => product_lift _ frames)
+    (fun _ _ _ _ ready => ready) _ _ _ (fun msg src => receive_entry msg src frames)
     (crypt frames) (fun _ _ => product_lift _ frames) family port msg tos ll dest
 
 theorem after_batch : ProductSafe (Driver.afterBatchObserved hooks) := by
@@ -31,7 +35,7 @@ theorem flood (count port family : Nat) (messages : List (List UInt8)) :
   exact TrafficSource.flood_preserves
     (I := fun h _ => CausalScope.stack (h.filterMap scope?) = .ok frames)
     (S := CausalScope.WellFormed scope?) (fun _ _ ready => ⟨frames,ready⟩)
-    (fun _ _ _ _ ready => ready) _ _ _ _ (fun _ _ => product_lift _ frames)
+    (fun _ _ _ _ ready => ready) _ _ _ _ (fun msg src => receive_entry msg src frames)
     (inline_poll frames) (after_batch frames) (fun _ _ => product_lift _ frames)
     count port family messages
 
@@ -41,7 +45,7 @@ theorem batch_item (d : Device) (cqes : List Int) (item : Env.BatchItem) :
   exact batchItemWith_preserves
     (I := fun h _ => CausalScope.stack (h.filterMap scope?) = .ok frames)
     (S := CausalScope.WellFormed scope?) (fun _ _ ready => ⟨frames,ready⟩)
-    (fun _ _ _ _ ready => ready) _ _ _ _ (fun _ _ => product_lift _ frames)
+    (fun _ _ _ _ ready => ready) _ _ _ _ (fun msg src => receive_entry msg src frames)
     (inline_poll frames) (fun _ _ => product_lift _ frames)
     (fun family addr packets mtu => product_state _ (fixture_transmit family addr packets mtu) frames)
     d cqes item

@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryStaging
+import Leanux.Proofs.WG.TransmitSecurity.DriverNestedCallsHistory
 
 namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues Configuration
@@ -10,6 +11,8 @@ theorem sendDrain_history (h : ActorHistorySafe Safe g) (upTo : Option PeerId) :
     StateHistorySafe Safe (sendDrainObserved g upTo) := by
   unfold sendDrainObserved HandshakeSecurity.SendExchange.drainWith
   repeat' first
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.flushedClearWith;
+       exact RetirementSecurity.NestedPeerRelease.flushedClear_history (nested_history_ops g h.peerRelease) _)
     | (driver_history_head Hooks.flushedSend; exact h.flushedSend _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
     | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)

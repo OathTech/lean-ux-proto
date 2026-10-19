@@ -13,7 +13,7 @@ theorem retained_projects (h : HooksProjects ρ g a) (call : Syscall) :
   cases call <;> unfold retainedObserved
   case wgUp => exact socketCallOnWith_projects ρ _ (envUp_projects h)
   case wgDown => exact socketCallOnWith_projects ρ _ (envDown_projects h)
-  all_goals exact projectsPrefix_lift ρ _
+  all_goals exact RetirementSecurity.NestedPeerRelease.dumpDispatch_projects ρ (nestedOps_projects h) _
 
 theorem observe_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (observeObserved g) (observeObserved a) :=

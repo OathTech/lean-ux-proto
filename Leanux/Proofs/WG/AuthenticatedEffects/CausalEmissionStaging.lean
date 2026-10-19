@@ -21,10 +21,38 @@ theorem no_key (pid : PeerId) (packets : List Packet) (keypair : Option KeypairI
        | emission_effect_native)
     | emission_effect_step
 
+
+theorem queued_release (pid : PeerId) (retry : Bool) : StateSafe
+    (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects hooks.peerRelease pid retry) := by
+  unfold HandshakeSecurity.StagedDisposal.Effects.queuedWith
+  repeat' first
+    | (emission_head Driver.Hooks.peerRelease; exact peer_release _)
+    | emission_effect_step
+
+theorem restore (pid : PeerId) (packets : List Packet) : StateSafe (hooks.stagedRestore pid packets) := by
+  apply state_receipt _ ?_ _ (fun _ => rfl)
+  apply state_native
+  sent_frame [HandshakeSecurity.StagedConservation.Restore.nativeRestore]
+    using [getPeer_sent_spec,setPeer_sent_spec]
+
+theorem no_key_restore (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) (invalid : Bool) :
+    StateSafe (HandshakeSecurity.StagedConservation.Restore.noKeyWith effects hooks.stagedRestore
+      (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects hooks.peerRelease) pid packets keypair invalid) := by
+  unfold HandshakeSecurity.StagedConservation.Restore.noKeyWith
+  repeat' first
+    | (emission_head Driver.Hooks.stagedRestore; exact restore _ _)
+    | (emission_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact queued_release _ _)
+    | (emission_head TimerEffects.Ops.step
+       change StateSafe (liftWGPrefix _)
+       first
+       | (emission_native_head keypairPut; exact state_native _ (EmissionFrames.keypair_put _ _))
+       | emission_effect_native)
+    | emission_effect_step
+
 theorem staging (pid : PeerId) : StateSafe (Driver.stagingObserved hooks pid) := by
   unfold Driver.stagingObserved
   repeat' first
-    | (emission_head PacketEffects.noKeyWith; exact no_key _ _ _ _)
+    | (emission_head HandshakeSecurity.StagedConservation.Restore.noKeyWith; exact no_key_restore _ _ _ _)
     | (emission_head Driver.Hooks.selection; exact selection _)
     | (emission_head Driver.Hooks.reserve; exact reserve _)
     | (emission_head Driver.Hooks.allocate; exact allocate _)

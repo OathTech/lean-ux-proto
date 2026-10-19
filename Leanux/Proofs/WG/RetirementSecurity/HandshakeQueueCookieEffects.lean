@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptQuietHistory
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptNativeCallbacks
 import Leanux.Proofs.WG.TransmitSecurity.CookieInputHandshake
 import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueJournalOuter
 
@@ -8,6 +10,23 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity AuthenticatedEffects
 open CausalJournal CookieInput HandshakeSecurity Lifetimes Queues
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
+
+def cookieOnly : Event → Option Unit
+  | .cookieSocket _ => some ()
+  | _ => none
+
+theorem unchecked_of_quiet (event : Event) (quiet : cookieOnly event = none) : Unchecked event := by
+  cases event <;> simp_all [cookieOnly,Unchecked]
+
+theorem callback_state (quiet : CallbackQuiet.StateQuiet cookieOnly body) :
+    Driver.StateHistorySafe Safe body :=
+  CallbackQuiet.state_safe quiet (fun _ _ safe silent =>
+    safe.quiet (fun event member => unchecked_of_quiet event (silent event member)))
+
+theorem callback_product (quiet : CallbackQuiet.ProductQuiet cookieOnly body) :
+    Driver.ProductHistorySafe Safe body :=
+  CallbackQuiet.product_safe quiet (fun _ _ safe silent =>
+    safe.quiet (fun event member => unchecked_of_quiet event (silent event member)))
 
 private theorem initiated (pid : PeerId) : Driver.StateHistorySafe Safe (TimerEffects.initiatedWith effects pid) := by
   unfold TimerEffects.initiatedWith
@@ -47,7 +66,7 @@ theorem send_worker : Driver.ProductHistorySafe Safe (Driver.sendWorkerObserved 
     Driver.History.product_state (flushed_send pid))
 
 private abbrev base := CompletionEffects.lifetimeBase (Event.old ∘ TransmitSecurity.Journal.completionEvent) completion?
-private abbrev lifetime := LifetimeEffects.decorate base scope? Event.armed Event.queued
+private abbrev lifetime := CausalJournal.completionLifetime
 
 private theorem base_safe (body : MixedM α) : Driver.StateHistorySafe Safe
     (focusStatePrefix ((Event.old ∘ TransmitSecurity.Journal.completionEvent) ∘ CompletionEffects.lifetimeEvent)
@@ -68,10 +87,11 @@ private theorem lifetime_queue (pid : PeerId) : Driver.StateHistorySafe Safe (li
 macro "cookie_lifetime_step" : tactic => `(tactic| first
   | (driver_history_head LifetimeEffects.Ops.arm; exact lifetime_arm _ _ _ _)
   | (driver_history_head LifetimeEffects.Ops.append; exact lifetime_queue _)
+  | (driver_history_head LifetimeEffects.Ops.put
+     exact callback_state (CallbackFrames.lifetime_put_quiet cookieOnly (fun _ => rfl) (fun _ => rfl) _))
   | (first | driver_history_head LifetimeEffects.Ops.step | driver_history_head LifetimeEffects.Ops.peer
            | driver_history_head LifetimeEffects.Ops.keypair | driver_history_head LifetimeEffects.Ops.modifyPeer
            | driver_history_head LifetimeEffects.Ops.guard | driver_history_head LifetimeEffects.Ops.get
-           | driver_history_head LifetimeEffects.Ops.put
      exact base_safe _)
   | driver_state_history_step)
 
@@ -99,8 +119,7 @@ private theorem lifetime_fresh (pid : PeerId) : Driver.StateHistorySafe Safe (Li
     | (driver_history_head LifetimeEffects.queuedWith; exact lifetime_queued _ _)
     | cookie_lifetime_step
 
-private abbrev observed := StagedConservation.SendResult.decorate Event.sendResult
-  (CompletionEffects.observed (Event.old ∘ TransmitSecurity.Journal.completionEvent) completion? scope? Event.armed Event.queued)
+private abbrev observed := CausalJournal.completionOps
 
 private theorem old_completion (body : PrefixM Completion.Event α) : Driver.ProductHistorySafe Safe
     (focusPrefix (Event.old ∘ TransmitSecurity.Journal.completionEvent) completion? body) :=
@@ -117,6 +136,8 @@ private theorem product_capture (body : PrefixM Event α) (preserves : Driver.Pr
     Driver.ProductHistorySafe Safe (captureObserved body) := preserves.captureObserved
 
 macro "cookie_completion_step" : tactic => `(tactic| first
+  | (driver_history_head StagedDisposal.TxSource.dispose
+     exact callback_product (CallbackQuiet.dispose cookieOnly (fun _ => rfl) (fun _ => rfl) _ _ _))
   | (driver_history_head focusPrefix; exact old_completion _)
   | (driver_history_head LifetimeEffects.traversalWith; exact Driver.History.product_state (lifetime_traversal _))
   | (driver_history_head LifetimeEffects.dataSentWith; exact Driver.History.product_state (lifetime_data _))
@@ -130,25 +151,28 @@ macro "cookie_completion_step" : tactic => `(tactic| first
 private theorem complete (pid : PeerId) (item : List SkbId) :
     Driver.ProductHistorySafe Safe (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,StagedConservation.SendResult.decorate,CompletionEffects.observed,CompletionEffects.focused]
+  simp only [observed,CausalJournal.completionOps,StagedConservation.SendResult.decorate,CompletionEffects.observed,CompletionEffects.focused]
   repeat' cookie_completion_step
 private theorem complete_scope (pid : PeerId) (item : List SkbId) :
     Driver.ProductHistorySafe Safe (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed pid item) :=
   product_scope (.completion pid item) _ (fun _=>complete pid item)
 private theorem completion_body (pid : PeerId) (first : Option (List SkbId)) :
-    Driver.ProductHistorySafe Safe (CompletionEffects.bodySourceWith observed
-      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
-  unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,StagedConservation.SendResult.decorate,CompletionEffects.observed,CompletionEffects.focused]
+    Driver.ProductHistorySafe Safe (StagedConservation.Terminal.bodyWith observed
+      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed)
+      (StagedConservation.Terminal.deadObserved txEvent txEvent? Event.stagedDisposal Event.terminalDrop) pid first) := by
+  unfold StagedConservation.Terminal.bodyWith TxDisposition.andObs
+  simp only [observed,CausalJournal.completionOps,StagedConservation.SendResult.decorate,CompletionEffects.observed,CompletionEffects.focused]
   repeat' first
+    | (driver_history_head StagedConservation.Terminal.deadObserved
+       exact callback_product (CallbackQuiet.dead cookieOnly (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) _ _ _))
     | (driver_history_head CompletionEffects.completeScoped; exact complete_scope _ _)
     | cookie_completion_step
 
 theorem transmit (pid : PeerId) : Driver.ProductHistorySafe Safe (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [StagedConservation.SendResult.decorate,CompletionEffects.observed,CompletionEffects.focused]
+  unfold CausalJournal.transmit StagedConservation.Terminal.stepWith
+  simp only [CausalJournal.completionOps,StagedConservation.SendResult.decorate,CompletionEffects.observed,CompletionEffects.focused]
   repeat' first
-    | (driver_history_head CompletionEffects.bodySourceWith; exact completion_body _ _)
+    | (driver_history_head StagedConservation.Terminal.bodyWith; exact completion_body _ _)
     | cookie_completion_step
 
 end Leanux.Proofs.WG.RetirementSecurity.HandshakeLengths.Cookie

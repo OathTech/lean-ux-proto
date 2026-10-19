@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryPreservation
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeWorkers
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeTimers
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalCallbackQuietNative
 
 /-! Both real timer-selection modes bracket the native validation and callback
 with the exact returned token. Normal timer completion closes before deferred
@@ -24,6 +25,7 @@ theorem crypt : ProductSafe (Driver.cryptObserved hooks) :=
 theorem send_workers : ProductSafe (Driver.sendWorkersObserved hooks) := by
   unfold Driver.sendWorkersObserved
   repeat' first
+    | (scope_balance_head Driver.clearWorkerObserved; exact callback_product (CallbackQuiet.clear_worker scope? (fun _ => rfl)))
     | (scope_balance_head Driver.Hooks.deliver; exact deliver)
     | (scope_balance_head Driver.sendWorkerObserved; exact send_worker)
     | (scope_balance_head Driver.scheduleObserved; exact schedule _)
@@ -32,6 +34,7 @@ theorem send_workers : ProductSafe (Driver.sendWorkersObserved hooks) := by
 theorem after_xmit : ProductSafe (Driver.afterXmitObserved hooks) := by
   unfold Driver.afterXmitObserved
   repeat' first
+    | (scope_balance_head Driver.clearWorkerObserved; exact callback_product (CallbackQuiet.clear_worker scope? (fun _ => rfl)))
     | (scope_balance_head Driver.Hooks.deliver; exact deliver)
     | (scope_balance_head Driver.cryptObserved; exact crypt)
     | (scope_balance_head Driver.sendWorkersObserved; exact send_workers)
@@ -77,6 +80,7 @@ theorem timer_enter_bind (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
   PrefixEnsures.bind (timer_enter_checked d j pid timer entry before) tail
 
 macro "scope_timer_step" : tactic => `(tactic| first
+  | (scope_balance_head Driver.clearWorkerObserved; exact callback_product (CallbackQuiet.clear_worker scope? (fun _ => rfl)))
   | (scope_balance_head Driver.Hooks.deliver; exact deliver)
   | (scope_first_head Driver.Hooks.timerSelected; apply universal; intro frames; apply timer_enter_bind)
   | (scope_first_head Driver.Hooks.timerFinished; apply leave_bind)
@@ -99,6 +103,7 @@ theorem idle_timers : ProductSafe (Driver.idleTimersObserved hooks) := by
   unfold Driver.idleTimersObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (scope_balance_head Driver.clearWorkerObserved; exact callback_product (CallbackQuiet.clear_worker scope? (fun _ => rfl)))
     | (scope_balance_head Driver.Hooks.deliver; exact deliver)
     | (scope_balance_head Driver.timersObserved; exact timers _)
     | (scope_balance_head Driver.placeholderTimersObserved; exact placeholder_timers _)
@@ -108,6 +113,7 @@ theorem after_advance : ProductSafe (Driver.afterAdvanceObserved hooks) := by
   unfold Driver.afterAdvanceObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (scope_balance_head Driver.clearWorkerObserved; exact callback_product (CallbackQuiet.clear_worker scope? (fun _ => rfl)))
     | (scope_balance_head Driver.Hooks.deliver; exact deliver)
     | (scope_balance_head Driver.timersObserved; exact timers _)
     | (scope_balance_head Driver.placeholderTimersObserved; exact placeholder_timers _)

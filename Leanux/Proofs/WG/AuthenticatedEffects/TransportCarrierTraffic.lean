@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierDeferred
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierIngress
 import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryPreservation
 
 /-! Fixture ingress, flood, batch and transmit callers preserve the actual
@@ -9,11 +9,6 @@ open Lifetimes Queues TransmitSecurity.Driver
 variable {E : Type} {extra : List E → Prop}
   {origin : E → Option TransportDriver.OriginEvent} {replay : E → Option TransportDriver.Replay}
   {hooks : Hooks E}
-
-theorem ingress (msg : List UInt8) (src : SkbSource) :
-    ProductSafe extra origin replay (receiveEntryObserved msg src) := by
-  simpa only [receiveEntryObserved,liftWGObserver_lift] using product_state (extra := extra) (origin := origin)
-    (replay := replay) (state_native _ (TransportPublication.wgReceive_preserves msg src))
 
 theorem multicast (family addr : Nat) :
     ProductSafe extra origin replay (multicastObserved family addr) := by
@@ -45,7 +40,7 @@ private theorem safe (h : List E) (w : World) (hi : ProductInv extra origin repl
 theorem inject (h : DeferredSafe extra origin replay hooks) (family port : Nat)
     (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
     ProductSafe extra origin replay (injectObserved hooks family port msg tos ll dest) :=
-  TrafficSource.inject_preserves safe product_store _ _ _ ingress (crypt h) drain family port msg tos ll dest
+  TrafficSource.inject_preserves safe product_store _ _ _ (receive_entry_nested h.peerRelease) (crypt h) drain family port msg tos ll dest
 
 theorem afterBatch (h : DeferredSafe extra origin replay hooks) :
     ProductSafe extra origin replay (afterBatchObserved hooks) :=
@@ -55,14 +50,14 @@ theorem afterBatch (h : DeferredSafe extra origin replay hooks) :
 theorem flood (h : DeferredSafe extra origin replay hooks) (count port family : Nat)
     (messages : List (List UInt8)) :
     ProductSafe extra origin replay (floodObserved hooks count port family messages) :=
-  TrafficSource.flood_preserves safe product_store _ _ _ _ ingress (inlinePoll h.napi)
+  TrafficSource.flood_preserves safe product_store _ _ _ _ (receive_entry_nested h.peerRelease) (inlinePoll h.napi)
     (afterBatch h) drain count port family messages
 
 theorem batchItem (h : DeferredSafe extra origin replay hooks)
     (front : ∀ family addr packets mtu, StateSafe extra origin replay (hooks.front family addr packets mtu))
     (d : Device) (cqes : List Int) (item : Env.BatchItem) :
     ProductSafe extra origin replay (batchItemObserved hooks d cqes item) :=
-  batchItemWith_preserves safe product_wg_store _ _ _ _ ingress (inlinePoll h.napi) multicast
+  batchItemWith_preserves safe product_wg_store _ _ _ _ (receive_entry_nested h.peerRelease) (inlinePoll h.napi) multicast
     (fun family addr packets mtu => product_state (fixture h.toStagingSafe _ _
       (transmit h.toStagingSafe front family addr packets mtu))) d cqes item
 

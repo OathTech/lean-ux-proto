@@ -49,6 +49,7 @@ theorem quiet_receipt (action : WG.M α) (make : WGRunWitness α → Event)
 
 theorem native_projection : Driver.HooksProjects NativeDriver.erase
     Responder.DriverCuts.hooks NativeDriver.hooks where
+  stagedRestore := fun _ _ => Driver.Projection.state_lift NativeDriver.erase _
   stagedPurge := fun _ => Driver.Projection.state_lift NativeDriver.erase _
   peerRelease := fun _ => Driver.Projection.state_lift NativeDriver.erase _
   deliver := projectsPrefix_lift NativeDriver.erase _
@@ -101,6 +102,7 @@ def quietHooks : Driver.Hooks Event :=
 
 theorem quiet_hooks (initial : List Nat) :
     Driver.HooksHistorySafe (fun h => Responder.DriverCuts.labels h = initial) quietHooks where
+  stagedRestore := fun _ _ => Driver.History.state_lift _
   stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := Driver.History.product_lift _

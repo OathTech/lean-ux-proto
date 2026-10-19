@@ -110,9 +110,14 @@ theorem retained (call : Syscall) (kept : DispatchRetained call) : ProductSafe (
   · subst call; exact socket_call _ _ env_up
   · by_cases stopped : call = .wgDown
     · subst call; exact socket_call _ _ env_down
-    · have same : retainedObserved hooks call = liftPrefix (Leanux.dispatch call) := by
+    · have same : retainedObserved hooks call = RetirementSecurity.NestedPeerRelease.dumpDispatch (nestedOps hooks) call := by
         cases call <;> simp_all only [retainedObserved] <;> contradiction
       rw [same]
-      exact native _ (EmissionDispatch.quiet call kept opened stopped)
+      exact product_combine _
+        (Emissions.product_native_callback _
+          (CallbackFrames.dump_dispatch_quiet contributing? (fun _ => rfl) call)
+          (CallbackFrames.dump_dispatch_erases call) (EmissionDispatch.quiet call kept opened stopped))
+        (CallbackQuiet.product_safe (CallbackFrames.dump_dispatch_quiet delivery? (fun _ => rfl) call)
+          (fun _ _ safe quiet => safe.quiet quiet))
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Emissions.Deliveries.Carrier

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverNestedNeutral
 import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverRxFrames
 
@@ -9,7 +10,7 @@ theorem receive_tail (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     Preserves (Driver.receiveTailObserved hooks pid pkt confirmed) := by
   change StatePrefixPreserves (fun h w _ => Inv h w) Safe _
   unfold Driver.receiveTailObserved
-  simp only [Driver.prepare_lift hooks rfl]
+  simp only [Driver.nested_prepare_lift hooks rfl rfl,Driver.rxFinish_lift hooks rfl]
   repeat' first
     | (nonce_source_head Driver.stagingObserved; exact staging _)
     | (nonce_source_head timersHandshakeComplete; exact lift _ (carrier_complete _ _))

@@ -12,9 +12,34 @@ theorem noKey_lift (neutral : effectOps hooks = lifted) (pid : PeerId) (packets 
       liftWGPrefix (Lifetimes.stagedOutNokey pid packets keypair invalid) := by
   rw [neutral,PacketEffects.noKey_lifted]
 
+theorem restore_noKey_lift (neutral : effectOps hooks = lifted)
+    (restore : hooks.stagedRestore = fun pid packets =>
+      liftWGPrefix (HandshakeSecurity.StagedConservation.Restore.nativeRestore pid packets))
+    (release : hooks.peerRelease = fun peer => liftWGPrefix (peerPut peer))
+    (pid : PeerId) (packets : List Packet) (keypair : Option KeypairId) (invalid : Bool) :
+    HandshakeSecurity.StagedConservation.Restore.noKeyWith (effectOps hooks) hooks.stagedRestore
+      (HandshakeSecurity.StagedDisposal.Effects.queuedWith (effectOps hooks) hooks.peerRelease)
+      pid packets keypair invalid = liftWGPrefix (Lifetimes.stagedOutNokey pid packets keypair invalid) := by
+  rw [neutral,restore,release]
+  have queue : HandshakeSecurity.StagedDisposal.Effects.queuedWith
+      (lifted : Ops (WGPrefix E)) (fun peer => liftWGPrefix (peerPut peer)) = queuedWith lifted := by
+    funext pid retry
+    exact HandshakeSecurity.StagedDisposal.Effects.queued_neutral lifted pid retry
+  rw [queue]
+  exact (HandshakeSecurity.StagedConservation.Restore.core_native_factor lifted pid packets keypair invalid).trans
+    (PacketEffects.noKey_lifted pid packets keypair invalid)
+
 theorem prepare_lift (neutral : effectOps hooks = lifted) (pid : PeerId) (pkt : RxPacket) :
     PacketEffects.prepareWith (effectOps hooks) pid pkt = liftWGPrefix (Queues.RxCredits.prepareRest pid pkt) := by
   rw [neutral,PacketEffects.prepare_lifted]
+
+theorem nested_prepare_lift (neutral : effectOps hooks = lifted)
+    (release : hooks.peerRelease = fun peer => liftWGPrefix (peerPut peer)) (pid : PeerId) (pkt : RxPacket) :
+    HandshakeSecurity.StagedDisposal.PacketSource.prepareWith (effectOps hooks) hooks.peerRelease pid pkt =
+      liftWGPrefix (Queues.RxCredits.prepareRest pid pkt) := by
+  rw [neutral,release]
+  exact (HandshakeSecurity.StagedDisposal.PacketSource.prepare_neutral lifted pid pkt).trans
+    (PacketEffects.prepare_lifted pid pkt)
 
 theorem expiredKeepalive_lift (neutral : effectOps hooks = lifted) (pid : PeerId) :
     expiredKeepaliveObserved hooks pid = (do

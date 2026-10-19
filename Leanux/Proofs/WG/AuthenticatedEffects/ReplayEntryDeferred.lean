@@ -51,6 +51,9 @@ macro "replay_deferred_native" : tactic => `(tactic| first
      exact product_ambient _))
 
 macro "replay_deferred_step" : tactic => `(tactic| first
+  | (replay_entry_head clearWorkerObserved
+     rw [clearWorker_lift hooks rfl]
+     exact product_native _ EnvFrames.runOneClearWorker_ordinary)
   | solve | replay_deferred_native
   | replay_entry_product_step)
 

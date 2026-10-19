@@ -8,25 +8,34 @@ open HandshakeSecurity.Confirmation.Poll
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
-theorem fresh_receive (pid : PeerId) : StateSafe (PacketEffects.freshReceiveWith effects pid) := by
-  unfold PacketEffects.freshReceiveWith
+theorem fresh_receive (pid : PeerId) : StateSafe (HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith effects hooks.peerRelease pid) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith
   repeat' first
-    | (scope_balance_head TimerEffects.queuedWith; exact queued _ _)
+    | (scope_balance_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact restore_queued _ _)
     | scope_effect_step
 
-theorem prepare (pid : PeerId) (packet : RxPacket) : StateSafe (PacketEffects.prepareWith effects pid packet) := by
-  unfold PacketEffects.prepareWith
+theorem prepare (pid : PeerId) (packet : RxPacket) : StateSafe (HandshakeSecurity.StagedDisposal.PacketSource.prepareWith effects hooks.peerRelease pid packet) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.prepareWith
   repeat' first
-    | (scope_balance_head PacketEffects.freshReceiveWith; exact fresh_receive _)
+    | (scope_balance_head HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith; exact fresh_receive _)
     | (scope_balance_head TimerEffects.traversalWith; exact traversal _)
     | (scope_balance_head TimerEffects.dataReceivedWith; exact data_received _)
     | scope_effect_step
+
+theorem rx_finish (pid : PeerId) (ready : Packets.RxReady) :
+    StateSafe (RetirementSecurity.NestedPeerRelease.rxFinishWith (Driver.nestedOps hooks) pid ready) := by
+  unfold RetirementSecurity.NestedPeerRelease.rxFinishWith RetirementSecurity.NestedPeerRelease.rxAfterLookupWith
+  simp only [Driver.nestedOps]
+  repeat' first
+    | (scope_balance_head Driver.Hooks.peerRelease; exact peer_release _)
+    | scope_state_step
 
 theorem receive_tail (pid : PeerId) (packet : RxPacket) (confirmed : Bool) :
     StateSafe (Driver.receiveTailObserved hooks pid packet confirmed) := by
   unfold Driver.receiveTailObserved
   repeat' first
-    | (scope_balance_head PacketEffects.prepareWith; exact prepare _ _)
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.rxFinishWith; exact rx_finish _ _)
+    | (scope_balance_head HandshakeSecurity.StagedDisposal.PacketSource.prepareWith; exact prepare _ _)
     | (scope_balance_head Driver.stagingObserved; exact staging _)
     | scope_state_step
 

@@ -1,4 +1,6 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryStaging
+import Leanux.Proofs.WG.TransmitSecurity.DriverNestedCallsHistory
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleasePollPreserves
 
 namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
@@ -84,13 +86,18 @@ theorem flush_actor_history (h : ActorCoreHistorySafe Safe g) (ps : List (List U
 theorem nativePoll_core_history (h : ActorCoreHistorySafe Safe g)
     (scope : ∀ entry body, ProductHistorySafe Safe body →
       ProductHistorySafe Safe (g.stackInput entry body)) (pid : PeerId) (budget : Nat) :
-    ProductHistorySafe Safe (nativePollObserved g pid budget) :=
-  AuthenticatedEffects.GroOccurrencePoll.observed_preserves (fun history _ => Safe history) Safe
-    (fun _ _ hi => hi) _ _ _ _ _ _ _
+    ProductHistorySafe Safe (nativePollObserved g pid budget) := by
+  have callback := AuthenticatedEffects.GroOccurrence.stack_preserves
+    (fun history (_ : World) => Safe history) Safe (fun _ _ hi => hi)
+    g.stackInput (stackObserved g) (stack_history h) scope
+  exact RetirementSecurity.NestedPeerRelease.poll_preserves
+    (fun history _ => Safe history) Safe (fun _ _ hi => hi) _ _ _ _ _ _ _ _
     (fun _ => (History.state_lift _).liftWGObserver)
+    (fun peer => (h.peerRelease peer).liftWGObserver)
     h.candidateEnter h.candidateLeave h.counterCheck
     (fun peer pkt ep => (consume_history h peer pkt ep).liftWGObserver)
-    (stack_history h) scope pid budget
+    (AuthenticatedEffects.GroOccurrence.receive_preserves (fun history (_ : World) => Safe history) Safe (fun _ _ hi => hi) _ callback)
+    (AuthenticatedEffects.GroOccurrence.flushAll_preserves (fun history (_ : World) => Safe history) Safe (fun _ _ hi => hi) _ callback) pid budget
 
 theorem ActorCoreHistorySafe.withPoll (h : ActorCoreHistorySafe Safe g)
     (scope : ∀ entry body, ProductHistorySafe Safe body →

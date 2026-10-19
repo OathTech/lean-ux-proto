@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityRoutingObserved
 import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityStaging
+import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityActualFrames
 import Leanux.Proofs.WG.HandshakeSecurity.StagedAvailableRouting
 import Leanux.Proofs.WG.HandshakeSecurity.StagedAvailableKeepalive
 
@@ -18,6 +19,11 @@ theorem queued_observed (pid : PeerId) (retry : Bool) :
     (TimerEffects.queued_erases (CausalEffects.ops_erases scope? Event.armed Event.queued) pid retry)
     (fun _ => Native.queued pid retry)
 
+theorem queued_actual (pid : PeerId) (retry : Bool) :
+    StateSafe (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects peerRelease pid retry) := by
+  have quiet := CallbackQuiet.queued allocation? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid retry
+  exact state_quiet quiet.1 quiet.2 (queued_actual_erases pid retry) (fun _ => Native.queued pid retry)
+
 theorem held_pure (value : α) : StatePrefixPreserves (Held pid peer) Safe (pure value) :=
   StatePrefixEnsures.pure _ (fun _ _ _ before => before.1.2) (fun _ _ _ before => before)
 
@@ -30,15 +36,16 @@ theorem held_loop {α β : Type} (xs : List α) (initial : β)
 
 theorem no_key_observed (pid : PeerId) (peer : Peer) (keypair : Option KeypairId) (invalid : Bool) :
     StatePrefixEnsures (Held pid peer) Safe
-      (PacketEffects.noKeyWith effects pid peer.staged keypair invalid)
+      (HandshakeSecurity.StagedConservation.Restore.noKeyWith effects stagedRestore
+        (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects peerRelease) pid peer.staged keypair invalid)
       (fun _ h w _ => Carrier h w) := by
   have tail (kp : Option KeypairId) : StatePrefixEnsures (Held pid peer) Safe
       (do
         effects.step (keypairPut kp false)
         for _ in peer.staged do _ ← effects.step (branch .stagedOrphanWalk true)
         _ ← effects.step (branch .stagedOrphanWalk false)
-        effects.step (HandshakeSecurity.NonceRejection.restore pid peer.staged)
-        TimerEffects.queuedWith effects pid false)
+        stagedRestore pid peer.staged
+        HandshakeSecurity.StagedDisposal.Effects.queuedWith effects peerRelease pid false)
       (fun _ h w _ => Carrier h w) := by
     apply StatePrefixEnsures.bind (held_key_put kp false)
     intro _
@@ -51,8 +58,8 @@ theorem no_key_observed (pid : PeerId) (peer : Peer) (keypair : Option KeypairId
     · intro _
       apply StatePrefixEnsures.bind (held_ambient (AmbientM.branch .stagedOrphanWalk false))
       intro _
-      exact StatePrefixEnsures.bind (held_restore pid peer) (fun _ => queued_observed pid false)
-  unfold PacketEffects.noKeyWith
+      exact StatePrefixEnsures.bind (restore_actual pid peer) (fun _ => queued_actual pid false)
+  unfold HandshakeSecurity.StagedConservation.Restore.noKeyWith
   dsimp only
   split
   · split
@@ -62,19 +69,9 @@ theorem no_key_observed (pid : PeerId) (peer : Peer) (keypair : Option KeypairId
     · exact StatePrefixEnsures.bind (held_ambient (AmbientM.invariant "unreachable")) (fun _ => tail _)
   · exact tail _
 
-theorem create_observed (pid : PeerId) (items : List SkbId) : StateSafe (state (Journal.create pid items)) := by
-  have appends : StateAppends (Journal.create pid items) := by
-    intro w a h
-    exact Appends.focus Journal.Event.disposition Journal.disposition? (TxDisposition.create pid items)
-      (NativeAdapter.world w a) h
-  apply state_quiet (StateAppends.focus _ _ _)
-  · apply Origins.focused_history_frame _ _ allocation? _ appends
-    intro w a h
-    exact focusPrefix_other Journal.Event.disposition Journal.disposition? (allocation? ∘ Event.old)
-      (fun _ => rfl) (TxDisposition.create pid items) (NativeAdapter.world w a) h
-  · exact focusStatePrefix_erases _ _ (NativeAdapter.lower_erases
-      (focusPrefix_erases _ _ (TxDisposition.create_erases pid items)))
-  · exact fun _ => Native.create pid items
+theorem create_observed (pid : PeerId) (items : List SkbId) : StateSafe (CausalJournal.create pid items) := by
+  have quiet := CallbackQuiet.create allocation? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid items
+  exact state_quiet quiet.1 quiet.2 (create_actual_erases pid items) (fun _ => Native.create pid items)
 
 theorem staging_observed (pid : PeerId) : StateSafe (Driver.stagingObserved hooks pid) :=
   staging_source no_key_observed create_observed pid

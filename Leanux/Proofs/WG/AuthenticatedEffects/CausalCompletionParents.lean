@@ -30,7 +30,7 @@ theorem certificate_parent (history : List Event) (items : List SkbId)
     | protocolSocket receipt => cases decoded
     | cookieSocket receipt | cookieConsumed receipt => cases decoded
     | delivery sent => cases decoded
-    | transmitInput _ | stagedDisposal _ | sendResult _ => cases decoded
+    | transmitInput _ | stagedDisposal _ | sendResult _ | stagingTaken _ | stagedRestored _ | terminalDrop _ => cases decoded
   rw [same] at inHistory
   obtain ⟨before,after,position⟩ := List.mem_iff_append.mp inHistory
   refine ⟨before,after,packets,run,id,rest,generation,packet,position,?_,shape,valid,epoch,

@@ -50,7 +50,8 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
     StateProjectsPrefix entry? id (handshake sg kg) (EntrySource.worker st kt) := by
   apply ExchangeCookieJoint.worker_target entry? _ _ (EntrySource.receiveOps st kt) (fun _ => rfl)
   · intro msg
-    exact CookieConsumption.observed_matching entry? Event.cookieConsumed
+    exact RetirementSecurity.NestedPeerRelease.cookie_old Event.stagedDisposal stagedDisposal?
+      entry? (fun _ => rfl) Event.cookieConsumed
       (fun r => EntryEvent.cookie ⟨r.input,r.run⟩) (fun _ => rfl) msg
   intro mac
   apply HandshakeEffects.scopeOps_projects entry? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
@@ -63,6 +64,12 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
     (Event.old ∘ Journal.Event.handshake) handshake? (fun _ => rfl)
     sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
   exact {base with
+    initiation := fun msg => Exchange.quiet_native_projection entry? _ _
+      (CallbackFrames.initiation_erases {mac with input := msg})
+      (CallbackFrames.initiation_quiet entry? (fun _ => rfl) (fun _ => rfl) _).2
+    response := fun msg => Exchange.quiet_native_projection entry? _ _
+      (CallbackFrames.response_erases {mac with input := msg})
+      (CallbackFrames.response_quiet entry? (fun _ => rfl) (fun _ => rfl) _).2
     send := protocol.send
     cookie := protocol.cookie
     put := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
@@ -94,7 +101,8 @@ theorem transmit_projects (pid : PeerId) :
     ProjectsPrefix entry? id (transmit pid) (liftPrefix (liftWG (txStep pid))) := by
   apply HistoryFrame.project
   · exact ExchangeCausal.transmit_history_of_quiet entry? (fun e => by cases e <;> rfl)
-      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
+      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
+      (fun _ => rfl) (fun _ => rfl) pid
   · intro w h
     have old := congrArg Prod.fst (CausalJournal.transmit_projects pid w h)
     have native := native_result Journal.nonce? (Journal.transmit pid) _ (Journal.transmit_projects pid)
@@ -120,6 +128,7 @@ theorem timer_projects (d : Device) (bound : UInt64) (pid : PeerId) (timer : Pee
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,entry?,List.append_nil]
 
 theorem hooks_projects : Driver.HooksProjects entry? hooks EntrySource.hooks where
+  stagedRestore := StagedConservation.Restore.observed_projects Event.stagedRestored entry? (fun _ => rfl)
   stagedPurge := ExchangeCausal.stagedPurge_projects_of_quiet entry? (fun _ => rfl)
   peerRelease := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
     entry? (fun _ => rfl)
@@ -142,18 +151,17 @@ theorem hooks_projects : Driver.HooksProjects entry? hooks EntrySource.hooks whe
     (fun token => CausalScope.leave_projects Event.scope token entry? (fun _ => rfl))⟩
   prepare := product_native _ _ (TransportDriver.prepare_erases _ _)
   counterCheck := fun skb packet => product_native _ _ (TransportDriver.counter_erases _ skb packet)
-  selection := fun pid => state_native _ _ (focusStatePrefix_erases Journal.Event.responder Journal.responder?
-    (Responder.DriverCuts.selection_erases pid))
+  selection := ExchangeCausal.Callbacks.selection entry? (fun _ => rfl) (fun _ _ => rfl)
   confirmation := fun pid kid => state_native _ _ (focusStatePrefix_erases Journal.Event.responder Journal.responder?
     (Responder.DriverCuts.confirmation_erases pid kid))
   session := session_projects
   reserve := fun slot => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.reserve slot))
   allocate := fun packets => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.allocate packets))
-  create := fun pid item => state_native _ _ (state_result Journal.responder? _ _ (Journal.ResponderProjection.create pid item))
+  create := ExchangeCausal.Callbacks.create entry? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
   front := ExchangeCausal.front_projects_of_quiet entry? (fun _ => rfl) (fun _ => rfl)
     (fun _ _ => rfl)
   poll := product_native _ _ (native_result Journal.responder? _ _ Journal.ResponderProjection.poll)
-  encrypt := fun item => product_native _ _ (native_result Journal.responder? _ _ (Journal.ResponderProjection.encrypt item))
+  encrypt := ExchangeCausal.Callbacks.encrypt entry? (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl)
   transmit := transmit_projects
 
 /-- The initialized exchange and cookie-consumer history is an exact ordered

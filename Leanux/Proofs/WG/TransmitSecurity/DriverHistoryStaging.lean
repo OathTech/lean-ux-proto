@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsHistory
+import Leanux.Proofs.WG.TransmitSecurity.DriverNestedHistory
 
 namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
@@ -12,7 +12,8 @@ theorem staging_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
     StateHistorySafe Safe (stagingObserved g pid) := by
   unfold stagingObserved
   repeat' first
-    | (driver_history_head AuthenticatedEffects.PacketEffects.noKeyWith; exact effects_noKey_history h.effects _ _ _ _)
+    | (driver_history_head HandshakeSecurity.StagedConservation.Restore.noKeyWith;
+       exact disposal_restore_history h.effects g.stagedRestore g.peerRelease h.stagedRestore h.peerRelease _ _ _ _)
     | (driver_history_head Hooks.selection; exact h.selection _)
     | (driver_history_head Hooks.reserve; exact h.reserve _)
     | (driver_history_head Hooks.allocate; exact h.allocate _)
@@ -138,7 +139,10 @@ theorem receiveTail_actor_history (h : ActorCoreHistorySafe Safe g) (pid : PeerI
     StateHistorySafe Safe (receiveTailObserved g pid pkt confirmed) := by
   unfold receiveTailObserved
   repeat' first
-    | (driver_history_head AuthenticatedEffects.PacketEffects.prepareWith; exact effects_prepare_history h.effects _ _)
+    | (driver_history_head HandshakeSecurity.StagedDisposal.PacketSource.prepareWith;
+       exact disposal_prepare_history h.effects g.peerRelease h.peerRelease _ _)
+    | (driver_history_head RetirementSecurity.NestedPeerRelease.rxFinishWith;
+       exact nested_rxFinish_history g h.peerRelease _ _)
     | (driver_history_head stagingObserved; exact h.staging _)
     | (driver_history_head Hooks.session; exact h.session _)
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)

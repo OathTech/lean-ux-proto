@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalStackActors
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalStackNestedPoll
 
 /-! The final journal's actual native poll establishes inherited stack
 origins at each packet callback, including held GRO packets and Stop prefixes. -/
@@ -27,10 +28,11 @@ theorem poll (pid : PeerId) (budget : Nat) :
     funext fun skb => funext fun packet => counter_eq skb packet
   unfold Driver.nativePollObserved
   rw [counters]
-  exact GroOccurrence.Origins.observed_checked candidate replay stack? Event.scope CausalSources.Cause.stackInput
+  exact GroOccurrence.Origins.observed_nested_checked candidate replay stack? Event.scope CausalSources.Cause.stackInput
     (fun _ _ => rfl) (fun _ => rfl) (fun _ _ _ => rfl) (fun _ => rfl)
+    (fun peer => liftWGObserver (hooks.peerRelease peer))
     hooks.candidateLeave (fun peer packet endpoint => liftWGObserver (Driver.consumeObserved hooks peer packet endpoint))
-    (Driver.stackObserved hooks) core.candidateLeave
+    (Driver.stackObserved hooks) (fun peer => (core.peerRelease peer).liftWGObserver) core.candidateLeave
     (fun peer packet endpoint => (Driver.consume_history core peer packet endpoint).liftWGObserver)
     (Driver.stack_history core) pid budget
 

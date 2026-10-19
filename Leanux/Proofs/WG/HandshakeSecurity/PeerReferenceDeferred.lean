@@ -18,6 +18,7 @@ macro "peer_reference_driver_deferred_step " : tactic => `(tactic| first
   | (scheduler_preserve_at Env.runOneSendWorker; exact native_send_one_observed)
   | (nonce_product_head Driver.sendWorkerObserved; exact send_one)
   | (scheduler_preserve_at Env.runOneClearWorker; exact clear_one)
+  | (nonce_product_head Driver.clearWorkerObserved; rw [Driver.clearWorker_lift EntrySource.hooks rfl]; exact clear_one)
   | (scheduler_preserve_at Env.requireDrained; exact product_store _ (Nonce.Frames.drained _ _))
   | (scheduler_preserve_at Env.requireNoCryptWork; exact product_store _ requireNoCryptWork_sameKernel)
   | (nonce_product_head Driver.Hooks.deliver; exact product_store _ deliverSent_sameKernel)

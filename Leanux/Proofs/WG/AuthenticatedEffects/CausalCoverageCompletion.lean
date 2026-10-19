@@ -7,9 +7,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity Queues Lifetimes
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
 
-private abbrev observed := HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
-  (CompletionEffects.observed
-    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued)
+private abbrev observed := completionOps
 
 private theorem old_completion (body : PrefixM Completion.Event α) (live : frames ≠ []) : ProductAt frames
     (focusPrefix (Event.old ∘ Journal.completionEvent) completion? body) :=
@@ -31,7 +29,7 @@ private theorem result_receipt (body : PrefixM Event α) (safe : ProductAt frame
 private theorem complete (pid : PeerId) (item : List SkbId) (live : frames ≠ []) :
     ProductAt frames (CompletionEffects.completeWith observed pid item) := by
   unfold CompletionEffects.completeWith TxDisposition.andObs
-  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  simp only [observed,completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
     | (coverage_head receiptObserved; refine result_receipt _ ?_ _ (fun _ => rfl) (fun _ h => h.elim))
     | (coverage_head focusPrefix; exact old_completion _ live)
@@ -103,13 +101,18 @@ elab "coverage_completion_body " wanted:ident : tactic => withMainContext do
   unless name.toString == expected || name.toString.endsWith ("." ++ expected) do throwError "different body"
 
 private theorem body (pid : PeerId) (first : Option (List SkbId)) : ProductAt frames
-    (CompletionEffects.bodySourceWith observed
-      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed) pid first) := by
-  unfold CompletionEffects.bodySourceWith TxDisposition.andObs
-  simp only [observed,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+    (HandshakeSecurity.StagedConservation.Terminal.bodyWith observed
+      (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion observed)
+      (HandshakeSecurity.StagedConservation.Terminal.deadObserved txEvent txEvent? Event.stagedDisposal Event.terminalDrop) pid first) := by
+  unfold HandshakeSecurity.StagedConservation.Terminal.bodyWith TxDisposition.andObs
+  simp only [observed,completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
     | (coverage_head receiptObserved; refine result_receipt _ ?_ _ (fun _ => rfl) (fun _ h => h.elim))
     | (coverage_head CompletionEffects.completeScoped; exact complete_scope _ _)
+    | (coverage_head HandshakeSecurity.StagedDisposal.TxSource.dispose;
+        exact quiet_product (CallbackQuiet.dispose observed? (fun _ => rfl) (fun _ => rfl) _ _ _))
+    | (coverage_head HandshakeSecurity.StagedConservation.Terminal.deadObserved;
+        exact quiet_product (CallbackQuiet.dead observed? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) _ _ _))
     | (coverage_completion_body liftPrefix; exact old_step _)
     | (coverage_completion_body Completion.access; exact old_access _)
     | (coverage_completion_body focusPrefix; exact old_disposition _)
@@ -117,11 +120,11 @@ private theorem body (pid : PeerId) (first : Option (List SkbId)) : ProductAt fr
     | coverage_product_step
 
 theorem transmit (pid : PeerId) : ProductAt frames (CausalJournal.transmit pid) := by
-  unfold CausalJournal.transmit CompletionEffects.stepScoped CompletionEffects.stepSourceWith
-  simp only [HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
+  unfold CausalJournal.transmit HandshakeSecurity.StagedConservation.Terminal.stepWith
+  simp only [completionOps,HandshakeSecurity.StagedConservation.SendResult.decorate,HandshakeSecurity.StagedConservation.SendResult.observed,CompletionEffects.observed,CompletionEffects.focused,CompletionEffects.native]
   repeat' first
     | (coverage_head receiptObserved; refine result_receipt _ ?_ _ (fun _ => rfl) (fun _ h => h.elim))
-    | (coverage_head CompletionEffects.bodySourceWith; exact body _ _)
+    | (coverage_head HandshakeSecurity.StagedConservation.Terminal.bodyWith; exact body _ _)
     | (coverage_completion_body liftPrefix; exact old_step _)
     | (coverage_completion_body Completion.access; exact old_access _)
     | (coverage_completion_body focusPrefix; exact old_disposition _)

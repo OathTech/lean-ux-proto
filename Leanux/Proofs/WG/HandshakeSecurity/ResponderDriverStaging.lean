@@ -28,7 +28,7 @@ carrier through all normal paths, and later Stops retain prior checks. -/
 theorem staging (pid : PeerId) : Preserves (Driver.stagingObserved hooks pid) := by
   change StatePrefixPreserves (fun h w _ => Inv h w) Safe _
   unfold Driver.stagingObserved
-  simp only [Driver.noKey_lift hooks rfl]
+  simp only [Driver.restore_noKey_lift hooks rfl rfl rfl]
   dsimp only [hooks]
   apply StatePrefixEnsures.bind (selection_preserves pid)
   intro selected

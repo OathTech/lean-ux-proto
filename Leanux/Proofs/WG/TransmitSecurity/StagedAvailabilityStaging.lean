@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityRestore
+import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityActualSelection
 import Leanux.Proofs.WG.TransmitSecurity.BatchPayloadHistory
 import Leanux.Proofs.WG.TransmitSecurity.StagingProcessed
 
@@ -33,12 +33,13 @@ private theorem forget_held {action : WGPrefix Event α}
 arm. Early no-key and counter-limit exits use their restoration contract. -/
 theorem staging_source
     (noKey : ∀ pid peer key invalid, StatePrefixEnsures (Held pid peer) Safe
-      (AuthenticatedEffects.PacketEffects.noKeyWith effects pid peer.staged key invalid)
+      (HandshakeSecurity.StagedConservation.Restore.noKeyWith effects stagedRestore
+        (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects peerRelease) pid peer.staged key invalid)
       (fun _ h w _ => Carrier h w))
-    (create : ∀ pid items, StateSafe (state (Journal.create pid items)))
+    (create : ∀ pid items, StateSafe (AuthenticatedEffects.CausalJournal.create pid items))
     (pid : PeerId) : StateSafe (Driver.stagingObserved hooks pid) := by
   unfold Driver.stagingObserved
-  apply StatePrefixEnsures.bind (selection_observed pid)
+  apply StatePrefixEnsures.bind (selection_actual pid)
   intro chosen
   cases chosen with
   | none => exact StatePrefixEnsures.pure _ (fun _ _ _ before => before.1.2) (fun _ _ _ before => before.1)

@@ -110,7 +110,7 @@ private theorem keep {g : WGPrefix Journal.Event α} (rule : StateSafe g) (C : P
 theorem staging (pid : PeerId) : StateSafe (Driver.stagingObserved Journal.hooks pid) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold Driver.stagingObserved
-  simp only [Driver.noKey_lift Journal.hooks rfl]
+  simp only [Driver.restore_noKey_lift Journal.hooks rfl rfl rfl]
   dsimp only [Journal.hooks]
   apply StatePrefixEnsures.bind (selection pid)
   intro selected

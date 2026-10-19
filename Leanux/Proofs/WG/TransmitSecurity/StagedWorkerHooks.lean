@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.TransmitSecurity.StagedFocusedProduct
 import Leanux.Proofs.WG.TransmitSecurity.StagedWorkerFrames
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalCallbackProjection
 
 /-! The actual decrypt, ring-consume and encryption hooks preserve staged
 origins. Their focused events cannot create a staged-selection certificate. -/
@@ -21,16 +22,15 @@ theorem poll : ProductSafe hooks.poll := by
     exact Native.product _ Native.poll
 
 theorem encrypt (item : Option (List SkbId)) : ProductSafe (hooks.encrypt item) := by
-  apply product_focused_quiet Event.old old? (Journal.encrypt item)
-  · exact Appends.receiptObserved (Appends.focus _ _ _)
-  · exact HistoryFrame.receiptObserved
-      (focusPrefix_other Journal.Event.encrypted Journal.encryption? (selection? ∘ Event.old) (fun _ => rfl) _) (fun _ => rfl)
-  · intro w h
-    have projected := congrArg Prod.fst (Journal.encrypt_projects item w h)
-    have maps : (fun x : Bool × World => (id x.1,x.2)) = id := by funext ⟨value,v⟩; rfl
-    rw [maps,Except.map_id] at projected
-    exact projected.symm
-  · exact Native.encrypt item
+  have quiet := CallbackQuiet.encrypt selection? (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl) item
+  apply product_quiet quiet.1 quiet.2 _ (Native.encrypt item)
+  intro w h
+  have projected := congrArg Prod.fst
+    (HandshakeSecurity.ExchangeCausal.Callbacks.encrypt selection?
+      (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl) item w h)
+  change (RxWorkers.encryptStepTailSource item).run w =
+    (runPrefix (CausalJournal.encrypt item) w h).1.map id at projected
+  simpa only [Except.map_id,id_eq] using projected.symm
 
 theorem decrypt_prepare : ProductSafe hooks.prepare := by
   apply product_focused_quiet Event.old old? (TransportDriver.prepare Journal.Event.rxOrigin Journal.origin?)

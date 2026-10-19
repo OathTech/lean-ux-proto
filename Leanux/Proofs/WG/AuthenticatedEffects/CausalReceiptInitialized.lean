@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptQuietHistory
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDisposalHistoryFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptHandshake
@@ -9,6 +10,22 @@ native effect witnesses and exact current-token attribution, not that every
 token is authorized or that a missing/malformed context is unreachable. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Receipts
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity
+
+private def checkedEvent? (event : Event) : Option Event :=
+  match event with
+  | .cookieConsumed _ | .armed _ | .queued _ | .keepalivePrepared _ _ | .protocolSocket _ | .cookieSocket _ => some event
+  | _ => none
+
+private theorem quiet_checked (event : Event) (quiet : checkedEvent? event = none) : Unchecked event := by
+  cases event <;> simp_all [checkedEvent?,Unchecked]
+
+private theorem quiet_state_callback {body : WGPrefix Event α}
+    (quiet : CallbackQuiet.StateQuiet checkedEvent? body) : Driver.StateHistorySafe Safe body :=
+  CallbackQuiet.state_safe quiet (fun _ _ hi quiet => hi.quiet (fun event member => quiet_checked event (quiet event member)))
+
+private theorem quiet_product_callback {body : PrefixM Event α}
+    (quiet : CallbackQuiet.ProductQuiet checkedEvent? body) : Driver.ProductHistorySafe Safe body :=
+  CallbackQuiet.product_safe quiet (fun _ _ hi quiet => hi.quiet (fun event member => quiet_checked event (quiet event member)))
 
 private theorem old_state (body : WGPrefix Journal.Event α) :
     Driver.StateHistorySafe Safe (state body) := quiet_state Event.old old? (fun _ => True.intro) body
@@ -44,6 +61,7 @@ private theorem keepalive_prepare (pid : PeerId) :
     exact ⟨[.keepalivePrepared pid ⟨value,w,v,a,b⟩],rfl,safe,safe⟩
 
 theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
+  stagedRestore := fun pid packets => quiet_state_callback (CallbackQuiet.restore checkedEvent? (fun _ => rfl) pid packets)
   stagedPurge := fun _ => quiet_state Event.stagedDisposal stagedDisposal? (fun _ => True.intro) _
   peerRelease := fun _ => quiet_state Event.stagedDisposal stagedDisposal? (fun _ => True.intro) _
   deliver := by
@@ -66,15 +84,15 @@ theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
   counterCheck := fun _ _ => old_product _
   timerSelected := selected
   timerFinished := product_leave
-  selection := fun _ => old_state _
+  selection := fun pid => quiet_state_callback (CallbackQuiet.selection checkedEvent? (fun _ => rfl) (fun _ _ => rfl) pid)
   confirmation := fun _ _ => old_state _
   session := session
   reserve := fun _ => old_state _
   allocate := fun _ => old_state _
-  create := fun _ _ => old_state _
+  create := fun pid item => quiet_state_callback (CallbackQuiet.create checkedEvent? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid item)
   front := disposal_front
   poll := old_product _
-  encrypt := fun _ => old_product _
+  encrypt := fun item => quiet_product_callback (CallbackQuiet.encrypt checkedEvent? (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl) item)
   transmit := transmit
 
 theorem initialized (trace : Runner.Trace) (placeholders : Bool) :

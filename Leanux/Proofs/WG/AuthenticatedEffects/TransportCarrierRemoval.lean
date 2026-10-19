@@ -40,10 +40,21 @@ macro "transport_removal_step" : tactic => `(tactic| first
   | (transport_carrier_head liftWGPrefix; solve | apply state_rx; transport_removal_rx)
   | transport_carrier_state_step)
 
-theorem sendDrain (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid))
+theorem flushed_clear (effects : EffectsSafe extra origin replay hooks) (pid : PeerId) :
+    StateSafe extra origin replay (RetirementSecurity.NestedPeerRelease.flushedClearWith (nestedOps hooks) pid) := by
+  unfold RetirementSecurity.NestedPeerRelease.flushedClearWith RetirementSecurity.NestedPeerRelease.clearWith
+  simp only [nestedOps]
+  repeat' first
+    | (transport_carrier_head Hooks.peerRelease; exact effects.peerRelease _)
+    | (transport_carrier_native handshakeClear; exact state_rx _ (clearHandshake_rx _))
+    | (transport_carrier_native hidden; apply state_rx; exact removal_ambient_rx _)
+    | transport_removal_step
+
+theorem sendDrain (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid))
     (upTo : Option PeerId) : StateSafe extra origin replay (sendDrainObserved hooks upTo) := by
   unfold sendDrainObserved drainWith
   repeat' first
+    | (transport_carrier_head RetirementSecurity.NestedPeerRelease.flushedClearWith; exact flushed_clear effects _)
     | (transport_carrier_head Hooks.flushedSend; exact flushed _)
     | transport_removal_step
   all_goals exact state_rx _ (removal_throw_rx _)
@@ -54,7 +65,7 @@ theorem removeAfter (effects : EffectsSafe extra origin replay hooks) (flushed :
   unfold HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith timersStopWith
   repeat' first
     | (transport_carrier_head Hooks.peerRelease; exact effects.peerRelease _)
-    | (transport_carrier_head sendDrainObserved; exact sendDrain flushed _)
+    | (transport_carrier_head sendDrainObserved; exact sendDrain effects flushed _)
     | transport_removal_step
 
 theorem remove (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid))

@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueCookieActors
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueCookieNested
 
 /-! The actual queued receiver retains the validity of its popped input.
 Its native frame is derived by exact operation projections, while cookie
@@ -8,16 +8,6 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing TransmitSecurit
 open CausalJournal CookieInput HandshakeSecurity Origins.HandshakeSources
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
-
-abbrev receiver (session : PeerId→WGPrefix Event Bool) (keepalive : PeerId→WGPrefix Event Unit) :=
-  CookieConsumption.receiveWith (CookieConsumption.observed Event.cookieConsumed)
-    (fun mac=>HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
-      (ExchangeJoint.receiveOps Event.exchange
-        (HandshakeEffects.withEffects
-          (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
-            (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake) handshake?
-              session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
-          (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects)))
 
 private theorem receiver_old
     (sg : PeerId→WGPrefix Event Bool) (st : PeerId→WGPrefix TransmitSecurity.Journal.Event Bool)
@@ -29,7 +19,12 @@ private theorem receiver_old
         st kt msg src) := by
   rw [HandshakeWorker.observedReceive_factor,←CookieConsumption.receive_native]
   apply CookieConsumption.receive_projects old? _ _ _ _
-  · intro msg; exact CookieConsumption.observed_projects old? Event.cookieConsumed (fun _=>rfl) msg
+  · intro msg
+    unfold NestedPeerRelease.cookieObserved
+    apply HandshakeSecurity.Exchange.receipt_ignored old? _ _ _ ?_ (fun _ => rfl)
+    simpa only [NestedPeerRelease.cookie_lifted,NestedPeerRelease.cookie_native] using
+      NestedPeerRelease.cookie_projects old?
+        (NestedPeerRelease.observedOps_projects Event.stagedDisposal stagedDisposal? old? (fun _=>rfl)) msg
   intro mac
   apply HandshakeEffects.scopeOps_projects old? Event.scope CausalSources.Cause.handshake (fun _=>rfl)
   apply ExchangeJoint.receive_ignored old? Event.exchange (fun _=>rfl)
@@ -38,8 +33,17 @@ private theorem receiver_old
     sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _=>rfl) (fun _=>rfl)
   have repayment:=StagedDisposal.Decoration.receive_projects Event.stagedDisposal stagedDisposal?
     old? (fun _=>rfl) base (fun _=>rfl)
+  have accepted : HandshakeWorker.OpsProjects old? (CausalJournal.receiveOps sg kg mac)
+      (HandshakeWorker.observedOps TransmitSecurity.Journal.Event.handshake TransmitSecurity.Journal.handshake? st kt mac) :=
+    {repayment with
+      initiation := fun msg => NestedPeerRelease.initiation_focused_old
+        Event.stagedDisposal stagedDisposal? old? (fun _=>rfl) _
+        TransmitSecurity.Journal.Event.handshake TransmitSecurity.Journal.handshake? (fun _=>rfl) {mac with input := msg}
+      response := fun msg => NestedPeerRelease.response_focused_old
+        Event.stagedDisposal stagedDisposal? old? (fun _=>rfl) _
+        TransmitSecurity.Journal.Event.handshake TransmitSecurity.Journal.handshake? (fun _=>rfl) {mac with input := msg}}
   have projected:=HandshakeEffects.withEffects_projects old? (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
-    TransmitSecurity.Journal.Event.handshake (fun _=>rfl) _ _ effects TimerEffects.lifted repayment effects_projects
+    TransmitSecurity.Journal.Event.handshake (fun _=>rfl) _ _ effects TimerEffects.lifted accepted effects_projects
   rwa [HandshakeEffects.withEffects_neutral] at projected
 
 private theorem receiver_native (msg : Key) (src : SkbSource) :
@@ -77,7 +81,7 @@ private theorem receive_checked (msg : Key) (src : SkbSource) :
       (fun _=>StateInv HeaderLength.Valid Safe) := by
   intro w a h before
   apply Journal.checked_state
-    (CookieInput.receive hooks.session (Driver.keepaliveObserved hooks) session keepalive msg src before.2)
+    (receive_nested hooks.session (Driver.keepaliveObserved hooks) session keepalive msg src before.2)
     (fun w a h result v b valid run=>
       (hoare_iff_run_ambient _ _ _).mp (frame (receiveHandshakePacket_cell msg src)) w a result v b valid
         ((receiver_native msg src w a h).symm.trans run)) w a h before.1

@@ -103,7 +103,7 @@ theorem receive_tail_carrier (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) 
     CarrierSafe (Driver.receiveTailObserved Journal.hooks pid pkt confirmed) := by
   change StatePrefixPreserves (fun h w _ => Carrier h w) Safe _
   unfold Driver.receiveTailObserved
-  simp only [Driver.prepare_lift Journal.hooks rfl]
+  simp only [Driver.nested_prepare_lift Journal.hooks rfl rfl,Driver.rxFinish_lift Journal.hooks rfl]
   repeat' first
     | (nonce_source_head Driver.stagingObserved; exact staging_carrier _)
     | (nonce_source_head timersHandshakeComplete; exact carrier_lift _ (fun _ => NativeFrames.complete _ _) (bounds_complete _ _))

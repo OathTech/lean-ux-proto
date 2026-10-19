@@ -31,6 +31,7 @@ private theorem reserve_projects (kid : KeypairId) :
     (Nonce.reserveObserved_erases kid w)
 
 theorem hooks_projects : Driver.HooksProjects Journal.replay? Journal.hooks hooks where
+  stagedRestore := fun _ _ => Driver.Projection.state_lift _ _
   stagedPurge := fun _ => Driver.Projection.state_lift _ _
   peerRelease := fun _ => Driver.Projection.state_lift _ _
   deliver := projectsPrefix_lift _ _

@@ -104,4 +104,24 @@ theorem lifetime_fresh (pid : PeerId) :
     | (emission_head LifetimeEffects.queuedWith; exact lifetime_queued _ _)
     | emission_lifetime_step
 
+
+private theorem actual_put (peer : Option PeerId) : StateSafe (completionLifetime.put peer) :=
+  state_callback _ (CallbackFrames.lifetime_put_quiet contributing? (fun _ => rfl) (fun _ => rfl) peer)
+    (CallbackFrames.lifetime_put_erases peer) (peerPut_sent peer)
+
+private theorem actual_queued (pid : PeerId) (retry : Bool) :
+    StateSafe (LifetimeEffects.queuedWith completionLifetime pid retry) := by
+  unfold LifetimeEffects.queuedWith
+  repeat' first
+    | (emission_head LifetimeEffects.Ops.put; exact actual_put _)
+    | emission_lifetime_step
+
+theorem lifetime_actual_fresh (pid : PeerId) :
+    StateSafe (LifetimeEffects.freshWith completionLifetime pid) := by
+  unfold LifetimeEffects.freshWith andPrefix orPrefix
+  repeat' first
+    | (emission_head LifetimeEffects.queuedWith; exact actual_queued _ _)
+    | (emission_head LifetimeEffects.Ops.put; exact actual_put _)
+    | emission_lifetime_step
+
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Emissions

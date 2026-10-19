@@ -6,8 +6,9 @@ set_option maxHeartbeats 600000
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open TransmitSecurity RetirementSecurity Queues.RxCredits
 
-theorem ingress (msg : List UInt8) (src : SkbSource) : ProductSafe (Driver.receiveEntryObserved msg src) :=
-  product_native _ (ReadyCiphertext.Receive.coherent msg src)
+theorem ingress (msg : List UInt8) (src : SkbSource) : ProductSafe (Driver.receiveEntryObserved Journal.hooks msg src) := by
+  rw [Driver.receiveEntry_lift Journal.hooks rfl,liftWGObserver_lift]
+  exact product_native _ (ReadyCiphertext.Receive.coherent msg src)
 
 theorem inline_poll : ProductSafe (Driver.inlinePollObserved Journal.hooks) := by
   apply product_checked

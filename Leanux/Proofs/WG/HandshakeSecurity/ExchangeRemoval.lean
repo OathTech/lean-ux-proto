@@ -51,6 +51,7 @@ macro "exchange_removal_step " facts:term : tactic => `(tactic| first
 theorem drain_checked (facts : H1DriverSourceFacts) (upTo : Option PeerId) :
     Preserves (Driver.sendDrainObserved ExchangeDriver.hooks upTo) := by
   unfold Driver.sendDrainObserved SendExchange.drainWith
+  simp only [Driver.flushedClear_lift ExchangeDriver.hooks rfl]
   repeat' exchange_removal_step facts
 
 theorem timers_stop_checked (facts : H1DriverSourceFacts) (pid : PeerId) :

@@ -7,8 +7,9 @@ set_option maxHeartbeats 600000
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open RetirementSecurity Queues.RxCredits
 
-theorem ingress (msg : List UInt8) (src : SkbSource) : ProductSafe (Driver.receiveEntryObserved msg src) :=
-  product_native _ (fun _ => native_join (EncryptionPast.Ingress.receive msg src)
+theorem ingress (msg : List UInt8) (src : SkbSource) : ProductSafe (Driver.receiveEntryObserved Journal.hooks msg src) := by
+  rw [Driver.receiveEntry_lift Journal.hooks rfl,liftWGObserver_lift]
+  exact product_native _ (fun _ => native_join (EncryptionPast.Ingress.receive msg src)
     (RxPollOccurrences.join (ReceiveIngressCall.erases (.udp msg src)) (ReceiveIngressCall.allocation (.udp msg src))
       (ReceiveOccurrences.receive msg src)))
 

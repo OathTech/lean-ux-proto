@@ -29,7 +29,8 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
     StateProjectsPrefix cut? id (handshake sg kg) (Responder.DriverCuts.hooks.handshake st kt) := by
   apply ExchangeCookieJoint.worker_target cut? _ _ (HandshakeWorker.ops st kt) (fun _ => rfl)
   · intro msg
-    exact CookieConsumption.observed_projects cut? Event.cookieConsumed (fun _ => rfl) msg
+    exact Exchange.quiet_native_projection cut? _ _ (CallbackFrames.cookie_erases msg)
+      (CallbackFrames.cookie_quiet cut? (fun _ => rfl) (fun _ => rfl) msg).2
   intro mac
   apply HandshakeEffects.scopeOps_projects cut? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
   apply receive_projects
@@ -39,6 +40,12 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
     (Event.old ∘ Journal.Event.handshake) handshake? (fun _ => rfl)
     sg st kg kt hs hk mac Event.protocolSocket scope? Event.cookieSocket (fun _ => rfl) (fun _ => rfl)
   exact {base with
+    initiation := fun msg => Exchange.quiet_native_projection cut? _ _
+      (CallbackFrames.initiation_erases {mac with input := msg})
+      (CallbackFrames.initiation_quiet cut? (fun _ => rfl) (fun _ => rfl) _).2
+    response := fun msg => Exchange.quiet_native_projection cut? _ _
+      (CallbackFrames.response_erases {mac with input := msg})
+      (CallbackFrames.response_quiet cut? (fun _ => rfl) (fun _ => rfl) _).2
     send := protocol.send
     cookie := protocol.cookie
     put := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
@@ -58,7 +65,8 @@ theorem transmit_projects (pid : PeerId) :
     ProjectsPrefix cut? id (transmit pid) (liftPrefix (liftWG (txStep pid))) := by
   apply HistoryFrame.project
   · exact ExchangeCausal.transmit_history_of_quiet cut? (fun e => by cases e <;> rfl)
-      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid
+      (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
+      (fun _ => rfl) (fun _ => rfl) pid
   · intro w h
     have old := congrArg Prod.fst (CausalJournal.transmit_projects pid w h)
     have native := congrArg Prod.fst (Journal.ResponderProjection.transmit pid w (h.filterMap old?))
@@ -86,12 +94,8 @@ private theorem timer_projects (d : Device) (bound : UInt64) (pid : PeerId)
           .timer bound pid timer entry⟩)]).filterMap cut?)
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,cut?,List.append_nil]
 
-private theorem create_appends (pid : PeerId) (item : List SkbId) : StateAppends (Journal.create pid item) := by
-  intro w a h
-  exact Appends.focus Journal.Event.disposition Journal.disposition? (TxDisposition.create pid item)
-    (NativeAdapter.world w a) h
-
 theorem hooks_projects : Driver.HooksProjects cut? hooks Responder.DriverCuts.hooks where
+  stagedRestore := StagedConservation.Restore.observed_projects Event.stagedRestored cut? (fun _ => rfl)
   stagedPurge := ExchangeCausal.stagedPurge_projects_of_quiet cut? (fun _ => rfl)
   peerRelease := StagedDisposal.Decoration.release_projects Event.stagedDisposal stagedDisposal?
     cut? (fun _ => rfl)
@@ -121,18 +125,20 @@ theorem hooks_projects : Driver.HooksProjects cut? hooks Responder.DriverCuts.ho
     exact product_native _ _ ((Appends.lift _).receiptObserved)
       (TransportDriver.counter_projects_other Journal.Event.replay Journal.responder?
         (fun _ => rfl) skb packet)
-  selection := selection_projects
+  selection := fun pid => StagedConservation.Take.selection_projects Event.stagingTaken cut?
+    (fun _ => rfl) (fun peer run => .old (.responder (.selected peer run)))
+    Responder.DriverCuts.Event.selected (fun _ _ => rfl) pid
   confirmation := confirmation_projects
   session := session_projects
   reserve := fun slot => state_native _ _ ((StateAppends.focus _ _ _).receiptWGObserved _)
     (Journal.ResponderProjection.reserve slot)
   allocate := fun packets => state_native _ _ ((StateAppends.lift _).receiptWGObserved _)
     (Journal.ResponderProjection.allocate packets)
-  create := fun pid item => state_native _ _ (create_appends pid item) (Journal.ResponderProjection.create pid item)
+  create := ExchangeCausal.Callbacks.create cut? (fun _ => rfl) (fun _ => rfl) (fun _ => rfl)
   front := ExchangeCausal.front_projects_of_quiet cut? (fun _ => rfl) (fun _ => rfl)
     (fun _ _ => rfl)
   poll := product_native _ _ ((Appends.focus _ _ _).receiptObserved) Journal.ResponderProjection.poll
-  encrypt := fun item => product_native _ _ ((Appends.focus _ _ _).receiptObserved) (Journal.ResponderProjection.encrypt item)
+  encrypt := ExchangeCausal.Callbacks.encrypt cut? (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl)
   transmit := transmit_projects
 
 theorem execute_projects (trace : Runner.Trace) (placeholders : Bool) :

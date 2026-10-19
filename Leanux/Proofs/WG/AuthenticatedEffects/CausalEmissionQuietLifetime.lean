@@ -1,8 +1,7 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptNestedHistory
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionQuiet
 
-/-! The actual callback retains earlier delivery certificates; its emitted
-metadata does not add a delivery boundary. Native emission accounting remains
-a separate source contract. -/
+/-! Native completion lifetime effects preserve existing delivery certificates. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Emissions.Deliveries
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity Lifetimes
 set_option maxHeartbeats 600000
@@ -40,7 +39,7 @@ private theorem lifetime_guard (pid : PeerId) : Driver.StateHistorySafe Safe (li
 private theorem lifetime_get (pid : PeerId) : Driver.StateHistorySafe Safe (lifetime.get pid) := base_safe _
 private theorem lifetime_put (peer : Option PeerId) : Driver.StateHistorySafe Safe (lifetime.put peer) := base_safe _
 
-macro "stack_origin_lifetime_step" : tactic => `(tactic| first
+macro "emission_delivery_lifetime_step" : tactic => `(tactic| first
   | (driver_history_head LifetimeEffects.Ops.step; exact lifetime_step _)
   | (driver_history_head LifetimeEffects.Ops.peer; exact lifetime_peer _)
   | (driver_history_head LifetimeEffects.Ops.keypair; exact lifetime_key _)
@@ -55,7 +54,7 @@ macro "stack_origin_lifetime_step" : tactic => `(tactic| first
 private theorem lifetime_modify_timer (site : HiddenSite) (pid : PeerId) (timer : PeerTimer) (delay : Nat) :
     Driver.StateHistorySafe Safe (LifetimeEffects.modifyWith lifetime site pid timer delay) := by
   unfold LifetimeEffects.modifyWith
-  repeat' stack_origin_lifetime_step
+  repeat' emission_delivery_lifetime_step
 
 theorem lifetime_traversal (pid : PeerId) :
     Driver.StateHistorySafe Safe (LifetimeEffects.traversalWith lifetime pid) := by
@@ -63,23 +62,47 @@ theorem lifetime_traversal (pid : PeerId) :
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
     | (driver_history_head LifetimeEffects.modifyWith; exact lifetime_modify_timer _ _ _ _)
-    | stack_origin_lifetime_step
+    | emission_delivery_lifetime_step
 
 theorem lifetime_data_sent (pid : PeerId) :
     Driver.StateHistorySafe Safe (LifetimeEffects.dataSentWith lifetime pid) := by
   unfold LifetimeEffects.dataSentWith
-  repeat' stack_origin_lifetime_step
+  repeat' emission_delivery_lifetime_step
 
 private theorem lifetime_queued (pid : PeerId) (retry : Bool) :
     Driver.StateHistorySafe Safe (LifetimeEffects.queuedWith lifetime pid retry) := by
   unfold LifetimeEffects.queuedWith
-  repeat' stack_origin_lifetime_step
+  repeat' emission_delivery_lifetime_step
 
 theorem lifetime_fresh (pid : PeerId) :
     Driver.StateHistorySafe Safe (LifetimeEffects.freshWith lifetime pid) := by
   unfold LifetimeEffects.freshWith andPrefix orPrefix
   repeat' first
     | (driver_history_head LifetimeEffects.queuedWith; exact lifetime_queued _ _)
-    | stack_origin_lifetime_step
+    | emission_delivery_lifetime_step
+
+private theorem actual_lifetime_put (peer : Option PeerId) :
+    Driver.StateHistorySafe Safe (completionLifetime.put peer) :=
+  CallbackHistory.lifetime_put
+    (fun body => quiet_state
+      (HandshakeSecurity.StagedDisposal.LifetimeSource.peerEncode (Event.old ∘ Journal.completionEvent))
+      (HandshakeSecurity.StagedDisposal.LifetimeSource.peerDecode completion?)
+      (fun _ => rfl) body)
+    (fun event => emit_quiet (.stagedDisposal event) rfl) peer
+
+private theorem actual_lifetime_queued (pid : PeerId) (retry : Bool) :
+    Driver.StateHistorySafe Safe (LifetimeEffects.queuedWith completionLifetime pid retry) := by
+  unfold LifetimeEffects.queuedWith
+  repeat' first
+    | (driver_history_head LifetimeEffects.Ops.put; exact actual_lifetime_put _)
+    | emission_delivery_lifetime_step
+
+theorem lifetime_actual_fresh (pid : PeerId) :
+    Driver.StateHistorySafe Safe (LifetimeEffects.freshWith completionLifetime pid) := by
+  unfold LifetimeEffects.freshWith andPrefix orPrefix
+  repeat' first
+    | (driver_history_head LifetimeEffects.queuedWith; exact actual_lifetime_queued _ _)
+    | (driver_history_head LifetimeEffects.Ops.put; exact actual_lifetime_put _)
+    | emission_delivery_lifetime_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Emissions.Deliveries

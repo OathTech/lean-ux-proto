@@ -72,13 +72,14 @@ theorem encrypt_native (item : Option (List SkbId)) (h : List Event) :
 
 theorem encrypt (item : Option (List SkbId)) : ProductSafe (hooks.encrypt item) := by
   apply observed_product _ (RxWorkers.encryptStepTailSource item)
-  · apply focusPrefix_erases
+  · apply CallbackFrames.product_erases old? (CausalJournal.encrypt_projects item)
     intro w h
     have projected := congrArg Prod.fst (Journal.encrypt_projects item w h)
     have maps : (fun x : Bool × World => (id x.1,x.2)) = id := by funext ⟨value,v⟩; rfl
     rw [maps,Except.map_id] at projected
     exact projected.symm
-  · exact Appends.focus _ _ _
+  · exact (CallbackQuiet.encrypt (fun _ : Event => (none : Option Empty))
+      (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl) item).1
   · exact encrypt_native item
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Delayed

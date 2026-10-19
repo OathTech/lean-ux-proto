@@ -4,8 +4,9 @@ namespace Leanux.Proofs.WG.HandshakeSecurity.Exchange
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues TransmitSecurity
 
 theorem receive_entry (traffic : H1TrafficTagFrames) (msg : List UInt8) (src : SkbSource) :
-    ProductPreserves (Driver.receiveEntryObserved msg src) :=
-  product_native _ (fun h => frame h _ (traffic.receive msg src))
+    ProductPreserves (Driver.receiveEntryObserved ExchangeDriver.hooks msg src) := by
+  rw [Driver.receiveEntry_lift ExchangeDriver.hooks rfl,liftWGObserver_lift]
+  exact product_native _ (fun h => frame h _ (traffic.receive msg src))
 
 theorem multicast (family addr : Nat) :
     ProductPreserves (Driver.multicastObserved family addr) :=

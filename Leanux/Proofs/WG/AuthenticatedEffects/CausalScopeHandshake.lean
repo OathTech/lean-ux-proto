@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeStaging
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptNestedFrames
 
 /-! Native authenticated callbacks balance their own scopes, allowing nested
 keepalive and session observers while retaining valid prefixes on Stop. -/
@@ -26,12 +27,16 @@ private theorem after_mac
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
+            (CausalJournal.receiveOps session keepalive mac)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src loaded state) := by
   unfold afterMacWith responseWith
   simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
+    CausalJournal.receiveOps,
     StagedDisposal.Decoration.receive,ProtocolSender.receiveOps,HandshakeWorker.observedOps]
   repeat' first
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.admitInitiationWith; exact callback_state (CallbackFrames.initiation_quiet scope? (fun _ => rfl) (fun _ => rfl) _))
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.admitResponseWith; exact callback_state (CallbackFrames.response_quiet scope? (fun _ => rfl) (fun _ => rfl) _))
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.cookieObserved; exact callback_state (CallbackFrames.cookie_quiet scope? (fun _ => rfl) (fun _ => rfl) _))
     | (scope_balance_head StagedDisposal.Decoration.release; exact state_focus Event.stagedDisposal stagedDisposal? (fun _ => rfl) _)
     | (scope_balance_head ProtocolSocket.observed; exact protocol_send _ _)
     | (scope_balance_head CookieSocket.observed; exact cookie_send _ _ _)
@@ -50,14 +55,17 @@ private theorem receive
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, StateSafe (session pid))
     (hk : ∀ pid, StateSafe (keepalive pid)) (msg : Key) (src : SkbSource) :
-    StateSafe (CookieConsumption.receiveWith (CookieConsumption.observed Event.cookieConsumed)
+    StateSafe (CookieConsumption.receiveWith (RetirementSecurity.NestedPeerRelease.cookieObserved CallbackFrames.nested Event.cookieConsumed)
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
-            (StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal? (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket))
+            (CausalJournal.receiveOps session keepalive mac)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
-  unfold CookieConsumption.receiveWith CookieConsumption.observed
+  unfold CookieConsumption.receiveWith
   repeat' first
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.admitInitiationWith; exact callback_state (CallbackFrames.initiation_quiet scope? (fun _ => rfl) (fun _ => rfl) _))
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.admitResponseWith; exact callback_state (CallbackFrames.response_quiet scope? (fun _ => rfl) (fun _ => rfl) _))
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.cookieObserved; exact callback_state (CallbackFrames.cookie_quiet scope? (fun _ => rfl) (fun _ => rfl) _))
     | (scope_balance_head receiptWGObserved; refine state_receipt _ ?_ _ (fun _ => rfl))
     | (scope_balance_head StagedDisposal.Decoration.release; exact state_focus Event.stagedDisposal stagedDisposal? (fun _ => rfl) _)
     | (scope_balance_head ProtocolSocket.observed; exact protocol_send _ _)
@@ -73,6 +81,9 @@ theorem handshake
     StateSafe (CausalJournal.handshake session keepalive) := by
   unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.admitInitiationWith; exact callback_state (CallbackFrames.initiation_quiet scope? (fun _ => rfl) (fun _ => rfl) _))
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.admitResponseWith; exact callback_state (CallbackFrames.response_quiet scope? (fun _ => rfl) (fun _ => rfl) _))
+    | (scope_balance_head RetirementSecurity.NestedPeerRelease.cookieObserved; exact callback_state (CallbackFrames.cookie_quiet scope? (fun _ => rfl) (fun _ => rfl) _))
     | (scope_balance_head StagedDisposal.Decoration.release; exact state_focus Event.stagedDisposal stagedDisposal? (fun _ => rfl) _)
     | (scope_balance_head ProtocolSocket.observed; exact protocol_send _ _)
     | (scope_balance_head CookieSocket.observed; exact cookie_send _ _ _)

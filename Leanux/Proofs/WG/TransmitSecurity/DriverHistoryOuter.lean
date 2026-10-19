@@ -40,7 +40,7 @@ theorem retained_history (h : ActorHistorySafe Safe g) (call : Syscall) :
   cases call <;> unfold retainedObserved
   case wgUp => exact History.socketCall _ _ (envUp_history h)
   case wgDown => exact History.socketCall _ _ (envDown_history h)
-  all_goals exact History.product_lift _
+  all_goals exact dumpDispatch_history g h.peerRelease _
 
 theorem observe_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (observeObserved g) :=

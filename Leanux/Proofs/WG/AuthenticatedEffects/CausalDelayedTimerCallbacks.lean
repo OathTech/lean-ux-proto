@@ -62,7 +62,7 @@ theorem retransmit (pid : PeerId) : StateSafe (TimerEffects.retransmitWith effec
     | (causal_delayed_head TimerEffects.queuedWith; exact queued _ _)
     | causal_delayed_effect_step
 
-private theorem queued_disposal (pid : PeerId) (retry : Bool) : StateSafe
+theorem queued_disposal (pid : PeerId) (retry : Bool) : StateSafe
     (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects hooks.peerRelease pid retry) := by
   unfold HandshakeSecurity.StagedDisposal.Effects.queuedWith
   repeat' first

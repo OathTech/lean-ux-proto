@@ -30,12 +30,23 @@ theorem fixture (c : Contracts P Safe hooks ρ) (trigger : AuthenticatedEffects.
     (state_neutral (c.quiet.fixtureEnter trigger) (enter trigger))
     (fun token=>state_neutral (c.quiet.fixtureLeave token) (leave token)) keeps
 
-theorem ingress (msg : List UInt8) (src : SkbSource) :
-    ProductSafe Valid Safe (Driver.receiveEntryObserved msg src) := by
-  simpa only [Driver.receiveEntryObserved,liftWGObserver_lift] using
-    state_product (show StateSafe Valid Safe (liftWGPrefix (wgReceive msg src)) from
-      StatePrefixEnsures.lift _ (fun _ _ _ before=>before.2)
-        (fun _ w a x v b before run=>⟨(hoare_iff_run_ambient _ _ _).mp (receive msg src) w a x v b before.1 run,before.2⟩))
+theorem ingress (c : Contracts Valid Safe hooks ρ) (msg : List UInt8) (src : SkbSource) :
+    ProductSafe Valid Safe (Driver.receiveEntryObserved hooks msg src) := by
+  apply checked_product (Driver.receiveEntry_history hooks c.quiet.peerRelease msg src)
+  intro w h result v before run
+  have projected := Projection.product (Driver.receiveEntry_projects c.projects msg src)
+    (Driver.receiveEntry_projects TransmitSecurity.Journal.hooks_projects msg src)
+  rw [Driver.receiveEntry_lift Driver.nonceHooks rfl, liftWGObserver_lift] at projected
+  have plain := DriverOwnership.product_native projected (erasesPrefix_lift _) w v h run
+  rw [liftWG_run] at plain
+  cases nativeRun : ((wgReceive msg src).run w.wg).run w.ambient with
+  | error e => simp [nativeRun, Except.map] at plain
+  | ok output =>
+    obtain ⟨⟨value,g⟩,a⟩ := output
+    simp only [nativeRun, Except.map, Except.ok.injEq, Prod.mk.injEq] at plain
+    rcases plain with ⟨_,same⟩
+    subst v
+    exact (hoare_iff_run_ambient _ _ _).mp (receive msg src) w.wg w.ambient value g a before nativeRun
 
 theorem inline_poll (c : Contracts P Safe hooks ρ) :
     ProductSafe P Safe (Driver.inlinePollObserved hooks) := by
@@ -71,7 +82,7 @@ theorem wg_stable (h : List E) (w v : World) (same : wgStoreView v.wg=wgStoreVie
 theorem inject (c : Contracts Valid Safe hooks ρ) (family port : Nat)
     (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
     ProductSafe Valid Safe (Driver.injectObserved hooks family port msg tos ll dest) :=
-  TrafficSource.inject_preserves (fun _ _ before=>before.2) stable _ _ _ ingress (crypt c) drain
+  TrafficSource.inject_preserves (fun _ _ before=>before.2) stable _ _ _ (ingress c) (crypt c) drain
     family port msg tos ll dest
 
 theorem after_batch (c : Contracts P Safe hooks ρ) : ProductSafe P Safe (Driver.afterBatchObserved hooks) := by
@@ -86,12 +97,12 @@ theorem after_batch (c : Contracts P Safe hooks ρ) : ProductSafe P Safe (Driver
 
 theorem flood (c : Contracts Valid Safe hooks ρ) (count port family : Nat) (messages : List (List UInt8)) :
     ProductSafe Valid Safe (Driver.floodObserved hooks count port family messages) :=
-  TrafficSource.flood_preserves (fun _ _ before=>before.2) stable _ _ _ _ ingress (inline_poll c)
+  TrafficSource.flood_preserves (fun _ _ before=>before.2) stable _ _ _ _ (ingress c) (inline_poll c)
     (after_batch c) drain count port family messages
 
 theorem batch_item (c : Contracts Valid Safe hooks ρ) (d : Device) (cqes : List Int) (item : Env.BatchItem) :
     ProductSafe Valid Safe (Driver.batchItemObserved hooks d cqes item) :=
-  batchItemWith_preserves (fun _ _ before=>before.2) wg_stable _ _ _ _ ingress (inline_poll c) multicast
+  batchItemWith_preserves (fun _ _ before=>before.2) wg_stable _ _ _ _ (ingress c) (inline_poll c) multicast
     (fun family addr packets mtu=>state_product (fixture c _ _ (transmit c family addr packets mtu))) d cqes item
 
 theorem batch (c : Contracts Valid Safe hooks ρ) (items : List Env.BatchItem) :

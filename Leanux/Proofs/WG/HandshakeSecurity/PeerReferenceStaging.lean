@@ -28,7 +28,7 @@ nonce allocation and packet queue decisions, including internally stopped runs. 
 theorem staging (pid : PeerId) : Observed (E := E) (Driver.stagingObserved EntrySource.hooks (E := E) pid) := by
   change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold Driver.stagingObserved
-  simp only [Driver.noKey_lift EntrySource.hooks (E := E) rfl]
+  simp only [Driver.restore_noKey_lift EntrySource.hooks (E := E) rfl rfl rfl]
   dsimp only [EntrySource.hooks]
   apply StatePrefixEnsures.bind (lift _ (selection pid))
   intro selected

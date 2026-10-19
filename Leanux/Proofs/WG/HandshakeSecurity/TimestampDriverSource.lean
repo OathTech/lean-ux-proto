@@ -102,6 +102,7 @@ theorem worker_safe
     | timestamp_driver_step
 
 theorem hooks_safe : Driver.HooksHistorySafe IncreasingReceipts hooks where
+  stagedRestore := fun _ _ => TransmitSecurity.Driver.History.state_lift _
   stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := Driver.History.product_lift _

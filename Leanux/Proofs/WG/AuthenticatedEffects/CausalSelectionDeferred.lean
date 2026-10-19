@@ -14,8 +14,13 @@ theorem deliver : ProductSafe hooks.deliver := by
     Driver.History.product_bind (Selections.product_emit (.delivery w.sent) True.intro) (fun _ =>
       Driver.History.product_lift _))
 
+theorem clear_worker : ProductSafe (Driver.clearWorkerObserved hooks) :=
+  product_combine _ Delayed.clear_worker
+    (Selections.callback_product (CallbackFrames.clear_worker_quiet Selections.protected? (fun _ => rfl)))
+
 macro "selection_deferred_step" : tactic => `(tactic| first
   | (selection_carrier_head Driver.Hooks.deliver; exact deliver)
+  | (selection_carrier_head Driver.clearWorkerObserved; exact clear_worker)
   | (selection_carrier_head liftPrefix; apply product_native; solve | causal_delayed_deferred_native)
   | (selection_carrier_head Driver.sendWorkerObserved; exact Selections.send_worker)
   | (selection_carrier_head Driver.scheduleObserved; exact schedule _)

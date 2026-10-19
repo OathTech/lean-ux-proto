@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptQuietHistory
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDisposalHistoryFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalHandshakePairWorker
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalHandshakePairSend
@@ -7,6 +8,14 @@ import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryReceive
 /-! Every shared-driver actor preserves exact handshake-scope/callback pairing. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.HandshakePairs
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity
+
+private theorem quiet_state_callback {body : WGPrefix Event α}
+    (quiet : CallbackQuiet.StateQuiet required body) : Driver.StateHistorySafe Safe body :=
+  CallbackQuiet.state_safe quiet (fun _ _ hi quiet => hi.quiet quiet)
+
+private theorem quiet_product_callback {body : PrefixM Event α}
+    (quiet : CallbackQuiet.ProductQuiet required body) : Driver.ProductHistorySafe Safe body :=
+  CallbackQuiet.product_safe quiet (fun _ _ hi quiet => hi.quiet quiet)
 
 private theorem old_state (body : WGPrefix Journal.Event α) :
     Driver.StateHistorySafe Safe (state body) := quiet_state Event.old old? (fun _ => rfl) body
@@ -25,6 +34,7 @@ private theorem selected (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
     (fun _ => product_enter (.timer j pid timer entry) (fun _ => rfl)) w h hi
 
 theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
+  stagedRestore := fun pid packets => quiet_state_callback (CallbackQuiet.restore required (fun _ => rfl) pid packets)
   stagedPurge := fun _ => quiet_state Event.stagedDisposal stagedDisposal? (fun _ => rfl) _
   peerRelease := fun _ => quiet_state Event.stagedDisposal stagedDisposal? (fun _ => rfl) _
   deliver := by
@@ -49,15 +59,15 @@ theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
   counterCheck := fun _ _ => old_product _
   timerSelected := selected
   timerFinished := product_leave
-  selection := fun _ => old_state _
+  selection := fun pid => quiet_state_callback (CallbackQuiet.selection required (fun _ => rfl) (fun _ _ => rfl) pid)
   confirmation := fun _ _ => old_state _
   session := session
   reserve := fun _ => old_state _
   allocate := fun _ => old_state _
-  create := fun _ _ => old_state _
+  create := fun pid item => quiet_state_callback (CallbackQuiet.create required (fun _ => rfl) (fun _ => rfl) (fun _ => rfl) pid item)
   front := disposal_front
   poll := old_product _
-  encrypt := fun _ => old_product _
+  encrypt := fun item => quiet_product_callback (CallbackQuiet.encrypt required (fun _ => rfl) (fun _ => rfl) (fun _ _ => rfl) item)
   transmit := transmit
 
 theorem actors : Driver.ActorHistorySafe Safe hooks := hooks_safe.actors

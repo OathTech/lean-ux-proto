@@ -11,6 +11,7 @@ set_option maxHeartbeats 600000
 macro "causal_delayed_removal_step" : tactic => `(tactic| first
   | (causal_delayed_head Hooks.peerRelease; exact peer_release _)
   | (causal_delayed_native_head runFlushedClearWork; exact flushed_clear _)
+  | (causal_delayed_head RetirementSecurity.NestedPeerRelease.flushedClearWith; exact flushed_clear_observed _)
   | (causal_delayed_native_head keypairsClear; exact clear_keys _)
   | (causal_delayed_native_head delTimer; exact delete _ _)
   | (causal_delayed_native_head peerMakeDead; exact dead _)

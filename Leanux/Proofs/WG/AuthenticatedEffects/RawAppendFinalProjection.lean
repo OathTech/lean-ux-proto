@@ -25,6 +25,7 @@ theorem timer (d : Device) (bound : UInt64) (pid : PeerId) (kind : PeerTimer) (e
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,raw?,journal?,List.append_nil]
 
 theorem hooks_projects : Driver.HooksProjects raw? CausalJournal.hooks RawAppend.hooks where
+  stagedRestore := restore
   stagedPurge := purge
   peerRelease := release
   deliver := DeliverySource.observed_projects raw? CausalJournal.Event.delivery (fun _ => rfl)

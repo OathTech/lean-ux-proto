@@ -10,26 +10,35 @@ set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
 theorem fresh_receive (pid : PeerId) (live : frames ≠ []) :
-    StateAt frames (PacketEffects.freshReceiveWith effects pid) := by
-  unfold PacketEffects.freshReceiveWith
+    StateAt frames (HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith effects hooks.peerRelease pid) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith
   repeat' first
-    | (coverage_head TimerEffects.queuedWith; exact queued _ _ live)
+    | (coverage_head HandshakeSecurity.StagedDisposal.Effects.queuedWith; exact restore_queued _ _ live)
     | coverage_effect_step live
 
 theorem prepare_packet (pid : PeerId) (packet : RxPacket) (live : frames ≠ []) :
-    StateAt frames (PacketEffects.prepareWith effects pid packet) := by
-  unfold PacketEffects.prepareWith
+    StateAt frames (HandshakeSecurity.StagedDisposal.PacketSource.prepareWith effects hooks.peerRelease pid packet) := by
+  unfold HandshakeSecurity.StagedDisposal.PacketSource.prepareWith
   repeat' first
-    | (coverage_head PacketEffects.freshReceiveWith; exact fresh_receive _ live)
+    | (coverage_head HandshakeSecurity.StagedDisposal.PacketSource.freshReceiveWith; exact fresh_receive _ live)
     | (coverage_head TimerEffects.traversalWith; exact traversal _ live)
     | (coverage_head TimerEffects.dataReceivedWith; exact data_received _ live)
     | coverage_effect_step live
+
+theorem rx_finish (pid : PeerId) (ready : Packets.RxReady) :
+    StateAt frames (RetirementSecurity.NestedPeerRelease.rxFinishWith (Driver.nestedOps hooks) pid ready) := by
+  unfold RetirementSecurity.NestedPeerRelease.rxFinishWith RetirementSecurity.NestedPeerRelease.rxAfterLookupWith
+  simp only [Driver.nestedOps]
+  repeat' first
+    | (coverage_head Driver.Hooks.peerRelease; exact peer_release _)
+    | coverage_state_step
 
 theorem receive_tail (pid : PeerId) (packet : RxPacket) (confirmed : Bool) (live : frames ≠ []) :
     StateAt frames (Driver.receiveTailObserved hooks pid packet confirmed) := by
   unfold Driver.receiveTailObserved
   repeat' first
-    | (coverage_head PacketEffects.prepareWith; exact prepare_packet _ _ live)
+    | (coverage_head RetirementSecurity.NestedPeerRelease.rxFinishWith; exact rx_finish _ _)
+    | (coverage_head HandshakeSecurity.StagedDisposal.PacketSource.prepareWith; exact prepare_packet _ _ live)
     | (coverage_head Driver.stagingObserved; exact staging _ live)
     | coverage_state_step
 

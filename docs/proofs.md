@@ -18,7 +18,7 @@ facts are named hypotheses, not silently discharged dependencies.
 | Outcome | Result, assumptions and remaining boundary |
 | --- | --- |
 | T1 nonce safety | Complete. `TransmitSecurity.initialized_nonce_safety` joins initialized native reservation uniqueness, actual key-allocation/AEAD nonce uniqueness, bounded counters and exact header/wire encoding, including stopped prefixes. No incoming invariant or H1 premise remains. `HandshakeSecurity.native_nonce_rejection_invalidates_and_restores` and the rejection observer expose the actual invalidation/restoration and unchanged drop count; `TransmitSecurity.original_rekey_count_request` and `original_rekey_age_request` expose the guarded native helper call. |
-| T2 transmit authorization and conservation | Open. `initialized_staged_selection_origins` derives ordered, distinct routing/keepalive positions through the whole native initialized runner, including Stop. `initialized_allocated_staged_occurrences` retains the selected peer allocation, exact plaintext sequence and those prior batch positions. `initialized_encrypted_plaintext_origin` and `initialized_socket_route_key_core_and_endpoint` join that history to each actual AEAD and transport socket receipt in the same final journal, with no incoming carrier or H1 premise. Socket bytes, endpoint, packet peer and historical current-slot sending core are bound. The current tranche also derives historical key-owner equality at the actual allocation entry and joins it to the socket peer through the same AEAD material; that strengthening passes the aggregate gate and fresh replay. Native overflow/purge and creation-refusal arms expose their exact effects. Initialized TX ownership and native work service cover resident cells, scheduling, deferred calls and peer removal; destructor disposal retains its explicit idle-entry premise. `initialized_available_birth_bank` and `initialized_available_birth_unique` now derive live birth credits and cross-allocation uniqueness through the actual initialized Runner, including Stop, without an incoming carrier or C2 premise; scoped validation passes. Complete fixed-ticket pending/terminal conservation remains open. T3 supplies converse native emission coverage separately. Batch-local distinctness and queue aliases do not discharge those obligations. |
+| T2 transmit authorization and conservation | Open. `initialized_staged_selection_origins` derives ordered, distinct routing/keepalive positions through the whole native initialized runner, including Stop. `initialized_allocated_staged_occurrences` retains the selected peer allocation, exact plaintext sequence and those prior batch positions. `initialized_encrypted_plaintext_origin` and `initialized_socket_route_key_core_and_endpoint` join that history to each actual AEAD and transport socket receipt in the same final journal, with no incoming carrier or H1 premise. Socket bytes, endpoint, packet peer and historical current-slot sending core are bound. The current tranche also derives historical key-owner equality at the actual allocation entry and joins it to the socket peer through the same AEAD material; that strengthening passes the aggregate gate and fresh replay. Native overflow/purge and creation-refusal arms expose their exact effects. Initialized TX ownership and native work service cover resident cells, scheduling, deferred calls and peer removal; destructor disposal retains its explicit idle-entry premise. `initialized_available_birth_bank` and `initialized_available_birth_unique` now derive live birth credits and cross-allocation uniqueness through the actual initialized Runner, including Stop, without an incoming carrier or C2 premise; the aggregate gate and fresh replay pass. Complete fixed-ticket pending/terminal conservation remains open. T3 supplies converse native emission coverage separately. Batch-local distinctness and queue aliases do not discharge those obligations. |
 | T3 authenticated effects and silence | Complete and validated. `AuthenticatedEffects.initialized_silence_security_outcome` combines every native append’s own authorization, rooted timer/work effects, latest own handshake admission, authenticated replay and packet-specific GRO delivery. The cookie exception uses actual load/MAC guards: at most one source-bound 64-byte reply per invocation, strictly smaller than its initialized input, without session effects. Refused initialized consumers preserve every WG field modulo map representation; MAC refusal masks only load/cookie-secret/rate-limit bookkeeping, and decryption names the exact pre-AEAD invalidation alternative. Consumer equality is at completed native cuts, retained through later outer Stop; internally stopped effects use prefix observations. No incoming invariant, funding, coherence or H1 premise remains. No global reply-rate, CPU, timing or cryptographic-unforgeability claim is made. |
 | T4 handshake replay resistance | Complete and validated. `HandshakeSecurity` derives initialized retained-peer timestamp and exchange histories, one allocation per successful session, handshake clearing and refusal-state preservation. The final session entry supplies role-slot residency. Actual initialized stale initiations are refused with restored peer records and no sent-data change; the exact native continuation produces no response without an independent ambient-history premise. Final-journal exports prove response-consumption and session-installation uniqueness by exchange epoch, and exactly one native allocation for the same successful session receipt. Visible assumptions include `H1ResponseEdges`, `H1SessionEffects` and operational C2 tag/frame packages at read-only `5177bd9c`; no C2 file is edited. |
 | T5 responder confirmation | Complete and validated. `initialized_responder_confirmation_discipline` joins promotion-label uniqueness, each confirmation's own accepted transport cause and actual responder AEAD after confirmation of the same allocation. Initialized transport covers inner promotion receipts even when the enclosing receive later stops. `PendingPromotion.H1DriverFrames` and `H1ResponderCurrentEdges` remain named local C2 operational assumptions; no incoming carrier, reachability, funding or callback premise remains. |
@@ -32,22 +32,24 @@ locals and the complete pending/terminal partition remain open. Original early
 transmit refusals now have their exact invocation-level error charge; a GSO
 packet list does not multiply that charge.
 
-The T3 package and native fixed-ledger purge/final-release transitions pass
-the 3039-job aggregate build and 1523-declaration axiom gate across thirteen
-roots, using only the three standard axioms. Fresh root kernel replay, all
-twelve counterexample recipes, the 130-job model build and 131 unit tests pass
-(one configured-kernel skip, 22.483 seconds). All 2993 frozen proof-source
-hashes match; all 916 inherited proof modules, mirror `77c9b555` and main
-`783510e8` are unchanged. The previous validated checkpoint is `ccbd8eba`.
-The inherited warning and repaired development failures are recorded in the
-report.
+The current source-44 checkpoint passes the 3107-job aggregate build and
+1523-declaration axiom gate across thirteen roots, using only the three standard
+axioms. Fresh root kernel replay, all twelve counterexample recipes, the 66-job
+default model build and 131 unit tests pass (one configured-kernel skip, 22.756
+seconds). All 3061 frozen proof-source hashes match; all 916 inherited proof
+modules, mirror `77c9b555` and main `783510e8` are unchanged. The previous
+validated checkpoint is `3db44e32`. The inherited warning and repaired
+development failures are recorded in the report.
 
-Fixed-ticket purge and final release now preserve the complete ledger and
-settle the same incoming queue tickets with the actual counter charge. New
-local take/restore, publication and nested-release source factors are checked.
-T2 still needs native backing for held/allocated tickets, first-terminal
-classification and full initialized conservation through stopped prefixes.
-The shared final driver’s new source-cut integration remains in progress.
+The final Driver now exposes actual take, restore, terminal disposal and nested
+reference repayment. Its native projections and completed-outcome adapters pass
+the aggregate checks. Local admission creates fresh fixed tickets; native
+allocation preserves their backing and injection under explicit entry carriers.
+A stopped borrow retains the completed staging take and selected tickets even
+without an outer selection receipt. These local facts do not establish the full
+initialized pending/terminal partition. General stopped ownership frontiers,
+first-terminal transport and initialized conservation remain open. Mirror/C1/C2
+claims are unchanged.
 
 ## Current register
 

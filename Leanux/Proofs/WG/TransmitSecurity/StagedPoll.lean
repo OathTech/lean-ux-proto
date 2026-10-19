@@ -39,6 +39,7 @@ theorem receive_poll (pid : PeerId) (budget : Nat)
   unfold Driver.pollObserved CandidatePoll.sourceWith
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
+    | (staged_origin_product_head Driver.Hooks.peerRelease; exact product_state (disposal_release_observed _))
     | (staged_origin_product_head Driver.Hooks.candidateEnter; exact candidate_enter _ _)
     | (staged_origin_product_head Driver.Hooks.candidateLeave; exact candidate_leave _)
     | (staged_origin_product_head Driver.Hooks.counterCheck; exact counter_observed _ _)
@@ -54,9 +55,10 @@ theorem native_poll (pid : PeerId) (budget : Nat) : ProductSafe (Driver.nativePo
   have callback := GroOccurrence.stack_preserves (fun h w => Carrier h w.wg) Safe
     (fun _ _ before => before.2) hooks.stackInput (Driver.stackObserved hooks) stack
     (fun entry _ safe => product_scope (.stackInput entry) _ (fun _ => safe))
-  unfold Driver.nativePollObserved GroOccurrencePoll.observed GroOccurrencePoll.sourceWith
+  unfold Driver.nativePollObserved RetirementSecurity.NestedPeerRelease.pollWith
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
+    | (staged_origin_product_head Driver.Hooks.peerRelease; exact product_state (disposal_release_observed _))
     | (staged_origin_product_head Driver.Hooks.candidateEnter; exact candidate_enter _ _)
     | (staged_origin_product_head Driver.Hooks.candidateLeave; exact candidate_leave _)
     | (staged_origin_product_head Driver.Hooks.counterCheck; exact counter_observed _ _)

@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationTakeSource
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationRestoreObserved
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationTerminalObserved
+import Leanux.Proofs.WG.HandshakeSecurity.StagedDisposalEncryptionFocus
+import Leanux.Proofs.WG.HandshakeSecurity.StagedDisposalLifetimeProjection
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseAdmissionProjection
 import Leanux.Proofs.WG.TransmitSecurity.JournalSource
 import Leanux.Proofs.WG.AuthenticatedEffects.CompletionEffectsMatching
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeEffectsNatural
@@ -21,6 +27,9 @@ abbrev Cause := CausalSources.Cause
 abbrev Context := CausalEffects.Context Cause
 
 inductive Event where
+  | stagingTaken (receipt : HandshakeSecurity.StagedConservation.Take.Receipt)
+  | stagedRestored (receipt : HandshakeSecurity.StagedConservation.Restore.Receipt)
+  | terminalDrop (receipt : HandshakeSecurity.StagedConservation.Terminal.Receipt)
   | transmitInput (input : HandshakeSecurity.StagedConservation.Front.Input)
   | stagedDisposal (event : HandshakeSecurity.StagedDisposal.Event)
   | sendResult (receipt : HandshakeSecurity.StagedConservation.SendResult.Receipt)
@@ -76,15 +85,28 @@ def product (body : PrefixM Journal.Event α) : PrefixM Event α :=
 def session (pid : PeerId) : WGPrefix Event Bool :=
   HandshakeSecurity.ExchangeJoint.session Event.exchange pid (state (Journal.session pid))
 
+def receiveOps (session : PeerId → WGPrefix Event Bool)
+    (keepalive : PeerId → WGPrefix Event Unit) (mac : HandshakeMac) :
+    Origins.HandshakeSources.Ops (WGPrefix Event) :=
+  {HandshakeSecurity.StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
+      (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac
+        Event.protocolSocket scope? Event.cookieSocket) with
+    initiation := fun msg => RetirementSecurity.NestedPeerRelease.admitInitiationWith
+      (RetirementSecurity.NestedPeerRelease.observedOps Event.stagedDisposal stagedDisposal?)
+      (Event.old ∘ Journal.Event.handshake ∘ HandshakeCausal.Event.admission) {mac with input := msg}
+    response := fun msg => RetirementSecurity.NestedPeerRelease.admitResponseWith
+      (RetirementSecurity.NestedPeerRelease.observedOps Event.stagedDisposal stagedDisposal?)
+      (Event.old ∘ Journal.Event.handshake ∘ HandshakeCausal.Event.admission) {mac with input := msg}}
+
 def handshake (session : PeerId → WGPrefix Event Bool)
     (keepalive : PeerId → WGPrefix Event Unit) : WGPrefix Event Bool :=
-  CookieConsumption.workerWith (CookieConsumption.observed Event.cookieConsumed) fun mac =>
+  CookieConsumption.workerWith
+    (RetirementSecurity.NestedPeerRelease.cookieObserved
+      (RetirementSecurity.NestedPeerRelease.observedOps Event.stagedDisposal stagedDisposal?) Event.cookieConsumed) fun mac =>
     HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
       (HandshakeSecurity.ExchangeJoint.receiveOps Event.exchange
         (HandshakeEffects.withEffects
-          (HandshakeSecurity.StagedDisposal.Decoration.receive Event.stagedDisposal stagedDisposal?
-            (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac
-              Event.protocolSocket scope? Event.cookieSocket))
+          (receiveOps session keepalive mac)
           (Event.old ∘ Journal.Event.handshake) effects))
 
 def flushedSend (pid : PeerId) : WGPrefix Event Unit :=
@@ -93,11 +115,45 @@ def flushedSend (pid : PeerId) : WGPrefix Event Unit :=
       (HandshakeSecurity.StagedDisposal.Decoration.send Event.stagedDisposal stagedDisposal?
         (ProtocolSender.sendOps Event.protocolSocket scope?))) effects pid
 
+def txEvent (event : Queues.TxDisposition.Event) : Event := .old (.disposition event)
+
+def txEvent? (event : Event) : Option Queues.TxDisposition.Event :=
+  (old? event).bind Journal.disposition?
+
+def completionLifetime : LifetimeEffects.Ops (WGPrefix Event) :=
+  HandshakeSecurity.StagedDisposal.LifetimeSource.decorate
+    (Event.old ∘ Journal.completionEvent) completion? scope? Event.armed Event.queued Event.stagedDisposal
+
+def completionOps : CompletionEffects.Ops Event :=
+  {HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
+    (CompletionEffects.observed (Event.old ∘ Journal.completionEvent) completion?
+      scope? Event.armed Event.queued) with
+    fresh := fun pid => liftWGObserver (LifetimeEffects.freshWith completionLifetime pid)
+    dispose := HandshakeSecurity.StagedDisposal.TxSource.dispose
+      (HandshakeSecurity.StagedDisposal.TxSource.observed txEvent txEvent? Event.stagedDisposal)}
+
 def transmit (pid : PeerId) : PrefixM Event Bool :=
-  CompletionEffects.stepScoped Event.scope CausalSources.Cause.completion
-    (HandshakeSecurity.StagedConservation.SendResult.decorate Event.sendResult
-      (CompletionEffects.observed (Event.old ∘ Journal.completionEvent) completion?
-        scope? Event.armed Event.queued)) pid
+  HandshakeSecurity.StagedConservation.Terminal.stepWith completionOps
+    (CompletionEffects.completeScoped Event.scope CausalSources.Cause.completion completionOps)
+    (HandshakeSecurity.StagedConservation.Terminal.deadObserved txEvent txEvent?
+      Event.stagedDisposal Event.terminalDrop) pid
+
+def selection (pid : PeerId) : WGPrefix Event (Option (Peer × Option KeypairId)) :=
+  HandshakeSecurity.StagedConservation.Take.selection Event.stagingTaken
+    (fun pid run => .old (.responder (.selected pid run))) pid
+
+def stagedRestore (pid : PeerId) (packets : List Packet) : WGPrefix Event Unit :=
+  HandshakeSecurity.StagedConservation.Restore.observed Event.stagedRestored pid packets
+
+def create (pid : PeerId) (item : List SkbId) : WGPrefix Event Unit :=
+  NativeAdapter.lower (HandshakeSecurity.StagedConservation.Terminal.createObserved
+    txEvent txEvent? Event.stagedDisposal Event.terminalDrop pid item)
+
+def encrypt (item : Option (List SkbId)) : PrefixM Event Bool :=
+  receiptObserved (HandshakeSecurity.StagedDisposal.EncryptionSource.tail
+    (HandshakeSecurity.StagedDisposal.EncryptionSource.observed
+      (Event.old ∘ Journal.Event.encrypted) (fun event => (old? event).bind Journal.encryption?)
+      Event.stagedDisposal stagedDisposal?) item) (fun run => .old (.encryptionReturn item run))
 
 def front (family addr : Nat) (packets : List Packet) (mtu : Nat) : WGPrefix Event (Except Int PeerId) :=
   HandshakeSecurity.StagedConservation.Front.observed Event.transmitInput Event.stagedDisposal stagedDisposal?
@@ -115,6 +171,7 @@ def keepalivePrepare (pid : PeerId) : WGPrefix Event Bool :=
     (.keepalivePrepared pid)
 
 def hooks : Driver.Hooks Event where
+  stagedRestore := stagedRestore
   stagedPurge := stagedPurge
   peerRelease := peerRelease
   deliver := DeliverySource.observed Event.delivery
@@ -132,15 +189,15 @@ def hooks : Driver.Hooks Event where
   timerFinished := CausalScope.leavePrefix Event.scope
   prepare := product Journal.hooks.prepare
   counterCheck := fun skb packet => product (Journal.hooks.counterCheck skb packet)
-  selection := fun pid => state (Journal.selection pid)
+  selection := selection
   confirmation := fun pid kid => state (Journal.confirmation pid kid)
   session := session
   reserve := fun slot => state (Journal.reserve slot)
   allocate := fun packets => state (Journal.allocate packets)
-  create := fun pid item => state (Journal.create pid item)
+  create := create
   front := front
   poll := product Journal.poll
-  encrypt := fun item => product (Journal.encrypt item)
+  encrypt := encrypt
   transmit := transmit
 
 def execute (trace : Runner.Trace) (placeholders : Bool) : PrefixOuter Event Lean.Json :=

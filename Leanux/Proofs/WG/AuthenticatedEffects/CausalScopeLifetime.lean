@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeEffects
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalDisposalScopeFrames
 
 /-! The native lifetime source restores its incoming lexical stack on
 normal completion and retains a well-formed stack on Stop. -/
@@ -10,7 +11,7 @@ set_option maxRecDepth 4096
 private abbrev base := CompletionEffects.lifetimeBase
   (Event.old ∘ Journal.completionEvent) completion?
 
-def lifetime := LifetimeEffects.decorate base scope? Event.armed Event.queued
+def lifetime := completionLifetime
 
 private theorem base_safe (body : MixedM α) : StateSafe
     (focusStatePrefix ((Event.old ∘ Journal.completionEvent) ∘ CompletionEffects.lifetimeEvent)
@@ -37,7 +38,8 @@ private theorem lifetime_modify (pid : PeerId) (f : Peer → Peer) :
     StateSafe (lifetime.modifyPeer pid f) := base_safe _
 private theorem lifetime_guard (pid : PeerId) : StateSafe (lifetime.guard pid) := base_safe _
 private theorem lifetime_get (pid : PeerId) : StateSafe (lifetime.get pid) := base_safe _
-private theorem lifetime_put (peer : Option PeerId) : StateSafe (lifetime.put peer) := base_safe _
+private theorem lifetime_put (peer : Option PeerId) : StateSafe (lifetime.put peer) :=
+  callback_state (CallbackQuiet.peer scope? _ _ (fun _ => rfl) (fun _ => rfl) peer)
 
 macro "scope_balanced_lifetime_step" : tactic => `(tactic| first
   | (scope_balance_head LifetimeEffects.Ops.step; exact lifetime_step _)

@@ -17,6 +17,7 @@ macro "exchange_driver_deferred_step " facts:term : tactic => `(tactic| first
   | (scheduler_preserve_at delTimer; exact product_native _ (fun h => frame_tag h _ (($facts).handshake.deleteTimer _ _)))
   | (nonce_product_head Driver.sendWorkerObserved; exact send_one_checked ($facts).edges ($facts).handshake)
   | (scheduler_preserve_at Env.runOneClearWorker; exact product_lift _ (clear_one_frame ($facts).control))
+  | (nonce_product_head Driver.clearWorkerObserved; rw [Driver.clearWorker_lift ExchangeDriver.hooks rfl]; exact product_lift _ (clear_one_frame ($facts).control))
   | (scheduler_preserve_at Env.requireDrained; exact product_store _ (Nonce.Frames.drained _ _))
   | (scheduler_preserve_at Env.requireNoCryptWork; exact product_store _ requireNoCryptWork_sameKernel)
   | (nonce_product_head Driver.Hooks.deliver; exact product_store _ deliverSent_sameKernel)
