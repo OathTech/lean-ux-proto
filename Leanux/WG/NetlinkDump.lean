@@ -217,10 +217,18 @@ def wgGetDeviceDump (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) : M DumpCal
       if ← branch .dumpPutPublic fail then unsupported "the device part does not fit a fresh chunk (unreachable)"
       device := device ++ [("private_key", toJson (hexKey identity.staticPrivate)),
         ("public_key", toJson (hexKey identity.staticPublic))]
-  -- peers_nest = nla_nest_start(skb, WGDEVICE_A_PEERS)
+  -- peers_nest = nla_nest_start(skb, WGDEVICE_A_PEERS): `nla_nest_start`
+  -- saves the tail pointer before it puts the nest header
+  -- (include/net/netlink.h:1925-1934), and `nla_nest_cancel` trims back to
+  -- that saved tail (:1975-1978), header included; so the snapshot the
+  -- cancel arm restores is taken before the reservation. Until 2026-10-19 it
+  -- was taken after it, and a cancelled dump kept a four-byte debit
+  -- (campaign 2's request 3, with its arithmetic witness: 3720 of 3776 where
+  -- the C leaves 3724; unobservable on this fixture, since nothing is put
+  -- into the chunk after the cancel, netlink.c:264-268 → `out`)
+  let nestStart := skb
   let (fail, s) := skb.put (nlaTotal 0); skb := s
   if ← branch .dumpNoPeersNest fail then unsupported "the peers nest does not fit a fresh chunk (unreachable)"
-  let nestStart := skb
   let ret : Int := 0
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]
