@@ -140,6 +140,8 @@ theorem handshake : StateSafe (Driver.handshakeObserved Journal.hooks) :=
     (TransportCarrier.keepalive staging)
 
 theorem callbacks : DeferredSafe (fun _ => True) origin? replay? Journal.hooks where
+  fixtureEnter := fun _ => state_pure _
+  fixtureLeave := fun _ => state_pure _
   armTimer := armTimer
   queueSend := queueSend
   selection := selection

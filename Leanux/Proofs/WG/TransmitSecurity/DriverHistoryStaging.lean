@@ -23,6 +23,8 @@ theorem staging_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
 
 theorem HooksHistorySafe.actors (h : HooksHistorySafe Safe g) : ActorHistorySafe Safe g where
   staging := staging_history h
+  fixtureEnter := h.fixtureEnter
+  fixtureLeave := h.fixtureLeave
   handshake := h.handshake
   sendWorker := h.sendWorker
   flushedSend := h.flushedSend

@@ -28,6 +28,9 @@ macro "responder_driver_up_step" : tactic => `(tactic| first
 
 theorem open_device : Preserves (Driver.openObserved hooks) := by
   unfold Driver.openObserved
+  rw [show Driver.fixtureOps hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
+    AuthenticatedEffects.FixtureEffects.open_neutral]
+  unfold AuthenticatedEffects.FixtureEffects.openWith
   repeat' responder_driver_up_step
 
 theorem up_device : Preserves (Driver.upObserved hooks) := by

@@ -33,8 +33,11 @@ theorem flood (count port family : Nat)
     receive_entry (inline_poll) (after_batch) drain count port family messages
 
 theorem batch_item (d : Device) (cqes : List Int) (item : Env.BatchItem) :
-    ProductPreserves (Driver.batchItemObserved TimestampDriver.hooks d cqes item) :=
-  batchItemWith_preserves (fun _ _ hi => hi.1) product_wg_stable _ _ _ _
+    ProductPreserves (Driver.batchItemObserved TimestampDriver.hooks d cqes item) := by
+  unfold Driver.batchItemObserved
+  simp only [show Driver.fixtureOps TimestampDriver.hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
+    AuthenticatedEffects.FixtureEffects.run_neutral]
+  exact batchItemWith_preserves (fun _ _ hi => hi.1) product_wg_stable _ _ _ _
     receive_entry (inline_poll) multicast
     (fun family addr packets mtu => product_safe (transmit family addr packets mtu)) d cqes item
 
@@ -44,8 +47,11 @@ theorem batch (items : List Env.BatchItem) :
     (batch_item) (after_batch) items
 
 theorem syscall_xmit (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) :
-    ProductPreserves (Driver.syscallXmitObserved TimestampDriver.hooks family addr payload opts) :=
-  syscallXmitWith_preserves (fun _ _ hi => hi.1) product_wg_stable _ _ multicast
+    ProductPreserves (Driver.syscallXmitObserved TimestampDriver.hooks family addr payload opts) := by
+  unfold Driver.syscallXmitObserved
+  simp only [show Driver.fixtureOps TimestampDriver.hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
+    AuthenticatedEffects.FixtureEffects.run_neutral]
+  exact syscallXmitWith_preserves (fun _ _ hi => hi.1) product_wg_stable _ _ multicast
     (fun family addr packets mtu => product_safe (transmit family addr packets mtu)) family addr payload opts
 
 end Leanux.Proofs.WG.HandshakeSecurity.TimestampArchive

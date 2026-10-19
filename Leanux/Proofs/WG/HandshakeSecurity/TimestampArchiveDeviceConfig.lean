@@ -51,6 +51,8 @@ private theorem config_key_with (a : DeviceAttrs)
 theorem config_key (a : DeviceAttrs) :
     Preserves (Driver.configKey TimestampDriver.hooks a) := by
   unfold Driver.configKey
+  simp only [show Driver.fixtureOps TimestampDriver.hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
+    AuthenticatedEffects.FixtureEffects.run_neutral]
   have removal : Driver.removeObserved TimestampDriver.hooks = fun peer => liftWGPrefix (peerRemove peer) :=
     funext (Driver.remove_lift TimestampDriver.hooks rfl)
   rw [removal]

@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverSource
 import Leanux.Proofs.Logged.PrefixOuter
+import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsContracts
 
 /-! History-only safety through the shared native driver. State-dependent
 ownership invariants remain separate; this interface cannot discharge them. -/
@@ -13,6 +14,8 @@ abbrev ProductHistorySafe (Safe : List E → Prop) (g : PrefixM E α) : Prop :=
   PrefixPreserves (fun h _ => Safe h) Safe g
 
 structure HooksHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop where
+  fixtureEnter : ∀ trigger, StateHistorySafe Safe (hooks.fixtureEnter trigger)
+  fixtureLeave : ∀ token, StateHistorySafe Safe (hooks.fixtureLeave token)
   handshake : ∀ (session : PeerId → WGPrefix E Bool) (keepalive : PeerId → WGPrefix E Unit),
     (∀ pid, StateHistorySafe Safe (session pid)) →
     (∀ pid, StateHistorySafe Safe (keepalive pid)) →
@@ -44,6 +47,8 @@ property would discard that source relationship. Other callback contracts stay
 explicit and the original native driver remains unchanged. -/
 structure ActorHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop where
   staging : ∀ pid, StateHistorySafe Safe (stagingObserved hooks pid)
+  fixtureEnter : ∀ trigger, StateHistorySafe Safe (hooks.fixtureEnter trigger)
+  fixtureLeave : ∀ token, StateHistorySafe Safe (hooks.fixtureLeave token)
   handshake : ∀ (session : PeerId → WGPrefix E Bool) (keepalive : PeerId → WGPrefix E Unit),
     (∀ pid, StateHistorySafe Safe (session pid)) →
     (∀ pid, StateHistorySafe Safe (keepalive pid)) →
@@ -244,4 +249,13 @@ macro "driver_product_history_step" : tactic => `(tactic| first
   | maintenance_intro
   | driver_history_reduce
   | (split; all_goals try simp_all only []; all_goals try subst_vars))
+
+theorem fixture_history {E α : Type} {Safe : List E → Prop} {hooks : Hooks E}
+    (h : ActorHistorySafe Safe hooks)
+    (trigger : AuthenticatedEffects.FixtureEffects.Trigger) (body : WGPrefix E α)
+    (history : StateHistorySafe Safe body) : StateHistorySafe Safe
+      (AuthenticatedEffects.FixtureEffects.runWith (fixtureOps hooks) trigger body) :=
+  AuthenticatedEffects.FixtureEffects.run_preserves _ _ _
+    (fun _ _ _ before => before) (h.fixtureEnter trigger) h.fixtureLeave history
+
 end Leanux.Proofs.WG.TransmitSecurity.Driver

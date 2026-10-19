@@ -30,7 +30,7 @@ theorem batchItem_projects (h : HooksProjects ρ g a) (d : Device) (cqes : List 
     ProjectsPrefix ρ id (batchItemObserved g d cqes item) (batchItemObserved a d cqes item) :=
   batchItemWith_projects ρ _ _ _ _ _ _ _ _ (fun _ _ => projectsPrefix_lift ρ _)
     (inline_projects h) (fun _ _ => projectsPrefix_lift ρ _)
-    (fun family addr packets mtu => (transmit_projects h family addr packets mtu).liftWGObserver ρ id) d cqes item
+    (fun family addr packets mtu => (fixture_projects h _ _ _ (transmit_projects h family addr packets mtu)).liftWGObserver ρ id) d cqes item
 
 theorem batch_projects (h : HooksProjects ρ g a) (items : List Env.BatchItem) :
     ProjectsPrefix ρ id (batchObserved g items) (batchObserved a items) := by
@@ -45,6 +45,6 @@ theorem syscallXmit_projects (h : HooksProjects ρ g a) (family addr : Nat)
     ProjectsPrefix ρ id (syscallXmitObserved g family addr payload opts)
       (syscallXmitObserved a family addr payload opts) :=
   syscallXmitWith_projects ρ _ _ _ _ (fun _ _ => projectsPrefix_lift ρ _)
-    (fun family addr packets mtu => (transmit_projects h family addr packets mtu).liftWGObserver ρ id) _ _ _ _
+    (fun family addr packets mtu => (fixture_projects h _ _ _ (transmit_projects h family addr packets mtu)).liftWGObserver ρ id) _ _ _ _
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

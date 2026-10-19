@@ -37,6 +37,9 @@ private theorem decide_keepalive (p : Peer) (interval : Nat) (running : Bool) : 
 theorem config_finish (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (ret : Int) :
     Preserves (Driver.configTailFinish TimestampDriver.hooks a peer pid ret) := by
   unfold Driver.configTailFinish
+  rw [show Driver.fixtureOps TimestampDriver.hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
+    AuthenticatedEffects.FixtureEffects.peerFinish_neutral]
+  unfold AuthenticatedEffects.FixtureEffects.peerFinishWith
   apply StatePrefixEnsures.bind (lift _ (fun h => frame_store h _ getDev_sameWGStore))
   intro d
   apply StatePrefixEnsures.bind (ambient _)

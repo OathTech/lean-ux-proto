@@ -24,6 +24,8 @@ import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastTransmit
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastRxPoll
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastDecrypt
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastHandshake
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastDeviceConfiguration
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastTx
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Transport from reservation through every actual AEAD invocation remains open. -/
@@ -573,5 +575,25 @@ theorem original_ingress_handshake_history_exclusion :
   ⟨EncryptionPast.Ingress.receive,EncryptionPast.Decrypt.iteration,
     EncryptionPast.Handshake.receive,EncryptionPast.Maintenance.drain_send,
     EncryptionPast.Maintenance.timers_stop⟩
+
+/-- Security: native peer/device configuration, lifecycle operations and TX
+completion cannot make an old encrypted packet identity available as pending
+encryption work. Fresh device epochs prevent numeric-ID reuse from conflating
+allocations. Incoming physical/live bounds and historical exclusion remain
+explicit; this does not assert the initialized global carrier or key continuity. -/
+theorem original_configuration_lifecycle_history_exclusion :
+    (∀ attrs, Framing.Preserves (EncryptionPast.Ready past active) (setPeerCmd attrs)) ∧
+    (∀ attrs, Framing.Preserves (EncryptionPast.Ready past active) (wgSetDevice attrs)) ∧
+    (∀ peer, Framing.Preserves (EncryptionPast.Ready past active) (peerRemove peer)) ∧
+    Framing.Preserves (EncryptionPast.Ready past active) wgCreate ∧
+    Framing.Preserves (EncryptionPast.Ready past active) wgOpen ∧
+    Framing.Preserves (EncryptionPast.Ready past active) wgDown ∧
+    Framing.Preserves (EncryptionPast.Ready past active) (wgDelete : WG.M Int) ∧
+    (∀ pid, Framing.Preserves (fun w : World => EncryptionPast.Ready past active w.wg)
+      (txIter pid (Env.condResched .txWorker))) :=
+  ⟨EncryptionPast.PeerConfiguration.set_peer,EncryptionPast.DeviceConfiguration.set_device,
+    EncryptionPast.Removal.remove_peer,EncryptionPast.DeviceFrames.create,
+    EncryptionPast.DeviceLifecycle.device_open,EncryptionPast.Removal.down,
+    EncryptionPast.DeviceLifecycle.device_delete_default,EncryptionPast.Tx.tx⟩
 
 end Leanux.Proofs.WG.TransmitSecurity

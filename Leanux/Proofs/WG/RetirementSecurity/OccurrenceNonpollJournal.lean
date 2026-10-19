@@ -107,6 +107,8 @@ theorem hooks_safe : HooksHistorySafe Safe nonpollHooks where
     rw [Driver.sendWorker_lift nonpollHooks rfl]
     exact History.product_lift _
   flushedSend := fun _ => History.state_lift _
+  fixtureEnter := fun _ => History.state_pure _
+  fixtureLeave := fun _ => History.state_pure _
   armTimer := fun _ _ _ _ => History.state_lift _
   queueSend := fun _ => History.state_lift _
   candidateEnter := fun _ _ => History.product_pure _

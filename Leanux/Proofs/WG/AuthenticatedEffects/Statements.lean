@@ -1,3 +1,8 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CompletionEffectsObservedProjection
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalSourceMetadata
+import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsFactors
+import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsScope
+import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsContracts
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeEffectsOther
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeScopePrefix
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportEffectReceipts

@@ -14,13 +14,14 @@ theorem configOut_projects (ρ : E → Option F) (attrs : PeerAttrs) (peer : Opt
 theorem configTailFinish_projects (h : HooksProjects ρ g a) (attrs : PeerAttrs)
     (peer : Option PeerId) (pid : PeerId) (ret : Int) :
     StateProjectsPrefix ρ id (configTailFinish g attrs peer pid ret) (configTailFinish a attrs peer pid ret) := by
-  unfold configTailFinish
+  unfold configTailFinish AuthenticatedEffects.FixtureEffects.peerFinishObserved AuthenticatedEffects.FixtureEffects.peerFinishWith
   repeat' first
     | (maintenance_head removeObserved; exact remove_projects h _)
     | (maintenance_head removeAllObserved; exact removeAll_projects h)
     | (maintenance_head configOut; exact configOut_projects ρ _ _ _)
     | (maintenance_head stagingObserved; exact staging_projects h _)
     | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
+    | (maintenance_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_projects h)
     | driver_state_step ρ
 
 theorem configTail_projects (h : HooksProjects ρ g a) (attrs : PeerAttrs)
@@ -32,6 +33,7 @@ theorem configTail_projects (h : HooksProjects ρ g a) (attrs : PeerAttrs)
     | (maintenance_head removeAllObserved; exact removeAll_projects h)
     | (maintenance_head configOut; exact configOut_projects ρ _ _ _)
     | (maintenance_head configTailFinish; exact configTailFinish_projects h _ _ _ _)
+    | (maintenance_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_projects h)
     | driver_state_step ρ
 
 theorem configUpdate_projects (h : HooksProjects ρ g a) (attrs : PeerAttrs)
@@ -43,6 +45,7 @@ theorem configUpdate_projects (h : HooksProjects ρ g a) (attrs : PeerAttrs)
     | (maintenance_head removeAllObserved; exact removeAll_projects h)
     | (maintenance_head configOut; exact configOut_projects ρ _ _ _)
     | (maintenance_head configTail; exact configTail_projects h _ _ _)
+    | (maintenance_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_projects h)
     | driver_state_step ρ
 
 theorem configPeer_projects (h : HooksProjects ρ g a) (attrs : PeerAttrs) :
@@ -53,6 +56,7 @@ theorem configPeer_projects (h : HooksProjects ρ g a) (attrs : PeerAttrs) :
     | (maintenance_head removeAllObserved; exact removeAll_projects h)
     | (maintenance_head configOut; exact configOut_projects ρ _ _ _)
     | (maintenance_head configUpdate; exact configUpdate_projects h _ _ _ _ _)
+    | (maintenance_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_projects h)
     | driver_state_step ρ
 
 theorem configPeers_projects (h : HooksProjects ρ g a) (attrs : DeviceAttrs) :
@@ -62,6 +66,7 @@ theorem configPeers_projects (h : HooksProjects ρ g a) (attrs : DeviceAttrs) :
     | (maintenance_head removeObserved; exact remove_projects h _)
     | (maintenance_head removeAllObserved; exact removeAll_projects h)
     | (maintenance_head configPeer; exact configPeer_projects h _)
+    | (maintenance_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_projects h)
     | driver_state_step ρ
 
 theorem configKey_projects (h : HooksProjects ρ g a) (attrs : DeviceAttrs) :
@@ -72,6 +77,7 @@ theorem configKey_projects (h : HooksProjects ρ g a) (attrs : DeviceAttrs) :
     | (maintenance_head removeAllObserved; exact removeAll_projects h)
     | (maintenance_head configPeers; exact configPeers_projects h _)
     | (maintenance_head stagingObserved; exact staging_projects h _)
+    | (maintenance_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_projects h)
     | driver_state_step ρ
 
 theorem configDeviceUpdate_projects (h : HooksProjects ρ g a) (attrs : DeviceAttrs) (flags : UInt32) :
@@ -81,6 +87,7 @@ theorem configDeviceUpdate_projects (h : HooksProjects ρ g a) (attrs : DeviceAt
     | (maintenance_head removeObserved; exact remove_projects h _)
     | (maintenance_head removeAllObserved; exact removeAll_projects h)
     | (maintenance_head configKey; exact configKey_projects h _)
+    | (maintenance_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_projects h)
     | driver_state_step ρ
 
 theorem configDevice_projects (h : HooksProjects ρ g a) (attrs : DeviceAttrs) :
@@ -90,16 +97,18 @@ theorem configDevice_projects (h : HooksProjects ρ g a) (attrs : DeviceAttrs) :
     | (maintenance_head removeObserved; exact remove_projects h _)
     | (maintenance_head removeAllObserved; exact removeAll_projects h)
     | (maintenance_head configDeviceUpdate; exact configDeviceUpdate_projects h _ _)
+    | (maintenance_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_projects h)
     | driver_state_step ρ
 
 theorem open_projects (h : HooksProjects ρ g a) :
     StateProjectsPrefix ρ id (openObserved g) (openObserved a) := by
-  unfold openObserved
+  unfold openObserved AuthenticatedEffects.FixtureEffects.openObserved AuthenticatedEffects.FixtureEffects.openWith
   repeat' first
     | (maintenance_head removeObserved; exact remove_projects h _)
     | (maintenance_head removeAllObserved; exact removeAll_projects h)
     | (maintenance_head stagingObserved; exact staging_projects h _)
     | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
+    | (maintenance_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_projects h)
     | driver_state_step ρ
 
 theorem up_projects (h : HooksProjects ρ g a) :
@@ -109,6 +118,7 @@ theorem up_projects (h : HooksProjects ρ g a) :
     | (maintenance_head removeObserved; exact remove_projects h _)
     | (maintenance_head removeAllObserved; exact removeAll_projects h)
     | (maintenance_head openObserved; exact open_projects h)
+    | (maintenance_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_projects h)
     | driver_state_step ρ
 
 theorem envUp_projects (h : HooksProjects ρ g a) :

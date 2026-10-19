@@ -72,17 +72,24 @@ theorem flood (count port family : Nat) (messages : List (List UInt8)) :
   TrafficSource.flood_preserves (fun _ _ hi => hi.2) product_stable _ _ _ _ ingress inline_poll
     after_batch drain count port family messages
 
+private theorem fixture_neutral :
+    Driver.fixtureOps Journal.hooks = AuthenticatedEffects.FixtureEffects.neutral := rfl
+
 theorem batch_item (d : Device) (cqes : List Int) (item : Env.BatchItem) :
-    ProductSafe (Driver.batchItemObserved Journal.hooks d cqes item) :=
-  batchItemWith_preserves (fun _ _ hi => hi.2) product_wg_store _ _ _ _ ingress inline_poll multicast
+    ProductSafe (Driver.batchItemObserved Journal.hooks d cqes item) := by
+  unfold Driver.batchItemObserved
+  simp only [fixture_neutral, AuthenticatedEffects.FixtureEffects.run_neutral]
+  exact batchItemWith_preserves (fun _ _ hi => hi.2) product_wg_store _ _ _ _ ingress inline_poll multicast
     (fun family addr packets mtu => state_product (transmit family addr packets mtu)) d cqes item
 
 theorem batch (items : List Env.BatchItem) : ProductSafe (Driver.batchObserved Journal.hooks items) :=
   TrafficSource.batch_preserves (fun _ _ hi => hi.2) product_stable _ _ batch_item after_batch items
 
 theorem syscall_xmit (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) :
-    ProductSafe (Driver.syscallXmitObserved Journal.hooks family addr payload opts) :=
-  syscallXmitWith_preserves (fun _ _ hi => hi.2) product_wg_store _ _ multicast
+    ProductSafe (Driver.syscallXmitObserved Journal.hooks family addr payload opts) := by
+  unfold Driver.syscallXmitObserved
+  simp only [fixture_neutral, AuthenticatedEffects.FixtureEffects.run_neutral]
+  exact syscallXmitWith_preserves (fun _ _ hi => hi.2) product_wg_store _ _ multicast
     (fun family addr packets mtu => state_product (transmit family addr packets mtu)) family addr payload opts
 
 end Leanux.Proofs.WG.RetirementSecurity.OccurrencePollJournal

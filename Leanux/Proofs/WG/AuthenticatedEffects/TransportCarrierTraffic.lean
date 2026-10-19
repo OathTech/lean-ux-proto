@@ -63,7 +63,8 @@ theorem batchItem (h : DeferredSafe extra origin replay hooks)
     (d : Device) (cqes : List Int) (item : Env.BatchItem) :
     ProductSafe extra origin replay (batchItemObserved hooks d cqes item) :=
   batchItemWith_preserves safe product_wg_store _ _ _ _ ingress (inlinePoll h.napi) multicast
-    (fun family addr packets mtu => product_state (transmit h.toStagingSafe front family addr packets mtu)) d cqes item
+    (fun family addr packets mtu => product_state (fixture h.toStagingSafe _ _
+      (transmit h.toStagingSafe front family addr packets mtu))) d cqes item
 
 theorem batch (h : DeferredSafe extra origin replay hooks)
     (front : ∀ family addr packets mtu, StateSafe extra origin replay (hooks.front family addr packets mtu))
@@ -75,7 +76,8 @@ theorem syscallXmit (h : DeferredSafe extra origin replay hooks)
     (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) :
     ProductSafe extra origin replay (syscallXmitObserved hooks family addr payload opts) :=
   syscallXmitWith_preserves safe product_wg_store _ _ multicast
-    (fun family addr packets mtu => product_state (transmit h.toStagingSafe front family addr packets mtu))
+    (fun family addr packets mtu => product_state (fixture h.toStagingSafe _ _
+      (transmit h.toStagingSafe front family addr packets mtu)))
     family addr payload opts
 
 end Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrier

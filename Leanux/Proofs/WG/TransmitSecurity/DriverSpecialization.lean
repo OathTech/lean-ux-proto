@@ -253,9 +253,12 @@ theorem nonce_floodObserved_eq : floodObserved nonceHooks = Nonce.floodObserved 
   simp only [nonce_inlinePollObserved_eq, nonce_receiveEntryObserved_eq, nonce_drainObserved_eq, nonce_afterBatchObserved_eq]
   all_goals rfl
 
+private theorem nonce_fixture_neutral :
+    fixtureOps nonceHooks = AuthenticatedEffects.FixtureEffects.neutral := rfl
+
 theorem nonce_batchItemObserved_eq : batchItemObserved nonceHooks = Nonce.batchItemObserved := by
   unfold batchItemObserved Nonce.batchItemObserved
-  simp only [nonce_transmitObserved_eq, nonce_inlinePollObserved_eq, nonce_receiveEntryObserved_eq, nonce_multicastObserved_eq]
+  simp only [nonce_fixture_neutral, AuthenticatedEffects.FixtureEffects.run_neutral, nonce_transmitObserved_eq, nonce_inlinePollObserved_eq, nonce_receiveEntryObserved_eq, nonce_multicastObserved_eq]
   all_goals rfl
 
 theorem nonce_batchObserved_eq : batchObserved nonceHooks = Nonce.batchObserved := by
@@ -265,7 +268,7 @@ theorem nonce_batchObserved_eq : batchObserved nonceHooks = Nonce.batchObserved 
 
 theorem nonce_syscallXmitObserved_eq : syscallXmitObserved nonceHooks = Nonce.syscallXmitObserved := by
   unfold syscallXmitObserved Nonce.syscallXmitObserved
-  simp only [nonce_transmitObserved_eq, nonce_multicastObserved_eq]
+  simp only [nonce_fixture_neutral, AuthenticatedEffects.FixtureEffects.run_neutral, nonce_transmitObserved_eq, nonce_multicastObserved_eq]
   all_goals rfl
 
 theorem nonce_configOut_eq : (@configOut Nonce.Allocation) = Nonce.configOut := by
@@ -274,7 +277,8 @@ theorem nonce_configOut_eq : (@configOut Nonce.Allocation) = Nonce.configOut := 
 
 theorem nonce_configTailFinish_eq : configTailFinish nonceHooks = Nonce.configTailFinish := by
   unfold configTailFinish Nonce.configTailFinish
-  simp only [nonce_staging_function, nonce_keepaliveObserved_eq, nonce_configOut_eq]
+  simp only [nonce_fixture_neutral, AuthenticatedEffects.FixtureEffects.peerFinish_neutral, nonce_staging_function, nonce_keepaliveObserved_eq, nonce_configOut_eq]
+  unfold AuthenticatedEffects.FixtureEffects.peerFinishWith
   all_goals rfl
 
 theorem nonce_configTail_eq : configTail nonceHooks = Nonce.configTail := by
@@ -302,7 +306,7 @@ private theorem nonce_remove_function : removeObserved nonceHooks = fun peer => 
 
 theorem nonce_configKey_eq : configKey nonceHooks = Nonce.configKey := by
   unfold configKey Nonce.configKey
-  simp only [nonce_staging_function, nonce_configPeers_eq, nonce_remove_function]
+  simp only [nonce_fixture_neutral, AuthenticatedEffects.FixtureEffects.run_neutral, nonce_staging_function, nonce_configPeers_eq, nonce_remove_function]
   all_goals rfl
 
 theorem nonce_configDeviceUpdate_eq : configDeviceUpdate nonceHooks = Nonce.configDeviceUpdate := by
@@ -317,7 +321,8 @@ theorem nonce_configDevice_eq : configDevice nonceHooks = Nonce.configDevice := 
 
 theorem nonce_openObserved_eq : openObserved nonceHooks = Nonce.openObserved := by
   unfold openObserved Nonce.openObserved
-  simp only [nonce_staging_function, nonce_keepaliveObserved_eq]
+  simp only [nonce_fixture_neutral, AuthenticatedEffects.FixtureEffects.open_neutral, nonce_staging_function, nonce_keepaliveObserved_eq]
+  unfold AuthenticatedEffects.FixtureEffects.openWith
   all_goals rfl
 
 theorem nonce_upObserved_eq : upObserved nonceHooks = Nonce.upObserved := by

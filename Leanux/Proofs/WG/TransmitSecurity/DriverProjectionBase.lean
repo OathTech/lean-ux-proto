@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.TransmitSecurity.DriverSource
 import Leanux.Proofs.Logged.ProjectsOuter
 import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeRemovalProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsProjection
+import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsProjection
 
 /-! Exact event projection through the shared TX source driver. These laws
 preserve the native result and both states, as well as every failed prefix. -/
@@ -9,6 +10,9 @@ namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
 
 structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop where
+  fixture : ∃ scopeMap : Nat → Nat,
+    (∀ trigger, StateProjectsPrefix ρ scopeMap (g.fixtureEnter trigger) (a.fixtureEnter trigger)) ∧
+    (∀ token, StateProjectsPrefix ρ id (g.fixtureLeave token) (a.fixtureLeave (scopeMap token)))
   handshake : ∀ (sg : PeerId → WGPrefix E Bool) (sa : PeerId → WGPrefix F Bool)
     (kg : PeerId → WGPrefix E Unit) (ka : PeerId → WGPrefix F Unit),
     (∀ pid, StateProjectsPrefix ρ id (sg pid) (sa pid)) →
@@ -37,6 +41,17 @@ structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop
   poll : ProjectsPrefix ρ id g.poll a.poll
   encrypt : ∀ item, ProjectsPrefix ρ id (g.encrypt item) (a.encrypt item)
   transmit : ∀ pid, ProjectsPrefix ρ id (g.transmit pid) (a.transmit pid)
+
+theorem fixture_projects {E F α : Type} {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
+    (h : HooksProjects ρ g a)
+    (trigger : AuthenticatedEffects.FixtureEffects.Trigger)
+    (body : WGPrefix E α) (target : WGPrefix F α)
+    (projects : StateProjectsPrefix ρ id body target) :
+    StateProjectsPrefix ρ id
+      (AuthenticatedEffects.FixtureEffects.runWith (fixtureOps g) trigger body)
+      (AuthenticatedEffects.FixtureEffects.runWith (fixtureOps a) trigger target) := by
+  obtain ⟨scopeMap,enter,leave⟩ := h.fixture
+  exact AuthenticatedEffects.FixtureEffects.run_projects ρ scopeMap _ _ enter leave trigger body target projects
 
 namespace Projection
 variable {E F State Outer Inner α β γ : Type} (ρ : E → Option F)

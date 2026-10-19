@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierEffects
+import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsContracts
 
 /-! Actual shared staging and keepalive callbacks preserve RX authentication
 carriers. Every native leaf uses its concrete packet-store projection frame. -/
@@ -12,10 +13,18 @@ variable {E : Type} {extra : List E → Prop} {origin : E → Option TransportDr
 
 structure StagingSafe (extra : List E → Prop) (origin : E → Option TransportDriver.OriginEvent)
     (replay : E → Option TransportDriver.Replay) (hooks : Hooks E) : Prop extends EffectsSafe extra origin replay hooks where
+  fixtureEnter : ∀ trigger, StateSafe extra origin replay (hooks.fixtureEnter trigger)
+  fixtureLeave : ∀ token, StateSafe extra origin replay (hooks.fixtureLeave token)
   selection : ∀ pid, StateSafe extra origin replay (hooks.selection pid)
   reserve : ∀ kid, StateSafe extra origin replay (hooks.reserve kid)
   allocate : ∀ packets, StateSafe extra origin replay (hooks.allocate packets)
   create : ∀ pid item, StateSafe extra origin replay (hooks.create pid item)
+
+theorem fixture (h : StagingSafe extra origin replay hooks) (trigger : FixtureEffects.Trigger)
+    (body : WGPrefix E α) (preserves : StateSafe extra origin replay body) :
+    StateSafe extra origin replay (FixtureEffects.runWith (fixtureOps hooks) trigger body) :=
+  FixtureEffects.run_preserves _ _ _ (fun _ _ _ hi => hi.2)
+    (h.fixtureEnter trigger) h.fixtureLeave preserves
 
 macro "transport_staging_step" : tactic => `(tactic| first
   | (transport_carrier_head liftWGPrefix; solve | apply state_rx; transport_native_rx)

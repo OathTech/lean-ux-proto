@@ -103,6 +103,8 @@ theorem worker_safe
 
 theorem hooks_safe : Driver.HooksHistorySafe IncreasingReceipts hooks where
   handshake := worker_safe
+  fixtureEnter := fun _ => Driver.History.state_pure _
+  fixtureLeave := fun _ => Driver.History.state_pure _
   sendWorker := by
     rw [Driver.sendWorker_lift hooks rfl]
     exact Driver.History.product_lift _

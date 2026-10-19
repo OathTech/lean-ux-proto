@@ -3,6 +3,10 @@ import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeReceive
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeData
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeScheduler
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDeferred
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDecoration
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeLifecycle
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeEnvironment
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeNativeFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeOrigins
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeObservation
@@ -966,5 +970,47 @@ theorem scheduled_exchange_history (H1 : H1ExchangeEdges)
     (workers : H1WorkerTagFrames) (stack : Option Worker) :
     Exchange.ProductPreserves (TransmitSecurity.Driver.scheduleObserved ExchangeDriver.hooks stack) :=
   Exchange.schedule_checked H1 handshake data workers stack
+
+/-- Deferred sends and both native timer modes preserve the same exchange
+ledger, including Stop prefixes. The visible C2 package contains only native
+edge and tag-frame facts; it assumes no exchange history or reachability.
+Lifecycle, configuration and outer initialization are separate obligations. -/
+theorem deferred_exchange_history (facts : H1DriverSourceFacts) :
+    Exchange.ProductPreserves
+      (TransmitSecurity.Driver.afterXmitObserved ExchangeDriver.hooks) ∧
+    Exchange.ProductPreserves
+      (TransmitSecurity.Driver.afterAdvanceObserved ExchangeDriver.hooks) :=
+  ⟨Exchange.after_xmit facts, Exchange.after_advance facts⟩
+
+/-- A completed exchange receipt can decorate the existing authenticated
+callback without replacing its execution. Exact native erasure and an
+independent exchange-history frame project the same callback to the T4
+receipt, including every stopped prefix. -/
+theorem observed_exchange_receipt_projection (decode : E → Option Exchange.Event)
+    (encode : Exchange.Event → E) (roundtrip : ∀ e, decode (encode e) = some e)
+    (callback : WGPrefix E α) (native : WG.M α)
+    (erases : ErasesStatePrefix callback native)
+    (quiet : StateHistoryFrame decode callback) (record : WGRunWitness α → Exchange.Event) :
+    StateProjectsPrefix decode id (receiptWGObserved callback (encode ∘ record))
+      (receiptWGObserved (liftWGPrefix native) record) :=
+  Exchange.decorated_native_projection decode encode roundtrip callback native erases quiet record
+
+/-- Shutdown and destruction retain the exchange ledger across every actual
+queued-send drain, including the nested timersStop drain. Deleting the device
+does not delete the completed history. Only named C2 native edge and tag-frame
+facts are assumed; initialized outer-driver transport remains separate. -/
+theorem lifecycle_exchange_history (facts : H1DriverSourceFacts) :
+    Exchange.Preserves (TransmitSecurity.Driver.downObserved ExchangeDriver.hooks) ∧
+    Exchange.Preserves (TransmitSecurity.Driver.destructObserved ExchangeDriver.hooks) :=
+  ⟨Exchange.down_checked facts,Exchange.destruct_checked facts⟩
+
+/-- Actual environment up, down and delete operations preserve exchange
+history through their routing notifications and observed lifecycle callbacks.
+Native C2 source facts remain explicit; outer initialized execution is separate. -/
+theorem environment_exchange_history (facts : H1DriverSourceFacts) :
+    Exchange.ProductPreserves (TransmitSecurity.Driver.envUpObserved ExchangeDriver.hooks) ∧
+    Exchange.ProductPreserves (TransmitSecurity.Driver.envDownObserved ExchangeDriver.hooks) ∧
+    Exchange.ProductPreserves (TransmitSecurity.Driver.envDeleteObserved ExchangeDriver.hooks) :=
+  ⟨Exchange.env_up_checked facts,Exchange.env_down_checked facts,Exchange.env_delete_checked facts⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

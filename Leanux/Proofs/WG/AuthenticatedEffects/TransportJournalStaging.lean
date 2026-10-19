@@ -76,6 +76,8 @@ theorem queueSend (pid : PeerId) : StateSafe (Journal.hooks.queueSend pid) :=
   state_rx _ (modifyDev_rx _ (fun _ => rfl) (fun _ => rfl))
 
 theorem staging : StagingSafe (fun _ => True) origin? replay? Journal.hooks where
+  fixtureEnter := fun _ => state_pure _
+  fixtureLeave := fun _ => state_pure _
   armTimer := armTimer
   queueSend := queueSend
   selection := selection

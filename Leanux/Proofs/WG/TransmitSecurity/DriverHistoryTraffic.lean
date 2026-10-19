@@ -32,7 +32,7 @@ theorem batchItem_history (h : ActorHistorySafe Safe g) (d : Device) (cqes : Lis
     ProductHistorySafe Safe (batchItemObserved g d cqes item) :=
   batchItemWith_preserves history_safe (fun _ _ _ _ hi => hi) _ _ _ _
     (fun _ _ => History.product_lift _) (inline_history h) (fun _ _ => History.product_lift _)
-    (fun family addr packets mtu => (transmit_history h family addr packets mtu).liftWGObserver) d cqes item
+    (fun family addr packets mtu => (fixture_history h _ _ (transmit_history h family addr packets mtu)).liftWGObserver) d cqes item
 
 theorem batch_history (h : ActorHistorySafe Safe g) (items : List Env.BatchItem) :
     ProductHistorySafe Safe (batchObserved g items) :=
@@ -43,6 +43,6 @@ theorem syscallXmit_history (h : ActorHistorySafe Safe g) (family addr : Nat)
     (payload : List UInt8) (opts : Env.XmitOpts) :
     ProductHistorySafe Safe (syscallXmitObserved g family addr payload opts) :=
   syscallXmitWith_preserves history_safe (fun _ _ _ _ hi => hi) _ _ (fun _ _ => History.product_lift _)
-    (fun family addr packets mtu => (transmit_history h family addr packets mtu).liftWGObserver) family addr payload opts
+    (fun family addr packets mtu => (fixture_history h _ _ (transmit_history h family addr packets mtu)).liftWGObserver) family addr payload opts
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

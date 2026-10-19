@@ -41,6 +41,8 @@ theorem configTailFinish_safe (attrs : PeerAttrs)
     StateSafe (configTailFinish Journal.hooks attrs peer pid ret) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold configTailFinish
+  simp only [Journal.fixture_neutral,AuthenticatedEffects.FixtureEffects.peerFinish_neutral]
+  unfold AuthenticatedEffects.FixtureEffects.peerFinishWith
   repeat' first
     | (nonce_source_head configOut; exact configOut_safe _ _ _)
     | (nonce_source_head stagingObserved; exact staging _)
@@ -89,6 +91,7 @@ theorem configKey_safe (attrs : DeviceAttrs) :
     StateSafe (configKey Journal.hooks attrs) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold configKey deviceKeyWith
+  simp only [Journal.fixture_neutral,AuthenticatedEffects.FixtureEffects.run_neutral]
   simp only [remove_lift Journal.hooks rfl]
   repeat' first
     | (nonce_source_head configPeers; exact configPeers_safe _)
@@ -116,6 +119,8 @@ theorem opened :
     StateSafe (openObserved Journal.hooks) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold openObserved
+  simp only [Journal.fixture_neutral,AuthenticatedEffects.FixtureEffects.open_neutral]
+  unfold AuthenticatedEffects.FixtureEffects.openWith
   repeat' first
     | (nonce_source_head stagingObserved; exact staging _)
     | (nonce_source_head keepaliveObserved; exact keepalive _)

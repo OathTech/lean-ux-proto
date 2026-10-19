@@ -102,6 +102,8 @@ private def quietHooks : Driver.Hooks Exchange.Event :=
 private theorem quietHooks_history (good : List Exchange.Event → Prop) :
     Driver.HooksHistorySafe good quietHooks where
   handshake := fun _ _ _ _ => Driver.History.state_lift _
+  fixtureEnter := fun _ => Driver.History.state_pure _
+  fixtureLeave := fun _ => Driver.History.state_pure _
   sendWorker := by
     rw [Driver.sendWorker_lift quietHooks rfl]
     exact Driver.History.product_lift _
@@ -129,6 +131,23 @@ private theorem history_frame {g : PrefixM Exchange.Event α}
     (safe : ∀ initial, Driver.ProductHistorySafe (fun h => h = initial) g) : HistoryFrame some g := by
   intro w h
   simpa only [List.filterMap_some] using (safe h w h rfl).choose_spec.2.1
+
+private theorem state_history_frame {g : WGPrefix Exchange.Event α}
+    (safe : ∀ initial, Driver.StateHistorySafe (fun h => h = initial) g) : StateHistoryFrame some g := by
+  intro w a h
+  simpa only [List.filterMap_some] using (safe h w a h rfl).choose_spec.2.1
+
+theorem timer_lift (pid : PeerId) (timer : PeerTimer) :
+    Driver.timerObserved hooks pid timer = liftWGPrefix (timerCallback pid timer) := by
+  apply eq_native_lift
+  · apply native_via_nonce (Driver.timer_projects native_projection pid timer)
+      (Driver.timer_projects NativeDriver.nonce_projection pid timer)
+    rw [Driver.nonce_timerObserved_eq]
+    exact Nonce.timerObserved_erases pid timer
+  · apply state_history_frame
+    intro initial
+    change Driver.StateHistorySafe (fun h => h = initial) (Driver.timerObserved quietHooks pid timer)
+    exact Driver.timer_history (quietHooks_history _).actors pid timer
 
 theorem product_native_via_nonce {g : PrefixM Exchange.Event α} {n : PrefixM Nonce.Allocation α}
     {empty : PrefixM Empty α} {action : Leanux.M α}

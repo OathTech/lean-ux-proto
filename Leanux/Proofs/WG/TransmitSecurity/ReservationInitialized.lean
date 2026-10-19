@@ -93,6 +93,8 @@ private theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (
 
 theorem hooks_safe : ActorHistorySafe Safe Journal.hooks where
   staging := staging
+  fixtureEnter := fun _ => History.state_pure _
+  fixtureLeave := fun _ => History.state_pure _
   handshake := handshake
   sendWorker := by
     rw [Driver.sendWorker_lift _ rfl]

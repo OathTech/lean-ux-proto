@@ -51,6 +51,8 @@ private theorem config_key_with (H1 : H1ResponderCurrentEdges) (a : DeviceAttrs)
 theorem config_key (H1 : H1ResponderCurrentEdges) (a : DeviceAttrs) :
     Preserves (Driver.configKey hooks a) := by
   unfold Driver.configKey
+  simp only [show Driver.fixtureOps hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
+    AuthenticatedEffects.FixtureEffects.run_neutral]
   have removal : Driver.removeObserved hooks = fun peer => liftWGPrefix (peerRemove peer) :=
     funext (Driver.remove_lift hooks rfl)
   rw [removal]

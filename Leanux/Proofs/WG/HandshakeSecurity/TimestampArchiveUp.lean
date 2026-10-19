@@ -28,6 +28,9 @@ macro "archive_driver_up_step" : tactic => `(tactic| first
 
 theorem open_device : Preserves (Driver.openObserved TimestampDriver.hooks) := by
   unfold Driver.openObserved
+  rw [show Driver.fixtureOps TimestampDriver.hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
+    AuthenticatedEffects.FixtureEffects.open_neutral]
+  unfold AuthenticatedEffects.FixtureEffects.openWith
   repeat' archive_driver_up_step
 
 theorem up_device : Preserves (Driver.upObserved TimestampDriver.hooks) := by

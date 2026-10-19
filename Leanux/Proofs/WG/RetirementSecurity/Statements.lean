@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.RetirementSecurity.KeySlotDataCompletion
+import Leanux.Proofs.WG.RetirementSecurity.KeySlotTimers
+import Leanux.Proofs.WG.RetirementSecurity.KeySlotBulkRemoval
+import Leanux.Proofs.WG.RetirementSecurity.KeySlotCreation
 import Leanux.Proofs.WG.RetirementSecurity.SlotAnchorConsumers
 import Leanux.Proofs.WG.RetirementSecurity.HolderConfigurationUpdate
 import Leanux.Proofs.WG.RetirementSecurity.HolderConfigurationCommand
@@ -1665,5 +1669,66 @@ theorem original_peer_command_key_accounts (attrs : PeerAttrs)
     (before : HolderConfiguration.Entry temporary carriers loans w) (a b : Ambient)
     (run : ((WG.setPeerCmd attrs).run w).run a=.ok ((result,v),b)) : HolderAccount temporary v :=
   (hoare_iff_run_ambient _ _ _).mp (HolderConfiguration.command attrs) w a result v b before run
+
+/-- A peer with a published key slot has independent stamped peer protection
+when actual slot liveness, configured registry coherence and funded base
+alignment hold. Peer credit does not supply key credit; initialized transport
+of these boundary carriers remains a separate obligation. -/
+theorem live_published_slots_have_peer_protection
+    (live : KeySlotLiveness.Inv w) (funded : holders.Funded carriers loans w)
+    (coherent : Queues.RxCredits.BaseCoherence.Inv w) (configured : ConfiguredIdentity.Inv w) :
+    SlotPeerReferences holders loans w :=
+  KeySlotLiveness.references live funded coherent configured
+
+/-- Native single and bulk peer removal cannot leave a dead surviving peer
+with published key slots outside the explicit incoming removal exceptions.
+The make-dead interval is discharged by actual slot clear before work drains
+and final peer payment; retained packet references are not claimed destroyed. -/
+theorem original_removal_slot_liveness (word : Option PeerId) :
+    Preserves (KeySlotLiveness.InvExcept pending) (peerRemove word) ∧
+    Preserves (KeySlotLiveness.InvExcept pending) peerRemoveAll :=
+  ⟨KeySlotLiveness.remove_peer word,KeySlotLiveness.all_peers⟩
+
+/-- Native creation starts with empty key slots, while successful session
+publication and responder confirmation preserve the relation between live
+peers and published key slots. These are actual source contracts; the whole
+initialized caller carrier is not assumed or asserted here. -/
+theorem original_publication_slot_liveness (key : Key) (psk : Option Key)
+    (pid : PeerId) (kid : KeypairId) :
+    Preserves (KeySlotLiveness.InvExcept pending) (peerCreate key psk) ∧
+    Preserves (KeySlotLiveness.InvExcept pending) (beginSession pid) ∧
+    Preserves (KeySlotLiveness.InvExcept pending) (receivedWithKeypair pid kid) :=
+  ⟨KeySlotLiveness.create key psk,KeySlotLiveness.session pid,KeySlotLiveness.confirmation pid kid⟩
+
+/-- The original peer command preserves live publication through creation,
+removal, cached keepalive writes, staging and early-error cleanup. This native
+boundary closes configuration transport of slot liveness; initialized holder
+and reference-credit closure remain separate obligations. -/
+theorem original_configuration_slot_liveness (attrs : PeerAttrs) :
+    Preserves (KeySlotLiveness.InvExcept pending) (setPeerCmd attrs) :=
+  KeySlotLiveness.config_command attrs
+
+/-- Actual receive admission, handshake completion and selected timer callbacks
+retain live published slots. This includes native staging and refusal arms;
+normal callback transport supplies neither authentication nor eventual drain. -/
+theorem original_receive_timer_slot_liveness (msg : List UInt8) (src : SkbSource)
+    (pid : PeerId) (timer : PeerTimer) :
+    Preserves (KeySlotLiveness.InvExcept pending) (wgReceive msg src) ∧
+    Preserves (KeySlotLiveness.InvExcept pending) WG.receiveStep ∧
+    Preserves (KeySlotLiveness.InvExcept pending) (timerCallback pid timer) :=
+  ⟨KeySlotLiveness.receive msg src,KeySlotLiveness.receive_step,KeySlotLiveness.timer pid timer⟩
+
+/-- Native device configuration, lifecycle clearing and data completion retain
+live published slots through cached writes, disposal and actual peer payments.
+Fresh creation starts with empty peers. This is native boundary transport;
+whole-run key-credit accounting and eventual retirement remain separate. -/
+theorem original_device_data_slot_liveness (attrs : DeviceAttrs) (pid : PeerId)
+    (pkt : RxPacket) (endpoint : Endpoint) :
+    Preserves (KeySlotLiveness.InvExcept pending) (wgSetDevice attrs) ∧
+    Preserves (KeySlotLiveness.InvExcept pending) wgDown ∧
+    Preserves (KeySlotLiveness.InvExcept pending) (consumeDataDone pid pkt endpoint) ∧
+    Preserves (KeySlotLiveness.InvExcept pending) (txStep pid) :=
+  ⟨KeySlotLiveness.set_device attrs,KeySlotLiveness.down,
+    KeySlotLiveness.consume_done pid pkt endpoint,KeySlotLiveness.tx_step pid⟩
 
 end Leanux.Proofs.WG.RetirementSecurity

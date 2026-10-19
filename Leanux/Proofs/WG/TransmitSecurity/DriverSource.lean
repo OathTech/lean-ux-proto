@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerSource
 import Leanux.Proofs.WG.AuthenticatedEffects.CandidatePollSource
 import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeLifecycleSource
 import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsSource
+import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsSource
 
 /-! The nonce source driver parameterized at native TX boundaries. Its nonce
 specialization is proved equal to the initialized observer in the companion
@@ -16,6 +17,8 @@ open Leanux.Proofs.WG.Origins.HandshakeSources
 open HandshakeSecurity.Confirmation.Poll
 
 structure Hooks (E : Type) where
+  fixtureEnter : AuthenticatedEffects.FixtureEffects.Trigger → WGPrefix E Nat := fun _ => pure 0
+  fixtureLeave : Nat → WGPrefix E Unit := fun _ => pure ()
   handshake : (PeerId → WGPrefix E Bool) → (PeerId → WGPrefix E Unit) → WGPrefix E Bool :=
     AuthenticatedEffects.HandshakeWorker.source
   flushedSend : PeerId → WGPrefix E Unit := fun pid => liftWGPrefix (runFlushedSendWork pid)
@@ -40,6 +43,11 @@ structure Hooks (E : Type) where
   poll : PrefixM E (Option (List SkbId))
   encrypt : Option (List SkbId) → PrefixM E Bool
   transmit : PeerId → PrefixM E Bool
+
+/-- Scope markers for the actual guarded local-send trigger sites. -/
+def fixtureOps (hooks : Hooks E) : AuthenticatedEffects.FixtureEffects.Hooks E where
+  enter := hooks.fixtureEnter
+  leave := hooks.fixtureLeave
 
 /-- Only timer arms and send-work appends are callbacks; native guard steps remain fixed. -/
 def effectOps (hooks : Hooks E) : AuthenticatedEffects.TimerEffects.Ops (WGPrefix E) :=
@@ -383,14 +391,18 @@ def floodObserved (hooks : Hooks E) (count port family : Nat) (messages : List (
 
 def batchItemObserved (hooks : Hooks E) (d : Device) (cqes : List Int) (item : Env.BatchItem) : PrefixM E (ForInStep (List Int)) :=
   batchItemWith receiveEntryObserved (inlinePollObserved hooks) multicastObserved
-    (fun family addr packets mtu => liftWGObserver ((transmitObserved hooks) family addr packets mtu)) d cqes item
+    (fun family addr packets mtu => liftWGObserver
+      (AuthenticatedEffects.FixtureEffects.runWith (fixtureOps hooks) (.transmit family addr packets mtu)
+        (transmitObserved hooks family addr packets mtu))) d cqes item
 
 def batchObserved (hooks : Hooks E) (items : List Env.BatchItem) : PrefixM E Int :=
   TrafficSource.batchWith (batchItemObserved hooks) (afterBatchObserved hooks) items
 
 def syscallXmitObserved (hooks : Hooks E) (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) : PrefixM E Int :=
   syscallXmitWith multicastObserved
-    (fun family addr packets mtu => liftWGObserver ((transmitObserved hooks) family addr packets mtu)) family addr payload opts
+    (fun family addr packets mtu => liftWGObserver
+      (AuthenticatedEffects.FixtureEffects.runWith (fixtureOps hooks) (.transmit family addr packets mtu)
+        (transmitObserved hooks family addr packets mtu))) family addr payload opts
 
 def sendDrainObserved (hooks : Hooks E) (upTo : Option PeerId) : WGPrefix E Unit :=
   HandshakeSecurity.SendExchange.drainWith liftWGPrefix hooks.flushedSend
@@ -407,17 +419,9 @@ def configOut {E : Type} (a : PeerAttrs) (peer : Option PeerId) (ret : Int) : WG
   _ ← liftWGPrefix (branch .peerZeroPsk a.presharedKey.isSome)
   pure ret
 
-def configTailFinish (hooks : Hooks E) (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (ret : Int) : WGPrefix E Int := do
-  let running := (← liftWGPrefix getDev).running
-  if ← liftWGPrefix (branch .peerHasKeepalive a.keepalive.isSome) then
-    let interval := a.keepalive.getD 0
-    let p ← liftWGPrefix (getPeer pid)
-    let send ← liftWGPrefix (WG.andM (branch .peerKeepaliveWasZero (p.persistentKeepaliveInterval == 0))
-      (WG.andM (branch .peerKeepaliveNonzero (interval != 0)) (branch .peerKeepaliveRunning running)))
-    liftWGPrefix (setPeer pid {p with persistentKeepaliveInterval := interval})
-    if ← liftWGPrefix (branch .peerSendKeepalive send) then (keepaliveObserved hooks) pid
-  if ← liftWGPrefix (branch .peerRunning running) then (stagingObserved hooks) pid
-  configOut a peer ret
+def configTailFinish (hooks : Hooks E) (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (ret : Int) : WGPrefix E Int :=
+  AuthenticatedEffects.FixtureEffects.peerFinishObserved (fixtureOps hooks)
+    (stagingObserved hooks) (keepaliveObserved hooks) configOut a peer pid ret
 
 def configTail (hooks : Hooks E) (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) : WGPrefix E Int :=
   peerAllowedIpsWith (fun d b => liftWGPrefix (branch d b))
@@ -443,7 +447,8 @@ def configKey (hooks : Hooks E) (a : DeviceAttrs) : WGPrefix E Int :=
   deviceKeyWith (fun {_} a => liftWGPrefix a) (fun key => liftWGPrefix (pubkeyLookup key))
     (fun peer => liftWGPrefix (peerPut peer)) (removeObserved hooks)
     (fun pid => liftWGPrefix (precomputeStaticStatic pid)) (fun pid => liftWGPrefix (expireCurrentPeerKeypairs pid))
-    (stagingObserved hooks) ((configPeers hooks) a) a
+    (fun pid => AuthenticatedEffects.FixtureEffects.runWith (fixtureOps hooks) (.identityConfiguration a pid)
+      (stagingObserved hooks pid)) ((configPeers hooks) a) a
 
 def configDeviceUpdate (hooks : Hooks E) (a : DeviceAttrs) (flags : UInt32) : WGPrefix E Int :=
   deviceUpdateWith (fun {_} a => liftWGPrefix a) (fun pid => liftWGPrefix (clearPeerEndpointSrc pid))
@@ -452,20 +457,9 @@ def configDeviceUpdate (hooks : Hooks E) (a : DeviceAttrs) (flags : UInt32) : WG
 def configDevice (hooks : Hooks E) (a : DeviceAttrs) : WGPrefix E Int :=
   setDeviceWith (fun {_} a => liftWGPrefix a) ((configDeviceUpdate hooks) a) a
 
-def openObserved (hooks : Hooks E) : WGPrefix E Int := do
-  let dev ← liftWGPrefix getDev
-  _ ← liftWGPrefix (branch .openHasInet dev.inet4Dev)
-  _ ← liftWGPrefix (branch .openHasInet6 dev.inet6Dev)
-  let d ← liftWGPrefix getDev
-  let ret ← liftWGPrefix (socketInit d.incomingPort)
-  if ← liftWGPrefix (branch .openSocketError (ret < 0)) then return ret
-  for pid in d.peerList do
-    _ ← liftWGPrefix (branch .openPeersIter true)
-    (stagingObserved hooks) pid
-    if ← liftWGPrefix (branch .openKeepalive ((← liftWGPrefix (getPeer pid)).persistentKeepaliveInterval != 0)) then
-      (keepaliveObserved hooks) pid
-  _ ← liftWGPrefix (branch .openPeersIter false)
-  return 0
+def openObserved (hooks : Hooks E) : WGPrefix E Int :=
+  AuthenticatedEffects.FixtureEffects.openObserved (fixtureOps hooks)
+    (stagingObserved hooks) (keepaliveObserved hooks)
 
 def upObserved (hooks : Hooks E) : WGPrefix E Int := do
   liftWGPrefix (modifyDev fun d => {d with running := true})

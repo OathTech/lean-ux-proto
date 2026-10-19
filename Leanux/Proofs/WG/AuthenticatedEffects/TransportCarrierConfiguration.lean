@@ -48,8 +48,9 @@ theorem configOut_safe (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
 theorem configTailFinish_safe (h : StagingSafe extra origin replay hooks) (attrs : PeerAttrs)
     (peer : Option PeerId) (pid : PeerId) (ret : Int) :
     StateSafe extra origin replay (configTailFinish hooks attrs peer pid ret) := by
-  unfold configTailFinish
+  unfold configTailFinish FixtureEffects.peerFinishObserved FixtureEffects.peerFinishWith
   repeat' first
+    | (transport_carrier_head FixtureEffects.runWith; apply fixture h)
     | (transport_carrier_head configOut; exact configOut_safe _ _ _)
     | (transport_carrier_head stagingObserved; exact staging h _)
     | (transport_carrier_head keepaliveObserved; exact keepalive h _)
@@ -97,6 +98,7 @@ theorem configKey_safe (h : StagingSafe extra origin replay hooks)
     StateSafe extra origin replay (configKey hooks attrs) := by
   unfold configKey deviceKeyWith
   repeat' first
+    | (transport_carrier_head FixtureEffects.runWith; apply fixture h)
     | (transport_carrier_head configPeers; exact configPeers_safe h flushed _)
     | (transport_carrier_head removeObserved; exact remove flushed _)
     | (transport_carrier_head stagingObserved; exact staging h _)
@@ -121,8 +123,9 @@ theorem configDevice_safe (h : StagingSafe extra origin replay hooks)
 
 theorem opened (h : StagingSafe extra origin replay hooks) :
     StateSafe extra origin replay (openObserved hooks) := by
-  unfold openObserved
+  unfold openObserved FixtureEffects.openObserved FixtureEffects.openWith
   repeat' first
+    | (transport_carrier_head FixtureEffects.runWith; apply fixture h)
     | (transport_carrier_head stagingObserved; exact staging h _)
     | (transport_carrier_head keepaliveObserved; exact keepalive h _)
     | transport_config_step

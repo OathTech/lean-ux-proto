@@ -15,6 +15,8 @@ structure QuietHooksSafe (Good : List E → Prop) (hooks : Driver.Hooks E) : Pro
     (∀ pid, StateHistorySafe Good (session pid)) →
     (∀ pid, StateHistorySafe Good (keepalive pid)) →
     StateHistorySafe Good (hooks.handshake session keepalive)
+  fixtureEnter : ∀ trigger, StateHistorySafe Good (hooks.fixtureEnter trigger)
+  fixtureLeave : ∀ token, StateHistorySafe Good (hooks.fixtureLeave token)
   sendWorker : ProductHistorySafe Good (Driver.sendWorkerObserved hooks)
   armTimer : ∀ pid timer delay caller, StateHistorySafe Good (hooks.armTimer pid timer delay caller)
   queueSend : ∀ pid, StateHistorySafe Good (hooks.queueSend pid)
@@ -41,6 +43,8 @@ private def neutralConfirmation (hooks : Driver.Hooks E) : Driver.Hooks E :=
 private theorem quiet_hooks (h : QuietHooksSafe Good hooks) :
     HooksHistorySafe Good (neutralConfirmation hooks) where
   handshake := h.handshake
+  fixtureEnter := h.fixtureEnter
+  fixtureLeave := h.fixtureLeave
   sendWorker := h.sendWorker
   armTimer := h.armTimer
   queueSend := h.queueSend

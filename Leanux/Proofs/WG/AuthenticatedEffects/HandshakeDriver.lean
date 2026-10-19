@@ -27,6 +27,8 @@ valid earlier causes; the handshake hook proves its callbacks from the actual
 consumer admission, and all other hooks leave this projected history unchanged. -/
 theorem hooks_safe : Driver.HooksHistorySafe HandshakeCausal.Safe hooks := by
   constructor
+  · intro trigger; exact Driver.History.state_pure _
+  · intro token; exact Driver.History.state_pure _
   · exact HandshakeWorker.HistorySafety.observed_preserves
   all_goals intros
   all_goals first

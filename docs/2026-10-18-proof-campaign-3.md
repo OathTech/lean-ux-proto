@@ -193,7 +193,8 @@ and authentication invariants remain separate obligations.
   receive completion and RX polls with actual Stack/GRO replies retain the same
   supplied historical exclusion. Full native ingress, decryption with actual NAPI
   placements, handshake receive, queued send/clear drains and timer shutdown now
-  preserve it as well.
+  preserve it as well. Native peer/device configuration, removal, creation,
+  open/down/delete and TX completion now retain the same carrier.
   These cuts retain their incoming carrier until the whole-driver transport
   is proved. Historical key-material continuity, routing linkage, global
   encryption non-reuse, complete egress
@@ -223,7 +224,11 @@ and authentication invariants remain separate obligations.
   completion; handshake scope/effect wrappers preserve both matching and unrelated
   journals with visible effect contracts. Causal arm/queue wrappers retain the RX
   carrier under their stated event quietness/history conditions. Owned implementations through
-  `915eeea0` are copied without a branch merge.
+  `6b300d30` are copied without a branch merge. Guarded fixture scopes preserve
+  all existing initialized projections. Concrete completion decoration preserves
+  the full old completion journal, including Stops. Unified causal metadata
+  distinguishes roots from inherited causes and stores only the required
+  send-work queue/incarnation projection.
 - T4/T5: timestamp and response/session replay contracts remain explicit;
   H1 projections are named dependencies, not silently discharged. Native
   confirmation cuts precede later Stop. Shared responder authorization now
@@ -252,7 +257,10 @@ and authentication invariants remain separate obligations.
   `H1HandshakeTagFrames` cites eleven native declarations at read-only C2 pin
   `5177bd9cbcaffb16dcf8290d88c0e5e0544a0939`; it does not assume initialized
   exchange history, reachability or a security conclusion. Complete exchange identity and prohibition on premature encryption
-  remain open. Owned implementations through `f273c120` are copied.
+  remain open. Native deferred work, advance, nested lifecycle drains and
+  environment up/down/delete now transport the exchange carrier, with the
+  additional named operational C2 free frame. Owned implementations through
+  `461b44ea` are copied; fixture-neutral adapter scoped validation passes.
 - T6: allocation-stamped credits distinguish slot unpublication from final
   store removal. Native creation, acquisition, clearing, rotation, session
   installation and disposal retain exact reference payments. Actual
@@ -288,7 +296,11 @@ and authentication invariants remain separate obligations.
   both update/removal branches, early cleanup and final caller payment under
   its explicit incoming holder/slot/configured carriers. Initialized key-holder accounting, historical selection uniqueness,
   orphan completeness and conditional retirement progress remain open. Owned
-  implementations through `4be9a116` are copied.
+  implementations through `f005e76a` are copied. A separate native slot-liveness
+  carrier now covers consumers, publication, send/clear drains, staging, removal,
+  receive/handshake, timers, peer/device configuration, lifecycle and data
+  completion. It supplies slot affiliation from the stated holder/configuration
+  accounts; their initialized closure remains open.
 
 [AGENT 2026-10-19] Historical encryption identities pair a device epoch with
 a packet ID. Pending-alias exclusion and allocation-frontier bounds transport
@@ -299,16 +311,15 @@ continuity and is not yet initialized over the whole driver.
 The register names each module's assumptions and boundaries. All six campaign
 outcomes remain open; these are compositional results toward those outcomes.
 
-The seventeenth source checkpoint passes all 1734 proof-build jobs and the
-1242-declaration gate across thirteen root modules, with only standard axioms.
+The eighteenth source checkpoint passes all 1783 proof-build jobs and the
+1253-declaration gate across thirteen root modules, with only standard axioms.
 All twelve witness recipes and fresh-root kernel replay pass at the default
 cap. The model executable build passes 130 jobs, and the unit suite
 completes 131 tests with one kernel-build-dependent skip. This checkpoint
-closes timer scopes on normal return and preserves the existing initialized
-claims. Historical encryption exclusion now covers native ingress, decryption
-with NAPI, full handshake receive and queued drains. Causal handshake wrappers,
-exchange worker/scheduler transport and complete peer-command holder accounting
-are also checked. All six outcomes remain open.
+adds guarded fixture scopes while preserving the existing initialized claims.
+Historical encryption exclusion now covers native configuration, lifecycle and
+TX completion. Guarded completion-effect projection, exchange deferred/lifecycle
+transport and native slot-liveness contracts are also checked. All six outcomes remain open.
 No differential guest run is needed for this proof-only checkpoint: the mirror
 and its pin are unchanged. The inherited Env deprecation warning remains outside
 the permitted edit scope; campaign-owned code has no compiler warning.
@@ -356,6 +367,22 @@ seventeen passes complete validation of this API and the new native
 ingress/handshake exclusion, causal handshake, exchange-worker and complete
 peer-command holder contracts.
 All six outcomes remain open.
+
+[AGENT 2026-10-19] Create local fixture causes only around the native guarded
+send callbacks in peer configuration, first-identity configuration, interface
+open and explicit transmit calls. Input, stack replies and deferred drains must
+inherit their own causes. The generic fixture-scope projection/history proofs
+and existing nonce specialization pass; concrete campaign adapters retain
+their original initialized signatures and pass complete checkpoint validation. Native historical exclusion now
+also covers peer/device removal, creation, opening and configuration. Exchange
+closure extends through environment lifecycle calls, and the slot-liveness
+carrier covers native staging, handshake receive, peer commands and timers.
+The eighteenth checkpoint passes the complete proof gate, all twelve witness
+recipes, fresh-root kernel replay, the model build and unit suite. All six outcomes remain
+open. A scoped removal proof compiler was deliberately interrupted after a
+looping tactic; all seven dirty repository worktrees were snapshotted with
+indexes and branches preserved before further development. The corrected
+proof passes; this development failure was not a mirror finding.
 
 ## Validation
 

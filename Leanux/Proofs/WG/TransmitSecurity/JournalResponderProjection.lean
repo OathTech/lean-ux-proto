@@ -65,6 +65,8 @@ theorem transmit (pid : PeerId) :
     (fun e => by cases e <;> rfl) (Completion.step_erases pid)
 
 theorem hooks : Driver.HooksProjects responder? Journal.hooks DriverCuts.hooks where
+  fixture := ⟨id, (fun _ => Driver.Projection.state_pure responder? 0),
+    (fun _ => Driver.Projection.state_pure responder? ())⟩
   handshake := AuthenticatedEffects.HandshakeWorker.observed_projects Event.handshake handshake? responder?
     (fun _ => rfl)
   flushedSend := fun _ => Driver.Projection.state_lift responder? _
