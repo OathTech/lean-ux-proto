@@ -71,6 +71,8 @@ Source-50 local joins cover actual TX selection and DEAD repayment, all send-res
 
 Source-51 joins the complete native TX worker up to its explicit crypted-completion contract. Indexed send/free loops retain each settlement and restore empty cleanup debt; disposal retains the actual peer-release successor. All five timer callbacks, native handshake checking paths, configuration metadata and routing edits now have full-entry contracts. Peer creation preserves the exact old staged queues under the visible native peer-slot bound. The combined root passes 3367 jobs and fifteen focused standard-axiom queries. Whole initialized transport and historical terminal completeness remain open; source-50 `78cbb619` remains the last aggregate gate/replay checkpoint.
 
+Source-52 defines receipt-to-terminal completeness on the same ledger, proves exact fresh-position settlement and old-receipt preservation, and pairs it with full Entry in `CompleteCarrier`. Passive reuse requires terminal-quiet history explicitly. Native removal and down now compose counted disposal with the still-explicit handshake-work drain. The combined root passes 3375 jobs and nine focused standard-axiom queries. These are local source and algebra joins; initialized conservation and converse transport remain open. The last aggregate gate/replay checkpoint is source-50 `78cbb619`.
+
 ## Current register
 
 The proof tree is current over the namespace-pin landing `218d3ffd`: after
