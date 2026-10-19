@@ -322,6 +322,8 @@ Source-58 closes actual UDP ingress, scheduled TX/send/clear workers, dump curso
 
 Source-59 extends the exact peer-reference account through native dump cursors, send/clear drains, single and bulk removal, full handshake workers, TX completion, RX enqueue outcomes and all timer callbacks. Peer configuration now retains the same account through actual lookup/creation, early cleanup, routing edits and removal. The combined root passes 3593 jobs; thirty-eight focused queries use only standard axioms. Whole RX polling/admission, scheduler transport, lifecycle reset discharge and initialized T2 conservation remain open. Source-59 `782432ab` also passes the aggregate gate, fresh root replay and all twelve counterexample recipes.
 
+Source-60 completes the exact peer account through whole RX polling, native ingress and crypt workers, scheduler/deferred composition, complete device configuration, routed transmit and lifecycle controls. Deletion exposes the same account and positive resident references at its actual prepared guard; successful native guards derive the empty RX ledger. The original runner now supports a stronger idle operation entry and a weaker syscall endpoint, using its real final guard and retaining stopped journals. The combined root passes 3633 jobs, the 1523-declaration gate and thirty-eight focused standard-axiom queries. Outer traffic/account transport, the packet-ledger reset join and initialized T2 conservation remain open. Fresh replay and counterexample replay are pending for this checkpoint.
+
 ## Validation
 
 Source-59 checkpoint `782432ab` passes the 3593-job aggregate build and 1523-declaration gate across thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`. Thirty-eight focused source queries use only those axioms. Fresh root kernel replay and all twelve counterexample recipes pass. All 3546 frozen proof-source hashes match; all 916 inherited proof modules, main at `783510e8` and mirror `77c9b555` are unchanged. The unchanged model and harness retain source-56 validation: 66 build jobs and 131 unit tests (one configured-kernel skip); they were not rerun for these proof-only additions. The preceding fully validated checkpoint is `57598814`.
@@ -342,7 +344,7 @@ lookup reports that `capped` is absent inside the bundle PATH; the outer
 wrapper contains the gate and its children. No differential guest run is
 claimed for this proof-only work.
 
-Failed development checks remain failures. Earlier non-fresh checker runs
+Failed development checks remain failures. Source-60’s first aggregate gate rejected six uses of a local identifier reserved by the token scanner. Renaming that identifier repairs the failure; the unchanged gate passes. Earlier non-fresh checker runs
 exceeded their caps; the fresh-root command above passes. Ordinary local
 elaboration, frame and projection failures were repaired without changing the
 mirror or weakening statements. In this tranche, the first gate stopped on a

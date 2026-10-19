@@ -87,6 +87,8 @@ Source-58 closes actual UDP ingress, scheduled TX/send/clear workers, dump curso
 
 Source-59 extends the exact peer-reference account through native dump cursors, send/clear drains, single and bulk removal, full handshake workers, TX completion, RX enqueue outcomes and all timer callbacks. Peer configuration now retains the same account through actual lookup/creation, early cleanup, routing edits and removal. The combined root passes 3593 jobs; thirty-eight focused queries use only standard axioms. Whole RX polling/admission, scheduler transport, lifecycle reset discharge and initialized T2 conservation remain open. Source-59 `782432ab` also passes the aggregate gate, fresh root replay and all twelve counterexample recipes.
 
+Source-60 completes the exact peer account through whole RX polling, native ingress and crypt workers, scheduler/deferred composition, complete device configuration, routed transmit and lifecycle controls. Deletion exposes the same account and positive resident references at its actual prepared guard; successful native guards derive the empty RX ledger. The original runner now supports a stronger idle operation entry and a weaker syscall endpoint, using its real final guard and retaining stopped journals. The combined root passes 3633 jobs, the 1523-declaration gate and thirty-eight focused standard-axiom queries. Outer traffic/account transport, the packet-ledger reset join and initialized T2 conservation remain open. Fresh replay and counterexample replay are pending for this checkpoint.
+
 ## Current register
 
 The proof tree is current over the namespace-pin landing `218d3ffd`: after
