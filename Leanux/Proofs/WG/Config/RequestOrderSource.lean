@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Config.RequestOrderEffects
 import Leanux.Proofs.WG.Config.RequestOrderFrames
+import Leanux.Proofs.WG.Config.ClearedSources
 
 /-! One receipt-bearing device-request factory and its exact erasure, grammar, validity, and entry linkage. -/
 set_option autoImplicit false
@@ -663,30 +664,83 @@ theorem quiet_closed {α : Type} (a : WG.M α) (P : List Receipt → Prop)
   | error stop => trivial
   | ok out => exact empty
 
+def fwmarkObserved (attrs : DeviceAttrs) : WGPrefix Receipt Unit := do
+  mark .setDevFwmark attrs.fwmark.isSome
+  if attrs.fwmark.isSome then
+    liftWGPrefix (modifyDev fun d => {d with fwmark := attrs.fwmark.getD 0})
+    let d ← liftWGPrefix getDev
+    for pid in d.peerList do
+      mark .setDevFwmarkPeerIter true
+      let _ ← record attrs (.clearSource pid)
+    mark .setDevFwmarkPeerIter false
+  else pure ()
+
+def fwmarkSource (attrs : DeviceAttrs) : WG.M Unit := do
+  (do let _ ← branch .setDevFwmark attrs.fwmark.isSome; pure ())
+  if attrs.fwmark.isSome then
+    modifyDev fun d => {d with fwmark := attrs.fwmark.getD 0}
+    let d ← getDev
+    fwmarkClearLoop d.peerList
+    _ ← branch .setDevFwmarkPeerIter false
+
+theorem update_fwmark_factor (attrs : DeviceAttrs) (flags : UInt32) :
+    update attrs flags = (fwmarkObserved attrs >>= fun _ => afterFwmark attrs flags) :=
+  update_factor attrs flags
+
+theorem fwmarkObserved_erases (attrs : DeviceAttrs) :
+    ErasesStatePrefix (fwmarkObserved attrs) (fwmarkSource attrs) := by
+  unfold fwmarkObserved fwmarkSource
+  apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
+  intro _
+  split
+  · apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
+    intro _
+    apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
+    intro d
+    apply erasesStatePrefix_bind
+    · have grouped : fwmarkClearLoop d.peerList = (forIn d.peerList () fun pid _ => do
+        (do let _ ← branch .setDevFwmarkPeerIter true; pure ())
+        clearPeerEndpointSrc pid
+        pure (ForInStep.yield ())) := by
+        simp [fwmarkClearLoop]
+      rw [grouped]
+      apply erasesStatePrefix_forIn
+      intro pid _
+      apply erasesStatePrefix_bind (erasesStatePrefix_lift _)
+      intro _
+      have h := erasesStatePrefix_bind (clear_erases attrs pid)
+        (fun _ => erasesStatePrefix_pure (ForInStep.yield ()))
+      simpa only [bind_assoc, pure_bind] using h
+    · intro _
+      exact erasesStatePrefix_lift _
+  · exact erasesStatePrefix_pure ()
+
+theorem fwmarkObserved_conforms (attrs : DeviceAttrs) :
+    Conforms (fwmarkObserved attrs) (Language.closed (ClearPrefix attrs)) := by
+  unfold fwmarkObserved
+  apply Conforms.mark_then _ _ (ClearPrefix.empty attrs)
+  split
+  · rename_i present
+    apply Conforms.quiet_then _ (ClearPrefix.empty attrs)
+    intro _
+    apply Conforms.quiet_then _ (ClearPrefix.empty attrs)
+    intro d
+    apply Conforms.closed_bind (fun _ _ => ClearPrefix.append)
+    · apply Conforms.closed_forIn _ _ _ _ (ClearPrefix.empty attrs)
+        (fun _ _ => ClearPrefix.append)
+      intro pid state
+      apply Conforms.mark_then _ _ (ClearPrefix.empty attrs)
+      apply Conforms.closed_bind (fun _ _ => ClearPrefix.append) (clear_conforms attrs pid present)
+      intro _
+      exact Conforms.closed_pure _ _ (ClearPrefix.empty attrs)
+    · intro _
+      exact quiet_closed _ _ (ClearPrefix.empty attrs)
+  · exact Conforms.closed_pure () _ (ClearPrefix.empty attrs)
+
 theorem update_conforms (attrs : DeviceAttrs) (flags : UInt32) :
     Conforms (update attrs flags) (updateLanguage attrs flags) := by
-  rw [update_factor]
-  apply Conforms.bind (B := fun _ : Unit => afterFwmarkLanguage attrs flags)
-  · apply Conforms.mark_then _ _ (ClearPrefix.empty attrs)
-    split
-    · rename_i present
-      apply Conforms.quiet_then _ (ClearPrefix.empty attrs)
-      intro _
-      apply Conforms.quiet_then _ (ClearPrefix.empty attrs)
-      intro d
-      apply Conforms.closed_bind (fun _ _ => ClearPrefix.append)
-      · apply Conforms.closed_forIn _ _ _ _ (ClearPrefix.empty attrs)
-          (fun _ _ => ClearPrefix.append)
-        intro pid state
-        apply Conforms.mark_then _ _ (ClearPrefix.empty attrs)
-        apply Conforms.closed_bind (fun _ _ => ClearPrefix.append) (clear_conforms attrs pid present)
-        intro _
-        exact Conforms.closed_pure _ _ (ClearPrefix.empty attrs)
-      · intro _
-        exact quiet_closed _ _ (ClearPrefix.empty attrs)
-    · exact Conforms.closed_pure () _ (ClearPrefix.empty attrs)
-  · intro _
-    exact afterFwmark_conforms attrs flags
+  rw [update_fwmark_factor]
+  exact Conforms.bind (fwmarkObserved_conforms attrs) (fun _ => afterFwmark_conforms attrs flags)
 
 theorem request_pure (attrs : DeviceAttrs) (ret : Int) :
     Conforms (pure ret) (requestLanguage attrs) :=
@@ -845,17 +899,18 @@ private theorem prelude_mark (attrs : DeviceAttrs) (initial : WGWorld) (a : Ambi
   prelude_quiet attrs initial a _
     ((ambient_frame (AmbientM.branch site value)).bind (fun _ => SameView.pure _ ()))
 
-theorem observe_prelude (attrs : DeviceAttrs) (initial : WGWorld) (a : Ambient) :
-    StatePrefixEnsures (fun h w _ => h = [] ∧ w = initial)
-      (PreludeSafe attrs (Campaign2.snapshot initial a).wg) (observe attrs)
-      (fun _ h w _ => PreludePost attrs initial a h w) := by
-  have next : StatePrefixEnsures (fun h w _ => h = [] ∧ w = initial)
-      (PreludeSafe attrs (Campaign2.snapshot initial a).wg)
-      (accepted attrs (attrs.flags.getD 0))
-      (fun _ h w _ => PreludePost attrs initial a h w) :=
-    StatePrefixEnsures.bind (entry_record attrs initial a)
-      (fun _ => after_entry attrs initial a (update attrs (attrs.flags.getD 0))
-        (updateLanguage attrs (attrs.flags.getD 0)) (update_conforms attrs (attrs.flags.getD 0)))
+theorem observe_entry_rule (attrs : DeviceAttrs)
+    {P : List Receipt → WGWorld → Ambient → Prop} {S : List Receipt → Prop}
+    {Q : Int → List Receipt → WGWorld → Ambient → Prop}
+    (early : ∀ ret, StatePrefixEnsures P S (pure ret) Q)
+    (marks : ∀ site value, StatePrefixPreserves P S (mark site value))
+    (lookup : StatePrefixPreserves P S (liftWGPrefix (lookupInterface attrs.device)))
+    (read : StatePrefixPreserves P S (liftWGPrefix getDev))
+    (bad : StatePrefixPreserves P S (liftWGPrefix (invariant "unreachable" : WG.M Int)))
+    (or : ∀ left right a b, StatePrefixPreserves P S
+      (liftWGPrefix (WG.orM (branch left a) (branch right b))))
+    (next : StatePrefixEnsures P S (accepted attrs (attrs.flags.getD 0)) Q) :
+    StatePrefixEnsures P S (observe attrs) Q := by
   unfold observe setDeviceWith
   simp only [branch_factor,bind_assoc,pure_bind]
   cases flags : attrs.flags <;>
@@ -864,18 +919,31 @@ theorem observe_prelude (attrs : DeviceAttrs) (initial : WGWorld) (a : Ambient) 
   all_goals
     repeat' first
       | (maintenance_head accepted; exact next)
-      | (maintenance_head Pure.pure; exact prelude_pure attrs initial a _)
-      | (maintenance_head mark; exact prelude_mark attrs initial a _ _)
-      | (maintenance_lift_action_head lookupInterface
-         exact prelude_quiet attrs initial a _ (Leanux.Proofs.Framing.lookupInterface_sameWGWorld _))
-      | (maintenance_lift_action_head getDev
-         exact prelude_quiet attrs initial a _ getDev_frame)
-      | (maintenance_lift_action_head invariant
-         exact prelude_quiet attrs initial a _ (ambient_frame _))
-      | (maintenance_lift_action_head orM
-         exact prelude_quiet attrs initial a _ (branch_or_frame _ _ _ _))
+      | (maintenance_head Pure.pure; exact early _)
+      | (maintenance_head mark; exact marks _ _)
+      | (maintenance_lift_action_head lookupInterface; exact lookup)
+      | (maintenance_lift_action_head getDev; exact read)
+      | (maintenance_lift_action_head invariant; exact bad)
+      | (maintenance_lift_action_head orM; exact or _ _ _ _)
       | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind)
       | (maintenance_intro; try dsimp only)
       | split
+
+theorem observe_prelude (attrs : DeviceAttrs) (initial : WGWorld) (a : Ambient) :
+    StatePrefixEnsures (fun h w _ => h = [] ∧ w = initial)
+      (PreludeSafe attrs (Campaign2.snapshot initial a).wg) (observe attrs)
+      (fun _ h w _ => PreludePost attrs initial a h w) := by
+  apply observe_entry_rule attrs
+  · exact fun ret => prelude_pure attrs initial a ret
+  · exact fun site value => prelude_mark attrs initial a site value
+  · exact prelude_quiet attrs initial a _
+      (Leanux.Proofs.Framing.lookupInterface_sameWGWorld _)
+  · exact prelude_quiet attrs initial a _ Internal.getDev_frame
+  · exact prelude_quiet attrs initial a _ (Internal.ambient_frame _)
+  · exact fun left right b c => prelude_quiet attrs initial a _
+      (Internal.branch_or_frame left right b c)
+  · exact StatePrefixEnsures.bind (entry_record attrs initial a)
+      (fun _ => after_entry attrs initial a (update attrs (attrs.flags.getD 0))
+        (updateLanguage attrs (attrs.flags.getD 0)) (update_conforms attrs (attrs.flags.getD 0)))
 
 end Leanux.Proofs.WG.Config.RequestOrder

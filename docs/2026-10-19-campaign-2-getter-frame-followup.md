@@ -1,5 +1,22 @@
 # Getter metadata frame follow-up
 
+**Resolved within campaign 2's owned proofs, 2026-10-19.** The original
+seven-counterpart draft below was not installed. The replacement keeps the same
+metadata claim and uses no independent new shared-source proof copies:
+
+- Cache reset and endpoint effects project existing contracts.
+- The owned precompute proof now gives its exact full-state execution, with the
+  old Returns theorem as an adapter.
+- The owned lookup proof is generalized once to a WGWorld predicate; its old
+  device-predicate interface remains an adapter.
+- The two owned handshake-init/reset proof spines are generalized once and
+  shared by their old remote-destination and new metadata clients.
+
+Nine old theorem headers remain unchanged. The replacement passed its
+1,380-job scoped build and independent source/reuse review. No shared edit,
+mirror change or exception to the local-variant limit is needed. The original
+request below is retained to record the superseded architecture.
+
 Campaign 2 is current over main 783510e8. Its remaining mixed configuration
 readback needs the device dump header, netlink socket 7 and device-selector
 fixture to survive the complete peer command. Existing command/account and

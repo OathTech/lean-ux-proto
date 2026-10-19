@@ -16,6 +16,15 @@ structure Contracts {V : Type} (view : WGWorld → V) : Prop where
     (modifyDev fun d=>{d with peerAllowedips:={d.peerAllowedips with seq:=d.peerAllowedips.seq+1}})
   removeNode : ∀ id, SameView view (AllowedIps.removeNodeBody id)
 
+structure InsertionContracts {V : Type} (view : WGWorld → V) : Prop where
+  aip : ∀ {α : Type} (a : AipM α), SameView view (liftAip a)
+  deleteList : ∀ id, SameView view (listDel id)
+  appendList : ∀ pid id, SameView view (listAddTail pid id)
+  sequence : SameView view
+    (modifyDev fun d=>{d with peerAllowedips:={d.peerAllowedips with seq:=d.peerAllowedips.seq+1}})
+theorem Contracts.insertion {V : Type} {view : WGWorld → V} (c : Contracts view) :
+    InsertionContracts view := ⟨c.aip,c.deleteList,c.appendList,c.sequence⟩
+
 macro "allowed_frame_step " contract:term " at " initial:term : tactic => `(tactic| first
   | (allocation_release_lift_from AipM
      exact (($contract).aip _).wp (fun s=>s=$initial))
@@ -32,7 +41,7 @@ macro "allowed_frame_step " contract:term " at " initial:term : tactic => `(tact
   | (rx_retention_head invariant; unfold invariant)
   | rx_retention_step)
 
-theorem placed {V : Type} {view : WGWorld → V} (contracts : Contracts view)
+theorem placed_insertion {V : Type} {view : WGWorld → V} (contracts : InsertionContracts view)
     (root : Slot) (bits key cidr : Nat) (pid : PeerId) (placed : Option NodeId) (exact : Bool) :
     SameView view (Config.addPlacedSource root bits key cidr pid placed exact) := by
   intro initial
@@ -40,7 +49,7 @@ theorem placed {V : Type} {view : WGWorld → V} (contracts : Contracts view)
   unfold Config.addPlacedSource
   repeat' allowed_frame_step contracts at initial
 
-theorem root {V : Type} {view : WGWorld → V} (contracts : Contracts view)
+theorem root_insertion {V : Type} {view : WGWorld → V} (contracts : InsertionContracts view)
     (root : Slot) (bits key cidr : Nat) (pid : PeerId) (trie : Option NodeId) :
     SameView view (Config.addRootSource root bits key cidr pid trie) := by
   intro initial
@@ -48,10 +57,10 @@ theorem root {V : Type} {view : WGWorld → V} (contracts : Contracts view)
   unfold Config.addRootSource
   repeat' first
     | (rx_retention_head Config.addPlacedSource;
-       exact (placed contracts _ _ _ _ _ _ _).wp (fun s=>s=initial))
+       exact (placed_insertion contracts _ _ _ _ _ _ _).wp (fun s=>s=initial))
     | allowed_frame_step contracts at initial
 
-theorem add {V : Type} {view : WGWorld → V} (contracts : Contracts view)
+theorem add_insertion {V : Type} {view : WGWorld → V} (contracts : InsertionContracts view)
     (root : Slot) (bits key cidr : Nat) (peer : Option PeerId) :
     SameView view (WG.add root bits key cidr peer) := by
   rw [Config.add_transfer_source]
@@ -59,10 +68,10 @@ theorem add {V : Type} {view : WGWorld → V} (contracts : Contracts view)
   change Preserves (fun w=>view w=initial) _
   repeat' first
     | (rx_retention_head Config.addRootSource;
-       exact (AllowedFrame.root contracts _ _ _ _ _ _).wp (fun s=>s=initial))
+       exact (AllowedFrame.root_insertion contracts _ _ _ _ _ _).wp (fun s=>s=initial))
     | allowed_frame_step contracts at initial
 
-theorem insert {V : Type} {view : WGWorld → V} (contracts : Contracts view)
+theorem insert_insertion {V : Type} {view : WGWorld → V} (contracts : InsertionContracts view)
     (family addr cidr : Nat) (pid : PeerId) :
     SameView view (WG.insert family addr cidr pid) := by
   intro initial
@@ -70,18 +79,42 @@ theorem insert {V : Type} {view : WGWorld → V} (contracts : Contracts view)
   unfold WG.insert
   repeat' first
     | (rx_retention_head WG.add;
-       exact (AllowedFrame.add contracts _ _ _ _ _).wp (fun s=>s=initial))
+       exact (AllowedFrame.add_insertion contracts _ _ _ _ _).wp (fun s=>s=initial))
     | allowed_frame_step contracts at initial
 
-theorem allowed {V : Type} {view : WGWorld → V} (contracts : Contracts view)
+theorem allowed_insertion {V : Type} {view : WGWorld → V} (contracts : InsertionContracts view)
     (pid : PeerId) (ip : AllowedIpAttrs) : SameView view (setAllowedip pid ip) := by
   intro initial
   change Preserves (fun w=>view w=initial) _
   unfold setAllowedip WG.andM WG.orM
   repeat' first
     | (rx_retention_head WG.insert;
-       exact (insert contracts _ _ _ _).wp (fun s=>s=initial))
+       exact (insert_insertion contracts _ _ _ _).wp (fun s=>s=initial))
     | allowed_frame_step contracts at initial
+
+theorem placed {V : Type} {view : WGWorld → V} (contracts : Contracts view)
+    (root : Slot) (bits key cidr : Nat) (pid : PeerId) (placed : Option NodeId) (exact : Bool) :
+    SameView view (Config.addPlacedSource root bits key cidr pid placed exact) :=
+  placed_insertion contracts.insertion root bits key cidr pid placed exact
+
+theorem root {V : Type} {view : WGWorld → V} (contracts : Contracts view)
+    (root : Slot) (bits key cidr : Nat) (pid : PeerId) (trie : Option NodeId) :
+    SameView view (Config.addRootSource root bits key cidr pid trie) :=
+  root_insertion contracts.insertion root bits key cidr pid trie
+
+theorem add {V : Type} {view : WGWorld → V} (contracts : Contracts view)
+    (root : Slot) (bits key cidr : Nat) (peer : Option PeerId) :
+    SameView view (WG.add root bits key cidr peer) :=
+  add_insertion contracts.insertion root bits key cidr peer
+
+theorem insert {V : Type} {view : WGWorld → V} (contracts : Contracts view)
+    (family addr cidr : Nat) (pid : PeerId) :
+    SameView view (WG.insert family addr cidr pid) :=
+  insert_insertion contracts.insertion family addr cidr pid
+
+theorem allowed {V : Type} {view : WGWorld → V} (contracts : Contracts view)
+    (pid : PeerId) (ip : AllowedIpAttrs) : SameView view (setAllowedip pid ip) :=
+  allowed_insertion contracts.insertion pid ip
 
 theorem remove {V : Type} {view : WGWorld → V} (contracts : Contracts view)
     (pid : PeerId) : SameView view (removeByPeer pid) := by

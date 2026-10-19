@@ -163,27 +163,17 @@ theorem observe_refusal (attrs : DeviceAttrs) (a : Ambient) :
     StatePrefixEnsures (fun h _ _ => NoRefusal h) (fun _ => True)
       (observe attrs)
       (fun ret h w _ => RefusalFinal ret h (Campaign2.snapshot w a).wg) := by
-  have next : StatePrefixEnsures (fun h _ _ => NoRefusal h) (fun _ => True)
-      (accepted attrs (attrs.flags.getD 0))
-      (fun ret h w _ => RefusalFinal ret h (Campaign2.snapshot w a).wg) :=
-    StatePrefixEnsures.bind
+  apply observe_entry_rule attrs
+  · exact fun ret => pure_refusal ret a
+  · exact fun site value => noRefusal_mark site value
+  · exact noRefusal_lift _
+  · exact noRefusal_lift _
+  · exact noRefusal_lift _
+  · exact fun _ _ _ _ => noRefusal_lift _
+  · exact StatePrefixEnsures.bind
       (noRefusal_record attrs (.updateEntry (attrs.flags.getD 0))
         (by intro port eq; cases eq))
       (fun _ => update_refusal attrs (attrs.flags.getD 0) a)
-  unfold observe setDeviceWith
-  simp only [branch_factor,bind_assoc,pure_bind]
-  cases flags : attrs.flags <;>
-    simp only [flags,Option.isSome_none,Option.isSome_some,Option.getD_none,Option.getD_some,
-      Bool.false_eq_true,ite_false,ite_true] at next ⊢
-  all_goals
-    repeat' first
-      | (maintenance_head accepted; exact next)
-      | (maintenance_head Pure.pure; exact pure_refusal _ a)
-      | (maintenance_head mark; exact noRefusal_mark _ _)
-      | (maintenance_head liftWGPrefix; exact noRefusal_lift _)
-      | (maintenance_head Bind.bind; apply StatePrefixEnsures.bind)
-      | (maintenance_intro; try dsimp only)
-      | split
 
 theorem inspection_refusal (attrs : DeviceAttrs) (w : WGWorld) (ambient : Ambient) :
     RefusalFacts (inspection attrs w ambient) := by

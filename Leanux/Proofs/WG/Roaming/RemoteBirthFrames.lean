@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.PeerInitializationSource
 import Leanux.Proofs.WG.Roaming.RemoteBirthModel
 import Leanux.Proofs.WG.Roaming.RemoteTransportFrames
 import Leanux.Proofs.WG.Roaming.RemotePeerFrames
@@ -44,37 +45,15 @@ theorem precompute_remotes (pid : PeerId) :
           | simp [destinationAt,peerAt,Config.withPeer,device,Std.TreeMap.getElem?_insert,same]
 
 theorem handshakeInit_remotes (pid : PeerId) (psk : Option Key) :
-    SameView destinationAt (handshakeInit pid psk) := by
-  have modify_eq (f : Peer → Peer) : Noise.modifyPeer pid f = (do let p ← getPeer pid; setPeer pid (f p)) := rfl
-  have factor : handshakeInit pid psk = (do
-      modifyPeer pid (fun p => {p with handshakeEntryPeer := some pid})
-      if ← branch .handshakeInitHasPsk psk.isSome then
-        modifyPeer pid (fun p => {p with presharedKey := psk.getD p.presharedKey})
-      precomputeStaticStatic pid) := by
-    simp only [handshakeInit,IndexOwner.setPeerWord,modify_eq,bind_assoc]
-  rw [factor]
-  apply (modifyPeer_remotes pid (fun p => {p with handshakeEntryPeer := some pid}) (fun _ => rfl)).bind
-  intro _
-  apply (show SameView destinationAt (branch .handshakeInitHasPsk psk.isSome) from
-    fun initial => hoare_liftAmbient (AmbientM.branch _ _) (fun g => destinationAt g = initial)).bind
-  intro hasPsk
-  cases hasPsk
-  · simpa using precompute_remotes pid
-  · exact (modifyPeer_remotes pid (fun p => {p with presharedKey := psk.getD p.presharedKey})
-      (fun _ => rfl)).bind (fun _ => precompute_remotes pid)
-
+    SameView destinationAt (handshakeInit pid psk) :=
+  handshakeInit_frame_source destinationAt pid psk
+    (modifyPeer_remotes pid _ (fun _=>rfl))
+    (modifyPeer_remotes pid _ (fun _=>rfl))
+    (precompute_remotes pid)
 theorem resetLast_remotes (pid : PeerId) :
-    SameView destinationAt (resetLastSentHandshake pid) := by
-  have factor : resetLastSentHandshake pid = (do
-      let now ← hiddenClock64 .resetLastSent
-      modifyPeer pid (fun p => {p with
-        lastSentHandshake := now - (REKEY_TIMEOUT + 1 : Nat).toInt64 * NSEC_PER_SEC64})) := by
-    rfl
-  rw [factor]
-  exact (show SameView destinationAt (hiddenClock64 .resetLastSent : WG.M Int64) from
-    fun initial => hoare_liftAmbient (AmbientM.hiddenClock64 _) (fun g => destinationAt g = initial)).bind
-    (fun _ => modifyPeer_remotes pid _ (fun _ => rfl))
-
+    SameView destinationAt (resetLastSentHandshake pid) :=
+  resetLastSentHandshake_frame_source destinationAt pid
+    (fun _=>modifyPeer_remotes pid _ (fun _=>rfl))
 theorem finish_remotes (pid : PeerId) (key : Key) (psk : Option Key) :
     SameView destinationAt (BaseCreation.finish pid key psk) := by
   unfold BaseCreation.finish

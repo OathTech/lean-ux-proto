@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Config.RequestInputClaims
+import Leanux.Proofs.WG.Config.KeyStageClaims
+import Leanux.Proofs.WG.Config.GetterPeerCommandClaims
+import Leanux.Proofs.WG.Config.GetterReadyClaims
 import Leanux.Proofs.WG.Config.InitializedOwnerClaims
 import Leanux.Proofs.WG.Config.RequestReceiptClaims
 import Leanux.Proofs.WG.Config.GetterStagingSource
@@ -2805,5 +2809,93 @@ theorem original_mixed_device_nonzero_port_refusal (attrs : DeviceAttrs)
       ClaimView.clearedPeers d final.wg.toCore d.peerList :=
   RequestOrder.certificate_nonzero_port_refusal attrs initial result facts ret final normal
     r member port kind d nonzero entry refused
+
+
+/-- Initialized endpoint coherence supplies actual peer/node reads and unique serialized lists. This does not assert getter completion. -/
+theorem original_initialized_dump_readable (trace : Runner.Trace)
+    (shape : Configuration.TraceAddressShape trace) (placeholders : Bool)
+    (json : Lean.Json) (final : Campaign2.Product.Snapshot)
+    (run : (InitializedRouting.inspection trace placeholders).outcome=.ok (json,final))
+    (d : Device) (present : final.wg.device=some d) : DeviceDumpReadable d :=
+  initialized_dump_readable trace shape placeholders json final run d present
+
+/-- The canonical complete getter derives pagination freshness from coherent data. Page capacity, cursor reference bounds, socket readiness and receive budget remain explicit. -/
+theorem original_readable_mixed_getter_returns (d : Device) (sock : NlSock)
+    (data : DeviceDumpReadable d)
+    (ready : MixedPageReady d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true})
+    (headerFits : devicePrefixSpace d ≤ NLMSG_GOODSIZE)
+    (cursorData : MixedPlanCursorData d
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready))
+    (idle : sock.cbRunning=false) (emptyQueue : sock.queue=[])
+    (within : mixedPageReceiveCount
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready) ≤ 4096) :
+    let pages := mixedPages d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready
+    Campaign2.Returns (wgGetDevice (byIndex d))
+      (fun s=>s.wg.device=some d ∧ s.wg.nlSock7=sock ∧ ClaimView.selectsDevice s d)
+      (fun result s=>result=.ok (mixedGetterJson d (routingReadPeer d) (routingReadNode d)) ∧
+        s.wg.device=some (mixedPagesDevice d pages) ∧
+        s.wg.nlSock7=socketReadbackFinal sock d ∧ CursorHeld d (mixedPagesDevice d pages) none) :=
+  readable_mixed_getter_returns d sock data ready headerFits cursorData idle emptyQueue within
+
+/-- Every normal arbitrary peer command preserves the device getter header and socket/selector observation, including errno returns. -/
+theorem original_peer_command_getter_metadata (attrs : PeerAttrs) (entry : GetterMetadata) :
+    Campaign2.Ensures (setPeerCmd attrs)
+      (fun s=>getterMetadataObservation s=entry)
+      (fun _ s=>getterMetadataObservation s=entry) :=
+  setPeerCmd_getterMetadata attrs entry
+
+/-- The actual complete key stage classifies absent/unchanged, public generation, funded collision cleanup and ordered installation, including first identity. -/
+theorem original_configuration_key_stage (cs : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (before : Device) :
+    Campaign2.Ensures (RequestOrder.keyStage attrs)
+      (fun s=>OwnerConfiguration.ProjectedEntry cs loans s ∧ s.wg.device=some before)
+      (fun ret s=>ret=0 ∧ OwnerConfiguration.ProjectedEntry cs loans s ∧
+        ∃ after,s.wg.device=some after ∧ KeyStage.Effect attrs before after) :=
+  KeyStage.original_stage cs loans attrs before
+
+/-- A same-request completed key stage retains its all-branch effects before later Stops. Its account premise is explicitly at the recorded stage entry. -/
+theorem original_mixed_device_key_stage (cs : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (initial : Campaign2.Snapshot) (result : RequestOrder.Inspection)
+    (certificate : RequestOrder.Certificate attrs initial result)
+    (r : RequestOrder.Receipt) (member : r∈result.receipts) (kind : r.kind=.keyStage)
+    (before : Device) (pre : OwnerConfiguration.ProjectedEntry cs loans r.before)
+    (device : r.before.wg.device=some before) :
+    r.result=0 ∧ OwnerConfiguration.ProjectedEntry cs loans r.after ∧
+      ∃ after,r.after.wg.device=some after ∧ KeyStage.Effect attrs before after :=
+  KeyStage.certificate_effect cs loans attrs initial result certificate r member kind before pre device
+
+/-- Every arbitrary request outcome retains original-entry field continuity at each completed port receipt. -/
+theorem original_mixed_device_input_certificate (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (fun _ => True)
+      (fun entry outcome => ∃ result : RequestOrder.Inspection,
+        result.outcome = outcome ∧ RequestOrder.Certificate attrs entry result ∧
+          RequestOrder.InputHistory attrs entry.wg result.receipts) :=
+  RequestOrder.original_request_input_certificate attrs
+
+/-- A completed port receipt starts after the actual generation/fwmark/source-clear prefix of this same request. -/
+theorem original_mixed_device_port_input (attrs : DeviceAttrs) (entry : Campaign2.Snapshot)
+    (result : RequestOrder.Inspection) (facts : RequestOrder.Certificate attrs entry result)
+    (r : RequestOrder.Receipt) (member : r ∈ result.receipts) (port : Nat)
+    (kind : r.kind = .port port) : RequestOrder.PortInput attrs entry.wg r :=
+  RequestOrder.certificate_port_input attrs entry result facts r member port kind
+
+/-- A normal refused nonzero-port request has the original entry's generation/fwmark-adjusted header, exact source clearing and unchanged bind/socket/selector context. -/
+theorem original_mixed_device_initial_port_refusal (attrs : DeviceAttrs) (initial : Campaign2.Snapshot)
+    (result : RequestOrder.Inspection) (facts : RequestOrder.Certificate attrs initial result)
+    (ret : Int) (final : Campaign2.Snapshot) (normal : result.outcome = .ok (ret,final))
+    (d : Device) (entry : initial.wg.device = some d)
+    (r : RequestOrder.Receipt) (member : r ∈ result.receipts) (port : Nat)
+    (kind : r.kind = .port port) (nonzero : port ≠ 0) (refused : r.result ≠ 0) :
+    ret = (portOutcome (RequestOrder.prefixDevice attrs d) port initial.wg.portBound).1 ∧
+      final.wg.device.map withoutPeers = some (withoutPeers (RequestOrder.prefixDevice attrs d)) ∧
+      ClaimView.clearedPeers d final.wg.toCore d.peerList ∧
+      final.wg.portBound = initial.wg.portBound ∧
+      final.wg.nlSock7 = initial.wg.nlSock7 ∧
+      final.wg.fixtureNetDevices = initial.wg.fixtureNetDevices :=
+  RequestOrder.certificate_initial_port_refusal attrs initial result facts ret final normal d entry r member port kind nonzero refused
 
 end Leanux.Proofs.WG.Config

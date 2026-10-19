@@ -454,11 +454,12 @@ theorem consumeResponse_preserves_held_source (msg : List UInt8)
 /-- Exact resident acquisition is the only device update made by this public-key
 lookup. Normal misses preserve the input, and normal success holds one extra
 reference independently of any owner-table invariant. -/
-theorem pubkeyLookup_preserves_acquire_source (key : Key) (D : Device → Prop)
-    (acquire : ∀ d pid p, d.peers[pid]? = some p → D d → D (acquirePeer d pid p)) :
+theorem pubkeyLookup_preserves_acquire_world_source (key : Key) (P : WGWorld → Prop)
+    (acquire : ∀ g d pid p, g.dev=some d → d.peers[pid]?=some p → P g →
+      P {g with dev:=some (acquirePeer d pid p)}) :
     Ensures (pubkeyLookup key)
-      (fun g => ∀ d, g.dev = some d → D d)
-      (fun result g => (∀ d, g.dev = some d → D d) ∧
+      P
+      (fun result g => P g ∧
         ∀ pid, result = some pid → ∃ d p,
           g.dev = some d ∧ d.peers[pid]? = some p ∧ 1 < p.refcount) := by
   intro g ambient result final after pre run
@@ -499,14 +500,24 @@ theorem pubkeyLookup_preserves_acquire_source (key : Key) (D : Device → Prop)
               overflow, branch, branchCmp, AmbientM.branch, AmbientM.branchCmp,
               setPeer, modifyDev] at run
             rcases run with ⟨⟨rfl,rfl⟩,rfl⟩
-            have coherent : D (acquirePeer d pid p) :=
-              acquire d pid p resident (pre d device)
-            have safe : ∀ actual,
-                some (acquirePeer d pid p) = some actual → D actual := by
-              intro actual same; cases same; exact coherent
+            have safe : P {g with dev:=some (acquirePeer d pid p)} :=
+              acquire g d pid p device resident pre
             refine ⟨safe, ?_⟩
             intro target same
             cases same
             exact ⟨acquirePeer d pid p, {p with refcount := p.refcount + 1},
               rfl, by simp [acquirePeer], by simp; omega⟩
+
+theorem pubkeyLookup_preserves_acquire_source (key : Key) (D : Device → Prop)
+    (acquire : ∀ d pid p, d.peers[pid]? = some p → D d → D (acquirePeer d pid p)) :
+    Ensures (pubkeyLookup key)
+      (fun g => ∀ d, g.dev = some d → D d)
+      (fun result g => (∀ d, g.dev = some d → D d) ∧
+        ∀ pid, result = some pid → ∃ d p,
+          g.dev = some d ∧ d.peers[pid]? = some p ∧ 1 < p.refcount) := by
+  apply pubkeyLookup_preserves_acquire_world_source key
+  intro g d pid p device resident pre actual same
+  cases same
+  exact acquire d pid p resident (pre d device)
+
 end Leanux.Proofs.WG.Index
