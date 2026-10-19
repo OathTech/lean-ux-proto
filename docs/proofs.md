@@ -17,7 +17,7 @@ the replacement source-selected order contract and its conditional reversal
 helper. Chronological post-GRO order remains refuted by the accepted distinct-flow
 replay. The mirror is unchanged by this carry.
 
-Lag [AGENT 2026-10-19]: the environment fixes for campaign 2's requests 2, 3 and 4 landed on `main` after this tree (`Activation.run`'s fuel as occupancy plus refills, the pending-work lifecycle with the end-of-wait and end-of-operation refusal, the dump's nest cancellation restoring the pre-header snapshot); by `git grep` on this tree 18 files unfold `Activation.run`, 106 name `dispatch`, 75 `schedule`, 35 `requireDrained`, 78 `AmbientM.hidden`, 3 `pendingWork`, 48 `executeTrace`, 13 `wgGetDeviceDump` (`Framing/Batch.lean` and `Logged/Scheduler.lean` the deepest), so every result lags at that commit until the campaign's next carry; campaign 2's own witnesses now refute or pass differently and campaign 3's `AuthenticatedEffects` and `RetirementSecurity` scheduler frames move, repaired on their carries.
+Carry [AGENT 2026-10-19]: the lag from the environment fixes (the activation fuel, the pending-work lifecycle, the dump's nest cancellation) is repaired by the carry commits 74b03922, 0c8f59fb and 7a189c9e (Codex#1, as campaign 1's carry: the inherited observers and source equations, the refill and pending-work frames in `Framing/BatchRefills.lean`, the expanded anti-replay runner proof's budget; 50 files, all within the landed layers); the gate passes with 895 terminal statements and the twelve counterexample recipes replay, so every result is current over main at this commit.
 
 The complete 973-job build, the 895-declaration proof gate over nine root modules,
 fresh root kernel replay and all twelve executable witness recipes pass.
