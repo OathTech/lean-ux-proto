@@ -302,18 +302,11 @@ Source-48 local joins retain full Entry through native queue admission, both pee
 
 Source-49 local joins derive pending-ticket evidence at the actual allocator and discharge the real creation callback, including exact original-debt restoration after refusal. Full transmit and keepalive now compose without an assumed creation or queued-initiation callback. Counted purge, encryption, receive maintenance and the family-selected completion send retain the full Entry bundle. Stop certificates remain local source frontiers; initialized transport and the converse historical terminal relation are still open. The 3321-job combined root build and eleven focused standard-axiom queries pass. Source-49 has not yet repeated the aggregate gate or fresh root replay; the last fully validated checkpoint is `13d285cf`.
 
-Source-50 local joins cover actual TX selection and DEAD repayment, all send-result arms and nested completion release, receive finishing and timer callbacks, and native key creation, confirmation and clearing. Idle selection derives its pending batch from empty cleanup debts. Retirement algebra proves that empty native staged/TX ownership leaves no pending ticket; the lifecycle caller must still establish that quiescence before reset. The combined root build passes 3344 jobs and fourteen focused queries use only standard axioms. Whole initialized conservation and the converse historical terminal relation remain open. The last fully validated checkpoint remains `13d285cf` pending the source-50 aggregate checks.
+Source-50 local joins cover actual TX selection and DEAD repayment, all send-result arms and nested completion release, receive finishing and timer callbacks, and native key creation, confirmation and clearing. Idle selection derives its pending batch from empty cleanup debts. Retirement algebra proves that empty native staged/TX ownership leaves no pending ticket; the lifecycle caller must still establish that quiescence before reset. The combined root build passes 3344 jobs and fourteen focused queries use only standard axioms. Whole initialized conservation and the converse historical terminal relation remain open. These local joins pass the source-50 aggregate checks below; they do not close initialized T2 conservation.
 
 ## Validation
 
-Source-48 checkpoint `13d285cf` passes the 3295-job aggregate build and 1523-declaration gate across
-thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`.
-Thirteen focused source queries also use only those axioms. All twelve
-counterexample recipes and fresh root kernel replay pass. The default model
-build passes 66 jobs; the unit suite passes 131 tests (one configured-kernel
-skip, 22.556 seconds). All 3248 frozen proof-source hashes match; all 916
-inherited proof modules, main at `783510e8` and mirror `77c9b555` are unchanged.
-The preceding validated checkpoint is `d90624cc`.
+Source-50 checkpoint `78cbb619` passes the 3344-job aggregate build and 1523-declaration gate across thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`. Fourteen focused source queries also use only those axioms. All twelve counterexample recipes and fresh root kernel replay pass. The default model build passes 66 jobs; the unit suite passes 131 tests (one configured-kernel skip, 22.657 seconds). All 3297 frozen proof-source hashes match; all 916 inherited proof modules, main at `783510e8` and mirror `77c9b555` are unchanged. The preceding fully validated checkpoint is `13d285cf`.
 
 Reproduce the proof and model checks from the campaign worktree:
 
