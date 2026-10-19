@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalOldProjection
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalReceiptInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.SendCallerContracts
 import Leanux.Proofs.WG.AuthenticatedEffects.QueuedSourceContracts
 import Leanux.Proofs.WG.AuthenticatedEffects.TimerOccurrences
@@ -1157,5 +1158,27 @@ theorem causal_journal_preserves_prior_execution (trace : Runner.Trace) (placeho
     ProjectsOuter CausalJournal.old? id (CausalJournal.execute trace placeholders)
       (TransmitSecurity.Journal.execute trace placeholders) :=
   CausalJournal.execute_projects trace placeholders
+
+/-- Security: each timer-arm receipt in an initialized final-journal execution
+is the actual native arm and carries the lexical context present at that exact
+receipt, even before a later Stop. This does not yet prove that the recorded
+context is present, well formed, or authorized. -/
+theorem initialized_timer_receipt_matches_current_context (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (receipt : TimerEffects.Arm CausalJournal.Context)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      pre ++ CausalJournal.Event.armed receipt :: post) :
+    receipt.Valid ∧ receipt.cause = CausalScope.current CausalJournal.scope? pre :=
+  CausalJournal.Receipts.initialized_arm trace placeholders pre post receipt position
+
+/-- Security: each handshake-work append receipt in an initialized final-journal
+execution is the actual native append under its exact current lexical context,
+including a stopped prefix. A live queue-occurrence carrier must still authorize
+the later selected worker; missing or malformed contexts remain explicit. -/
+theorem initialized_queue_receipt_matches_current_context (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (receipt : TimerEffects.Queued CausalJournal.Context)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      pre ++ CausalJournal.Event.queued receipt :: post) :
+    receipt.Valid ∧ receipt.cause = CausalScope.current CausalJournal.scope? pre :=
+  CausalJournal.Receipts.initialized_queue trace placeholders pre post receipt position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.RetirementSecurity.HolderPoll
 import Leanux.Proofs.WG.RetirementSecurity.HolderReplayFrames
 import Leanux.Proofs.WG.RetirementSecurity.HolderDeviceConfiguration
 import Leanux.Proofs.WG.RetirementSecurity.HolderBoundary
@@ -1810,5 +1811,18 @@ theorem original_replay_decrypt_key_accounts (kid : KeypairId) (nonce : Nat) (pk
     Preserves (HolderAccount temporary) (counterValidate kid nonce) ∧
     Preserves (HolderAccount temporary) (decryptPacket pkt) :=
   ⟨HolderReplay.counter kid nonce,HolderReplay.decrypt pkt⟩
+
+/-- Every normally completed original RX poll conserves exact key credit:
+its actual selected packet transfers one allocation-stamped reference into
+the poll local, replay/confirmation and GRO retain it, and cleanup pays it.
+Independent physical, session, slot and peer funding are explicit incoming
+support; initialized global key accounting is a separate obligation. -/
+theorem original_rx_poll_joint_key_account (pid budget : Nat)
+    (funded : Queues.RxCredits.DurableHolders.Boundary initial loans w.wg)
+    (keys : HolderAccount temporary w.wg)
+    (support : HolderPoll.Support sessions locals active w.wg)
+    (run : (rxPoll pid budget (fun packets=>packets.forM Env.deliverInner)).run w=.ok (result,v)) :
+    HolderAccount temporary v.wg ∧ HolderPoll.Support sessions locals active v.wg :=
+  HolderPoll.normal pid budget funded keys support run
 
 end Leanux.Proofs.WG.RetirementSecurity

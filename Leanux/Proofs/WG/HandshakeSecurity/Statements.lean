@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDriverProjection
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeReceive
@@ -1146,5 +1147,24 @@ theorem initialized_refused_session_unchanged (facts : H1DriverSourceFacts)
     (position : (runPrefixOuter (ExchangeDriver.execute trace placeholders) []).2 =
       pre ++ Exchange.Event.session pid r :: post) (refused : r.value = false) : r.after = r.before :=
   Exchange.initialized_session_refusal_world facts config traffic trace placeholders pre post pid r position refused
+
+/-- Security: the final causal journal retains the initialized native exchange
+history, so the response-replay and single-installation results apply to its
+actual ordered callbacks, including those before a later Stop. The named C2
+local frame packages remain visible; no history or reachability is assumed. -/
+theorem initialized_final_journal_exchange_history
+    (facts : H1DriverSourceFacts) (config : H1ConfigurationTagFrames)
+    (traffic : H1TrafficTagFrames) (trace : Runner.Trace) (placeholders : Bool) :
+    ProjectsOuter AuthenticatedEffects.CausalJournal.exchange? id
+      (AuthenticatedEffects.CausalJournal.execute trace placeholders)
+      (ExchangeDriver.execute trace placeholders) ∧
+    Exchange.History
+      ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+        AuthenticatedEffects.CausalJournal.exchange?)
+      (Exchange.replay
+        ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+          AuthenticatedEffects.CausalJournal.exchange?)) :=
+  ⟨ExchangeCausal.execute_projects trace placeholders,
+    ExchangeCausal.initialized facts config traffic trace placeholders⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

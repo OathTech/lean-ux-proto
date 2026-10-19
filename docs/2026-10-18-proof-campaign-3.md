@@ -19,7 +19,7 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 
 | Outcome | Status and remaining obligation |
 | --- | --- |
-| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Historical key-material continuity and reservation-to-encryption uniqueness remain open. |
+| T1 nonce safety | Open. Initialized native counter reservations are unique through Stop, and admitted counters have injective encoding. Every actual initialized AEAD now has a below-limit nonce and strict earlier reservation evidence. Initialized global packet-identity non-reuse now closes through the same driver and exact causal-journal projection. Each initialized AEAD now has an exclusive allocation-stamped reservation token matching its packet nonce, with no two AEAD occurrences sharing an assigned token. Historical key-material continuity remains open. |
 | T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; packet/material transport to actual encryption and socket emission, and complete TX dispositions, remain to prove. |
 | T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts, not causal closure of all delayed effects. |
 | T4 handshake replay resistance | Open. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Direct initialized stale-refusal/no-response and final role-slot residency exports remain. Named C2 source assumptions stay visible. |
@@ -406,6 +406,31 @@ instance of the same source driver. Its exact projection retains the prior
 journal's complete states, results, event order and stopped prefixes. This
 reuses existing initialized claims without a second execution or another
 native frame pass; causal authorization remains a separate obligation.
+
+The twentieth checkpoint passes complete validation. Native staging now assigns each
+packet a distinct reservation occurrence after the preceding allocation. The
+initialized journal supplies this positional assignment without an entry
+premise. Joining it with native reservation non-reuse, packet-allocation
+provenance and initialized encryption-identity non-reuse proves that every
+actual AEAD has an exclusive allocation-stamped reservation token matching
+its packet nonce. Exact projection carries this result to the final causal
+journal. Continuity between that historical allocation and the resident AEAD
+key remains open. The shared execution also now derives valid native timer-arm
+and queued-send receipts with their exact lexical contexts; that result does
+not establish causal authorization. Its exchange projection derives initialized
+exchange history. Native full RX polling transports its selected key credit
+through validation, promotion, GRO callbacks, cleanup and iteration; global
+holder initialization remains open. The proof gate passes 1872 jobs and 1277 terminal declarations across thirteen
+root modules, with only the three permitted axioms. All twelve witness
+recipes and fresh-root kernel replay pass; the model build passes 130 jobs,
+and 131 unit tests pass with one configured-kernel skip (22.948 seconds).
+All 1816 proof-source hashes stayed unchanged through validation. Adopted child pins are T3 `53106bb6`, T4 `24f59cf8`
+and T6 `d7f3d879`. A worker deliberately stopped a slow draft compiler and
+replaced the proof search with an existing exact execution lemma. Before
+further edits, all twelve registered worktrees were audited and all seven
+dirty trees snapshotted, including untracked nonignored files; branches and
+normal indexes were preserved. The corrected scoped proof passes. This
+development failure is not a mirror finding. All six outcomes remain open.
 
 ## Validation
 

@@ -27,9 +27,11 @@ import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastHandshake
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastDeviceConfiguration
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastTx
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionHistoryFinal
+import Leanux.Proofs.WG.TransmitSecurity.ReservationAssignmentEncryption
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
-Transport from reservation through every actual AEAD invocation remains open. -/
+Exclusive reservation tokens now reach every initialized AEAD occurrence;
+continuity from those allocation stamps to the resident AEAD key remains open. -/
 namespace Leanux.Proofs.WG.TransmitSecurity
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
@@ -610,5 +612,26 @@ theorem initialized_encryption_identity_nonreuse (trace : Runner.Trace) (placeho
         AuthenticatedEffects.CausalJournal.old?) :=
   ⟨EncryptionHistory.Scheduler.initialized trace placeholders,
     EncryptionHistory.final_initialized trace placeholders⟩
+
+/-- Security: each native allocated batch assigns distinct reservation event
+positions to its packets, all after every earlier allocation. Initialization
+supplies this assignment through either timer mode and stopped prefixes; a
+later batch cannot reuse a preceding batch's reservation credit. -/
+theorem initialized_reservation_assignment (trace : Runner.Trace) (placeholders : Bool) :
+    ReservationAssignments.Safe (runPrefixOuter (Journal.execute trace placeholders) []).2 :=
+  ReservationAssignments.initialized trace placeholders
+
+/-- Security: every actual initialized AEAD has an exclusive allocation-stamped
+native reservation token whose counter equals its packet nonce. No two AEAD
+occurrences share an assigned token, including stopped executions and device
+recreation. The same result holds in the exact final causal-journal projection.
+Binding that allocation stamp to the resident AEAD key material remains separate. -/
+theorem initialized_exclusive_encryption_reservations (trace : Runner.Trace) (placeholders : Bool) :
+    ReservationAssignments.Exclusive (runPrefixOuter (Journal.execute trace placeholders) []).2 ∧
+    ReservationAssignments.Exclusive
+      ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+        AuthenticatedEffects.CausalJournal.old?) :=
+  ⟨ReservationAssignments.initialized_exclusive trace placeholders,
+    ReservationAssignments.final_exclusive trace placeholders⟩
 
 end Leanux.Proofs.WG.TransmitSecurity
