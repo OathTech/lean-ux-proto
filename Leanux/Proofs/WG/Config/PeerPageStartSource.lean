@@ -64,7 +64,7 @@ theorem peerFirst_complete_returns (d : Device) (peers : PeerId → Peer)
       simp [cursorDumpBody,NlSkb.put,nlaTotal,short,cursorDumpGuard,members,
         WG.orM,branch,AmbientM.branch,cursorDumpFinish,WG.andM,peerPut]
       refine ⟨_,g,⟨_,rfl⟩,?_,device⟩
-      simp [multiPeerCall,members,multiPeerSpace,room,headerMessages]
+      simp [multiPeerCall,members,multiPeerSpace,header,exactHeader,nlaTotal]
     | cons pid ids =>
       have loop : Returns (cursorLoopFinish d d.peerList {hasWg := true} 2
           (deviceFixedAttrs d) {header with room := header.room-4}) (fun g => g.dev = some d) R := by
@@ -181,6 +181,8 @@ theorem peerFirst_start_returns (d : Device) (peers : PeerId → Peer) (sock : N
       simp only [peerFirstCall,remainder,List.isEmpty_cons,Bool.false_eq_true,ite_false]
       apply Int.natCast_pos.mpr
       have lower : 48 ≤ devicePrefixSpace d := by unfold devicePrefixSpace; omega
+      have debit : (if d.peerList.isEmpty then nlaTotal 0 else 0) ≤ 4 := by
+        split <;> decide
       unfold NLMSG_GOODSIZE at *
       omega
     have start := netlinkDumpStart_more_device_transition d (peerFirstDevice d peers) sock

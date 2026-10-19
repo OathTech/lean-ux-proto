@@ -9,7 +9,9 @@ open Leanux Leanux.WG Lean
 /-- The first maximal DATA page and its actual completion/cursor metadata. -/
 def peerFirstCall (d : Device) (peers : PeerId → Peer) : DumpCall :=
   let result := peerPagePrefix peers (NLMSG_GOODSIZE-devicePrefixSpace d) d.peerList
-  let room := NLMSG_GOODSIZE-devicePrefixSpace d-multiPeerSpace peers result.1
+  let room := NLMSG_GOODSIZE -
+    (devicePrefixSpace d - (if d.peerList.isEmpty then nlaTotal 0 else 0)) -
+    multiPeerSpace peers result.1
   {ret := if result.2.isEmpty then 0 else Int.ofNat (NLMSG_GOODSIZE-room),
    skb := {room,messages := [.data 2 (deviceFixedAttrs d)
      (if d.peerList.isEmpty then none else some (multiPeerParts peers result.1))]},

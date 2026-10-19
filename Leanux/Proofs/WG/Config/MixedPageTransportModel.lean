@@ -12,8 +12,9 @@ def mixedPageMessage (d : Device) (page : MixedPeerScan) : NlMessage :=
   .data 2 (if page.native.1.nextPeer.isNone then deviceFixedAttrs d else [])
     (if d.peerList.isEmpty then none else some page.native.2.2.2.2.toList)
 
-/-- Exact callback data after cursor finalization, with fixed successful flags.
-Whole native correspondence separately discharges guards and reference handling. -/
+/-- Post-nest scan data after cursor finalization, with fixed successful flags.
+Native nonempty correspondence discharges guards and reference handling; the
+empty Device's cancellation is applied separately by `mixedPeersFirstCall`. -/
 def mixedPageCall (d : Device) (page : MixedPeerScan) : DumpCall :=
   cursorCallResult d 2 (if page.native.1.nextPeer.isNone then deviceFixedAttrs d else [])
     page.native.1 page.native.2.1 page.native.2.2.1 page.native.2.2.2.1
@@ -24,9 +25,10 @@ correspondence supplies unchanged generation and the guard/lifetime conditions. 
 def mixedPageMessages (d : Device) (pages : List MixedPeerScan) : List NlMessage :=
   pages.map (mixedPageMessage d) ++ [.done 2 0]
 
-/-- Static receive budget: every DATA page, and one further receive exactly
-when the last DATA has insufficient room for DONE. The empty-list case is only
-a total definition; the canonical plan below is nonempty. -/
+/-- Static receive budget from the post-nest scan: every DATA page and its
+computed DONE spill bit. An empty Device's actual guard restores the nest
+reservation, so this remains sufficient and can overestimate by one receive.
+The empty-plan case is only a total definition; canonical plans are nonempty. -/
 def mixedPageReceiveCount (pages : List MixedPeerScan) : Nat :=
   match pages.getLast? with
   | none => 0

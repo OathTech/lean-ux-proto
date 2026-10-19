@@ -81,6 +81,8 @@ theorem peerGetter_drain_source (d : Device) (peers : PeerId → Peer) (sock : N
         simp only [peerFirstCall,plan,List.isEmpty_cons,Bool.false_eq_true,ite_false]
         apply Int.natCast_pos.mpr
         have lower : 48 ≤ devicePrefixSpace d := by unfold devicePrefixSpace; omega
+        have debit : (if d.peerList.isEmpty then nlaTotal 0 else 0) ≤ 4 := by
+          split <;> decide
         unfold NLMSG_GOODSIZE at *
         omega
       have notDone : (peerFirstCall d peers).ret ≠ 0 := by omega

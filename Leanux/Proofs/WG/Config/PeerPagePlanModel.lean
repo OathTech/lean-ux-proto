@@ -83,12 +83,13 @@ def peerPageBoundaryFresh (before : List PeerId) : List (List PeerId) → Prop
     page ≠ [] ∧ (∀ cursor, page.getLast? = some cursor → cursor ∉ before ++ page.dropLast) ∧
       peerPageBoundaryFresh (before ++ page) (next :: rest)
 
-/-- Room in the final DATA before the actual DONE-size test. The mirror's
-empty-peer cancellation retains the already-reserved nest space; see the
-checked DumpCancellation finding. -/
+/-- Room in the final DATA before the actual DONE-size test. An empty first
+page restores the cancelled peer-nest reservation; nonempty scans retain it. -/
 def peerPageFinalRoom (peers : PeerId → Peer) (d : Device) (ids : List PeerId) : Nat :=
   let pages := peerPages peers d ids
-  let room := if pages.tail.isEmpty then NLMSG_GOODSIZE - devicePrefixSpace d else NLMSG_GOODSIZE - 24
+  let room := if pages.tail.isEmpty then
+    NLMSG_GOODSIZE - (devicePrefixSpace d - (if ids.isEmpty then nlaTotal 0 else 0))
+    else NLMSG_GOODSIZE - 24
   room - multiPeerSpace peers (pages.getLastD [])
 
 /-- One receive per DATA page plus the actual final DONE spill bit. -/

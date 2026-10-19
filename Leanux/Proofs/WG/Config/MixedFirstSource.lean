@@ -28,9 +28,12 @@ theorem mixedFirst_callback_returns (d : Device) (peers : PeerId → Peer) (node
       (by simp [cursorGuardValue,empty]) (by intro _; exact headerFits)
       (by intro id impossible; cases impossible)
     dsimp only at callback
-    rw [mixedPageHeader_exact d {hasWg := true} (by intro _; exact headerFits)] at callback
+    rw [peerFirstHeader_exact d headerFits] at callback
+    have lower : 48 ≤ devicePrefixSpace d := by unfold devicePrefixSpace; omega
+    have restored : NLMSG_GOODSIZE-devicePrefixSpace d+4 =
+        NLMSG_GOODSIZE-(devicePrefixSpace d-4) := by omega
     simpa [mixedPeersFirstCall,mixedPageCall,mixedFirstScan,mixedInitialRows,empty,mixedPeerScan,
-      mixedFirstDevice,cursorHandoff,cursorAcquired,cursorReleased] using callback
+      mixedFirstDevice,cursorHandoff,cursorAcquired,cursorReleased,mixedPageRoom,restored,cursorCallResult] using callback
   · have origin := mixedInitialRows_origin d peers {hasWg := true} rfl
     have selected := mixedBoundary_selected d peers (mixedInitialRows d peers) {hasWg := true} none
       origin.1 origin.2 (by constructor <;> intros <;> contradiction)

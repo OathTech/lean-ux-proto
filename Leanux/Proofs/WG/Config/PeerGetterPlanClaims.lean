@@ -38,8 +38,12 @@ theorem peerPageReceiveCount_first_complete (d : Device) (peers : PeerId → Pee
     (complete : (peerPagePrefix peers (NLMSG_GOODSIZE-devicePrefixSpace d) d.peerList).2 = []) :
     peerPageReceiveCount peers d d.peerList =
       if (peerFirstCall d peers).skb.room < nlmsgTotal 4 then 2 else 1 := by
-  simp [peerPageReceiveCount,peerPageFinalRoom,peerPages,complete,peerTailPages,
-    List.getLastD,peerFirstCall] <;> split <;> omega
+  have spillCount :
+      (1 + if (peerFirstCall d peers).skb.room < nlmsgTotal 4 then 1 else 0) =
+        (if (peerFirstCall d peers).skb.room < nlmsgTotal 4 then 2 else 1) := by
+    by_cases spill : (peerFirstCall d peers).skb.room < nlmsgTotal 4 <;> simp [spill]
+  simpa [peerPageReceiveCount,peerPageFinalRoom,peerPages,complete,peerTailPages,
+    List.getLastD,peerFirstCall] using spillCount
 
 /-- A nonfinal first DATA adds one to the resumed plan's DATA-plus-spill
 budget. It does not assert instrumented minimal receive execution. -/

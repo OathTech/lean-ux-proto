@@ -127,7 +127,7 @@ theorem wgGetDeviceDump_mixed_returns (d : Device) (peers : PeerId → Peer) (no
 
 /-- The actual empty-list/dead-cursor guard cancels the peer nest and releases
 its held cursor. It needs no serializer or row assumptions and preserves the
-original header flags, repeated device attributes and post-nest room. -/
+original header flags, repeated device attributes and pre-nest room. -/
 theorem wgGetDeviceDump_guard_returns (d : Device) (ctx : DumpCtx) (prev : Nat)
     (skip : cursorGuardValue d ctx = true)
     (headerFits : ctx.nextPeer.isNone = true → devicePrefixSpace d ≤ NLMSG_GOODSIZE)
@@ -138,7 +138,7 @@ theorem wgGetDeviceDump_guard_returns (d : Device) (ctx : DumpCtx) (prev : Nat)
       (fun result g => result = cursorCallResult d
           (2 + if prev != 0 && prev != d.deviceUpdateGen then 16 else 0)
           (if ctx.nextPeer.isNone then deviceFixedAttrs d else []) ctx ctx.nextPeer
-          {header with room := header.room-4} true none ∧
+          header true none ∧
         g.dev = some (cursorHandoff d ctx.nextPeer none)) := by
   dsimp only
   let header := cursorHeaderSkb d ctx {}
@@ -157,10 +157,10 @@ theorem wgGetDeviceDump_guard_returns (d : Device) (ctx : DumpCtx) (prev : Nat)
   let attrs := if ctx.nextPeer.isNone then deviceFixedAttrs d else []
   let R : DumpCall → WGWorld → Prop := fun result g =>
     result = cursorCallResult d flags attrs ctx ctx.nextPeer
-      {header with room := header.room-4} true none ∧
+      header true none ∧
     g.dev = some (cursorHandoff d ctx.nextPeer none)
   have finish : Returns (cursorDumpFinish d flags attrs ctx ctx.nextPeer
-      {header with room := header.room-4} true none) (fun g => g.dev = some d) R :=
+      header true none) (fun g => g.dev = some d) R :=
     cursorFinish_ready_returns d flags attrs ctx ctx.nextPeer _ true none
       (by intro id impossible; cases impossible)
       (by simpa only [ite_true,cursorAcquired] using releaseReady)

@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Progress.FsEpollFiniteClaims
+import Leanux.Proofs.WG.Progress.SeccompProgramFiniteClaims
+import Leanux.Proofs.WG.Progress.FsFcntlFiniteClaims
 import Leanux.Proofs.WG.Progress.FsDescriptorFiniteClaims
 import Leanux.Proofs.WG.Progress.FsReadWriteFiniteClaims
 import Leanux.Proofs.WG.Progress.FsPipeCreationFiniteClaims
@@ -2127,5 +2130,91 @@ theorem original_fs_sysPipe2_finite (flags : UInt32) :
     Campaign2.Product.AgreesOn (fun _ => True)
       (liftFS (Leanux.sysPipe2 flags)) (liftFS (FsFinite.sysPipe2 flags)) :=
   FsFinite.original_sysPipe2_finite flags
+
+/-- Exact finite native evaluation, including all original refusal and Stop paths. -/
+theorem original_seccomp_migrate_finite (insns orig : Seccomp.ClassicProg) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftSeccomp (Seccomp.bpfMigrateFilter insns orig))
+      (liftSeccomp (SeccompProgramFinite.migrate insns orig)) :=
+  SeccompProgramFinite.original_migrate_finite insns orig
+
+/-- Exact finite native evaluation, including all original refusal and Stop paths. -/
+theorem original_seccomp_prepare_finite (insns orig : Seccomp.ClassicProg) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftSeccomp (Seccomp.bpfPrepareFilter insns orig))
+      (liftSeccomp (SeccompProgramFinite.prepare insns orig)) :=
+  SeccompProgramFinite.original_prepare_finite insns orig
+
+/-- Exact finite native creation from the original sock_fprog input. -/
+theorem original_seccomp_create_finite (fprog : Seccomp.SockFprog) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftSeccomp (Seccomp.bpfProgCreateFromUser fprog))
+      (liftSeccomp (SeccompProgramFinite.create fprog)) :=
+  SeccompProgramFinite.original_create_finite fprog
+
+/-- Exact Local result and normal state, including original Local Stops. -/
+theorem original_seccomp_local_migrate_finite (insns orig : Seccomp.ClassicProg)
+    (initial : Seccomp.Local.LState) :
+    Seccomp.Local.run (Seccomp.bpfMigrateFilter insns orig : Seccomp.Local.L _) initial =
+      Seccomp.Local.run (SeccompLocalProgramFinite.migrate insns orig) initial :=
+  SeccompLocalProgramFinite.original_migrate_result_finite insns orig initial
+
+/-- Exact Local result and normal state, including original Local Stops. -/
+theorem original_seccomp_local_prepare_finite (insns orig : Seccomp.ClassicProg)
+    (initial : Seccomp.Local.LState) :
+    Seccomp.Local.run (Seccomp.bpfPrepareFilter insns orig : Seccomp.Local.L _) initial =
+      Seccomp.Local.run (SeccompLocalProgramFinite.prepare insns orig) initial :=
+  SeccompLocalProgramFinite.original_prepare_result_finite insns orig initial
+
+/-- Exact Local creation result; no larger install or prefill execution is asserted. -/
+theorem original_seccomp_local_create_finite (fprog : Seccomp.SockFprog)
+    (initial : Seccomp.Local.LState) :
+    Seccomp.Local.run (Seccomp.bpfProgCreateFromUser fprog : Seccomp.Local.L _) initial =
+      Seccomp.Local.run (SeccompLocalProgramFinite.create fprog) initial :=
+  SeccompLocalProgramFinite.original_create_result_finite fprog initial
+
+/-- Exact finite caller evaluation retains every original result and Stop. -/
+theorem original_fs_roundPipeSize_finite (size : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.roundPipeSize size)) (liftFS (FsFinite.roundPipeSize size)) :=
+  FsFinite.original_roundPipeSize_finite size
+
+/-- Exact finite caller evaluation retains every original result and Stop. -/
+theorem original_fs_pipeSetSize_finite (pid : PipeId) (arg : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.pipeSetSize pid arg)) (liftFS (FsFinite.pipeSetSize pid arg)) :=
+  FsFinite.original_pipeSetSize_finite pid arg
+
+/-- Exact finite caller evaluation retains every original result and Stop. -/
+theorem original_fs_pipeFcntl_finite (fid : FileId) (cmd : Nat) (arg : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.pipeFcntl fid cmd arg)) (liftFS (FsFinite.pipeFcntl fid cmd arg)) :=
+  FsFinite.original_pipeFcntl_finite fid cmd arg
+
+/-- Exact finite caller evaluation retains every original result and Stop. -/
+theorem original_fs_doFcntl_finite (fd : Nat) (cmd : FcntlCmd) (arg : UInt64) (fid : FileId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.doFcntl fd cmd arg fid)) (liftFS (FsFinite.doFcntl fd cmd arg fid)) :=
+  FsFinite.original_doFcntl_finite fd cmd arg fid
+
+/-- Exact finite caller evaluation retains every original result and Stop. -/
+theorem original_fs_sysFcntl_finite (fd : Nat) (cmd : FcntlCmd) (arg : UInt64) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.sysFcntl fd cmd arg)) (liftFS (FsFinite.sysFcntl fd cmd arg)) :=
+  FsFinite.original_sysFcntl_finite fd cmd arg
+
+/-- Finite epoll creation retains allocation refusals and original cleanup. -/
+theorem original_epoll_create1_finite (flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.sysEpollCreate1 flags)) (liftFS (FsFinite.sysEpollCreate1 flags)) :=
+  FsFinite.original_sysEpollCreate1_finite flags
+
+/-- Finite ADD/DEL/MOD evaluation retains original checks, reference payments
+and bounded nested-poll exhaustion Stops. -/
+theorem original_epoll_ctl_finite (epfd : Nat) (op fd : Int) (events : UInt32) (data : UInt64) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.sysEpollCtl epfd op fd events data))
+      (liftFS (FsFinite.sysEpollCtl epfd op fd events data)) :=
+  FsFinite.original_sysEpollCtl_finite epfd op fd events data
 
 end Leanux.Proofs.WG.Progress

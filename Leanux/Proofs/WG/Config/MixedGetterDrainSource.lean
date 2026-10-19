@@ -100,16 +100,25 @@ theorem mixedGetter_drain_source (d : Device) (peers : PeerId → Peer) (nodes :
         simp only [reset.1,reset.2,metadata.1,ite_true]
     let started : NlSock := {sock with cbRunning := true,dumpDoneErrno := INT_MAX,prevSeq := 0,ctx := {hasWg := true}}
     have drain := pageDrain_completed d started call outAttrs outParts rfl callCtx rfl data
-    have count : mixedPageReceiveCount [page] = if call.skb.room < nlmsgTotal 4 then 2 else 1 := by
+    have count : (if call.skb.room < nlmsgTotal 4 then 2 else 1) ≤ mixedPageReceiveCount [page] := by
+      have restored : page.native.2.2.1.room ≤ call.skb.room :=
+        Nat.le_add_right _ _
       simp only [mixedPageReceiveCount,List.getLast?_singleton,List.length_singleton]
-      change 1 + (if page.native.2.2.1.room < nlmsgTotal 4 then 1 else 0) =
-        (if page.native.2.2.1.room < nlmsgTotal 4 then 2 else 1)
-      split <;> simp_all
+      by_cases actualSpill : call.skb.room < nlmsgTotal 4
+      · have rawSpill : page.native.2.2.1.room < nlmsgTotal 4 := by omega
+        simp [actualSpill,rawSpill]
+      · simp only [actualSpill,ite_false]
+        split <;> omega
+    have bounded : PageDrainContract d (paginationCompletedSocket started call) d
+        (socketReadbackFinal started d) [.data 2 outAttrs outParts,.done 2 0]
+        (mixedPageReceiveCount [page]) := by
+      intro step budget acc enough
+      exact drain step budget acc (Nat.le_trans count enough)
     refine ⟨?_,?_⟩
     · simp [planEq,finalDevice,CursorHeld]
-    · rw [planEq,finalDevice,firstDevice,count]
+    · rw [planEq,finalDevice,firstDevice]
       simpa [mixedFirstSocket,show mixedPeersFirstCall d peers nodes = call from rfl,completed,
-        emptyQueue,mixedPageMessages,mixedPageMessage,outAttrs,outParts,started,socketReadbackFinal] using drain
+        emptyQueue,mixedPageMessages,mixedPageMessage,outAttrs,outParts,started,socketReadbackFinal] using bounded
   · have notDone : page.native.2.2.2.1 = false := by
       cases done : page.native.2.2.2.1
       · rfl

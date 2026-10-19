@@ -81,3 +81,13 @@ including empty-list and dead-cursor cancellation from the pre-header
 snapshot. A 72-declaration scoped audit and fresh replay pass. Outer peer
 and mixed-page pagination are still being carried; none of the shared
 observer failures has been hidden or repaired in campaign 2.
+
+The outer peer/mixed pagination carry now passes a 207-job build. The native
+empty-device callback restores the reservation; the mixed raw-plan count
+remains a proved sufficient bound. A combined pagination/epoll root audits
+66 declarations including four exact terminal bodies with standard axioms
+only; fresh replay exits zero. The next full gate fails only in the five
+shared modules listed above (3,078 planned jobs), with no further owned
+failure. Dependent owned modules skipped behind those failures remain
+unvalidated; the terminal axiom stage is skipped. Token/import checks pass.
+This shared carry is still required; local substitutes would copy layers.
