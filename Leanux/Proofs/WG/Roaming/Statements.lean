@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.Roaming.RemoteChronologyClaims
 import Leanux.Proofs.WG.Roaming.HandshakeOverlayClaims
+import Leanux.Proofs.WG.Roaming.HandshakeInitializedClaims
 import Leanux.Proofs.WG.Roaming.PollAuthenticationCheckClaims
 import Leanux.Proofs.WG.Roaming.ReceiveStepRemoteClaims
 import Leanux.Proofs.WG.Roaming.ReceiveStepSetterClaims
@@ -590,5 +591,26 @@ theorem original_scheduler_attempt_authentication (stack : Option Worker) :
       (fun entry result => ∃ audit, result = .ok (audit,entry) ∧
         ∀ attempt ∈ audit.attempts, HandshakeOverlay.Authenticated attempt) :=
   ⟨HandshakeOverlay.schedule_original stack,HandshakeOverlay.schedule_facts stack⟩
+
+/-- Every committed handshake setter attempt in the original initialized
+execution has successful MAC/consumer authentication and the selected source
+endpoint, tied to the actual setter-entry peer state, including before later
+indexed Stops. No callback or invariant premise is supplied. -/
+theorem original_initialized_handshake_attempt_authentication (trace : Runner.Trace)
+    (placeholders : Bool) :
+    ∀ q ∈ (HandshakeOverlay.initializedInspection trace placeholders).attempts,
+      HandshakeOverlay.Authenticated q.attempt :=
+  HandshakeOverlay.initialized_authentication trace placeholders
+
+/-- The concrete initialized handshake observer retains the original JSON or
+indexed Stop and exactly its emitted attempts at their actual positions.
+Copied consistency trials remain separate from this committed history. -/
+theorem original_initialized_handshake_attempt_coverage (trace : Runner.Trace)
+    (placeholders : Bool) :
+    (HandshakeOverlay.initializedInspection trace placeholders).outcome =
+      Runner.executeTrace trace placeholders ∧
+    ∀ q, q ∈ (HandshakeOverlay.initializedInspection trace placeholders).attempts ↔
+      q.Occurs trace placeholders :=
+  HandshakeOverlay.initialized_coverage trace placeholders
 
 end Leanux.Proofs.WG.Roaming
