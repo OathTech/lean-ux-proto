@@ -210,4 +210,10 @@ source finding.
    `f11eadfe`. These are further concrete source points, not closure of the
    universal interior obligation.
 
+   Source-70 `14a5f051` adds initialized encryption-loop/publication and
+   overflow-prefix cuts, and a fixed send-drain point contract covering normal
+   and stopped executions. The three child-source contracts remain explicit.
+   Combined aggregate gate, fresh replay and twelve recipes pass; finding 2
+   remains open until concrete child instances and all caller roots close.
+
 No mirror change or narrower T2 outcome is adopted.

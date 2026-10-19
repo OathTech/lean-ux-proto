@@ -281,5 +281,7 @@ of the open native-cut obligation; no narrower outcome is adopted.
    encryption lanes cover their own entries; pending receipts and consumed
    debts remain explicit where an old resident account is false.
 4. The final headline will require a closed source coverage instance. The
-   next common contract is the conditional send-drain prototype in section 5,
-   with its three child obligations visible; it is not itself T2 completion.
+   conditional send-drain prototype in section 5 is implemented at source-70
+   `14a5f051`, with exact normal/stopped decomposition and its three child
+   source obligations visible. Its initialized composition and aggregate
+   checks pass; it is not itself T2 completion.
