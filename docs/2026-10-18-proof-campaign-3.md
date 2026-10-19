@@ -300,9 +300,11 @@ These local results pass the aggregate checks below; initialized T2 conservation
 
 Source-48 local joins retain full Entry through native queue admission, both peer-release observers, queued initiation and refusal frees. The actual transmit/keepalive composition now leaves only its creation callback open; completion uses indexed settlement and cleanup. Exact normal refusal-debt restoration, enclosing source transport and historical terminal completeness remain open. These local joins pass the source-48 aggregate checks below; they do not establish initialized conservation.
 
+Source-49 local joins derive pending-ticket evidence at the actual allocator and discharge the real creation callback, including exact original-debt restoration after refusal. Full transmit and keepalive now compose without an assumed creation or queued-initiation callback. Counted purge, encryption, receive maintenance and the family-selected completion send retain the full Entry bundle. Stop certificates remain local source frontiers; initialized transport and the converse historical terminal relation are still open. The 3321-job combined root build and eleven focused standard-axiom queries pass. Source-49 has not yet repeated the aggregate gate or fresh root replay; the last fully validated checkpoint is `13d285cf`.
+
 ## Validation
 
-Source-48 checkpoint passes the 3295-job aggregate build and 1523-declaration gate across
+Source-48 checkpoint `13d285cf` passes the 3295-job aggregate build and 1523-declaration gate across
 thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`.
 Thirteen focused source queries also use only those axioms. All twelve
 counterexample recipes and fresh root kernel replay pass. The default model

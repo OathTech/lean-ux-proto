@@ -20,7 +20,8 @@ theorem staging (ledger : Ledger) (debts : List CleanupDebt) (locals : List TxLo
     (queued : ∀ ledger, StatePrefixEnsures (fun h w _ => StagedEntry.Inv h ledger debts locals w)
       Safe (HandshakeSecurity.StagedDisposal.Effects.queuedWith effects peerRelease pid false) (fun _ => Post))
     (created : ∀ ledger items, StatePrefixEnsures
-      (fun h w _ => StagedEntry.Inv h ledger debts (⟨.unpublished,pid,items⟩ :: locals) w)
+      (fun h w _ => StagedEntry.Inv h ledger debts (⟨.unpublished,pid,items⟩ :: locals) w ∧
+        CreateDisposal.PendingBatch h ledger items)
       Safe (CausalJournal.create pid items) (fun _ => Post)) :
     StatePrefixEnsures (fun h w _ => StagedEntry.Inv h ledger debts locals w) Safe
       (Driver.stagingObserved hooks pid) (fun _ => Post) := by

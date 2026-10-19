@@ -14,7 +14,8 @@ theorem staging (pid : PeerId) (Safe : List Event → Prop)
     (activeSafe : ∀ ledger generation peer position h,
       SoundHeld.Active ledger debts generation pid peer position h → Safe h)
     (created : ∀ ledger items, StatePrefixEnsures
-      (fun h w _ => StagedEntry.Inv h ledger debts (⟨.unpublished,pid,items⟩ :: locals) w)
+      (fun h w _ => StagedEntry.Inv h ledger debts (⟨.unpublished,pid,items⟩ :: locals) w ∧
+        CreateDisposal.PendingBatch h ledger items)
       Safe (CausalJournal.create pid items) (fun _ => Carrier debts locals)) :
     StatePrefixPreserves (Carrier debts locals) Safe (Driver.stagingObserved hooks pid) := by
   intro w a h before

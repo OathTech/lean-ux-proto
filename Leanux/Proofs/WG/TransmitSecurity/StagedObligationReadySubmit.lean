@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.StagedObligationReadyAllocation
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationReadyAllocationPending
 
 /-! Actual owner lookup, peer borrowing and allocation feed the create callback
 with the whole entry bundle at the same native cut. Failure before allocation
@@ -23,19 +23,20 @@ theorem allocation_tail (ledger : Ledger) (debts : List CleanupDebt) (locals : L
     (generation : Nat) (pid : PeerId) (peer : Peer) (position : Nat) (kid : KeypairId)
     (packets : List DataPacket) (Safe : List Event → Prop) (Post : List Event → WGWorld → Ambient → Prop)
     (created : ∀ after items, StatePrefixEnsures
-      (fun h w _ => StagedEntry.Inv h after debts (⟨.unpublished,pid,items⟩ :: locals) w)
+      (fun h w _ => StagedEntry.Inv h after debts (⟨.unpublished,pid,items⟩ :: locals) w ∧
+        CreateDisposal.PendingBatch h after items)
       Safe (CausalJournal.create pid items) (fun _ => Post)) :
     StatePrefixEnsures
       (fun h w a => Ready ledger debts locals generation pid peer position h w a ∧
         BatchPayload.Shape pid kid peer.staged packets) Safe
       (do let items ← state (Journal.allocate packets); CausalJournal.create pid items) (fun _ => Post) := by
   intro w a h before
-  obtain ⟨items,v,performed,_,_,entry⟩ := allocate before.1 before.2
+  obtain ⟨items,v,performed,_,_,entry,pending⟩ := allocate_pending before.1 before.2
   simp only [StateT.run_bind,runPrefix_bind]
   change runPrefix ((state (Journal.allocate packets)).run w) a h = _ at performed
   rw [performed]
   obtain ⟨suffix,extended,safe,post⟩ := created (assignBatch position h.length ledger) items v a
-    (h ++ [Event.old (.allocated packets ⟨items,w,v,a,a⟩)]) entry
+    (h ++ [Event.old (.allocated packets ⟨items,w,v,a,a⟩)]) ⟨entry,pending⟩
   refine ⟨[Event.old (.allocated packets ⟨items,w,v,a,a⟩)] ++ suffix,?_,safe,post⟩
   simpa only [runStatePrefix,List.append_assoc] using extended
 
@@ -49,7 +50,8 @@ theorem submit (ledger : Ledger) (debts : List CleanupDebt) (locals : List TxLoc
     (frontier : ∀ h, SoundHeld.Active ledger debts generation pid peer position h → Safe h)
     (Post : List Event → WGWorld → Ambient → Prop)
     (created : ∀ after items, StatePrefixEnsures
-      (fun h w _ => StagedEntry.Inv h after debts (⟨.unpublished,pid,items⟩ :: locals) w)
+      (fun h w _ => StagedEntry.Inv h after debts (⟨.unpublished,pid,items⟩ :: locals) w ∧
+        CreateDisposal.PendingBatch h after items)
       Safe (CausalJournal.create pid items) (fun _ => Post)) :
     StatePrefixEnsures
       (fun h w a => Ready ledger debts locals generation pid peer position h w a ∧
