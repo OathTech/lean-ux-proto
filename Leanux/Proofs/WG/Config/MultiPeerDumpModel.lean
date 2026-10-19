@@ -13,10 +13,10 @@ def multiPeerSpace (peers : PeerId → Peer) (ids : List PeerId) : Nat :=
 def multiPeerParts (peers : PeerId → Peer) (ids : List PeerId) : List PeerDumpAttrs :=
   ids.map fun pid => {publicKey := hexKey (peers pid).remoteStatic, attrs := peerFixedAttrs (peers pid)}
 
-/-- Exact completing first callback, retaining the cancelled peer nest when
+/-- Exact completing first callback, restoring the peer-nest reservation when
 the device list is empty. No pagination or callback-success assumption is encoded. -/
 def multiPeerCall (d : Device) (peers : PeerId → Peer) (ids : List PeerId) : DumpCall :=
-  {ret := 0, skb := {room := NLMSG_GOODSIZE - devicePrefixSpace d - multiPeerSpace peers ids, messages := [.data 2 (deviceFixedAttrs d) (if ids.isEmpty then none else some (multiPeerParts peers ids))]}, ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen}
+  {ret := 0, skb := {room := NLMSG_GOODSIZE - (devicePrefixSpace d - (if ids.isEmpty then nlaTotal 0 else 0)) - multiPeerSpace peers ids, messages := [.data 2 (deviceFixedAttrs d) (if ids.isEmpty then none else some (multiPeerParts peers ids))]}, ctx := {hasWg := true}, prevSeq := d.deviceUpdateGen}
 
 /-- Conservative capacity bound used to fit all peers and a final DONE. -/
 theorem multiPeerSpace_bound (peers : PeerId → Peer) (ids : List PeerId) :

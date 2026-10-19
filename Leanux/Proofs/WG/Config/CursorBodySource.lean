@@ -78,7 +78,7 @@ theorem cursorDumpBody_normal (d : Device) (peers : PeerId → Peer) (ctx : Dump
     (fresh : ctx.nextAllowedip = none)
     (oldResident : ∀ pid, ctx.nextPeer = some pid → ∃ p, d.peers[pid]? = some p)
     (flags : Nat) (attrs : List (String × Json)) (skb : NlSkb) :
-    let state := cursorBodyState d peers ctx {skb with room := skb.room-4}
+    let state := cursorBodyState d peers ctx skb
     Ensures (cursorDumpBody d ctx flags attrs skb) (fun g => g.dev = some d)
       (fun result g => result = cursorCallResult d flags attrs state.1 state.2.1 state.2.2.1 state.2.2.2.1 state.2.2.2.2 ∧
         g.dev = some (cursorReleased (cursorAcquired d (if state.2.2.2.1 then none else state.2.1)) state.1.nextPeer)) := by
@@ -98,7 +98,7 @@ theorem cursorDumpBody_normal (d : Device) (peers : PeerId → Peer) (ctx : Dump
     | true =>
       rw [decision] at run
       have finish := cursorDumpFinish_normal d flags attrs ctx ctx.nextPeer
-        {skb with room := skb.room-4} true none oldResident oldResident
+        skb true none oldResident oldResident
         middle remaining result final after same run
       simpa [cursorBodyState,decision] using finish
     | false =>

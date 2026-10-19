@@ -47,7 +47,7 @@ def cursorDumpBody (d : Device) (ctx : DumpCtx) (flags : Nat)
   let (fail,skb) := skb0.put (nlaTotal 0)
   if ← branch .dumpNoPeersNest fail then unsupported "the peers nest does not fit a fresh chunk (unreachable)"
   if ← cursorDumpGuard d ctx then
-    cursorDumpFinish d flags device ctx ctx.nextPeer skb true none
+    cursorDumpFinish d flags device ctx ctx.nextPeer skb0 true none
   else
     let ids : List PeerId := match ctx.nextPeer with
       | none => d.peerList

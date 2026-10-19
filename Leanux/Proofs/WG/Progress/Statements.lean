@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Progress.FsDescriptorFiniteClaims
+import Leanux.Proofs.WG.Progress.FsReadWriteFiniteClaims
+import Leanux.Proofs.WG.Progress.FsPipeCreationFiniteClaims
 import Leanux.Proofs.WG.Progress.FsAllocationFiniteClaims
 import Leanux.Proofs.WG.Progress.SeccompLocalFiniteClaims
 import Leanux.Proofs.WG.Progress.MaintenanceFiniteClaims
@@ -1998,5 +2001,131 @@ theorem original_seccomp_local_convert_finite (prog : Seccomp.ClassicProg)
     Seccomp.Local.run (Seccomp.bpfConvertFilter prog newProg seen newLen : Seccomp.Local.L _) initial =
       Seccomp.Local.run (SeccompLocalFinite.convert prog newProg seen newLen) initial :=
   SeccompLocalFinite.original_convert_result_finite prog newProg seen newLen initial
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_expandFdtable_finite (nr : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.expandFdtable nr)) (liftFS (FsFinite.expandFdtable nr)) :=
+  FsFinite.original_expandFdtable_finite nr
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_expandFiles_finite (nr : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.expandFiles nr)) (liftFS (FsFinite.expandFiles nr)) :=
+  FsFinite.original_expandFiles_finite nr
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_allocFd_finite (start «end» : Nat) (flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.allocFd start «end» flags)) (liftFS (FsFinite.allocFd start «end» flags)) :=
+  FsFinite.original_allocFd_finite start «end» flags
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_getUnusedFdFlags_finite (flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.getUnusedFdFlags flags)) (liftFS (FsFinite.getUnusedFdFlags flags)) :=
+  FsFinite.original_getUnusedFdFlags_finite flags
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_doEventfd_finite (count flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.doEventfd count flags)) (liftFS (FsFinite.doEventfd count flags)) :=
+  FsFinite.original_doEventfd_finite count flags
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_sysEventfd2_finite (count flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.sysEventfd2 count flags)) (liftFS (FsFinite.sysEventfd2 count flags)) :=
+  FsFinite.original_sysEventfd2_finite count flags
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_newSyncRead_finite (fid : FileId) (len : Nat) (ppos : Option Int) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.newSyncRead fid len ppos)) (liftFS (FsFinite.newSyncRead fid len ppos)) :=
+  FsFinite.original_newSyncRead_finite fid len ppos
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_vfsRead_finite (fid : FileId) (count : Nat) (pos : Option Int) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.vfsRead fid count pos)) (liftFS (FsFinite.vfsRead fid count pos)) :=
+  FsFinite.original_vfsRead_finite fid count pos
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_ksysRead_finite (fd : Nat) (count : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.ksysRead fd count)) (liftFS (FsFinite.ksysRead fd count)) :=
+  FsFinite.original_ksysRead_finite fd count
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_newSyncWrite_finite (fid : FileId) (buf : ByteArray) (len : Nat) (ppos : Option Int) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.newSyncWrite fid buf len ppos)) (liftFS (FsFinite.newSyncWrite fid buf len ppos)) :=
+  FsFinite.original_newSyncWrite_finite fid buf len ppos
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_vfsWrite_finite (fid : FileId) (buf : ByteArray) (count : Nat) (pos : Option Int) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.vfsWrite fid buf count pos)) (liftFS (FsFinite.vfsWrite fid buf count pos)) :=
+  FsFinite.original_vfsWrite_finite fid buf count pos
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_ksysWrite_finite (fd : Nat) (buf : ByteArray) (count : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.ksysWrite fd buf count)) (liftFS (FsFinite.ksysWrite fd buf count)) :=
+  FsFinite.original_ksysWrite_finite fd buf count
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_getPipeInode_finite :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.getPipeInode)) (liftFS (FsFinite.getPipeInode)) :=
+  FsFinite.original_getPipeInode_finite
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_allocFileClone_finite (base : FileId) (flags : UInt32) (fopId : FopsId) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.allocFileClone base flags fopId)) (liftFS (FsFinite.allocFileClone base flags fopId)) :=
+  FsFinite.original_allocFileClone_finite base flags fopId
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_createPipeFiles_finite (flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.createPipeFiles flags)) (liftFS (FsFinite.createPipeFiles flags)) :=
+  FsFinite.original_createPipeFiles_finite flags
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_doPipeFlags_finite (flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.doPipeFlags flags)) (liftFS (FsFinite.doPipeFlags flags)) :=
+  FsFinite.original_doPipeFlags_finite flags
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_doPipe2_finite (flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.doPipe2 flags)) (liftFS (FsFinite.doPipe2 flags)) :=
+  FsFinite.original_doPipe2_finite flags
+
+/-- Exact finite caller evaluation preserves the original results, refusal
+order and Stops; the native equality also preserves every FS state field. -/
+theorem original_fs_sysPipe2_finite (flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.sysPipe2 flags)) (liftFS (FsFinite.sysPipe2 flags)) :=
+  FsFinite.original_sysPipe2_finite flags
 
 end Leanux.Proofs.WG.Progress

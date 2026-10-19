@@ -2,8 +2,6 @@ import Leanux.Proofs.WG.Config.SocketReadbackScanSource
 
 set_option autoImplicit false
 set_option pp.structureInstances false
-set_option maxHeartbeats 800000
-set_option maxRecDepth 2048
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
 
@@ -45,9 +43,9 @@ def socketDumpPeerSource (d : Device) (ctx0 : DumpCtx) (flags : Nat) (device : L
   let mut nextCursor := ctx.nextPeer
   let mut skb := skb
   -- peers_nest = nla_nest_start(skb, WGDEVICE_A_PEERS)
+  let nestStart := skb
   let (fail, s) := skb.put (nlaTotal 0); skb := s
   if ← branch .dumpNoPeersNest fail then unsupported "the peers nest does not fit a fresh chunk (unreachable)"
-  let nestStart := skb
   let ret : Int := 0
   let mut done := true
   let mut peers : Option (Array PeerDumpAttrs) := some #[]

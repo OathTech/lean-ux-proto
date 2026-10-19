@@ -74,3 +74,10 @@ The token/import checks pass. The owned dependent activation/decrypt/receive
 and cookie build passes 260 jobs; the corrected dump headlines pass a 108-job
 build. A scoped root audits ten exact headlines and 149 support declarations
 with standard axioms only. Fresh scoped replay passes at actual exit zero.
+
+The first two owned dump blockers now build (111 jobs). The corrected cursor
+source and model also build alongside the new finite FS callers (154 jobs),
+including empty-list and dead-cursor cancellation from the pre-header
+snapshot. A 72-declaration scoped audit and fresh replay pass. Outer peer
+and mixed-page pagination are still being carried; none of the shared
+observer failures has been hidden or repaired in campaign 2.

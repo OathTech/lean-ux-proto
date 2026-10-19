@@ -48,7 +48,8 @@ def cursorBodyState (d : Device) (peers : PeerId → Peer) (ctx : DumpCtx) (skb 
     DumpCtx × Option PeerId × NlSkb × Bool × Option (Array PeerDumpAttrs) :=
   if cursorGuardValue d ctx then (ctx,ctx.nextPeer,skb,true,none)
   else
-    let state := fixedPeersRun peers (cursorSelected d ctx) ctx ctx.nextPeer skb #[]
+    let state := fixedPeersRun peers (cursorSelected d ctx) ctx ctx.nextPeer
+      {skb with room := skb.room-4} #[]
     (state.1,state.2.1,state.2.2.1,state.2.2.2.1,some state.2.2.2.2)
 
 end Leanux.Proofs.WG.Config

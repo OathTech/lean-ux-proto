@@ -29,8 +29,10 @@ theorem fitting_peers_getter_returns (d : Device) (peers : PeerId → Peer) (soc
   let chunk : NlSkb := {call.skb with room := call.skb.room - nlmsgTotal 4,messages := call.skb.messages ++ [.done 2 0]}
   have enough : 20 ≤ call.skb.room := by
     have bound := multiPeerSpace_bound peers d.peerList
-    change 20 ≤ NLMSG_GOODSIZE - devicePrefixSpace d - multiPeerSpace peers d.peerList
-    omega
+    change 20 ≤ NLMSG_GOODSIZE -
+      (devicePrefixSpace d - (if d.peerList.isEmpty then nlaTotal 0 else 0)) -
+      multiPeerSpace peers d.peerList
+    split <;> omega
   have noSpill : ¬ call.skb.room < nlmsgTotal 4 := by change ¬ call.skb.room < 20; omega
   have start := netlinkDumpStart_completed_empty d sock call idle emptyQueue rfl rfl
     (wgGetDeviceDump_multi d peers residents emptyIps room)
