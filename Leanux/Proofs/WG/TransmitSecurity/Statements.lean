@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedReceiveWorkerComposition
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedLifecyclePointCoverage
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingPhaseCoverage
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCreatePhaseMutation
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDrainPointServiceComposition
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWheelPointPeerComposition
@@ -2608,6 +2611,59 @@ theorem initialized_runner_service_source_points_conditional
     Reached.Runner.Points.Covered (runnerPoints native nativeDispatch nativeOther) Good
       (Reached.Runner.Points.executeShape trace placeholders) [] :=
   Service.RunnerComposition.initialized trace placeholders carrierGood service dispatch other
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+
+/-- Security: every crypt-ring polling point preserves the same ledger,
+debts and local packet owners. The actual ring write and both receipts retain
+the original continuation, including prefixes before a later Stop. -/
+theorem crypt_poll_every_source_point_accounted
+    (before : CompleteCarrier.Accounted h ledger debts locals w.wg)
+    (point : CryptPoll.Points.RootPoints w h u middle) :
+    CompleteCarrier.Accounted middle ledger debts locals u.wg ∧
+      runPrefix CausalJournal.hooks.poll w h =
+        runPrefix (CryptPoll.Points.remainder w h u middle point) u middle :=
+  CryptPoll.Points.source_accounted before point
+
+/-- Security: lifecycle source boundaries preserve packet obligations,
+including reset only after its actual quiescence check with the same holder
+account. Deeper child interiors, compound native interiors and environment
+wrappers remain separate obligations; no incoming phase certificate is assumed. -/
+theorem lifecycle_source_boundaries_accounted (root : Lifecycle.Points.Root)
+    (before : root.Entry h w)
+    (point : Lifecycle.Points.Point Lifecycle.Points.Boundary
+      (Lifecycle.Points.canonical root) w h site u middle) :
+    Lifecycle.Points.Account middle u := Lifecycle.Points.lifecycle_boundary root before point
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+open ReceiveWorker.Composition
+
+/-- Security: initialized scheduler conservation uses concrete queued
+initiation, receive helpers, wheel placement, ring polling and final peer
+release. Seven deeper packet-source contracts remain visible; this does not
+claim completed T2 native coverage or assume an incoming initialized account. -/
+theorem initialized_scheduler_receive_source_points_conditional
+    (entry : ScheduledSource.Entry trace placeholders operationIndex world history)
+    {nativeConsume insideConsume : Consume.Points.ChildPoints}
+    {nativeNapi insideNapi : Napi.Points.ChildPoints}
+    {nativeWorker insideWorker : Iteration.Points.ChildPoints}
+    {Good : ReceiveWorker.Composition.History → World → Prop}
+    (carrierGood : ∀h w,Napi.Points.Carrier h w → Good h w)
+    (accept : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
+    (receive : ReceiveOther nativeConsume insideConsume nativeNapi insideNapi Good)
+    (workers : WorkerOther nativeConsume insideConsume nativeNapi insideNapi nativeWorker insideWorker Good) :
+    Scheduler.Points.Covered (schedulerPoints nativeConsume nativeNapi nativeWorker) Good
+      (Scheduler.Points.scheduleShape none) world history ∧
+    Scheduler.Points.Remainders
+      (Napi.Composition.schedulerChildren carrierGood (napiChildren carrierGood accept receive)
+        (workerChildren carrierGood accept workers)) (Scheduler.Points.scheduleShape none) world history :=
+  ReceiveWorker.Composition.initialized_scheduler entry carrierGood accept receive workers
 
 end
 
