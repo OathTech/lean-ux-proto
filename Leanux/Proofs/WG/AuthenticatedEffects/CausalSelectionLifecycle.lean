@@ -13,7 +13,10 @@ macro "selection_lifecycle_step" : tactic => `(tactic| first
   | selection_removal_step)
 
 theorem down : StateSafe (downObserved hooks) := by
-  unfold downObserved downWith stopWith timersStopWith
+  unfold downObserved
+  rw [show hooks.stagedPurge = (fun pid => liftWGPrefix (purgeStagedPackets pid)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.down_neutral]
+  unfold downWith stopWith timersStopWith
   repeat' first
     | (selection_carrier_head sendDrainObserved; exact sendDrain _)
     | selection_lifecycle_step

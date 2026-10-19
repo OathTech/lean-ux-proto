@@ -11,9 +11,11 @@ set_option pp.structureInstances false
 
 theorem down_history (h : ActorHistorySafe Safe g) :
     StateHistorySafe Safe (downObserved g) := by
-  unfold downObserved downWith stopWith timersStopWith
+  unfold downObserved HandshakeSecurity.StagedDisposal.Lifecycle.downWith HandshakeSecurity.StagedDisposal.Lifecycle.stopWith timersStopWith
   repeat' first
     | (driver_history_head sendDrainObserved; exact sendDrain_history h _)
+    | (driver_history_head Hooks.stagedPurge; exact h.stagedPurge _)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem destruct_history (h : ActorHistorySafe Safe g) :
@@ -23,6 +25,8 @@ theorem destruct_history (h : ActorHistorySafe Safe g) :
   unfold Configuration.destructWith
   repeat' first
     | (driver_history_head removeAllObserved; exact removeAll_history h)
+    | (driver_history_head Hooks.stagedPurge; exact h.stagedPurge _)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem envDown_history (h : ActorHistorySafe Safe g) :

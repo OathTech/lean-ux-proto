@@ -18,7 +18,7 @@ macro "responder_driver_device_step " H1:term : tactic => `(tactic| first
   | (nonce_source_head expireCurrentPeerKeypairs; exact lift _ (carrier_expire _))
   | (nonce_source_head clearPeerEndpointSrc; exact lift _ (carrier_clear_endpoint _))
   | (nonce_source_head setPort; exact lift _ (carrier_port _))
-  | (nonce_source_head Driver.removeAllObserved; rw [Driver.removeAll_lift hooks rfl])
+  | (nonce_source_head Driver.removeAllObserved; rw [Driver.removeAll_lift hooks rfl rfl])
   | (nonce_source_head peerRemoveAll; exact lift _ (carrier_remove_all $H1))
   | (nonce_source_head peerPut; exact lift _ (carrier_peer_put _))
   | (nonce_source_head modifyDev
@@ -54,7 +54,7 @@ theorem config_key (H1 : H1ResponderCurrentEdges) (a : DeviceAttrs) :
   simp only [show Driver.fixtureOps hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
     AuthenticatedEffects.FixtureEffects.run_neutral]
   have removal : Driver.removeObserved hooks = fun peer => liftWGPrefix (peerRemove peer) :=
-    funext (Driver.remove_lift hooks rfl)
+    funext (Driver.remove_lift hooks rfl rfl)
   rw [removal]
   exact config_key_with H1 a _ (config_peers H1 a)
 

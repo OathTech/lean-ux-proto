@@ -44,6 +44,7 @@ theorem transmit_front (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     StateSafe (Driver.transmitObserved hooks family addr packets mtu) := by
   unfold Driver.transmitObserved
   repeat' first
+    | (scope_balance_head Driver.Hooks.peerRelease; exact state_lift _)
     | (scope_balance_head Driver.Hooks.front; exact old_state _)
     | (scope_balance_head Driver.stagingObserved; exact staging _)
     | scope_state_step

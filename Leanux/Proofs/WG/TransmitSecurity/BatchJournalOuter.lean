@@ -152,7 +152,7 @@ theorem retained (call : Syscall)
   · by_cases down : call = .wgDown
     · subst call
       unfold retainedObserved
-      rw [envDown_lift Journal.hooks rfl,socketCall_lift]
+      rw [envDown_lift Journal.hooks rfl rfl,socketCall_lift]
       exact product_lift _ (BatchCoherence.Syscalls.dispatch_native .wgDown)
     · simp only [retainedObserved]
       exact product_lift _ (BatchCoherence.Syscalls.dispatch_native call)
@@ -180,7 +180,7 @@ theorem dispatch
   · apply rtnetlink
     exact product_native _ BatchCoherence.Lifecycle.create
   · apply rtnetlink
-    rw [Driver.envDelete_lift Journal.hooks rfl]
+    rw [Driver.envDelete_lift Journal.hooks rfl rfl rfl]
     exact product_lift _ BatchCoherence.Controls.env_delete
   · exact syscall_xmit
   · intro family port message tos ll dest

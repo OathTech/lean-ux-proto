@@ -41,11 +41,11 @@ theorem timer_carrier (pid : PeerId) (t : PeerTimer) :
     CarrierSafe (Driver.timerObserved Journal.hooks pid t) := by
   cases t with
   | retransmitHandshake =>
-    rw [Driver.timer_retransmit_lift Journal.hooks rfl]
+    rw [Driver.timer_retransmit_lift Journal.hooks rfl rfl rfl]
     exact carrier_lift _ (fun _ => NativeFrames.retransmit pid) (bounds_forget (DriverCuts.carrier_retransmit pid))
   | sendKeepalive => exact expired_keepalive_carrier pid
   | newHandshake =>
-    rw [Driver.timer_new_lift Journal.hooks rfl]
+    rw [Driver.timer_new_lift Journal.hooks rfl rfl]
     exact carrier_lift _ (fun _ => NativeFrames.new_handshake pid) (bounds_forget (DriverCuts.carrier_new_handshake pid))
   | zeroKeyMaterial =>
     exact carrier_lift _ (fun _ => NativeFrames.expired_zero pid) (bounds_forget (DriverCuts.carrier_zero_material pid))

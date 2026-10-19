@@ -72,14 +72,20 @@ theorem after_dead_checked (facts : H1DriverSourceFacts) (pid : PeerId) :
 
 theorem remove_checked (facts : H1DriverSourceFacts) (peer : Option PeerId) :
     Preserves (Driver.removeObserved ExchangeDriver.hooks peer) := by
-  unfold Driver.removeObserved SendExchange.removeWith Configuration.peerRemoveWith
+  unfold Driver.removeObserved
+  rw [show ExchangeDriver.hooks.peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
+    HandshakeSecurity.StagedDisposal.Lifecycle.remove_neutral]
+  unfold SendExchange.removeWith Configuration.peerRemoveWith
   repeat' first
     | (nonce_source_head SendExchange.afterDeadWith; exact after_dead_checked facts _)
     | exchange_removal_step facts
 
 theorem remove_all_checked (facts : H1DriverSourceFacts) :
     Preserves (Driver.removeAllObserved ExchangeDriver.hooks) := by
-  unfold Driver.removeAllObserved SendExchange.removeAllWith Configuration.peerRemoveAllWith
+  unfold Driver.removeAllObserved
+  rw [show ExchangeDriver.hooks.peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
+    HandshakeSecurity.StagedDisposal.Lifecycle.removeAll_neutral]
+  unfold SendExchange.removeAllWith Configuration.peerRemoveAllWith
   repeat' first
     | (nonce_source_head SendExchange.afterDeadWith; exact after_dead_checked facts _)
     | exchange_removal_step facts

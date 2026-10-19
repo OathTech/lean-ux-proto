@@ -52,6 +52,7 @@ theorem tx_iter (pid : PeerId) : ProductSafe (Driver.txIterObserved hooks pid) :
 theorem decrypt_step : ProductSafe (Driver.decryptStepObserved hooks) := by
   unfold Driver.decryptStepObserved RxWorkers.decryptWith
   repeat' first
+    | (scope_balance_head Driver.Hooks.peerRelease; exact product_state _ (state_lift _))
     | (scope_balance_head Driver.Hooks.prepare; exact old_product _)
     | (scope_balance_head Driver.softirqObserved; exact softirq)
     | (scope_balance_head Driver.irqExitObserved; exact irq_exit)

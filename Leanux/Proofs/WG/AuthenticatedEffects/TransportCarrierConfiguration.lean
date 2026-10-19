@@ -40,10 +40,12 @@ macro "transport_config_step" : tactic => `(tactic| first
   | (transport_carrier_head liftWGPrefix; solve | apply state_rx; transport_config_rx)
   | transport_carrier_state_step)
 
-theorem configOut_safe (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
-    StateSafe extra origin replay (configOut attrs peer ret) := by
+theorem configOut_safe (h : EffectsSafe extra origin replay hooks) (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
+    StateSafe extra origin replay (configOut hooks attrs peer ret) := by
   unfold configOut
-  repeat' transport_config_step
+  repeat' first
+    | (transport_carrier_head Hooks.peerRelease; exact h.peerRelease _)
+    | transport_config_step
 
 theorem configTailFinish_safe (h : StagingSafe extra origin replay hooks) (attrs : PeerAttrs)
     (peer : Option PeerId) (pid : PeerId) (ret : Int) :
@@ -51,7 +53,7 @@ theorem configTailFinish_safe (h : StagingSafe extra origin replay hooks) (attrs
   unfold configTailFinish FixtureEffects.peerFinishObserved FixtureEffects.peerFinishWith
   repeat' first
     | (transport_carrier_head FixtureEffects.runWith; apply fixture h)
-    | (transport_carrier_head configOut; exact configOut_safe _ _ _)
+    | (transport_carrier_head configOut; exact configOut_safe h.toEffectsSafe _ _ _)
     | (transport_carrier_head stagingObserved; exact staging h _)
     | (transport_carrier_head keepaliveObserved; exact keepalive h _)
     | transport_config_step
@@ -61,7 +63,7 @@ theorem configTail_safe (h : StagingSafe extra origin replay hooks) (attrs : Pee
     StateSafe extra origin replay (configTail hooks attrs peer pid) := by
   unfold configTail peerAllowedIpsWith
   repeat' first
-    | (transport_carrier_head configOut; exact configOut_safe _ _ _)
+    | (transport_carrier_head configOut; exact configOut_safe h.toEffectsSafe _ _ _)
     | (transport_carrier_head configTailFinish; exact configTailFinish_safe h _ _ _ _)
     | transport_config_step
 
@@ -71,9 +73,9 @@ theorem configUpdate_safe (h : StagingSafe extra origin replay hooks)
     StateSafe extra origin replay (configUpdate hooks attrs peer flags psk pid) := by
   unfold configUpdate peerConfigUpdateWith
   repeat' first
-    | (transport_carrier_head configOut; exact configOut_safe _ _ _)
+    | (transport_carrier_head configOut; exact configOut_safe h.toEffectsSafe _ _ _)
     | (transport_carrier_head configTail; exact configTail_safe h _ _ _)
-    | (transport_carrier_head removeObserved; exact remove flushed _)
+    | (transport_carrier_head removeObserved; exact remove h.toEffectsSafe flushed _)
     | transport_config_step
 
 theorem configPeer_safe (h : StagingSafe extra origin replay hooks)
@@ -81,7 +83,7 @@ theorem configPeer_safe (h : StagingSafe extra origin replay hooks)
     StateSafe extra origin replay (configPeer hooks attrs) := by
   unfold configPeer setPeerCmdWith peerCommandAcquiredWith
   repeat' first
-    | (transport_carrier_head configOut; exact configOut_safe _ _ _)
+    | (transport_carrier_head configOut; exact configOut_safe h.toEffectsSafe _ _ _)
     | (transport_carrier_head configUpdate; exact configUpdate_safe h flushed _ _ _ _ _)
     | transport_config_step
 
@@ -99,8 +101,9 @@ theorem configKey_safe (h : StagingSafe extra origin replay hooks)
   unfold configKey deviceKeyWith
   repeat' first
     | (transport_carrier_head FixtureEffects.runWith; apply fixture h)
+    | (transport_carrier_head Hooks.peerRelease; exact h.peerRelease _)
     | (transport_carrier_head configPeers; exact configPeers_safe h flushed _)
-    | (transport_carrier_head removeObserved; exact remove flushed _)
+    | (transport_carrier_head removeObserved; exact remove h.toEffectsSafe flushed _)
     | (transport_carrier_head stagingObserved; exact staging h _)
     | transport_config_step
 
@@ -110,7 +113,7 @@ theorem configDeviceUpdate_safe (h : StagingSafe extra origin replay hooks)
   unfold configDeviceUpdate deviceUpdateWith
   repeat' first
     | (transport_carrier_head configKey; exact configKey_safe h flushed _)
-    | (transport_carrier_head removeAllObserved; exact removeAll flushed)
+    | (transport_carrier_head removeAllObserved; exact removeAll h.toEffectsSafe flushed)
     | transport_config_step
 
 theorem configDevice_safe (h : StagingSafe extra origin replay hooks)

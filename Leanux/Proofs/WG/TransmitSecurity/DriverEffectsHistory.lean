@@ -33,6 +33,37 @@ theorem effects_queued_history (h : EffectsHistory Safe ops) (pid : PeerId) (ret
   repeat' first
     | effect_history_step h
 
+theorem disposal_queued_history (h : EffectsHistory Safe ops)
+    (release : Option PeerId → WGPrefix E Unit)
+    (hr : ∀ peer, StateHistorySafe Safe (release peer)) (pid : PeerId) (retry : Bool) :
+    StateHistorySafe Safe (HandshakeSecurity.StagedDisposal.Effects.queuedWith ops release pid retry) := by
+  unfold HandshakeSecurity.StagedDisposal.Effects.queuedWith
+  repeat' first | exact hr _ | effect_history_step h
+
+theorem disposal_retransmit_history (h : EffectsHistory Safe ops)
+    (release : Option PeerId → WGPrefix E Unit) (purge : PeerId → WGPrefix E Unit)
+    (hr : ∀ peer, StateHistorySafe Safe (release peer))
+    (hp : ∀ pid, StateHistorySafe Safe (purge pid)) (pid : PeerId) :
+    StateHistorySafe Safe (HandshakeSecurity.StagedDisposal.Effects.retransmitWith ops release purge pid) := by
+  unfold HandshakeSecurity.StagedDisposal.Effects.retransmitWith
+  simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
+  repeat' first
+    | exact hp _
+    | (driver_history_head modifyWith; exact effects_modify_history h _ _ _ _)
+    | (driver_history_head HandshakeSecurity.StagedDisposal.Effects.queuedWith;
+       exact disposal_queued_history h release hr _ _)
+    | effect_history_step h
+
+theorem disposal_new_history (h : EffectsHistory Safe ops)
+    (release : Option PeerId → WGPrefix E Unit)
+    (hr : ∀ peer, StateHistorySafe Safe (release peer)) (pid : PeerId) :
+    StateHistorySafe Safe (HandshakeSecurity.StagedDisposal.Effects.newHandshakeWith ops release pid) := by
+  unfold HandshakeSecurity.StagedDisposal.Effects.newHandshakeWith
+  repeat' first
+    | (driver_history_head HandshakeSecurity.StagedDisposal.Effects.queuedWith;
+       exact disposal_queued_history h release hr _ _)
+    | effect_history_step h
+
 theorem effects_traversal_history (h : EffectsHistory Safe ops) (pid : PeerId) :
     StateHistorySafe Safe (traversalWith ops pid) := by
   unfold traversalWith

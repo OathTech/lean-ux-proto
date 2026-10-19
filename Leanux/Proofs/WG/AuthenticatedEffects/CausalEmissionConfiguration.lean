@@ -20,6 +20,7 @@ theorem fixture (trigger : FixtureEffects.Trigger) (body : WGPrefix Event α) (s
     exact state_bind safe (fun value => state_bind (state_emit _ rfl) (fun _ => state_pure value))
 
 macro "emission_config_step" : tactic => `(tactic| first
+  | (emission_head Hooks.peerRelease; change StateSafe (liftWGPrefix _); apply state_native; exact fun initial => peerPut_sent_spec (· = initial) _)
   | (emission_native_head peerGet; exact state_native _ (peerGet_sent _))
   | (emission_native_head peerCreate; exact state_native _ (EmissionConfiguration.peer_create _ _))
   | (emission_native_head setAllowedip; exact state_native _ (EmissionAllowedIps.allowedip _ _))
@@ -37,7 +38,7 @@ macro "emission_config_step" : tactic => `(tactic| first
   | (emission_native_head generatePublic; exact state_native _ ((generatePublic_sameWGWorld _).factor WGWorld.sent))
   | emission_removal_step)
 
-theorem config_out (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) : StateSafe (configOut attrs peer ret) := by
+theorem config_out (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) : StateSafe (configOut hooks attrs peer ret) := by
   unfold configOut
   repeat' emission_config_step
 

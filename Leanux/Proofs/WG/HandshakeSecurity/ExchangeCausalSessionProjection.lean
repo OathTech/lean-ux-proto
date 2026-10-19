@@ -85,6 +85,8 @@ private theorem create_appends (pid : PeerId) (item : List SkbId) : StateAppends
     (NativeAdapter.world w a) h
 
 theorem hooks_projects : Driver.HooksProjects cut? hooks Responder.DriverCuts.hooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift cut? _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift cut? _
   deliver := DeliverySource.observed_projects cut? Event.delivery (fun _ => rfl)
   keepalivePrepare := fun _ => Journal.state_receipt_projects cut? _ _ _
     (fun _ => rfl) (Driver.Projection.state_lift cut? _)

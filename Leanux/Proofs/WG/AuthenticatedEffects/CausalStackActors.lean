@@ -27,6 +27,8 @@ private theorem selected (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
 private def neutral : Driver.Hooks Event := {hooks with stackInput := fun _ body => body}
 
 private theorem ordinary : Driver.HooksHistorySafe Safe neutral where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := by
     change Driver.ProductHistorySafe Safe (DeliverySource.observed Event.delivery)
     unfold DeliverySource.observed
@@ -60,6 +62,8 @@ private theorem ordinary : Driver.HooksHistorySafe Safe neutral where
   transmit := transmit
 
 theorem core : Driver.ActorCoreHistorySafe Safe hooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := by
     change Driver.ProductHistorySafe Safe (DeliverySource.observed Event.delivery)
     unfold DeliverySource.observed

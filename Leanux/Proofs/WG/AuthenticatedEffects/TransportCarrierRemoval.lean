@@ -48,28 +48,29 @@ theorem sendDrain (flushed : ∀ pid, StateSafe extra origin replay (hooks.flush
     | transport_removal_step
   all_goals exact state_rx _ (removal_throw_rx _)
 
-theorem removeAfter (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid))
+theorem removeAfter (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid))
     (pid : PeerId) : StateSafe extra origin replay
-      (afterDeadWith liftWGPrefix (sendDrainObserved hooks) pid) := by
-  unfold afterDeadWith timersStopWith
+      (HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith liftWGPrefix (sendDrainObserved hooks) hooks.peerRelease pid) := by
+  unfold HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith timersStopWith
   repeat' first
+    | (transport_carrier_head Hooks.peerRelease; exact effects.peerRelease _)
     | (transport_carrier_head sendDrainObserved; exact sendDrain flushed _)
     | transport_removal_step
 
-theorem remove (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid))
+theorem remove (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid))
     (peer : Option PeerId) : StateSafe extra origin replay (removeObserved hooks peer) := by
-  unfold removeObserved removeWith peerRemoveWith
+  unfold removeObserved HandshakeSecurity.StagedDisposal.Lifecycle.removeWith peerRemoveWith
   repeat' first
-    | (transport_carrier_head afterDeadWith; exact removeAfter flushed _)
+    | (transport_carrier_head HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith; exact removeAfter effects flushed _)
     | transport_removal_step
   all_goals simp_all only [Option.some.injEq]
-  all_goals first | exact removeAfter flushed _ | contradiction
+  all_goals first | exact removeAfter effects flushed _ | contradiction
 
-theorem removeAll (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
+theorem removeAll (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
     StateSafe extra origin replay (removeAllObserved hooks) := by
-  unfold removeAllObserved removeAllWith peerRemoveAllWith
+  unfold removeAllObserved HandshakeSecurity.StagedDisposal.Lifecycle.removeAllWith peerRemoveAllWith
   repeat' first
-    | (transport_carrier_head afterDeadWith; exact removeAfter flushed _)
+    | (transport_carrier_head HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith; exact removeAfter effects flushed _)
     | transport_removal_step
   all_goals exact state_rx _ ((pinned_const _private.Leanux.Proofs.WG.Packets.PublicationRemoval.«0».Leanux.Proofs.WG.PublicationFrontier.allowedipsFree_geometry).factor Prod.snd)
 

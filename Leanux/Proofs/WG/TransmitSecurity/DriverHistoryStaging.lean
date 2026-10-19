@@ -19,6 +19,7 @@ theorem staging_history (h : HooksHistorySafe Safe g) (pid : PeerId) :
     | (driver_history_head Hooks.create; exact h.create _ _)
     | (driver_history_head Hooks.session; exact h.session _)
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 /-- Preparation and complete staging preserve the supplied history predicate. -/
@@ -30,9 +31,12 @@ theorem keepalive_staging_history
   repeat' first
     | (driver_history_head Hooks.keepalivePrepare; exact prepare _)
     | (driver_history_head stagingObserved; exact staging _)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem HooksHistorySafe.core (h : HooksHistorySafe Safe g) : ActorCoreHistorySafe Safe g where
+  stagedPurge := h.stagedPurge
+  peerRelease := h.peerRelease
   deliver := h.deliver
   keepalivePrepare := h.keepalivePrepare
   staging := staging_history h
@@ -72,6 +76,7 @@ theorem transmit_history (h : ActorCoreHistorySafe Safe g) (family addr : Nat) (
     | (driver_history_head stagingObserved; exact h.staging _)
     | (driver_history_head Hooks.session; exact h.session _)
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem expired_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) :
@@ -85,9 +90,9 @@ theorem persistent_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) :
 theorem timer_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) (t : PeerTimer) :
     StateHistorySafe Safe (timerObserved g pid t) := by
   cases t with
-  | retransmitHandshake => exact effects_retransmit_history h.effects _
+  | retransmitHandshake => exact disposal_retransmit_history h.effects _ _ h.peerRelease h.stagedPurge _
   | sendKeepalive => exact expired_history h _
-  | newHandshake => exact effects_expiredNew_history h.effects _
+  | newHandshake => exact disposal_new_history h.effects _ h.peerRelease _
   | zeroKeyMaterial => exact History.state_lift _
   | persistentKeepalive => exact persistent_history h _
 
@@ -98,6 +103,7 @@ theorem response_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) :
   repeat' first
     | (driver_history_head Hooks.session; exact h.session _)
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem afterMac_history (h : ActorCoreHistorySafe Safe g) (msg : List UInt8) (src : SkbSource)
@@ -110,6 +116,7 @@ theorem afterMac_history (h : ActorCoreHistorySafe Safe g) (msg : List UInt8) (s
     | (driver_history_head keepaliveObserved; exact keepalive_actor_history h _)
     | (driver_history_head Hooks.session; exact h.session _)
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem reception_history (h : ActorCoreHistorySafe Safe g) (msg : List UInt8) (src : SkbSource) :
@@ -120,6 +127,7 @@ theorem reception_history (h : ActorCoreHistorySafe Safe g) (msg : List UInt8) (
     | (driver_history_head afterMacWith; exact afterMac_history h _ _ _ _)
     | (driver_history_head Hooks.session; exact h.session _)
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem handshake_history (h : ActorCoreHistorySafe Safe g) :
@@ -134,6 +142,7 @@ theorem receiveTail_actor_history (h : ActorCoreHistorySafe Safe g) (pid : PeerI
     | (driver_history_head stagingObserved; exact h.staging _)
     | (driver_history_head Hooks.session; exact h.session _)
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem consume_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
@@ -143,6 +152,7 @@ theorem consume_history (h : ActorCoreHistorySafe Safe g) (pid : PeerId) (pkt : 
     | (driver_history_head receiveTailObserved; exact receiveTail_actor_history h _ _ _)
     | (driver_history_head Hooks.session; exact h.session _)
     | (driver_history_head Hooks.confirmation; exact h.confirmation _ _)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem receiveTail_history (h : HooksHistorySafe Safe g) (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :

@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.TransmitSecurity.HeaderLength
+import Leanux.Proofs.WG.TransmitSecurity.CompletionAppendCut
 import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityInitialized
 import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityFocusedProduct
 import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityEffectsHistory
@@ -1184,5 +1186,30 @@ theorem initialized_available_birth_unique (trace : Runner.Trace) (placeholders 
   subst history
   exact Staged.Availability.bank_ticket_injective
     (initialized_available_birth_bank trace placeholders) first second left right
+
+
+/-- Security: native header admission fixes the exact initiation, response and
+cookie widths. Later cookie amplification claims must derive this acceptance
+for the same input; a message tag alone does not establish its size. -/
+theorem native_header_acceptance_has_wire_width (msg : List UInt8)
+    (w v : WGWorld) (a b : Ambient)
+    (run : ((prepareSkbHeader msg).run w).run a = .ok ((true,v),b)) :
+    HeaderLength.Valid msg := HeaderLength.prepared msg w v a b run
+
+/-- Security: every transport socket that reaches its native datagram append
+produces a receipt at that occurrence, retained before every later continuation
+event even on Stop. The actual pre-append source execution is explicit; this
+local converse does not assume that a containing worker returns successfully. -/
+theorem transport_append_cannot_lose_receipt (pid : PeerId) (id : SkbId)
+    (packet : RunWitness DataPacket) (peer : RunWitness Peer) (ipv4 : Bool)
+    (w : World) (u : WGWorld) (b : Ambient) (history : List Completion.Event)
+    (datagram : SentDatagram)
+    (front : (((Completion.socketArgs pid packet peer ipv4).beforeAppend).run w.wg).run w.ambient =
+      .ok ((.ok datagram,u),b))
+    (next : Int → PrefixM Completion.Event α) (appends : ∀ value, Appends (next value)) :
+    let v := {w with wg := {u with sent := u.sent ++ [datagram]},ambient := b}
+    ∃ middle suffix, (runPrefix (Completion.socket pid id packet peer ipv4 >>= next) w history).2 =
+      (history ++ middle) ++ .socket ⟨pid,id,packet,peer,ipv4,⟨0,w,v⟩⟩ :: suffix :=
+    Completion.socket_append_retained pid id packet peer ipv4 w u b history datagram front next appends
 
 end Leanux.Proofs.WG.TransmitSecurity

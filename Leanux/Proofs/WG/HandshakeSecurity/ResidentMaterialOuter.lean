@@ -129,7 +129,7 @@ theorem retained (call : Syscall)
   · by_cases down : call = .wgDown
     · subst call
       unfold retainedObserved
-      rw [envDown_lift Journal.hooks rfl,socketCall_lift]
+      rw [envDown_lift Journal.hooks rfl rfl,socketCall_lift]
       exact product_carrier_lift _ (fun history => OuterNative.quiet_dispatch .wgDown history kept up)
     · simp only [retainedObserved]
       exact product_carrier_lift _ (fun history => OuterNative.quiet_dispatch call history kept up)
@@ -155,7 +155,7 @@ theorem dispatch
   · apply rtnetlink
     simpa only [liftWGObserver_lift] using product_state (carrier_lift _ (fun _ => NativeFrames.device_create) bounds_create)
   · unfold dispatchDeleteObserved
-    rw [envDelete_lift Journal.hooks rfl]
+    rw [envDelete_lift Journal.hooks rfl rfl rfl]
     exact rtnetlink _ (product_carrier_lift _ Control.env_delete)
   · exact syscall_xmit
   · intro family port message tos ll dest

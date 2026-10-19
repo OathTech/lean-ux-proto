@@ -44,7 +44,7 @@ theorem decrypt_step : ProductSafe (Driver.decryptStepObserved hooks) := by
     apply product_bind irq_exit
     intro _
     apply product_bind
-    · apply product_wg
+    · apply product_state
       apply state_lift
       intro history
       repeat' staged_origin_native

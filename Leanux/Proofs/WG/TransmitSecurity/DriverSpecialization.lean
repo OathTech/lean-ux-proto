@@ -67,9 +67,9 @@ theorem nonce_persistentObserved_eq : persistentObserved nonceHooks = Nonce.pers
 theorem nonce_timerObserved_eq : timerObserved nonceHooks = Nonce.timerObserved := by
   funext pid t
   cases t with
-  | retransmitHandshake => exact timer_retransmit_lift nonceHooks rfl pid
+  | retransmitHandshake => exact timer_retransmit_lift nonceHooks rfl rfl rfl pid
   | sendKeepalive => exact congrFun nonce_expiredKeepaliveObserved_eq pid
-  | newHandshake => exact timer_new_lift nonceHooks rfl pid
+  | newHandshake => exact timer_new_lift nonceHooks rfl rfl pid
   | zeroKeyMaterial => rfl
   | persistentKeepalive => exact congrFun nonce_persistentObserved_eq pid
 
@@ -276,7 +276,7 @@ theorem nonce_syscallXmitObserved_eq : syscallXmitObserved nonceHooks = Nonce.sy
   simp only [nonce_fixture_neutral, AuthenticatedEffects.FixtureEffects.run_neutral, nonce_transmitObserved_eq, nonce_multicastObserved_eq]
   all_goals rfl
 
-theorem nonce_configOut_eq : (@configOut Nonce.Allocation) = Nonce.configOut := by
+theorem nonce_configOut_eq : (configOut nonceHooks) = Nonce.configOut := by
   unfold configOut Nonce.configOut
   all_goals rfl
 
@@ -293,7 +293,7 @@ theorem nonce_configTail_eq : configTail nonceHooks = Nonce.configTail := by
 
 theorem nonce_configUpdate_eq : configUpdate nonceHooks = Nonce.configUpdate := by
   unfold configUpdate Nonce.configUpdate
-  simp only [nonce_configOut_eq, nonce_configTail_eq, remove_lift nonceHooks rfl]
+  simp only [nonce_configOut_eq, nonce_configTail_eq, remove_lift nonceHooks rfl rfl]
   all_goals rfl
 
 theorem nonce_configPeer_eq : configPeer nonceHooks = Nonce.configPeer := by
@@ -307,7 +307,7 @@ theorem nonce_configPeers_eq : configPeers nonceHooks = Nonce.configPeers := by
   all_goals rfl
 
 private theorem nonce_remove_function : removeObserved nonceHooks = fun peer => liftWGPrefix (peerRemove peer) :=
-  funext (remove_lift nonceHooks rfl)
+  funext (remove_lift nonceHooks rfl rfl)
 
 theorem nonce_configKey_eq : configKey nonceHooks = Nonce.configKey := by
   unfold configKey Nonce.configKey
@@ -316,7 +316,7 @@ theorem nonce_configKey_eq : configKey nonceHooks = Nonce.configKey := by
 
 theorem nonce_configDeviceUpdate_eq : configDeviceUpdate nonceHooks = Nonce.configDeviceUpdate := by
   unfold configDeviceUpdate Nonce.configDeviceUpdate
-  simp only [nonce_configKey_eq, removeAll_lift nonceHooks rfl]
+  simp only [nonce_configKey_eq, removeAll_lift nonceHooks rfl rfl]
   all_goals rfl
 
 theorem nonce_configDevice_eq : configDevice nonceHooks = Nonce.configDevice := by
@@ -345,7 +345,7 @@ theorem nonce_retainedObserved_eq : retainedObserved nonceHooks = Nonce.retained
   cases call <;> unfold retainedObserved Nonce.retainedObserved
   case wgUp => rw [nonce_envUpObserved_eq]
   case wgDown =>
-    rw [envDown_lift nonceHooks rfl,socketCall_lift]
+    rw [envDown_lift nonceHooks rfl rfl,socketCall_lift]
     rfl
   all_goals rfl
 
@@ -371,7 +371,7 @@ theorem nonce_dispatchCreateObserved_eq : (@dispatchCreateObserved Nonce.Allocat
 
 theorem nonce_dispatchDeleteObserved_eq : dispatchDeleteObserved nonceHooks = Nonce.dispatchDeleteObserved := by
   unfold dispatchDeleteObserved Nonce.dispatchDeleteObserved
-  rw [envDelete_lift nonceHooks rfl]
+  rw [envDelete_lift nonceHooks rfl rfl rfl]
 
 theorem nonce_dispatchObserved_eq : dispatchObserved nonceHooks = Nonce.dispatchObserved := by
   unfold dispatchObserved Nonce.dispatchObserved

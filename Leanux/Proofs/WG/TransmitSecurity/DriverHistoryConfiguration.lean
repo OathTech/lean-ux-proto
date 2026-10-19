@@ -12,37 +12,43 @@ theorem sendDrain_history (h : ActorHistorySafe Safe g) (upTo : Option PeerId) :
   repeat' first
     | (driver_history_head Hooks.flushedSend; exact h.flushedSend _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 private theorem afterDead_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
     StateHistorySafe Safe
-      (HandshakeSecurity.SendExchange.afterDeadWith liftWGPrefix (sendDrainObserved g) pid) := by
-  unfold HandshakeSecurity.SendExchange.afterDeadWith HandshakeSecurity.SendExchange.timersStopWith
+      (HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith liftWGPrefix (sendDrainObserved g) g.peerRelease pid) := by
+  unfold HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith HandshakeSecurity.SendExchange.timersStopWith
   repeat' first
     | (driver_history_head sendDrainObserved; exact sendDrain_history h _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem remove_history (h : ActorHistorySafe Safe g) (peer : Option PeerId) :
     StateHistorySafe Safe (removeObserved g peer) := by
-  unfold removeObserved HandshakeSecurity.SendExchange.removeWith peerRemoveWith
+  unfold removeObserved HandshakeSecurity.StagedDisposal.Lifecycle.removeWith peerRemoveWith
   repeat' first
-    | (driver_history_head HandshakeSecurity.SendExchange.afterDeadWith; exact afterDead_history h _)
+    | (driver_history_head HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith; exact afterDead_history h _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem removeAll_history (h : ActorHistorySafe Safe g) :
     StateHistorySafe Safe (removeAllObserved g) := by
-  unfold removeAllObserved HandshakeSecurity.SendExchange.removeAllWith peerRemoveAllWith
+  unfold removeAllObserved HandshakeSecurity.StagedDisposal.Lifecycle.removeAllWith peerRemoveAllWith
   repeat' first
-    | (driver_history_head HandshakeSecurity.SendExchange.afterDeadWith; exact afterDead_history h _)
+    | (driver_history_head HandshakeSecurity.StagedDisposal.Lifecycle.afterDeadWith; exact afterDead_history h _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
-theorem configOut_history (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
-    StateHistorySafe Safe (configOut attrs peer ret) := by
+theorem configOut_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
+    StateHistorySafe Safe (configOut g attrs peer ret) := by
   unfold configOut
-  repeat' driver_state_history_step
+  repeat' first
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
+    | driver_state_history_step
 
 theorem configTailFinish_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs)
     (peer : Option PeerId) (pid : PeerId) (ret : Int) :
@@ -51,10 +57,11 @@ theorem configTailFinish_history (h : ActorHistorySafe Safe g) (attrs : PeerAttr
   repeat' first
     | (driver_history_head removeObserved; exact remove_history h _)
     | (driver_history_head removeAllObserved; exact removeAll_history h)
-    | (driver_history_head configOut; exact configOut_history _ _ _)
+    | (driver_history_head configOut; exact configOut_history h _ _ _)
     | (driver_history_head stagingObserved; exact h.staging _)
     | (driver_history_head keepaliveObserved; exact keepalive_actor_history h _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem configTail_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs)
@@ -64,9 +71,10 @@ theorem configTail_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs)
   repeat' first
     | (driver_history_head removeObserved; exact remove_history h _)
     | (driver_history_head removeAllObserved; exact removeAll_history h)
-    | (driver_history_head configOut; exact configOut_history _ _ _)
+    | (driver_history_head configOut; exact configOut_history h _ _ _)
     | (driver_history_head configTailFinish; exact configTailFinish_history h _ _ _ _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem configUpdate_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs)
@@ -76,9 +84,10 @@ theorem configUpdate_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs)
   repeat' first
     | (driver_history_head removeObserved; exact remove_history h _)
     | (driver_history_head removeAllObserved; exact removeAll_history h)
-    | (driver_history_head configOut; exact configOut_history _ _ _)
+    | (driver_history_head configOut; exact configOut_history h _ _ _)
     | (driver_history_head configTail; exact configTail_history h _ _ _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem configPeer_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs) :
@@ -87,9 +96,10 @@ theorem configPeer_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs) :
   repeat' first
     | (driver_history_head removeObserved; exact remove_history h _)
     | (driver_history_head removeAllObserved; exact removeAll_history h)
-    | (driver_history_head configOut; exact configOut_history _ _ _)
+    | (driver_history_head configOut; exact configOut_history h _ _ _)
     | (driver_history_head configUpdate; exact configUpdate_history h _ _ _ _ _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem configPeers_history (h : ActorHistorySafe Safe g) (attrs : DeviceAttrs) :
@@ -98,6 +108,7 @@ theorem configPeers_history (h : ActorHistorySafe Safe g) (attrs : DeviceAttrs) 
   repeat' first
     | (driver_history_head configPeer; exact configPeer_history h _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem configKey_history (h : ActorHistorySafe Safe g) (attrs : DeviceAttrs) :
@@ -108,6 +119,7 @@ theorem configKey_history (h : ActorHistorySafe Safe g) (attrs : DeviceAttrs) :
     | (driver_history_head configPeers; exact configPeers_history h _)
     | (driver_history_head stagingObserved; exact h.staging _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem configDeviceUpdate_history (h : ActorHistorySafe Safe g) (attrs : DeviceAttrs) (flags : UInt32) :
@@ -117,6 +129,7 @@ theorem configDeviceUpdate_history (h : ActorHistorySafe Safe g) (attrs : Device
     | (driver_history_head removeAllObserved; exact removeAll_history h)
     | (driver_history_head configKey; exact configKey_history h _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem configDevice_history (h : ActorHistorySafe Safe g) (attrs : DeviceAttrs) :
@@ -125,6 +138,7 @@ theorem configDevice_history (h : ActorHistorySafe Safe g) (attrs : DeviceAttrs)
   repeat' first
     | (driver_history_head configDeviceUpdate; exact configDeviceUpdate_history h _ _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem open_history (h : ActorHistorySafe Safe g) :
@@ -134,6 +148,7 @@ theorem open_history (h : ActorHistorySafe Safe g) :
     | (driver_history_head stagingObserved; exact h.staging _)
     | (driver_history_head keepaliveObserved; exact keepalive_actor_history h _)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem up_history (h : ActorHistorySafe Safe g) :
@@ -142,6 +157,7 @@ theorem up_history (h : ActorHistorySafe Safe g) :
   repeat' first
     | (driver_history_head openObserved; exact open_history h)
     | (driver_history_head AuthenticatedEffects.FixtureEffects.runWith; apply fixture_history h)
+    | (driver_history_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_history_step
 
 theorem envUp_history (h : ActorHistorySafe Safe g) :

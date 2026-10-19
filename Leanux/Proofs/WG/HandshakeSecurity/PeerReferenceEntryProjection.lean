@@ -113,6 +113,8 @@ theorem timer_projects (d : Device) (bound : UInt64) (pid : PeerId) (timer : Pee
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,entry?,List.append_nil]
 
 theorem hooks_projects : Driver.HooksProjects entry? hooks EntrySource.hooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift entry? _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift entry? _
   deliver := DeliverySource.observed_projects entry? Event.delivery (fun _ => rfl)
   keepalivePrepare := fun _ => Journal.state_receipt_projects entry? _ _ _
     (fun _ => rfl) (Driver.Projection.state_lift entry? _)

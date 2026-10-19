@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.HandshakeSecurity.StagedDisposalSource
+import Leanux.Proofs.WG.TransmitSecurity.StagedTrim
 
 /-! Disposal evidence uses queue positions and allocation stamps. The count
 comes from the actual named source arm, not from an inference from absence. -/

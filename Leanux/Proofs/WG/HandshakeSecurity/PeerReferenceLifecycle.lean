@@ -24,7 +24,10 @@ theorem destruct_finish : Framing.Preserves Inv Exchange.destructFinishSource :=
   simpa only [AllowedIps.routingView,Option.map_eq_none_iff] using gone
 
 theorem down_observed : Observed (E := E) (Driver.downObserved EntrySource.hooks (E := E)) := by
-  unfold Driver.downObserved SendExchange.downWith SendExchange.stopWith
+  unfold Driver.downObserved
+  rw [show (EntrySource.hooks (E := E)).stagedPurge = (fun pid => liftWGPrefix (purgeStagedPackets pid)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.down_neutral]
+  unfold SendExchange.downWith SendExchange.stopWith
   repeat' first
     | (nonce_source_head SendExchange.timersStopWith; exact timers_stop_observed _)
     | (nonce_source_head requireNotPending; exact lift _ (preserves_pure _))

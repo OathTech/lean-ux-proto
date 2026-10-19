@@ -18,7 +18,7 @@ macro "archive_driver_device_step " : tactic => `(tactic| first
   | (nonce_source_head expireCurrentPeerKeypairs; exact lift _ (expire _))
   | (nonce_source_head clearPeerEndpointSrc; exact lift _ (clear_endpoint _))
   | (nonce_source_head setPort; exact lift _ (port _))
-  | (nonce_source_head Driver.removeAllObserved; rw [Driver.removeAll_lift TimestampDriver.hooks rfl])
+  | (nonce_source_head Driver.removeAllObserved; rw [Driver.removeAll_lift TimestampDriver.hooks rfl rfl])
   | (nonce_source_head peerRemoveAll; exact lift _ (remove_all ))
   | (nonce_source_head peerPut; exact lift _ (peer_put _))
   | (nonce_source_head modifyDev
@@ -54,7 +54,7 @@ theorem config_key (a : DeviceAttrs) :
   simp only [show Driver.fixtureOps TimestampDriver.hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
     AuthenticatedEffects.FixtureEffects.run_neutral]
   have removal : Driver.removeObserved TimestampDriver.hooks = fun peer => liftWGPrefix (peerRemove peer) :=
-    funext (Driver.remove_lift TimestampDriver.hooks rfl)
+    funext (Driver.remove_lift TimestampDriver.hooks rfl rfl)
   rw [removal]
   exact config_key_with a _ (config_peers a)
 

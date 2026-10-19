@@ -78,6 +78,7 @@ theorem fixture (trigger : FixtureEffects.Trigger) (body : WGPrefix Event α) (s
       (state_combine _ (Delayed.state_emit _) (Selections.state_leave token)) (fun _ => state_pure value))
 
 macro "selection_config_step" : tactic => `(tactic| first
+  | (selection_carrier_head Hooks.peerRelease; change StateSafe (liftWGPrefix _); apply state_native; causal_delayed_native)
   | (selection_peer_bind; first
       | (apply read_modify; intro p t; rfl)
       | (apply read_write; · intro p t; rfl))
@@ -85,7 +86,7 @@ macro "selection_config_step" : tactic => `(tactic| first
   | selection_removal_step)
 
 theorem configOut_safe (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
-    StateSafe (configOut attrs peer ret) := by
+    StateSafe (configOut hooks attrs peer ret) := by
   unfold configOut
   repeat' selection_config_step
 

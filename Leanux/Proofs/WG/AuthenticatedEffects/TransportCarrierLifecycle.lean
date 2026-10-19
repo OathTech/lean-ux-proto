@@ -25,20 +25,21 @@ macro "transport_lifecycle_state_step" : tactic => `(tactic| first
   | (transport_carrier_head liftWGPrefix; solve | apply state_rx; transport_lifecycle_rx)
   | transport_carrier_state_step)
 
-theorem down (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
+theorem down (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
     StateSafe extra origin replay (downObserved hooks) := by
-  unfold downObserved downWith stopWith timersStopWith
+  unfold downObserved HandshakeSecurity.StagedDisposal.Lifecycle.downWith
+    HandshakeSecurity.StagedDisposal.Lifecycle.stopWith timersStopWith
   repeat' first
+    | (transport_carrier_head Hooks.stagedPurge; exact effects.stagedPurge _)
     | (transport_carrier_head sendDrainObserved; exact sendDrain flushed _)
     | transport_lifecycle_state_step
-  exact state_rx _ (((pinned_const _private.Leanux.Proofs.WG.Packets.PublicationTimers.«0».Leanux.Proofs.WG.PublicationFrontier.purge_geometry) _).factor Prod.snd)
 
-theorem destruct (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
+theorem destruct (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
     StateSafe extra origin replay (destructObserved hooks) := by
   change StateSafe extra origin replay (Configuration.destructWith liftWGPrefix (removeAllObserved hooks) _)
   unfold Configuration.destructWith
   repeat' first
-    | (transport_carrier_head removeAllObserved; exact removeAll flushed)
+    | (transport_carrier_head removeAllObserved; exact removeAll effects flushed)
     | transport_lifecycle_state_step
   exact state_native _ TransportLifecycle.finish
 

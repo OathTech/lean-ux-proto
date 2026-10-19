@@ -240,13 +240,45 @@ property alone does not constrain unseen bitmap bits. An arbitrary malformed
 counter is not an initialized counterexample.
 
 
+The current source tranche adopts exact owned deltas through T3 `45b8c066`,
+T4 `8e4d4676` and T6 `20620f96`. Aggregate validation passes below. Initialized replay-refusal proofs preserve complete keypair records and the
+protocol-state projection at every actual refused replay receipt, including
+later Stop. Entry coherence is derived through the complete native Runner;
+no incoming coherence or successful-run premise remains. Normal initialized TX service now derives its own operation-entry
+carrier. Physical handshake-ring validity includes occupied slots awaiting
+batch clearing, with an exact native pop contract. `HeaderLength` and
+`CookieInput.receive` prove the input-width and same-input history obligations;
+the initialized cookie amplification bound is not yet claimed.
+
+[AGENT 2026-10-19] Staged disposal uses neutral source callbacks for purge and
+peer release. Existing native instances discharge their neutrality explicitly;
+generic source claims retain the new callback premises. The final causal
+journal may gain disposal events, so its positional invariants must be proved
+for the resulting history. Exact erasure to the native mirror and the older
+transmit journal remains required; no equivalence of causal token positions
+across different event vocabularies is assumed. Initial callback wiring omits
+nested repayment cuts, which remain explicit open work. The concrete adapter
+repairs and aggregate validation pass for this tranche. The native
+append audit finds a single `sent` append in `Socket.lean`, at the end of the
+tunnel sender. Protocol receipts use `ProtocolSocket.append_factor` and
+`stops_before_append`; cookie receipts are emitted immediately after that
+append. `Completion.socket_append_receipt` and `socket_append_retained` now
+prove the transport converse at that actual cut, including later Stop and old
+lifetime events before the receipt. This local converse does not by itself
+supply the campaign's still-open global terminal/frontier accounting or
+internal-append coverage. The existing emission carrier constrains the sent
+buffer on normal returns only. A separate direct append observer and its
+exact projection through the final initialized source will address stopped
+internal appends.
+
+
 ## Validation
 
-The current checkpoint passes 2860 proof jobs and the 1506-declaration gate
+The current aggregate checkpoint passes 2900 proof jobs and the 1516-declaration gate
 across thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`;
 all twelve counterexample recipes and fresh root kernel replay pass. The model
 build passes 130 jobs and the unit suite passes 131 tests (one configured-kernel
-skip, 23.266 seconds). All 2805 frozen proof-source hashes matched; all 916
+skip, 23.191 seconds). All 2859 frozen proof-source hashes matched; all 916
 inherited proof modules, main at `783510e8` and mirror `77c9b555` were unchanged.
 The proof root retains its authorized campaign imports.
 
@@ -287,6 +319,19 @@ name, induction, projection and source-composition errors are also fixed. No mir
 was used. Protocol-socket integration initially failed in two older exchange
 projections; compact projection adapters repair those failures without raising
 their heartbeat limits. The full gate and fresh replay then pass. The historical-owner and direct-emission tranche repaired local binder, namespace, frame and induction errors; the initialized live-credit bank now discharges its incoming premise. The availability transport repaired one copied tactic-head mismatch; no native statement or mirror behavior changed.
+
+A child configuration-frame check exited 135 (SIGBUS) after dependency
+artifacts were copied while Lean was running. All dirty worktrees, including
+untracked source files, were preserved under
+`refs/snapshots/c3-crash-20261019T084423Z/` before further edits or builds.
+Replacing a memory-mapped artifact is the diagnosed infrastructure cause;
+future dependency synchronization is kept outside active builds. The single
+infrastructure rerun completed with ordinary elaboration failures, subsequently
+repaired on the child branch. That later child tranche is not included here.
+The parent's neutral-callback integration initially failed on missing concrete
+callback premises and configuration frames; explicit native proofs repair those
+failures. The final source build passes 2907 jobs including the separate local
+disposal targets; the aggregate gate builds its 2900-job root closure.
 
 The branch is preserved without merging or pushing. Completed checkpoint
 history and its individual validation counts remain in the branch commits.

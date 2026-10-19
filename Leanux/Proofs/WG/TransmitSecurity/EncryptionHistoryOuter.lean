@@ -154,7 +154,7 @@ theorem retained (call : Syscall)
   · by_cases down : call = .wgDown
     · subst call
       unfold retainedObserved
-      rw [envDown_lift Journal.hooks rfl,socketCall_lift]
+      rw [envDown_lift Journal.hooks rfl rfl,socketCall_lift]
       exact product_lift _ (fun past => product_join
         (EncryptionPast.OuterNative.quiet_dispatch .wgDown past kept up)
         (OccurrenceSyscall.dispatch_native .wgDown))
@@ -186,7 +186,7 @@ theorem dispatch
   · apply rtnetlink
     exact product_native _ (fun _ => native_join EncryptionPast.DeviceFrames.create OccurrenceLifecycle.create)
   · apply rtnetlink
-    rw [Driver.envDelete_lift Journal.hooks rfl]
+    rw [Driver.envDelete_lift Journal.hooks rfl rfl rfl]
     exact product_lift _ (fun past => product_join (EncryptionPast.Controls.env_delete past) OccurrenceControls.env_delete)
   · exact syscall_xmit
   · intro family port message tos ll dest

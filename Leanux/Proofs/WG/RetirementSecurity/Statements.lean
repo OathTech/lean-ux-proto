@@ -1,3 +1,10 @@
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueJournalWorkers
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueIngress
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueSession
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueCrypto
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueWorker
+import Leanux.Proofs.WG.RetirementSecurity.HandshakeQueueCallbacks
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkInitialized
 import Leanux.Proofs.WG.RetirementSecurity.TxActorScheduler
 import Leanux.Proofs.WG.RetirementSecurity.TxActorDecrypt
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkHandshakeReceive
@@ -3056,5 +3063,45 @@ theorem original_dump_dispatch_tx_service (ref : DeviceRef) :
     Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered [] []) [] active)
       (dispatch .wgGetRecv) :=
   ⟨TxWork.dispatch_dump_actor ref,TxWork.dispatch_dump_start_actor ref,TxWork.dispatch_dump_recv_actor⟩
+
+/-- Every normally completed initialized execution retains actual queue-head
+TX service: each unencrypted head has a pending encryption occurrence, and each
+terminal queue head has scheduled TX work. Physical coverage and the actual empty
+suspended list are derived from native execution, without a caller invariant or
+fairness premise. This is a normal-boundary claim; historical terminal accounting
+for stopped executions remains separate. -/
+theorem initialized_normal_tx_service (trace : Runner.Trace) (placeholders : Bool)
+    (run : Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders)
+      []=(.ok (result,w),h)) : TxWork.Runner.Inv w :=
+  TxWork.Runner.normal trace placeholders run
+
+/-- Successful executable trace acceptance supplies native allocated-TX queue
+service and physical coverage in the returned world, including an empty trace.
+The proof uses the original runner and its actual completion guards; it does not
+classify every historical packet as a terminal socket send or drop. -/
+theorem accepted_trace_tx_service (trace : Runner.Trace) (placeholders : Bool)
+    (run : Runner.executeTrace trace placeholders=.ok result) :
+    ∃w h,Leanux.Proofs.Logged.runPrefixOuter (Queues.RxCredits.RunnerAccount.observed trace placeholders)
+      []=(.ok (result,w),h) ∧ TxWork.Runner.Inv w :=
+  TxWork.Runner.accepted trace placeholders run
+
+/-- The actual handshake-worker ring pop obtains its input predicate from
+an occupied physical slot, including slots awaiting batch clearing. No ring
+geometry or queue-length premise is used. Instantiating the predicate with
+validated message sizes still requires initialized queue transport. -/
+theorem original_handshake_pop_validated (Valid : List UInt8 → Prop)
+    (before : HandshakeLengths.Inv Valid w) (device : w.dev=some d)
+    (poll : d.handshakeQueue.consume=(some (msg,src),ring)) : Valid msg :=
+  HandshakeLengths.popped before device poll
+
+/-- Native UDP admission inserts only header-validated handshake sizes into
+the physical ring. Every later occupied slot retains that property, including
+consumed slots awaiting batch clearing. This local source contract requires the
+entry queue invariant; initialized caller coverage is a separate obligation. -/
+theorem original_udp_handshake_size_preserved (msg : List UInt8) (src : SkbSource)
+    (before : HandshakeLengths.QueueValid w)
+    (run : ((wgReceive msg src).run w).run a=.ok ((result,v),b)) :
+    HandshakeLengths.QueueValid v :=
+  (hoare_iff_run_ambient _ _ _).mp (HandshakeLengths.receive msg src) w a result v b before run
 
 end Leanux.Proofs.WG.RetirementSecurity

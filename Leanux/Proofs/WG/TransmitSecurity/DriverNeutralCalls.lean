@@ -87,12 +87,13 @@ private theorem afterDead_frame (pid : PeerId) :
   repeat' neutral_call_frame
 
 theorem remove_lift (hooks : Hooks E)
-    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid)) (peer : Option PeerId) :
+    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid))
+    (release : hooks.peerRelease = fun peer => liftWGPrefix (peerPut peer)) (peer : Option PeerId) :
     removeObserved hooks peer = liftWGPrefix (peerRemove peer) := by
   unfold removeObserved
   have drains : sendDrainObserved hooks = fun upTo => liftWGPrefix (drainHandshakeSendWq upTo) :=
     funext (sendDrain_lift hooks neutral)
-  rw [drains]
+  rw [release, HandshakeSecurity.StagedDisposal.Lifecycle.remove_neutral,drains]
   apply state_equal
   · exact remove_erases liftWGPrefix (fun _ => erasesStatePrefix_lift _) _
       (fun _ => erasesStatePrefix_lift _) peer
@@ -102,12 +103,13 @@ theorem remove_lift (hooks : Hooks E)
     all_goals first | with_reducible exact afterDead_frame _ | contradiction
 
 theorem removeAll_lift (hooks : Hooks E)
-    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid)) :
+    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid))
+    (release : hooks.peerRelease = fun peer => liftWGPrefix (peerPut peer)) :
     removeAllObserved hooks = liftWGPrefix peerRemoveAll := by
   unfold removeAllObserved
   have drains : sendDrainObserved hooks = fun upTo => liftWGPrefix (drainHandshakeSendWq upTo) :=
     funext (sendDrain_lift hooks neutral)
-  rw [drains]
+  rw [release, HandshakeSecurity.StagedDisposal.Lifecycle.removeAll_neutral,drains]
   apply state_equal
   · exact removeAll_erases liftWGPrefix (fun _ => erasesStatePrefix_lift _) _
       (fun _ => erasesStatePrefix_lift _)
@@ -120,10 +122,11 @@ private theorem neutral_drains (hooks : Hooks E)
   funext (sendDrain_lift hooks neutral)
 
 theorem down_lift (hooks : Hooks E)
-    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid)) :
+    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid))
+    (purge : hooks.stagedPurge = fun pid => liftWGPrefix (purgeStagedPackets pid)) :
     downObserved hooks = liftWGPrefix wgDown := by
   unfold downObserved
-  rw [neutral_drains hooks neutral]
+  rw [purge, HandshakeSecurity.StagedDisposal.Lifecycle.down_neutral,neutral_drains hooks neutral]
   apply state_equal
   · exact down_erases liftWGPrefix (fun _ => erasesStatePrefix_lift _) _
       (fun _ => erasesStatePrefix_lift _)
@@ -131,10 +134,11 @@ theorem down_lift (hooks : Hooks E)
     repeat' neutral_call_frame
 
 theorem destruct_lift (hooks : Hooks E)
-    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid)) :
+    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid))
+    (release : hooks.peerRelease = fun peer => liftWGPrefix (peerPut peer)) :
     destructObserved hooks = liftWGPrefix wgDestruct := by
   unfold destructObserved
-  rw [neutral_drains hooks neutral]
+  rw [release, HandshakeSecurity.StagedDisposal.Lifecycle.destruct_neutral,neutral_drains hooks neutral]
   apply state_equal
   · exact destruct_erases liftWGPrefix (fun _ => erasesStatePrefix_lift _) _
       (fun _ => erasesStatePrefix_lift _)
@@ -155,20 +159,22 @@ macro "neutral_product_frame" : tactic => `(tactic| first
   | simp +failIfUnchanged only [bind_assoc,pure_bind])
 
 theorem envDown_lift (hooks : Hooks E)
-    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid)) :
+    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid))
+    (purge : hooks.stagedPurge = fun pid => liftWGPrefix (purgeStagedPackets pid)) :
     envDownObserved hooks = liftPrefix Env.wgDown := by
   unfold envDownObserved
-  rw [down_lift hooks neutral]
+  rw [down_lift hooks neutral purge]
   apply product_equal
   · exact envDown_erases (liftWGObserver_erases (erasesStatePrefix_lift _))
   · unfold envDownWith
     repeat' neutral_product_frame
 
 theorem envDelete_lift (hooks : Hooks E)
-    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid)) :
+    (neutral : hooks.flushedSend = fun pid => liftWGPrefix (runFlushedSendWork pid))
+    (purge : hooks.stagedPurge = fun pid => liftWGPrefix (purgeStagedPackets pid)) (release : hooks.peerRelease = fun peer => liftWGPrefix (peerPut peer)) :
     envDeleteObserved hooks = liftPrefix Env.wgDelete := by
   unfold envDeleteObserved
-  rw [down_lift hooks neutral,destruct_lift hooks neutral]
+  rw [down_lift hooks neutral purge,destruct_lift hooks neutral release]
   apply product_equal
   · exact envDelete_erases (liftWGObserver_erases (erasesStatePrefix_lift _))
       (liftWGObserver_erases (erasesStatePrefix_lift _))

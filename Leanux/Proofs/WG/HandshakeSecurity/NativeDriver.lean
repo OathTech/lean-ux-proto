@@ -37,6 +37,8 @@ theorem state_erasure {g : WGPrefix E α} {a : WG.M α}
   cases (a.run w).run b <;> rfl
 
 theorem nonce_projection : Driver.HooksProjects erase Driver.nonceHooks hooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift erase _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift erase _
   deliver := projectsPrefix_lift erase _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.Projection.state_lift erase _
   handshake := fun sg sa kg ka hs hk =>

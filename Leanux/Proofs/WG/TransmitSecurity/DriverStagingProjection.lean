@@ -19,6 +19,7 @@ theorem staging_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     | (maintenance_head Hooks.create; exact h.create _ _)
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
+    | (maintenance_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_step ρ
 
 theorem keepalive_projects (h : HooksProjects ρ g a) (pid : PeerId) :
@@ -29,6 +30,7 @@ theorem keepalive_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     | (maintenance_head stagingObserved; exact staging_projects h _)
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
+    | (maintenance_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_step ρ
 
 theorem transmit_projects (h : HooksProjects ρ g a) (family addr : Nat) (packets : List Packet) (mtu : Nat) :
@@ -39,6 +41,7 @@ theorem transmit_projects (h : HooksProjects ρ g a) (family addr : Nat) (packet
     | (maintenance_head stagingObserved; exact staging_projects h _)
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
+    | (maintenance_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_step ρ
 
 theorem expired_projects (h : HooksProjects ρ g a) (pid : PeerId) :
@@ -54,9 +57,9 @@ theorem persistent_projects (h : HooksProjects ρ g a) (pid : PeerId) :
 theorem timer_projects (h : HooksProjects ρ g a) (pid : PeerId) (t : PeerTimer) :
     StateProjectsPrefix ρ id (timerObserved g pid t) (timerObserved a pid t) := by
   cases t with
-  | retransmitHandshake => exact AuthenticatedEffects.TimerEffects.retransmit_projects ρ (effectOps_projects h) _
+  | retransmitHandshake => exact HandshakeSecurity.StagedDisposal.Effects.retransmit_projects ρ (effectOps_projects h) _ _ h.peerRelease _ _ h.stagedPurge _
   | sendKeepalive => exact expired_projects h _
-  | newHandshake => exact AuthenticatedEffects.TimerEffects.expiredNew_projects ρ (effectOps_projects h) _
+  | newHandshake => exact HandshakeSecurity.StagedDisposal.Effects.newHandshake_projects ρ (effectOps_projects h) _ _ h.peerRelease _
   | zeroKeyMaterial => exact Projection.state_lift ρ _
   | persistentKeepalive => exact persistent_projects h _
 
@@ -67,6 +70,7 @@ theorem response_projects (h : HooksProjects ρ g a) (pid : PeerId) :
   repeat' first
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
+    | (maintenance_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_step ρ
 
 theorem afterMac_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : SkbSource)
@@ -80,6 +84,7 @@ theorem afterMac_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : S
     | (maintenance_head keepaliveObserved; exact keepalive_projects h _)
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
+    | (maintenance_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_step ρ
 
 theorem reception_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : SkbSource) :
@@ -91,6 +96,7 @@ theorem reception_projects (h : HooksProjects ρ g a) (msg : List UInt8) (src : 
     | (maintenance_head afterMacWith; exact afterMac_projects h _ _ _ _)
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
+    | (maintenance_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_step ρ
 
 theorem handshake_projects (h : HooksProjects ρ g a) :
@@ -105,6 +111,7 @@ theorem receiveTail_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : Rx
     | (maintenance_head stagingObserved; exact staging_projects h _)
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
+    | (maintenance_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_step ρ
 
 theorem consume_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
@@ -114,6 +121,7 @@ theorem consume_projects (h : HooksProjects ρ g a) (pid : PeerId) (pkt : RxPack
     | (maintenance_head receiveTailObserved; exact receiveTail_projects h _ _ _)
     | (maintenance_head Hooks.session; exact h.session _)
     | (maintenance_head Hooks.confirmation; exact h.confirmation _ _)
+    | (maintenance_head Hooks.peerRelease; exact h.peerRelease _)
     | driver_state_step ρ
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

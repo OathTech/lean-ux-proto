@@ -1,4 +1,5 @@
-import Leanux.Proofs.WG.TransmitSecurity.StagedTrim
+import Leanux.Proofs.WG.Lifetimes.DeviceXmit
+import Leanux.Proofs.Logged.NativeCapture
 import Leanux.Proofs.WG.Peers.Access
 
 /-! Native staged disposal boundaries. The final peer release is split after

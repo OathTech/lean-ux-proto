@@ -1,6 +1,8 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverGroNeutral
 import Leanux.Proofs.Logged.ProjectsOuter
 import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeRemovalProjection
+import Leanux.Proofs.WG.HandshakeSecurity.StagedDisposalLifecycleProjection
+import Leanux.Proofs.WG.HandshakeSecurity.StagedDisposalEffectsProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryContracts
@@ -11,6 +13,8 @@ namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
 
 structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop where
+  stagedPurge : ∀ pid, StateProjectsPrefix ρ id (g.stagedPurge pid) (a.stagedPurge pid)
+  peerRelease : ∀ peer, StateProjectsPrefix ρ id (g.peerRelease peer) (a.peerRelease peer)
   deliver : ProjectsPrefix ρ id g.deliver a.deliver
   keepalivePrepare : ∀ pid, StateProjectsPrefix ρ id (g.keepalivePrepare pid) (a.keepalivePrepare pid)
   fixture : ∃ scopeMap : Nat → Nat,
@@ -151,13 +155,13 @@ theorem sendDrain_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
 theorem remove_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
     (h : HooksProjects ρ g a) (peer : Option PeerId) :
     StateProjectsPrefix ρ id (removeObserved g peer) (removeObserved a peer) :=
-  HandshakeSecurity.SendExchange.remove_projects ρ liftWGPrefix liftWGPrefix
-    (fun _ => Projection.state_lift ρ _) _ _ (sendDrain_projects h) peer
+  HandshakeSecurity.StagedDisposal.Lifecycle.remove_projects ρ liftWGPrefix liftWGPrefix
+    (fun _ => Projection.state_lift ρ _) _ _ (sendDrain_projects h) _ _ h.peerRelease peer
 
 theorem removeAll_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
     (h : HooksProjects ρ g a) : StateProjectsPrefix ρ id (removeAllObserved g) (removeAllObserved a) :=
-  HandshakeSecurity.SendExchange.removeAll_projects ρ liftWGPrefix liftWGPrefix
-    (fun _ => Projection.state_lift ρ _) _ _ (sendDrain_projects h)
+  HandshakeSecurity.StagedDisposal.Lifecycle.removeAll_projects ρ liftWGPrefix liftWGPrefix
+    (fun _ => Projection.state_lift ρ _) _ _ (sendDrain_projects h) _ _ h.peerRelease
 
 macro "driver_state_step " rho:ident : tactic => `(tactic| first
   | (maintenance_head liftWGPrefix; exact Projection.state_lift $rho _)

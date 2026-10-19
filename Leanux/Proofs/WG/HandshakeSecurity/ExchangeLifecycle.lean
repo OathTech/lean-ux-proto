@@ -11,7 +11,10 @@ set_option pp.structureInstances false
 
 theorem down_checked (facts : H1DriverSourceFacts) :
     Preserves (Driver.downObserved ExchangeDriver.hooks) := by
-  unfold Driver.downObserved SendExchange.downWith SendExchange.stopWith
+  unfold Driver.downObserved
+  rw [show ExchangeDriver.hooks.stagedPurge = (fun pid => liftWGPrefix (purgeStagedPackets pid)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.down_neutral]
+  unfold SendExchange.downWith SendExchange.stopWith
   repeat' first
     | (nonce_source_head SendExchange.timersStopWith; exact timers_stop_checked facts _)
     | (nonce_source_head requireNotPending; exact lift _ (fun _ => preserves_pure _))

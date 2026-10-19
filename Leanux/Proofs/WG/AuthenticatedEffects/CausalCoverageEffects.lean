@@ -95,6 +95,7 @@ theorem transmit_front (family addr : Nat) (packets : List Packet) (mtu : Nat)
     (live : frames ≠ []) : StateAt frames (Driver.transmitObserved hooks family addr packets mtu) := by
   unfold Driver.transmitObserved
   repeat' first
+    | (coverage_head Driver.Hooks.peerRelease; exact state_lift _)
     | (coverage_head Driver.Hooks.front; exact old_state _ live)
     | (coverage_head Driver.stagingObserved; exact staging _ live)
     | coverage_state_step

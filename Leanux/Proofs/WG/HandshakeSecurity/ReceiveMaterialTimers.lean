@@ -38,11 +38,11 @@ theorem timer (pid : PeerId) (t : PeerTimer) :
     StateSafe (Driver.timerObserved Journal.hooks pid t) := by
   cases t with
   | retransmitHandshake =>
-    rw [Driver.timer_retransmit_lift Journal.hooks rfl]
+    rw [Driver.timer_retransmit_lift Journal.hooks rfl rfl rfl]
     exact state_native _ (fun _ => TimerFrames.retransmit pid)
   | sendKeepalive => exact expired_keepalive pid
   | newHandshake =>
-    rw [Driver.timer_new_lift Journal.hooks rfl]
+    rw [Driver.timer_new_lift Journal.hooks rfl rfl]
     exact state_native _ (fun _ => TimerFrames.new_handshake pid)
   | zeroKeyMaterial => exact state_native _ (fun _ => TimerFrames.expired_zero pid)
   | persistentKeepalive => exact persistent pid

@@ -19,6 +19,7 @@ theorem encryptTail_projects (h : HooksProjects ρ g a) (item : Option (List Skb
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head Hooks.encrypt; exact h.encrypt _)
     | (maintenance_head reschedObserved; exact resched_projects ρ _ _)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 theorem encryptIter_projects (h : HooksProjects ρ g a) :
@@ -30,6 +31,7 @@ theorem encryptIter_projects (h : HooksProjects ρ g a) :
     | (maintenance_head Hooks.poll; exact h.poll)
     | (maintenance_head softirqObserved; exact softirq_projects h)
     | (maintenance_head encryptTailObserved; exact encryptTail_projects h _)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 theorem txIter_projects (h : HooksProjects ρ g a) (pid : PeerId) :
@@ -40,6 +42,7 @@ theorem txIter_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head Hooks.transmit; exact h.transmit _)
     | (maintenance_head reschedObserved; exact resched_projects ρ _ _)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 theorem decryptStep_projects (h : HooksProjects ρ g a) :
@@ -50,6 +53,7 @@ theorem decryptStep_projects (h : HooksProjects ρ g a) :
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head softirqObserved; exact softirq_projects h)
     | (maintenance_head irqExitObserved; exact irqExit_projects h)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 theorem decryptIter_projects (h : HooksProjects ρ g a) :
@@ -60,6 +64,7 @@ theorem decryptIter_projects (h : HooksProjects ρ g a) :
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head decryptStepObserved; exact decryptStep_projects h)
     | (maintenance_head reschedObserved; exact resched_projects ρ _ _)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 theorem receiveIter_projects (h : HooksProjects ρ g a) :
@@ -69,6 +74,7 @@ theorem receiveIter_projects (h : HooksProjects ρ g a) :
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head handshakeObserved; exact (handshake_projects h).liftWGObserver ρ id)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 theorem cryptAhead_projects (h : HooksProjects ρ g a) (pid : PeerId) :
@@ -78,6 +84,7 @@ theorem cryptAhead_projects (h : HooksProjects ρ g a) (pid : PeerId) :
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head encryptIterObserved; exact encryptIter_projects h)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 theorem iteration_projects (h : HooksProjects ρ g a) (act : Activation) :
@@ -91,6 +98,7 @@ theorem iteration_projects (h : HooksProjects ρ g a) (act : Activation) :
     | (maintenance_head receiveIterObserved; exact receiveIter_projects h)
     | (maintenance_head txIterObserved; exact txIter_projects h _)
     | (maintenance_head cryptAheadObserved; exact cryptAhead_projects h _)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 private theorem schedulerRun (h : HooksProjects ρ g a) (act : Activation) :
@@ -101,6 +109,7 @@ private theorem schedulerRun (h : HooksProjects ρ g a) (act : Activation) :
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head iterationObserved; exact iteration_projects h _)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 private theorem schedulerDispatch (h : HooksProjects ρ g a) (worker : Worker) :
@@ -111,6 +120,7 @@ private theorem schedulerDispatch (h : HooksProjects ρ g a) (worker : Worker) :
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head SourceScheduler.run; exact schedulerRun h _)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 theorem schedule_projects (h : HooksProjects ρ g a) (stack : Option Worker) :
@@ -122,6 +132,7 @@ theorem schedule_projects (h : HooksProjects ρ g a) (stack : Option Worker) :
     | (maintenance_head SourceScheduler.run; exact schedulerRun h _)
     | (maintenance_head SourceScheduler.dispatch; exact schedulerDispatch h _)
     | (maintenance_head softirqObserved; exact softirq_projects h)
+    | (maintenance_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver ρ id)
     | driver_product_step ρ
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

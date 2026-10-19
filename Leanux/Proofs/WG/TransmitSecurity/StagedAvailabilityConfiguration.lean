@@ -11,7 +11,7 @@ set_option maxRecDepth 4096
 set_option pp.structureInstances false
 
 theorem config_out (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
-    StateSafe (configOut attrs peer ret) := by
+    StateSafe (configOut hooks attrs peer ret) := by
   unfold configOut
   repeat' available_configuration_step
 
@@ -20,7 +20,7 @@ private theorem finish_end (attrs : PeerAttrs) (peer : Option PeerId) (pid : Pee
       if ← liftWGPrefix (branch .peerRunning running) then
         FixtureEffects.runWith (fixtureOps hooks) (.peerConfiguration attrs pid .staging)
           (stagingObserved hooks pid)
-      configOut attrs peer ret) := by
+      configOut hooks attrs peer ret) := by
   apply state_bind
   · apply state_lift; intro history; unfold branch; exact hoare_liftAmbient _ _
   intro active

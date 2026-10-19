@@ -49,6 +49,11 @@ private theorem guard_orM (d e : Decision) (b c : Bool) :
     repeat' responder_carrier_poll_step labels
 
 macro "resident_config_step" : tactic => `(tactic| first
+  | (nonce_source_head Hooks.peerRelease
+     change CarrierSafe (liftWGPrefix _)
+     apply carrier_lift
+     · intro h; repeat' resident_configuration_frame; done
+     · resident_configuration_bounds)
   | origin_carrier_join_let
   | origin_carrier_join_use
   | (nonce_source_head WG.andM; exact guard_andM _ _ _ _)
@@ -67,7 +72,7 @@ macro "resident_config_step" : tactic => `(tactic| first
   | (split; all_goals try simp_all only []; all_goals try subst_vars))
 
 theorem configOut_safe (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
-    CarrierSafe (configOut attrs peer ret) := by
+    CarrierSafe (configOut Journal.hooks attrs peer ret) := by
   change StatePrefixPreserves (fun h w _ => Carrier h w) Safe _
   unfold configOut
   repeat' resident_config_step
@@ -75,7 +80,7 @@ theorem configOut_safe (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
 private theorem finish_end (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId)
     (ret : Int) (running : Bool) : CarrierSafe (do
       if ← liftWGPrefix (branch .peerRunning running) then Driver.stagingObserved Journal.hooks pid
-      Driver.configOut a peer ret) := by
+      Driver.configOut Journal.hooks a peer ret) := by
   apply StatePrefixEnsures.bind (carrier_ambient _)
   intro active
   split
@@ -172,7 +177,7 @@ theorem configUpdate_safe (a : PeerAttrs) (peer : Option PeerId)
     (flags : UInt32) (psk : Option Key) (pid : PeerId) :
     CarrierSafe (Driver.configUpdate Journal.hooks a peer flags psk pid) := by
   unfold Driver.configUpdate
-  rw [Driver.remove_lift Journal.hooks rfl]
+  rw [Driver.remove_lift Journal.hooks rfl rfl]
   exact update_control a flags psk _ _ _ _ _ _ (carrier_lift _ (fun _ => NativeFrames.remove peer) (bounds_remove peer))
     (psk_write pid (psk.getD [])) (carrier_lift _ (fun _ => NativeFrames.remove_ips pid) (bounds_forget (DriverCuts.carrier_remove_ips pid)))
     (fun ep => carrier_lift _ (fun _ => NativeFrames.endpoint pid ep) (bounds_endpoint pid ep)) (configOut_safe a peer) (configTail_safe a peer pid)
@@ -199,7 +204,7 @@ theorem configKey_safe (attrs : DeviceAttrs) :
   change StatePrefixPreserves (fun h w _ => Carrier h w) Safe _
   unfold configKey deviceKeyWith
   simp only [Journal.fixture_neutral,AuthenticatedEffects.FixtureEffects.run_neutral]
-  simp only [remove_lift Journal.hooks rfl]
+  simp only [remove_lift Journal.hooks rfl rfl]
   repeat' first
     | (nonce_source_head configPeers; exact configPeers_safe _)
     | (nonce_source_head stagingObserved; exact staging_carrier _)
@@ -209,7 +214,7 @@ theorem configDeviceUpdate_safe (attrs : DeviceAttrs) (flags : UInt32) :
     CarrierSafe (configDeviceUpdate Journal.hooks attrs flags) := by
   change StatePrefixPreserves (fun h w _ => Carrier h w) Safe _
   unfold configDeviceUpdate deviceUpdateWith
-  simp only [removeAll_lift Journal.hooks rfl]
+  simp only [removeAll_lift Journal.hooks rfl rfl]
   repeat' first
     | (nonce_source_head configKey; exact configKey_safe _)
     | resident_config_step

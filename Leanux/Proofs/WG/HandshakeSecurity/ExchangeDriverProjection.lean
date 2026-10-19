@@ -85,6 +85,8 @@ theorem worker_projects
     | driver_state_step rho
 
 theorem native_projection : Driver.HooksProjects NativeDriver.erase hooks NativeDriver.hooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift NativeDriver.erase _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift NativeDriver.erase _
   deliver := projectsPrefix_lift NativeDriver.erase _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.Projection.state_lift NativeDriver.erase _
   handshake := worker_projects

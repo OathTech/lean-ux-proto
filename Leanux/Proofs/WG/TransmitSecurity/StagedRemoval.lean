@@ -15,6 +15,7 @@ theorem state_range (range : Std.Legacy.Range) (initial : β)
   exact state_forIn _ initial body safe
 
 macro "staged_configuration_step" : tactic => `(tactic| first
+  | (staged_origin_head Hooks.peerRelease; change StateSafe (liftWGPrefix _); apply state_lift; intro history; repeat' staged_configuration_native; done)
   | (staged_origin_head liftWGPrefix; apply state_lift; intro history; repeat' staged_configuration_native; done)
   | (staged_origin_head ForIn.forIn; first | apply state_range | apply state_forIn)
   | staged_origin_step)
@@ -41,13 +42,19 @@ theorem after_dead (pid : PeerId) :
     | staged_configuration_step
 
 theorem remove_peer (peer : Option PeerId) : StateSafe (removeObserved hooks peer) := by
-  unfold removeObserved SendExchange.removeWith Configuration.peerRemoveWith
+  unfold removeObserved
+  rw [show hooks.peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.remove_neutral]
+  unfold SendExchange.removeWith Configuration.peerRemoveWith
   repeat' first
     | (staged_origin_head SendExchange.afterDeadWith; exact after_dead _)
     | staged_configuration_step
 
 theorem remove_all : StateSafe (removeAllObserved hooks) := by
-  unfold removeAllObserved SendExchange.removeAllWith Configuration.peerRemoveAllWith
+  unfold removeAllObserved
+  rw [show hooks.peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.removeAll_neutral]
+  unfold SendExchange.removeAllWith Configuration.peerRemoveAllWith
   repeat' first
     | (staged_origin_head SendExchange.afterDeadWith; exact after_dead _)
     | staged_configuration_step

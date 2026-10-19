@@ -37,7 +37,10 @@ theorem removeAfter (pid : PeerId) : StateSafe
     | causal_delayed_removal_step
 
 theorem remove (peer : Option PeerId) : StateSafe (removeObserved hooks peer) := by
-  unfold removeObserved removeWith peerRemoveWith
+  unfold removeObserved
+  rw [show hooks.peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.remove_neutral]
+  unfold removeWith peerRemoveWith
   repeat' first
     | (causal_delayed_head afterDeadWith; exact removeAfter _)
     | causal_delayed_removal_step
@@ -46,7 +49,10 @@ theorem remove (peer : Option PeerId) : StateSafe (removeObserved hooks peer) :=
 
 theorem removeAll :
     StateSafe (removeAllObserved hooks) := by
-  unfold removeAllObserved removeAllWith peerRemoveAllWith
+  unfold removeAllObserved
+  rw [show hooks.peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.removeAll_neutral]
+  unfold removeAllWith peerRemoveAllWith
   repeat' first
     | (causal_delayed_head afterDeadWith; exact removeAfter _)
     | causal_delayed_removal_step

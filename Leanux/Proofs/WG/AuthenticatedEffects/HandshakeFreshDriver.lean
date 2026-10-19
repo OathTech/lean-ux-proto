@@ -43,6 +43,8 @@ theorem handshake_complete : Preserves (Driver.handshakeObserved HandshakeDriver
 
 
 theorem core : Driver.ActorCoreHistorySafe Safe HandshakeDriver.hooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := Driver.History.product_lift _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   staging := Driver.staging_history (g := quietHooks) (quiet Safe)

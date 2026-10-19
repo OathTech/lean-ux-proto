@@ -57,6 +57,7 @@ theorem transmit (h : StagingSafe extra origin replay hooks)
   unfold transmitObserved
   repeat' first
     | (transport_carrier_head Hooks.front; exact front _ _ _ _)
+    | (transport_carrier_head Hooks.peerRelease; exact h.peerRelease _)
     | (transport_carrier_head stagingObserved; exact staging h _)
     | transport_staging_step
 

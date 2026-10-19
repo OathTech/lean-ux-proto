@@ -43,6 +43,8 @@ private theorem keepalive_prepare (pid : PeerId) :
     exact ⟨[.keepalivePrepared pid ⟨value,w,v,a,b⟩],rfl,safe,safe⟩
 
 theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := by
     unfold hooks DeliverySource.observed
     exact Driver.History.product_bind (Driver.History.product_lift _) (fun w =>

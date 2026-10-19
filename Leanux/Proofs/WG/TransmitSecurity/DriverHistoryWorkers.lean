@@ -19,6 +19,7 @@ theorem encryptTail_history (h : ActorHistorySafe Safe g) (item : Option (List S
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head Hooks.encrypt; exact h.encrypt _)
     | (driver_history_head reschedObserved; exact resched_history _ _)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 theorem encryptIter_history (h : ActorHistorySafe Safe g) :
@@ -30,6 +31,7 @@ theorem encryptIter_history (h : ActorHistorySafe Safe g) :
     | (driver_history_head Hooks.poll; exact h.poll)
     | (driver_history_head softirqObserved; exact softirq_history h)
     | (driver_history_head encryptTailObserved; exact encryptTail_history h _)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 theorem txIter_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
@@ -40,6 +42,7 @@ theorem txIter_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head Hooks.transmit; exact h.transmit _)
     | (driver_history_head reschedObserved; exact resched_history _ _)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 theorem decryptStep_history (h : ActorHistorySafe Safe g) :
@@ -50,6 +53,7 @@ theorem decryptStep_history (h : ActorHistorySafe Safe g) :
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head softirqObserved; exact softirq_history h)
     | (driver_history_head irqExitObserved; exact irqExit_history h)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 theorem decryptIter_history (h : ActorHistorySafe Safe g) :
@@ -60,6 +64,7 @@ theorem decryptIter_history (h : ActorHistorySafe Safe g) :
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head decryptStepObserved; exact decryptStep_history h)
     | (driver_history_head reschedObserved; exact resched_history _ _)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 theorem receiveIter_history (h : ActorHistorySafe Safe g) :
@@ -69,6 +74,7 @@ theorem receiveIter_history (h : ActorHistorySafe Safe g) :
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head handshakeObserved; exact (handshake_history h).liftWGObserver)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 theorem cryptAhead_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
@@ -78,6 +84,7 @@ theorem cryptAhead_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head encryptIterObserved; exact encryptIter_history h)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 theorem iteration_history (h : ActorHistorySafe Safe g) (act : Activation) :
@@ -91,6 +98,7 @@ theorem iteration_history (h : ActorHistorySafe Safe g) (act : Activation) :
     | (driver_history_head receiveIterObserved; exact receiveIter_history h)
     | (driver_history_head txIterObserved; exact txIter_history h _)
     | (driver_history_head cryptAheadObserved; exact cryptAhead_history h _)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 private theorem schedulerRun (h : ActorHistorySafe Safe g) (act : Activation) :
@@ -100,6 +108,7 @@ private theorem schedulerRun (h : ActorHistorySafe Safe g) (act : Activation) :
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head iterationObserved; exact iteration_history h _)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 private theorem schedulerDispatch (h : ActorHistorySafe Safe g) (worker : Worker) :
@@ -109,6 +118,7 @@ private theorem schedulerDispatch (h : ActorHistorySafe Safe g) (worker : Worker
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head SourceScheduler.run; exact schedulerRun h _)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 theorem schedule_history (h : ActorHistorySafe Safe g) (stack : Option Worker) :
@@ -120,6 +130,7 @@ theorem schedule_history (h : ActorHistorySafe Safe g) (stack : Option Worker) :
     | (driver_history_head SourceScheduler.run; exact schedulerRun h _)
     | (driver_history_head SourceScheduler.dispatch; exact schedulerDispatch h _)
     | (driver_history_head softirqObserved; exact softirq_history h)
+    | (driver_history_head Hooks.peerRelease; exact (h.peerRelease _).liftWGObserver)
     | driver_product_history_step
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

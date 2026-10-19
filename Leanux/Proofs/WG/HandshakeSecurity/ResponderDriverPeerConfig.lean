@@ -8,7 +8,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues Origins TransmitSecurity Configuration
 
 theorem config_out (a : PeerAttrs) (peer : Option PeerId) (ret : Int) :
-    Preserves (Driver.configOut a peer ret) := by
+    Preserves (Driver.configOut hooks a peer ret) := by
   unfold Driver.configOut
   exact StatePrefixEnsures.bind (lift _ (carrier_peer_put peer)) (fun _ =>
     StatePrefixEnsures.bind (ambient _) (fun _ => pure ret))
@@ -16,7 +16,7 @@ theorem config_out (a : PeerAttrs) (peer : Option PeerId) (ret : Int) :
 private theorem finish_end (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId)
     (ret : Int) (running : Bool) : Preserves (do
       if ← liftWGPrefix (branch .peerRunning running) then Driver.stagingObserved hooks pid
-      Driver.configOut a peer ret) := by
+      Driver.configOut hooks a peer ret) := by
   apply StatePrefixEnsures.bind (ambient _)
   intro active
   split
@@ -78,7 +78,7 @@ macro "responder_driver_config_step " H1:term : tactic => `(tactic| first
   | (nonce_source_head Driver.keepaliveObserved; exact keepalive _)
   | (nonce_source_head Driver.stagingObserved; exact staging _)
   | (nonce_source_head setAllowedip; exact lift _ (carrier_allowedip _ _))
-  | (nonce_source_head Driver.removeObserved; rw [Driver.remove_lift hooks rfl])
+  | (nonce_source_head Driver.removeObserved; rw [Driver.remove_lift hooks rfl rfl])
   | (nonce_source_head peerRemove; exact lift _ (carrier_remove $H1 _))
   | (nonce_source_head removeByPeer; exact lift _ (carrier_remove_ips _))
   | (nonce_source_head setPeerEndpoint; exact lift _ (carrier_endpoint _ _))
@@ -208,7 +208,7 @@ theorem config_update (H1 : H1ResponderCurrentEdges) (a : PeerAttrs) (peer : Opt
     (flags : UInt32) (psk : Option Key) (pid : PeerId) :
     Preserves (Driver.configUpdate hooks a peer flags psk pid) := by
   unfold Driver.configUpdate
-  rw [Driver.remove_lift hooks rfl]
+  rw [Driver.remove_lift hooks rfl rfl]
   exact update_control a flags psk _ _ _ _ _ _ (lift _ (carrier_remove H1 peer))
     (psk_write pid (psk.getD [])) (lift _ (carrier_remove_ips pid))
     (fun ep => lift _ (carrier_endpoint pid ep)) (config_out a peer) (config_tail a peer pid)

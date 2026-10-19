@@ -144,6 +144,8 @@ theorem callbacks : DeferredSafe (fun _ => True) origin? replay? Journal.hooks w
   keepalivePrepare := keepalive_prepare
   fixtureEnter := fun _ => state_pure _
   fixtureLeave := fun _ => state_pure _
+  stagedPurge := stagedPurge
+  peerRelease := peerRelease
   armTimer := armTimer
   queueSend := queueSend
   selection := selection

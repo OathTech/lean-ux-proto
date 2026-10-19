@@ -30,14 +30,21 @@ theorem persistent_lift (pid : PeerId) :
       if ← liftWGPrefix (branch .persistentKeepaliveInterval ((← liftWGPrefix (getPeer pid)).persistentKeepaliveInterval != 0)) then
         keepaliveObserved hooks pid) := rfl
 
-theorem timer_retransmit_lift (neutral : effectOps hooks = lifted) (pid : PeerId) :
+theorem timer_retransmit_lift (neutral : effectOps hooks = lifted)
+    (release : hooks.peerRelease = fun peer => liftWGPrefix (peerPut peer))
+    (purge : hooks.stagedPurge = fun pid => liftWGPrefix (purgeStagedPackets pid)) (pid : PeerId) :
     timerObserved hooks pid .retransmitHandshake = liftWGPrefix (expiredRetransmitHandshake pid) := by
-  change retransmitWith (effectOps hooks) pid = _
-  rw [neutral,retransmit_lifted]
+  change HandshakeSecurity.StagedDisposal.Effects.retransmitWith (effectOps hooks) hooks.peerRelease hooks.stagedPurge pid = _
+  rw [neutral,release,purge]
+  exact (HandshakeSecurity.StagedDisposal.Effects.retransmit_neutral lifted pid).trans
+    (retransmit_lifted pid)
 
-theorem timer_new_lift (neutral : effectOps hooks = lifted) (pid : PeerId) :
+theorem timer_new_lift (neutral : effectOps hooks = lifted)
+    (release : hooks.peerRelease = fun peer => liftWGPrefix (peerPut peer)) (pid : PeerId) :
     timerObserved hooks pid .newHandshake = liftWGPrefix (expiredNewHandshake pid) := by
-  change expiredNewWith (effectOps hooks) pid = _
-  rw [neutral,expiredNew_lifted]
+  change HandshakeSecurity.StagedDisposal.Effects.newHandshakeWith (effectOps hooks) hooks.peerRelease pid = _
+  rw [neutral,release]
+  exact (HandshakeSecurity.StagedDisposal.Effects.newHandshake_neutral lifted pid).trans
+    (expiredNew_lifted pid)
 
 end Leanux.Proofs.WG.TransmitSecurity.Driver

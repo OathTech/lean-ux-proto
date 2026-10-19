@@ -86,6 +86,8 @@ private theorem front_appends (family addr : Nat) (packets : List Packet) (mtu :
     StateAppends (Journal.front family addr packets mtu) := (StateAppends.lift _).receiptWGObserved _
 
 theorem hooks_projects : Driver.HooksProjects old? hooks Journal.hooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift old? _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.Projection.state_lift old? _
   deliver := DeliverySource.observed_projects old? Event.delivery (fun _ => rfl)
   keepalivePrepare := fun _ => Journal.state_receipt_projects old? _ _ _
     (fun _ => rfl) (Driver.Projection.state_lift old? _)

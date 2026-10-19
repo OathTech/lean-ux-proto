@@ -28,6 +28,8 @@ private theorem selected (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
 def quietHooks : Driver.Hooks Event := {hooks with deliver := liftPrefix Env.deliverSent}
 
 theorem quiet_hooks : Driver.HooksHistorySafe Safe quietHooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := Driver.History.product_lift _
   keepalivePrepare := fun _ => receipt_quiet _ (Driver.History.state_lift _) _ (fun _ => rfl)
   fixtureEnter := fun trigger => state_enter (.fixture trigger) (fun _ => rfl)

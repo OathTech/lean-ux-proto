@@ -8,7 +8,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues Origins TransmitSecurity Configuration
 
 theorem config_out (a : PeerAttrs) (peer : Option PeerId) (ret : Int) :
-    Preserves (Driver.configOut a peer ret) := by
+    Preserves (Driver.configOut TimestampDriver.hooks a peer ret) := by
   unfold Driver.configOut
   exact StatePrefixEnsures.bind (lift _ (peer_put peer)) (fun _ =>
     StatePrefixEnsures.bind (ambient _) (fun _ => pure ret))
@@ -16,7 +16,7 @@ theorem config_out (a : PeerAttrs) (peer : Option PeerId) (ret : Int) :
 private theorem finish_end (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId)
     (ret : Int) (running : Bool) : Preserves (do
       if ← liftWGPrefix (branch .peerRunning running) then Driver.stagingObserved TimestampDriver.hooks pid
-      Driver.configOut a peer ret) := by
+      Driver.configOut TimestampDriver.hooks a peer ret) := by
   apply StatePrefixEnsures.bind (ambient _)
   intro active
   split
@@ -78,7 +78,7 @@ macro "archive_driver_config_step " : tactic => `(tactic| first
   | (nonce_source_head Driver.keepaliveObserved; exact keepalive _)
   | (nonce_source_head Driver.stagingObserved; exact staging _)
   | (nonce_source_head setAllowedip; exact lift _ (allowed_ip _ _))
-  | (nonce_source_head Driver.removeObserved; rw [Driver.remove_lift TimestampDriver.hooks rfl])
+  | (nonce_source_head Driver.removeObserved; rw [Driver.remove_lift TimestampDriver.hooks rfl rfl])
   | (nonce_source_head peerRemove; exact lift _ (remove _))
   | (nonce_source_head removeByPeer; exact lift _ (remove_ips _))
   | (nonce_source_head setPeerEndpoint; exact lift _ (endpoint _ _))
@@ -207,7 +207,7 @@ theorem config_update (a : PeerAttrs) (peer : Option PeerId)
     (flags : UInt32) (psk : Option Key) (pid : PeerId) :
     Preserves (Driver.configUpdate TimestampDriver.hooks a peer flags psk pid) := by
   unfold Driver.configUpdate
-  rw [Driver.remove_lift TimestampDriver.hooks rfl]
+  rw [Driver.remove_lift TimestampDriver.hooks rfl rfl]
   exact update_control a flags psk _ _ _ _ _ _ (lift _ (remove peer))
     (psk_write pid (psk.getD [])) (lift _ (remove_ips pid))
     (fun ep => lift _ (endpoint pid ep)) (config_out a peer) (config_tail a peer pid)

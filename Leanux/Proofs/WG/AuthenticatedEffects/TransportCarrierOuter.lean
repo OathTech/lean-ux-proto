@@ -89,21 +89,21 @@ theorem envUp (h : StagingSafe extra origin replay hooks) :
     | (transport_carrier_head upObserved; exact product_state (up h))
     | transport_outer_step
 
-theorem envDown (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
+theorem envDown (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
     ProductSafe extra origin replay (envDownObserved hooks) := by
   unfold envDownObserved envDownWith
   repeat' first
-    | (transport_carrier_head downObserved; exact product_state (down flushed))
+    | (transport_carrier_head downObserved; exact product_state (down effects flushed))
     | (transport_product_native Env.requireIdleDevice
        exact product_storeLift _ (pinned_const _private.Leanux.Proofs.WG.Origins.OwnerControlCalls.«0».Leanux.Proofs.WG.OwnerControlCalls.idle_store))
     | transport_outer_step
 
-theorem envDelete (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
+theorem envDelete (effects : EffectsSafe extra origin replay hooks) (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
     ProductSafe extra origin replay (envDeleteObserved hooks) := by
   unfold envDeleteObserved HandshakeSecurity.SendExchange.envDeleteWith Configuration.envDeleteWith
   repeat' first
-    | (transport_carrier_head downObserved; exact product_state (down flushed))
-    | (transport_carrier_head destructObserved; exact product_state (destruct flushed))
+    | (transport_carrier_head downObserved; exact product_state (down effects flushed))
+    | (transport_carrier_head destructObserved; exact product_state (destruct effects flushed))
     | (transport_product_native Env.requireIdleDevice
        exact product_storeLift _ (pinned_const _private.Leanux.Proofs.WG.Origins.OwnerControlCalls.«0».Leanux.Proofs.WG.OwnerControlCalls.idle_store))
     | (transport_product_native liftWG
@@ -148,7 +148,7 @@ theorem retained (h : StagingSafe extra origin replay hooks)
     exact socketCall _ _ (envUp h)
   · by_cases stopped : call = .wgDown
     · subst call
-      exact socketCall _ _ (envDown flushed)
+      exact socketCall _ _ (envDown h.toEffectsSafe flushed)
     · have same : retainedObserved hooks call = liftPrefix (Leanux.dispatch call) := by
         cases call <;> simp_all only [retainedObserved] <;> contradiction
       rw [same]
@@ -175,7 +175,7 @@ theorem dispatch (h : DeferredSafe extra origin replay hooks)
   · apply rtnetlink
     simpa only [liftWGObserver_lift] using product_state (extra := extra) (origin := origin)
       (replay := replay) (state_native _ TransportLifecycle.create)
-  · exact rtnetlink _ (envDelete h.flushedSend)
+  · exact rtnetlink _ (envDelete h.toEffectsSafe h.flushedSend)
   · exact syscallXmit h front
   · intro family port message tos ll dest
     exact socketCall _ _ (inject h family port message tos ll dest)

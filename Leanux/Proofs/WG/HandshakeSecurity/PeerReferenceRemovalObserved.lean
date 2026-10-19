@@ -67,14 +67,20 @@ theorem after_dead_observed (pid : PeerId) :
 
 theorem remove_observed (peer : Option PeerId) :
     Observed (E := E) (Driver.removeObserved EntrySource.hooks (E := E) peer) := by
-  unfold Driver.removeObserved SendExchange.removeWith Configuration.peerRemoveWith
+  unfold Driver.removeObserved
+  rw [show (EntrySource.hooks (E := E)).peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.remove_neutral]
+  unfold SendExchange.removeWith Configuration.peerRemoveWith
   repeat' first
     | (nonce_source_head SendExchange.afterDeadWith; exact after_dead_observed _)
     | peer_reference_removal_step
 
 theorem remove_all_observed :
     Observed (E := E) (Driver.removeAllObserved EntrySource.hooks (E := E)) := by
-  unfold Driver.removeAllObserved SendExchange.removeAllWith Configuration.peerRemoveAllWith
+  unfold Driver.removeAllObserved
+  rw [show (EntrySource.hooks (E := E)).peerRelease = (fun peer => liftWGPrefix (peerPut peer)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.removeAll_neutral]
+  unfold SendExchange.removeAllWith Configuration.peerRemoveAllWith
   repeat' first
     | (nonce_source_head SendExchange.afterDeadWith; exact after_dead_observed _)
     | peer_reference_removal_step

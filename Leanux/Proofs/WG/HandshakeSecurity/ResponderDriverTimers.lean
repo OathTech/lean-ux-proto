@@ -41,11 +41,11 @@ theorem timer (pid : PeerId) (t : PeerTimer) :
     Preserves (Driver.timerObserved hooks pid t) := by
   cases t with
   | retransmitHandshake =>
-    rw [Driver.timer_retransmit_lift hooks rfl]
+    rw [Driver.timer_retransmit_lift hooks rfl rfl rfl]
     exact lift _ (carrier_retransmit pid)
   | sendKeepalive => exact expired_keepalive pid
   | newHandshake =>
-    rw [Driver.timer_new_lift hooks rfl]
+    rw [Driver.timer_new_lift hooks rfl rfl]
     exact lift _ (carrier_new_handshake pid)
   | zeroKeyMaterial => exact lift _ (carrier_zero_material pid)
   | persistentKeepalive => exact persistent pid

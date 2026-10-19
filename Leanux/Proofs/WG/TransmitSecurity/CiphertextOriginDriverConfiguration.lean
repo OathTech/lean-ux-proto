@@ -20,6 +20,7 @@ private theorem config_bind {g : WGPrefix Journal.Event α} {f : α → WGPrefix
     StatePrefixPreserves (fun h w _ => JournalInv h w) Safe (g >>= f) := StatePrefixEnsures.bind hg hf
 
 macro "ciphertext_config_step" : tactic => `(tactic| first
+  | (nonce_source_head Hooks.peerRelease; change StateSafe (liftWGPrefix _); apply state_lift; intro h; repeat' ciphertext_configuration_frame)
   | ciphertext_carrier_join_let
   | ciphertext_carrier_join_use
   | (ciphertext_native_lift; solve | apply state_lift; intro h; repeat' ciphertext_configuration_frame)
@@ -31,7 +32,7 @@ macro "ciphertext_config_step" : tactic => `(tactic| first
   | (split; all_goals try simp_all only []; all_goals try subst_vars))
 
 theorem configOut_safe (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
-    StateSafe (configOut attrs peer ret) := by
+    StateSafe (configOut Journal.hooks attrs peer ret) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold configOut
   repeat' ciphertext_config_step
@@ -64,7 +65,7 @@ theorem configUpdate_safe (attrs : PeerAttrs)
     StateSafe (configUpdate Journal.hooks attrs peer flags psk pid) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold configUpdate peerConfigUpdateWith
-  simp only [remove_lift Journal.hooks rfl]
+  simp only [remove_lift Journal.hooks rfl rfl]
   repeat' first
     | (nonce_source_head configOut; exact configOut_safe _ _ _)
     | (nonce_source_head configTail; exact configTail_safe _ _ _)
@@ -92,7 +93,7 @@ theorem configKey_safe (attrs : DeviceAttrs) :
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold configKey deviceKeyWith
   simp only [Journal.fixture_neutral,AuthenticatedEffects.FixtureEffects.run_neutral]
-  simp only [remove_lift Journal.hooks rfl]
+  simp only [remove_lift Journal.hooks rfl rfl]
   repeat' first
     | (nonce_source_head configPeers; exact configPeers_safe _)
     | (nonce_source_head stagingObserved; exact staging _)
@@ -102,7 +103,7 @@ theorem configDeviceUpdate_safe (attrs : DeviceAttrs) (flags : UInt32) :
     StateSafe (configDeviceUpdate Journal.hooks attrs flags) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold configDeviceUpdate deviceUpdateWith
-  simp only [removeAll_lift Journal.hooks rfl]
+  simp only [removeAll_lift Journal.hooks rfl rfl]
   repeat' first
     | (nonce_source_head configKey; exact configKey_safe _)
     | ciphertext_config_step

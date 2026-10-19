@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.ReplayEntryFinal
 import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryContracts
 import Leanux.Proofs.WG.AuthenticatedEffects.CookieConsumptionSource
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsSockets
@@ -102,6 +103,7 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeNested
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeCompletion
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeFixture
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeHandshake
+import Leanux.Proofs.WG.AuthenticatedEffects.ReplayRefusalNative
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeReceive
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeTimers
@@ -1622,5 +1624,49 @@ theorem initialized_retained_append_has_its_own_authorized_cause
       ordinal = (CausalJournal.Emissions.emitted before).length + inside ∧
       CausalJournal.Emissions.AuthorizedAppend before event :=
   CausalJournal.Emissions.initialized_stream trace placeholders ordinal datagram atPosition
+
+/-- Security: rejection cannot advance or rewrite a coherent replay bitmap.
+Fresh counters are coherent, and every exact pure validator step preserves
+coherence. This local theorem exposes the entry invariant; initialized native
+receipt transport is a separate obligation. -/
+theorem coherent_replay_rejection_preserves_counter (counter : ReplayCounter) (nonce : Nat)
+    (coherent : ReplayRefusal.Coherent counter)
+    (refused : (CounterWindow.step counter nonce).1 = false) :
+    (CounterWindow.step counter nonce).2 = counter :=
+  ReplayRefusal.rejected_unchanged counter nonce coherent refused
+
+/-- Security: a refused original validator changes no WG field or resident
+keypair record when its actual entry counter is coherent. The projection only
+discards tree-map representation; it retains peer, timer, egress and replay
+state. The coherence premise remains visible until initialized transport. -/
+theorem native_replay_rejection_preserves_protocol (w v : WGWorld) (a b : Ambient)
+    (id : KeypairId) (nonce : Nat) (d : Device) (key : Keypair)
+    (device : w.dev = some d) (resident : d.keypairs[id]? = some key)
+    (coherent : ReplayRefusal.Coherent key.receivingCounter)
+    (run : ((counterValidate id nonce).run w).run a = .ok ((false,v),b)) :
+    ReplayRefusal.view v = ReplayRefusal.view w :=
+  ReplayRefusal.native_refusal w v a b id nonce d key device resident coherent run
+
+/-- Security: every actual completed replay check in a native poll starts
+with a coherent replay window and retains its native entry witness through later
+Stop. This source contract requires coherence at poll entry; whole-driver
+initialization remains a separate obligation. -/
+theorem native_poll_preserves_coherent_replay_entry_receipts (pid : PeerId) (budget : Nat) :
+    ReplayEntry.ProductSafe (TransmitSecurity.Driver.nativePollObserved ReplayEntry.hooks pid budget) :=
+  ReplayEntry.native_poll pid budget
+
+/-- Security: every actual refused replay check in the initialized combined
+journal leaves peer, timer, egress and complete resident-keypair state unchanged.
+The native window coherence needed for refusal is derived at that occurrence's
+own entry, including a receipt retained before later Stop; there is no incoming
+coherence, reachability, funding or successful-run premise. Only tree-map
+representation is discarded by the protocol projection. -/
+theorem initialized_refused_replay_preserves_complete_protocol_state
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event) (receipt : ReplayEntry.Event)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      before ++ .old (.replay receipt) :: after) (refused : receipt.run.value = false) :
+    ReplayRefusal.view receipt.run.after.wg = ReplayRefusal.view receipt.run.before.wg :=
+  ReplayEntry.final_refusal trace placeholders before after receipt position refused
 
 end Leanux.Proofs.WG.AuthenticatedEffects

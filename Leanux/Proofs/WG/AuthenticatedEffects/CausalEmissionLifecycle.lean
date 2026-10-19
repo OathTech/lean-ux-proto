@@ -17,7 +17,10 @@ macro "emission_lifecycle_step" : tactic => `(tactic| first
   | emission_removal_step)
 
 theorem down : StateSafe (downObserved hooks) := by
-  unfold downObserved downWith stopWith timersStopWith
+  unfold downObserved
+  rw [show hooks.stagedPurge = (fun pid => liftWGPrefix (purgeStagedPackets pid)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.down_neutral]
+  unfold downWith stopWith timersStopWith
   repeat' first
     | (emission_head sendDrainObserved; exact send_drain _)
     | emission_lifecycle_step

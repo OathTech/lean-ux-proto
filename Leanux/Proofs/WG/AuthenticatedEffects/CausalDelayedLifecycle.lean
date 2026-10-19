@@ -60,7 +60,10 @@ macro "causal_delayed_lifecycle_step" : tactic => `(tactic| first
   | causal_delayed_removal_step)
 
 theorem down : StateSafe (downObserved hooks) := by
-  unfold downObserved downWith stopWith timersStopWith
+  unfold downObserved
+  rw [show hooks.stagedPurge = (fun pid => liftWGPrefix (purgeStagedPackets pid)) from rfl,
+    Leanux.Proofs.WG.HandshakeSecurity.StagedDisposal.Lifecycle.down_neutral]
+  unfold downWith stopWith timersStopWith
   repeat' first
     | (causal_delayed_head sendDrainObserved; exact sendDrain _)
     | causal_delayed_lifecycle_step

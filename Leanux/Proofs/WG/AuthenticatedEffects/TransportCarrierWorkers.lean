@@ -11,6 +11,7 @@ variable {E : Type} {extra : List E → Prop}
 
 structure WorkerSafe (extra : List E → Prop) (origin : E → Option TransportDriver.OriginEvent)
     (replay : E → Option TransportDriver.Replay) (hooks : Hooks E) : Prop where
+  peerRelease : ∀ peer, StateSafe extra origin replay (hooks.peerRelease peer)
   prepare : ProductSafe extra origin replay hooks.prepare
   poll : ProductSafe extra origin replay hooks.poll
   encrypt : ∀ item, ProductSafe extra origin replay (hooks.encrypt item)
@@ -62,7 +63,7 @@ theorem decryptStep (h : WorkerSafe extra origin replay hooks) :
   | none => exact product_pure _
   | some pid =>
     exact product_bind (irqExit h.napi) (fun _ =>
-      product_bind (product_wg _ (RxCredits.peerPut_rxView (some pid))) (fun _ =>
+      product_bind (product_state (h.peerRelease (some pid))) (fun _ =>
       product_bind (softirq h.napi) (fun _ => product_pure _)))
 
 theorem decryptIter (h : WorkerSafe extra origin replay hooks) :

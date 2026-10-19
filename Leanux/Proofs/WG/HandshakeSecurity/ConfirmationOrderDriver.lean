@@ -12,6 +12,8 @@ open Confirmation.Poll
 variable {E : Type} {Good : List E → Prop} {hooks : Driver.Hooks E}
 
 structure QuietHooksSafe (Good : List E → Prop) (hooks : Driver.Hooks E) : Prop where
+  stagedPurge : ∀ pid, StateHistorySafe Good (hooks.stagedPurge pid)
+  peerRelease : ∀ peer, StateHistorySafe Good (hooks.peerRelease peer)
   deliver : ProductHistorySafe Good hooks.deliver
   keepalivePrepare : ∀ pid, StateHistorySafe Good (hooks.keepalivePrepare pid)
   handshake : ∀ (session : PeerId → WGPrefix E Bool) (keepalive : PeerId → WGPrefix E Unit),
@@ -47,6 +49,8 @@ private def neutralConfirmation (hooks : Driver.Hooks E) : Driver.Hooks E :=
 
 private theorem quiet_hooks (h : QuietHooksSafe Good hooks) :
     HooksHistorySafe Good (neutralConfirmation hooks) where
+  stagedPurge := h.stagedPurge
+  peerRelease := h.peerRelease
   deliver := h.deliver
   keepalivePrepare := h.keepalivePrepare
   handshake := h.handshake

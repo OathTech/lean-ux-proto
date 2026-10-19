@@ -153,7 +153,7 @@ theorem retained (call : Syscall)
   · by_cases down : call = .wgDown
     · subst call
       apply socketCall
-      rw [Driver.envDown_lift Journal.hooks rfl]
+      rw [Driver.envDown_lift Journal.hooks rfl rfl]
       exact product_lift _ OccurrenceControls.env_down
     · cases call <;> first
         | exact False.elim (up rfl)
@@ -185,7 +185,7 @@ theorem dispatch
   · apply rtnetlink
     exact product_native _ OccurrenceLifecycle.create
   · apply rtnetlink
-    rw [Driver.envDelete_lift Journal.hooks rfl]
+    rw [Driver.envDelete_lift Journal.hooks rfl rfl rfl]
     exact product_lift _ OccurrenceControls.env_delete
   · exact syscall_xmit
   · intro family port message tos ll dest

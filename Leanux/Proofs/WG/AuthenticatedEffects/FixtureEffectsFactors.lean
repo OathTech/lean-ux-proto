@@ -11,7 +11,7 @@ theorem peerFinish_factor (hooks : Driver.Hooks E) (attrs : PeerAttrs)
     (peer : Option PeerId) (pid : PeerId) (ret : Int) :
     Driver.configTailFinish hooks attrs peer pid ret =
       peerFinishObserved (Driver.fixtureOps hooks) (Driver.stagingObserved hooks) (Driver.keepaliveObserved hooks)
-        Driver.configOut attrs peer pid ret := by
+        (Driver.configOut hooks) attrs peer pid ret := by
   rfl
 
 theorem open_factor (hooks : Driver.Hooks E) :
@@ -22,7 +22,7 @@ theorem open_factor (hooks : Driver.Hooks E) :
 theorem identity_factor (hooks : Driver.Hooks E) (attrs : DeviceAttrs) :
     Driver.configKey hooks attrs =
       deviceKeyWith (fun {_} a => liftWGPrefix a) (fun key => liftWGPrefix (pubkeyLookup key))
-        (fun peer => liftWGPrefix (peerPut peer)) (Driver.removeObserved hooks)
+        hooks.peerRelease (Driver.removeObserved hooks)
         (fun pid => liftWGPrefix (precomputeStaticStatic pid))
         (fun pid => liftWGPrefix (expireCurrentPeerKeypairs pid))
         (fun pid => runWith (Driver.fixtureOps hooks) (.identityConfiguration attrs pid) (Driver.stagingObserved hooks pid))

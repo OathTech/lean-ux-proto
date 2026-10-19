@@ -104,6 +104,8 @@ paths. The actual softirq expression remains definitionally unchanged. -/
 def nonencryptHooks : Driver.Hooks Journal.Event := {Journal.hooks with encrypt := fun _ => pure false}
 
 theorem hooks_safe : HooksHistorySafe (Stable past) nonencryptHooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := Driver.History.product_lift _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   handshake := handshake

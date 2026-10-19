@@ -24,6 +24,8 @@ private theorem selected (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
     (fun _ => product_enter (.timer j pid timer entry) (fun _ => rfl)) w h hi
 
 theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := by
     change Driver.ProductHistorySafe Safe (DeliverySource.observed Event.delivery)
     unfold DeliverySource.observed

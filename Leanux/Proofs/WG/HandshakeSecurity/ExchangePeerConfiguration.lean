@@ -8,7 +8,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues Origins TransmitSecurity Configuration
 
 theorem config_out (a : PeerAttrs) (peer : Option PeerId) (ret : Int) :
-    Preserves (Driver.configOut a peer ret) := by
+    Preserves (Driver.configOut ExchangeDriver.hooks a peer ret) := by
   unfold Driver.configOut
   exact StatePrefixEnsures.bind (lift _ (peer_put peer)) (fun _ =>
     StatePrefixEnsures.bind (ambient _) (fun _ => pure ret))
@@ -16,7 +16,7 @@ theorem config_out (a : PeerAttrs) (peer : Option PeerId) (ret : Int) :
 private theorem finish_end (facts : H1DriverSourceFacts) (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId)
     (ret : Int) (running : Bool) : Preserves (do
       if ← liftWGPrefix (branch .peerRunning running) then Driver.stagingObserved ExchangeDriver.hooks pid
-      Driver.configOut a peer ret) := by
+      Driver.configOut ExchangeDriver.hooks a peer ret) := by
   apply StatePrefixEnsures.bind (ambient _)
   intro active
   split

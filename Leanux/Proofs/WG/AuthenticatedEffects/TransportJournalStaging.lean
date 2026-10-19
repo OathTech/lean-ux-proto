@@ -75,6 +75,12 @@ theorem armTimer (pid : PeerId) (timer : PeerTimer) (delay : Nat) (caller : Opti
 theorem queueSend (pid : PeerId) : StateSafe (Journal.hooks.queueSend pid) :=
   state_rx _ (modifyDev_rx _ (fun _ => rfl) (fun _ => rfl))
 
+theorem stagedPurge (pid : PeerId) : StateSafe (Journal.hooks.stagedPurge pid) :=
+  state_rx _ (effect_purge_rx pid)
+
+theorem peerRelease (peer : Option PeerId) : StateSafe (Journal.hooks.peerRelease peer) :=
+  state_rx _ (RxCredits.peerPut_rxView peer)
+
 theorem keepalive_prepare (pid : PeerId) : StateSafe (Journal.hooks.keepalivePrepare pid) := by
   apply state_rx
   unfold RetirementSecurity.OccurrenceHandshake.keepalivePrepare
@@ -86,6 +92,8 @@ theorem staging : StagingSafe (fun _ => True) origin? replay? Journal.hooks wher
   keepalivePrepare := keepalive_prepare
   fixtureEnter := fun _ => state_pure _
   fixtureLeave := fun _ => state_pure _
+  stagedPurge := stagedPurge
+  peerRelease := peerRelease
   armTimer := armTimer
   queueSend := queueSend
   selection := selection

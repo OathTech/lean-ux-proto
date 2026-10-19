@@ -117,6 +117,8 @@ private def quietHooks : Driver.Hooks Exchange.Event :=
 
 private theorem quietHooks_history (good : List Exchange.Event → Prop) :
     Driver.HooksHistorySafe good quietHooks where
+  stagedPurge := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
+  peerRelease := fun _ => Leanux.Proofs.WG.TransmitSecurity.Driver.History.state_lift _
   deliver := Driver.History.product_lift _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   handshake := fun _ _ _ _ => Driver.History.state_lift _

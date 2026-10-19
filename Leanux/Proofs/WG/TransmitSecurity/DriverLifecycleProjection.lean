@@ -10,13 +10,13 @@ variable {E F : Type} {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
 
 theorem down_projects (h : HooksProjects ρ g a) :
     StateProjectsPrefix ρ id (downObserved g) (downObserved a) :=
-  SendExchange.down_projects ρ liftWGPrefix liftWGPrefix
-    (fun _ => Projection.state_lift ρ _) _ _ (sendDrain_projects h)
+  StagedDisposal.Lifecycle.down_projects ρ liftWGPrefix liftWGPrefix
+    (fun _ => Projection.state_lift ρ _) _ _ (sendDrain_projects h) _ _ h.stagedPurge
 
 theorem destruct_projects (h : HooksProjects ρ g a) :
     StateProjectsPrefix ρ id (destructObserved g) (destructObserved a) :=
-  SendExchange.destruct_projects ρ liftWGPrefix liftWGPrefix
-    (fun _ => Projection.state_lift ρ _) _ _ (sendDrain_projects h)
+  StagedDisposal.Lifecycle.destruct_projects ρ liftWGPrefix liftWGPrefix
+    (fun _ => Projection.state_lift ρ _) _ _ (sendDrain_projects h) _ _ h.peerRelease
 
 theorem envDown_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (envDownObserved g) (envDownObserved a) :=

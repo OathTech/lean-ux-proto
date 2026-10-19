@@ -8,6 +8,8 @@ import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeLifecycleSource
 import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsSource
 import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsSource
 import Leanux.Proofs.WG.AuthenticatedEffects.DeliverySource
+import Leanux.Proofs.WG.HandshakeSecurity.StagedDisposalEffectsSource
+import Leanux.Proofs.WG.HandshakeSecurity.StagedDisposalLifecycleSource
 
 /-! The nonce source driver parameterized at native TX boundaries. Its nonce
 specialization is proved equal to the initialized observer in the companion
@@ -20,6 +22,8 @@ open Leanux.Proofs.WG.Origins.HandshakeSources
 open HandshakeSecurity.Confirmation.Poll
 
 structure Hooks (E : Type) where
+  stagedPurge : PeerId → WGPrefix E Unit := fun pid => liftWGPrefix (purgeStagedPackets pid)
+  peerRelease : Option PeerId → WGPrefix E Unit := fun peer => liftWGPrefix (peerPut peer)
   deliver : PrefixM E Unit := liftPrefix Env.deliverSent
   keepalivePrepare : PeerId → WGPrefix E Bool :=
     fun pid => liftWGPrefix (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid)
@@ -141,7 +145,7 @@ def transmitObserved (hooks : Hooks E) (family addr : Nat) (packets : List Packe
   | .error err => pure err
   | .ok pid =>
     (stagingObserved hooks) pid
-    liftWGPrefix (peerPut (some pid))
+    hooks.peerRelease (some pid)
     pure 0
 
 def expiredKeepaliveObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit :=
@@ -151,9 +155,11 @@ def persistentObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit :=
   AuthenticatedEffects.TimerEffects.persistentWith (effectOps hooks) (keepaliveObserved hooks) pid
 
 def timerObserved (hooks : Hooks E) (pid : PeerId) : PeerTimer → WGPrefix E Unit
-  | .retransmitHandshake => AuthenticatedEffects.TimerEffects.retransmitWith (effectOps hooks) pid
+  | .retransmitHandshake => HandshakeSecurity.StagedDisposal.Effects.retransmitWith
+      (effectOps hooks) hooks.peerRelease hooks.stagedPurge pid
   | .sendKeepalive => (expiredKeepaliveObserved hooks) pid
-  | .newHandshake => AuthenticatedEffects.TimerEffects.expiredNewWith (effectOps hooks) pid
+  | .newHandshake => HandshakeSecurity.StagedDisposal.Effects.newHandshakeWith
+      (effectOps hooks) hooks.peerRelease pid
   | .zeroKeyMaterial => liftWGPrefix (expiredZeroKeyMaterial pid)
   | .persistentKeepalive => (persistentObserved hooks) pid
 
@@ -174,7 +180,7 @@ def handshakeOps (hooks : Hooks E) : Ops (WGPrefix E) where
   complete := fun pid => liftWGPrefix (timersHandshakeComplete pid)
   keepalive := (keepaliveObserved hooks)
   received := fun pid => liftWGPrefix (timersAnyAuthenticatedPacketReceived pid)
-  put := fun peer => liftWGPrefix (peerPut peer)
+  put := hooks.peerRelease
   cookieConsume := fun msg => liftWGPrefix (cookieMessageConsume msg)
 
 def handshakeObserved (hooks : Hooks E) : WGPrefix E Bool :=
@@ -245,7 +251,7 @@ def txIterObserved (hooks : Hooks E) (pid : PeerId) : PrefixM E IterResult :=
 
 def decryptStepObserved (hooks : Hooks E) : PrefixM E Bool :=
   RxWorkers.decryptWith hooks.prepare
-    (fun pid => liftPrefix (liftWG (peerPut (some pid)))) (softirqObserved hooks) (irqExitObserved hooks)
+    (fun pid => liftWGObserver (hooks.peerRelease (some pid))) (softirqObserved hooks) (irqExitObserved hooks)
 
 def decryptIterObserved (hooks : Hooks E) : PrefixM E IterResult :=
   workerIterPrefix .decryptWorker none (decryptStepObserved hooks)
@@ -462,43 +468,43 @@ def sendDrainObserved (hooks : Hooks E) (upTo : Option PeerId) : WGPrefix E Unit
     (fun pid => liftWGPrefix (runFlushedClearWork pid)) upTo
 
 def removeObserved (hooks : Hooks E) (peer : Option PeerId) : WGPrefix E Unit :=
-  HandshakeSecurity.SendExchange.removeWith liftWGPrefix (sendDrainObserved hooks) peer
+  HandshakeSecurity.StagedDisposal.Lifecycle.removeWith liftWGPrefix (sendDrainObserved hooks) hooks.peerRelease peer
 
 def removeAllObserved (hooks : Hooks E) : WGPrefix E Unit :=
-  HandshakeSecurity.SendExchange.removeAllWith liftWGPrefix (sendDrainObserved hooks)
+  HandshakeSecurity.StagedDisposal.Lifecycle.removeAllWith liftWGPrefix (sendDrainObserved hooks) hooks.peerRelease
 
-def configOut {E : Type} (a : PeerAttrs) (peer : Option PeerId) (ret : Int) : WGPrefix E Int := do
-  liftWGPrefix (peerPut peer)
+def configOut (hooks : Hooks E) (a : PeerAttrs) (peer : Option PeerId) (ret : Int) : WGPrefix E Int := do
+  hooks.peerRelease peer
   _ ← liftWGPrefix (branch .peerZeroPsk a.presharedKey.isSome)
   pure ret
 
 def configTailFinish (hooks : Hooks E) (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (ret : Int) : WGPrefix E Int :=
   AuthenticatedEffects.FixtureEffects.peerFinishObserved (fixtureOps hooks)
-    (stagingObserved hooks) (keepaliveObserved hooks) configOut a peer pid ret
+    (stagingObserved hooks) (keepaliveObserved hooks) (configOut hooks) a peer pid ret
 
 def configTail (hooks : Hooks E) (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) : WGPrefix E Int :=
   peerAllowedIpsWith (fun d b => liftWGPrefix (branch d b))
-    (fun ip => liftWGPrefix (setAllowedip pid ip)) (configOut a peer) a ((configTailFinish hooks) a peer pid)
+    (fun ip => liftWGPrefix (setAllowedip pid ip)) (configOut hooks a peer) a ((configTailFinish hooks) a peer pid)
 
 def configUpdate (hooks : Hooks E) (a : PeerAttrs) (peer : Option PeerId) (flags : UInt32) (psk : Option Key) (pid : PeerId) : WGPrefix E Int :=
   peerConfigUpdateWith (fun {_} a => liftWGPrefix a) (removeObserved hooks peer)
     (do let p ← liftWGPrefix (getPeer pid); liftWGPrefix (setPeer pid {p with presharedKey := psk.getD []}))
     (liftWGPrefix (removeByPeer pid)) (fun e => liftWGPrefix (setPeerEndpoint pid e))
-    (configOut a peer) ((configTail hooks) a peer pid) a flags psk
+    (configOut hooks a peer) ((configTail hooks) a peer pid) a flags psk
 
 def configPeer (hooks : Hooks E) (a : PeerAttrs) : WGPrefix E Int :=
   setPeerCmdWith (fun {_} a => liftWGPrefix a) (fun key => liftWGPrefix (pubkeyLookup key))
-    (configOut a none)
+    (configOut hooks a none)
     (peerCommandAcquiredWith (fun {_} a => liftWGPrefix a)
       (fun key psk => liftWGPrefix (peerCreate key psk)) (fun pid => liftWGPrefix (peerGet pid))
-      (configOut a none) ((configUpdate hooks) a)) a
+      (configOut hooks a none) ((configUpdate hooks) a)) a
 
 def configPeers (hooks : Hooks E) (a : DeviceAttrs) : WGPrefix E Int :=
   devicePeersWith (fun {_} a => liftWGPrefix a) (configPeer hooks) a
 
 def configKey (hooks : Hooks E) (a : DeviceAttrs) : WGPrefix E Int :=
   deviceKeyWith (fun {_} a => liftWGPrefix a) (fun key => liftWGPrefix (pubkeyLookup key))
-    (fun peer => liftWGPrefix (peerPut peer)) (removeObserved hooks)
+    hooks.peerRelease (removeObserved hooks)
     (fun pid => liftWGPrefix (precomputeStaticStatic pid)) (fun pid => liftWGPrefix (expireCurrentPeerKeypairs pid))
     (fun pid => AuthenticatedEffects.FixtureEffects.runWith (fixtureOps hooks) (.identityConfiguration a pid)
       (stagingObserved hooks pid)) ((configPeers hooks) a) a
@@ -532,10 +538,10 @@ def envUpObserved (hooks : Hooks E) : PrefixM E Int := do
   pure ret
 
 def downObserved (hooks : Hooks E) : WGPrefix E Unit :=
-  HandshakeSecurity.SendExchange.downWith liftWGPrefix (sendDrainObserved hooks)
+  HandshakeSecurity.StagedDisposal.Lifecycle.downWith liftWGPrefix (sendDrainObserved hooks) hooks.stagedPurge
 
 def destructObserved (hooks : Hooks E) : WGPrefix E Unit :=
-  HandshakeSecurity.SendExchange.destructWith liftWGPrefix (sendDrainObserved hooks)
+  HandshakeSecurity.StagedDisposal.Lifecycle.destructWith liftWGPrefix (sendDrainObserved hooks) hooks.peerRelease
 
 def envDownObserved (hooks : Hooks E) : PrefixM E Int :=
   HandshakeSecurity.SendExchange.envDownWith liftPrefix (liftWGObserver (downObserved hooks))

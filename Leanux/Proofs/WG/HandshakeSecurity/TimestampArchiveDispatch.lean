@@ -13,7 +13,7 @@ theorem retained_dispatch (call : Syscall)
       cases call <;> unfold Driver.retainedObserved
       case wgUp => exact False.elim (up rfl)
       case wgDown =>
-        rw [Driver.envDown_lift TimestampDriver.hooks rfl,Driver.socketCall_lift]
+        rw [Driver.envDown_lift TimestampDriver.hooks rfl rfl,Driver.socketCall_lift]
         rfl
       all_goals rfl
     rw [native]
@@ -42,7 +42,7 @@ theorem dispatch (call : Syscall) :
     (by
       change ProductPreserves (Driver.dispatchDeleteObserved TimestampDriver.hooks)
       unfold Driver.dispatchDeleteObserved
-      rw [Driver.envDelete_lift TimestampDriver.hooks rfl]
+      rw [Driver.envDelete_lift TimestampDriver.hooks rfl rfl rfl]
       exact Outer.rtnetlinkRequest _ (product_lift _ (env_delete)))
     syscall_xmit
     (fun family port message tos ll dest => Outer.socketCallOn _ _ (inject family port message tos ll dest))
