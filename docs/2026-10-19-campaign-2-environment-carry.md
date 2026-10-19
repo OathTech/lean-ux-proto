@@ -131,3 +131,27 @@ remove the dependencies. Both architectures were inspected. Copying all
 five factories and their erasure layer would exceed a few local variants,
 so no such copy is made. The existing shared carry, or a campaign-1 light
 source extraction, unblocks the held concrete instance.
+
+## Native outer callers and remaining shared boundary, 2026-10-19
+
+Environment down/delete and the complete native timer/placeholder,
+after-transmit, idle and after-advance callers now pass scoped builds
+(397 and 367 jobs). Observation also closes using the existing light shared
+source factor (365 jobs); 45 standard-axiom audits cover this tranche. Two explicitly named local
+deletion variants stand in for the single shared factory and its source
+factor; no observer layer is copied. Four owned callback seams preserve all
+legacy theorem headers. The latest full gate has 3,117 planned jobs and
+fails only in the same five shared modules; skipped dependents and the
+shared-enum aggregate remain unvalidated. Fresh EnvironmentOuterReplay and
+ObservationNativeReplay both exit zero.
+
+The traffic dependency boundary remains exactly the two routes above.
+The remaining native callbacks must compose through syscall dispatch,
+taskWorkRun and executeTrace. A source audit found no additional
+nonstructural primitive beyond the seven sites already supplied with finite
+replacements. The closed-program Prefill specialization remains a separate
+proof-form blocker, not a mirror request or a semantic counterexample.
+
+The gate also reports the existing Env.lean String.mk deprecation and the
+RxDrainBoundary unused-simp warning. They remain in the mirror/shared lane,
+with no suppression or unauthorized edit in this campaign.

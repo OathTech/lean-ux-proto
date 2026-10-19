@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Progress.ObservationFiniteClaims
+import Leanux.Proofs.WG.Progress.DeferredFiniteOuterClaims
+import Leanux.Proofs.WG.Progress.LifecycleEnvironmentFiniteClaims
 import Leanux.Proofs.WG.Progress.FsNamespaceFiniteClaims
 import Leanux.Proofs.WG.Progress.ConfigurationFiniteClaims
 import Leanux.Proofs.WG.Progress.LifecycleFiniteClaims
@@ -2365,5 +2368,45 @@ theorem original_send_workers_finite :
 theorem original_namespace_close_finite :
     Campaign2.Product.AgreesOn (fun _ => True) Leanux.netnsClose FsFinite.netnsClose :=
   FsFinite.original_netnsClose_finite
+
+/-- The environment down caller has exact finite evaluation through routing notifications. -/
+theorem original_environment_down_finite :
+    Campaign2.Product.AgreesOn (fun _ => True) Env.wgDown LifecycleFinite.envDown :=
+  LifecycleFinite.original_envDown_finite
+
+/-- Deletion retains the original idle/dump refusals and finite down/destruction calls. -/
+theorem original_environment_delete_finite :
+    Campaign2.Product.AgreesOn (fun _ => True) Env.wgDelete LifecycleFinite.envDelete :=
+  LifecycleFinite.original_envDelete_finite
+
+/-- The native wheel pass retains its record budget and every dispatch or completion Stop. -/
+theorem original_native_runTimers_finite (j : UInt64) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.runTimers j) (DeferredFinite.nativeTimers j) :=
+  DeferredFinite.original_timers_finite j
+
+/-- The placeholder timer pass retains its captured bounds and concrete work drains. -/
+theorem original_native_placeholderTimers_finite (j : UInt64) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.runTimersPlaceholder j) (DeferredFinite.nativePlaceholder j) :=
+  DeferredFinite.original_placeholder_finite j
+
+/-- The after-transmit caller retains its mixed-work refusal and drained-work guard. -/
+theorem original_native_afterXmit_finite  :
+    Campaign2.Product.AgreesOn (fun _ => True) Env.afterXmit DeferredFinite.nativeAfterXmit :=
+  DeferredFinite.original_afterXmit_finite
+
+/-- The idle caller retains its actual mode selection and checked end-of-wait read. -/
+theorem original_native_idleTimers_finite  :
+    Campaign2.Product.AgreesOn (fun _ => True) Env.idleTimers DeferredFinite.nativeIdle :=
+  DeferredFinite.original_idle_finite
+
+/-- The advance caller retains its distinct pass/end bounds and exact recorded suffix. -/
+theorem original_native_afterAdvance_finite  :
+    Campaign2.Product.AgreesOn (fun _ => True) Env.afterAdvance DeferredFinite.nativeAfterAdvance :=
+  DeferredFinite.original_afterAdvance_finite
+
+/-- Observation preserves its actual idle wait and exact delivery/serialization outcomes. -/
+theorem original_environment_observe_finite :
+    Campaign2.Product.AgreesOn (fun _ => True) Env.observe ObservationFinite.observe :=
+  ObservationFinite.original_observe_finite
 
 end Leanux.Proofs.WG.Progress

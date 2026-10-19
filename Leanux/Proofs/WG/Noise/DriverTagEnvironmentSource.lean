@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Noise.DriverTagEnvironmentFactors
 import Leanux.Proofs.WG.Noise.DriverTagEnvironmentFrames
 
 set_option autoImplicit false
@@ -8,21 +9,6 @@ open Lifetimes Queues
 /-! Source: up, creation and namespace cleanup are tag-silent. Down and
 deletion execute the actual receipt-bearing stop and destruction observers. -/
 universe u
-
-def envDownWith {m : Type → Type u} [Monad m]
-    (lift : {α : Type} → Leanux.M α → m α) (idle down : m Unit) : m Int := do
-  let some d := (← lift getWG).dev | return -ENODEV
-  if !d.running then return 0
-  idle
-  down
-  lift (skipCut allocCuts)
-  lift Net.Fib.rtCacheFlush
-  lift (Net.Fib.netdevDown WG0_IFINDEX)
-  lift (modifyRouting fun w => {w with defaultRoute6 := false, addrs6 := [], ipv6Gen := w.ipv6Gen+1})
-  return 0
-
-theorem envDown_factor : Env.wgDown =
-    envDownWith (fun {_} a => a) Env.requireIdleDevice (liftWG WG.wgDown) := rfl
 
 def upObserved : ProductObs Int := discard envWgUpAudit
 def createObserved : ProductObs Int := discard (liftWGObserver wgCreatePrefix)

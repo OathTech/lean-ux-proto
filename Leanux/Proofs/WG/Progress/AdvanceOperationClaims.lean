@@ -96,7 +96,7 @@ theorem observedAdvanceOperation_checks (ticks : Nat) :
     cases hidden : initial.ambient.hidden with
     | some records => rfl
     | none =>
-      dsimp only [afterAdvancePrefix,getWG,getAmbient,monadLift,MonadLift.monadLift,liftM,
+      dsimp only [afterAdvancePrefix,afterAdvancePrefixWith,getWG,getAmbient,monadLift,MonadLift.monadLift,liftM,
         liftWG,liftAmbient,StateT.run,Bind.bind,StateT.bind,Pure.pure,StateT.pure,
         Except.pure,Except.bind,get,getThe,MonadStateOf.get,StateT.get] at run
       simp only [hidden,Option.isNone_none,ite_true] at run

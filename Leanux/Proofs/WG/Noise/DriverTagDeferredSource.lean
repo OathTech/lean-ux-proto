@@ -53,15 +53,9 @@ def timersWith {E : Type} (old : {α : Type} → RxHistory.Obs α → PrefixM E 
   return fired
 
 def placeholderWith {E : Type} (old : {α : Type} → RxHistory.Obs α → PrefixM E α) (hooks : Hooks E)
-    (cryptWork sendWork : PrefixM E Unit) (jHi : UInt64) : PrefixM E Unit := do
-  liftPrefix (modifyWG fun w => {w with queuedThisCall := []})
-  if (← liftPrefix getWG).dev.isNone then return
-  hooks.placeholder jHi
-  cryptWork
-  sendWork
-  for _ in [0:(← old (RxHistory.audit getDevSavedAudit)).clearWorkQueue.length + 1] do
-    if (← old (RxHistory.audit getDevSavedAudit)).clearWorkQueue.isEmpty then break
-    hooks.clearOne
+    (cryptWork sendWork : PrefixM E Unit) (jHi : UInt64) : PrefixM E Unit :=
+  placeholderWithNative (fun {_} a => liftPrefix a)
+    (old (RxHistory.audit getDevSavedAudit)) hooks.placeholder cryptWork sendWork hooks.clearOne jHi
 def deferredWith {E : Type} (old : {α : Type} → RxHistory.Obs α → PrefixM E α) (hooks : Hooks E)
     (cryptWork sendWork afterXmitWork : PrefixM E Unit)
     (timers : UInt64 → PrefixM E Bool) (placeholder : UInt64 → PrefixM E Unit)
@@ -184,7 +178,7 @@ theorem placeholder_preserves_saved (safe : ∀ h w,I h w→S h)
     (cryptWork sendWork : PrefixM E Unit)
     (hc : PrefixPreserves I S cryptWork) (hs : PrefixPreserves I S sendWork) (j : UInt64) :
     PrefixPreserves I S (placeholderWith old hooks cryptWork sendWork j) := by
-  unfold placeholderWith
+  unfold placeholderWith placeholderWithNative
   repeat' first
     | (scheduler_preserve_at cryptWork; exact hc)
     | (scheduler_preserve_at sendWork; exact hs)
@@ -310,7 +304,7 @@ theorem placeholder_erases
     (hs : ErasesPrefix sendWork Env.runSendWorkers) (j : UInt64) :
     ErasesPrefix (placeholderWith old hooks cryptWork sendWork j) (Env.runTimersPlaceholder j) := by
   rw [← RxHistory.placeholderSource_eq]
-  unfold placeholderWith RxHistory.placeholderSourceWithPass
+  unfold placeholderWith placeholderWithNative RxHistory.placeholderSourceWithPass
   repeat' first
     | exact contracts.placeholder _
     | exact atoms.saved

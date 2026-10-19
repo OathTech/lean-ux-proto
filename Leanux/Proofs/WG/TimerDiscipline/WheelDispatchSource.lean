@@ -27,7 +27,9 @@ def timerDispatchUnit_variant (w : Worker) (pid : PeerId) (t : PeerTimer)
   runTimerSection w (WG.timerCallback pid t)
   modifyWG fun s => { s with timerPassStep := none }
 
-def runTimersWheelSource (jPass : UInt64) : Leanux.M Bool := do
+def runTimersWheelWith
+    (dispatch : Worker → PeerId → PeerTimer → WheelEntry → Option UInt64 → Leanux.M Unit)
+    (sendOne crypt : Leanux.M Unit) (jPass : UInt64) : Leanux.M Bool := do
   modifyWG fun w => { w with queuedThisCall := [] }   -- the guest slept
   -- L: without wg0 (bare fixture, or after wg_delete) no WireGuard timer
   -- exists; a timer section in the records stays unconsumed and mismatches
@@ -49,7 +51,7 @@ def runTimersWheelSource (jPass : UInt64) : Leanux.M Bool := do
       else
         let some (pid, t, we) := TimerWheel.nextDue d jPass
           | throw (.hidden s!"a section of {w.symbol}, but no modeled timer's bucket is due by jiffies {jPass}")
-        timerDispatchUnit_variant w pid t we step
+        dispatch w pid t we step
         step := some we.bucketExpiry
         fired := true
     else
@@ -57,11 +59,11 @@ def runTimersWheelSource (jPass : UInt64) : Leanux.M Bool := do
         requireStepComplete b
         step := none
       if !fired then break
-      else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then runOneSendWorker
+      else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then sendOne
       else
         -- the crypt work a timer queued, as the records order it, and a crypt
         -- activation the records resume after a section (`schedule`)
-        runCryptWorkers
+        crypt
         if (← peekNextSite) == some site then break
   if let some b := step then requireStepComplete b
   if fired then
@@ -71,11 +73,14 @@ def runTimersWheelSource (jPass : UInt64) : Leanux.M Bool := do
       unsupported "work a timer queued outlived the guest's wait"
   return fired
 
+def runTimersWheelSource (jPass : UInt64) : Leanux.M Bool :=
+  runTimersWheelWith timerDispatchUnit_variant runOneSendWorker runCryptWorkers jPass
+
 theorem runTimers_wheel_source (jPass : UInt64) :
     runTimersWheelSource jPass = Env.runTimers jPass := by
   have stopped {α β : Type} (e : Stop) (f : α → Leanux.M β) :
       ((throw e : Leanux.M α) >>= f) = throw e := rfl
-  simp only [runTimersWheelSource, Env.runTimers, timerDispatchUnit_variant, bind_assoc, stopped]
+  simp only [runTimersWheelSource, runTimersWheelWith, Env.runTimers, timerDispatchUnit_variant, bind_assoc, stopped]
   repeat' first
     | rfl
     | split

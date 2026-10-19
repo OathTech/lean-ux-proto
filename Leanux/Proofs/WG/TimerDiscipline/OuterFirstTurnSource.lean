@@ -52,7 +52,7 @@ def runTimersLoopSource (jPass : UInt64) : Leanux.M Bool := do
 theorem runTimers_loop_source (jPass : UInt64) :
     runTimersLoopSource jPass = Env.runTimers jPass := by
   rw [← runTimers_wheel_source]
-  unfold runTimersLoopSource runTimersWheelSource
+  unfold runTimersLoopSource runTimersWheelSource runTimersWheelWith
   apply bind_congr
   intro reset
   apply bind_congr

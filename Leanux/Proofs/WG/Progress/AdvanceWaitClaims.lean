@@ -28,7 +28,7 @@ theorem observedAfterAdvance_recorded_checks :
       obtain ⟨value,after⟩ := pair
       rw [suffix] at run
       cases run
-      unfold afterAdvanceSuffix at suffix
+      unfold afterAdvanceSuffix afterAdvanceSuffixWith at suffix
       rw [StateT.run_bind] at suffix
       cases turns : (discard (runTimers receipt.pass)).run atPass with
       | error stop => rw [turns] at suffix; cases suffix

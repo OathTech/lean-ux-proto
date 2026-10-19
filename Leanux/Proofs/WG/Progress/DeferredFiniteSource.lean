@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.Progress.DeferredFiniteNativeSource
+import Leanux.Proofs.WG.Progress.DeferredFiniteOuterSource
 import Leanux.Proofs.WG.Progress.TimerFiniteSource
 
 set_option autoImplicit false
@@ -21,36 +21,6 @@ theorem hooks_erases : Noise.DriverTags.Deferred.HookErases hooks := by
     change ErasesPrefix (liftPrefix (TimerFinite.placeholder j)) _
     rw [TimerFinite.placeholder_source]
     exact erasesPrefix_lift _
-
-def afterXmit : PrefixM PUnit Unit :=
-  RxHistory.DeferredSource.afterXmitWith (fun {_} a=>HookScheduler.old a) crypt sendAll
-
-theorem afterXmit_erases : ErasesPrefix afterXmit Env.afterXmit :=
-  Noise.DriverTags.Deferred.afterXmit_erases _ HookDeferred.quiet_erases _ _ crypt_erases sendAll_erases
-
-def timers (j : UInt64) : PrefixM PUnit Bool :=
-  Noise.DriverTags.Deferred.timersWith (fun {_} a=>HookScheduler.old a) hooks crypt j
-
-theorem timers_erases (j : UInt64) : ErasesPrefix (timers j) (Env.runTimers j) :=
-  Noise.DriverTags.Deferred.timers_erases _ HookDeferred.quiet_erases _ hooks_erases _ crypt_erases j
-
-def placeholder (j : UInt64) : PrefixM PUnit Unit :=
-  Noise.DriverTags.Deferred.placeholderWith (fun {_} a=>HookScheduler.old a) hooks crypt sendAll j
-
-theorem placeholder_erases (j : UInt64) : ErasesPrefix (placeholder j) (Env.runTimersPlaceholder j) :=
-  Noise.DriverTags.Deferred.placeholder_erases _ HookDeferred.quiet_erases _ hooks_erases _ _ crypt_erases sendAll_erases j
-
-def idle : PrefixM PUnit Unit :=
-  RxHistory.DeferredSource.idleWith (fun {_} a=>HookScheduler.old a) timers placeholder
-
-theorem idle_erases : ErasesPrefix idle Env.idleTimers :=
-  Noise.DriverTags.Deferred.idle_erases _ HookDeferred.quiet_erases _ _ timers_erases placeholder_erases
-
-def afterAdvance : PrefixM PUnit Unit :=
-  RxHistory.DeferredSource.afterAdvanceWith (fun {_} a=>HookScheduler.old a) timers placeholder
-
-theorem afterAdvance_erases : ErasesPrefix afterAdvance Env.afterAdvance :=
-  Noise.DriverTags.Deferred.afterAdvance_erases _ HookDeferred.quiet_erases _ _ timers_erases placeholder_erases
 
 /-- Every existing deferred constructor, composed with concrete finite callbacks. -/
 def observed (call : EnvDeferredCall) : PrefixM PUnit call.Result :=

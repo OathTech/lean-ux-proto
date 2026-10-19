@@ -7,12 +7,13 @@ open Leanux Leanux.WG Leanux.Env
 
 /-- Original mode selection and bound reads. The recordless branch runs its
 original work and has no recorded-wait receipt. -/
-def afterAdvancePrefix : Leanux.M (Option AdvanceWaitReceipt) := do
+def afterAdvancePrefixWith (timers : UInt64 → Leanux.M Bool)
+    (placeholder : UInt64 → Leanux.M Unit) : Leanux.M (Option AdvanceWaitReceipt) := do
   let w ← getWG
   let a ← getAmbient
   if a.hidden.isNone then
     let jHi := w.jiffiesLast.getD 0 + a.timing.advanceWait.toUInt64
-    if a.hiddenPlaceholders then runTimersPlaceholder jHi else discard <| runTimers jHi
+    if a.hiddenPlaceholders then placeholder jHi else discard <| timers jHi
     return none
   let some jEnd ← peekSiteU64 .jiffiesEnd
     | throw (.hidden "no end-of-wait jiffies record (kind 310) in this wg_advance")
@@ -20,12 +21,19 @@ def afterAdvancePrefix : Leanux.M (Option AdvanceWaitReceipt) := do
     | invariant "afterAdvance without an advance"
   return some {j0,j1,jEnd}
 
+def afterAdvancePrefix : Leanux.M (Option AdvanceWaitReceipt) :=
+  afterAdvancePrefixWith runTimers runTimersPlaceholder
+
 /-- Original timer pass and checked end read, at the captured distinct bounds. -/
-def afterAdvanceSuffix : Option AdvanceWaitReceipt → Leanux.M Unit
+def afterAdvanceSuffixWith (timers : UInt64 → Leanux.M Bool) : Option AdvanceWaitReceipt → Leanux.M Unit
   | none => pure ()
   | some receipt => do
-    discard <| runTimers receipt.pass
+    discard <| timers receipt.pass
     timerWaitFinish receipt.pass receipt.jEnd
+
+def afterAdvanceSuffix : Option AdvanceWaitReceipt → Leanux.M Unit
+  | none => afterAdvanceSuffixWith runTimers none
+  | some receipt => afterAdvanceSuffixWith runTimers (some receipt)
 
 /-- Decorate the actual call. A receipt is returned only after its original
 timer pass, due-timer guard and consuming end read all return normally. -/
@@ -37,14 +45,14 @@ def observedAfterAdvance : Leanux.M (Option AdvanceWaitReceipt) := do
 /-- Complete original source factor, retaining both modes and every error. -/
 theorem afterAdvance_source :
     afterAdvance = (afterAdvancePrefix >>= afterAdvanceSuffix) := by
-  unfold afterAdvance afterAdvancePrefix
+  unfold afterAdvance afterAdvancePrefix afterAdvancePrefixWith
   simp only [bind_assoc]
   congr 1
   funext w
   congr 1
   funext a
   split
-  · split <;> simp [afterAdvanceSuffix]
+  · split <;> simp [afterAdvanceSuffix, afterAdvanceSuffixWith]
   · simp only [bind_assoc]
     congr 1
     funext seen
@@ -58,7 +66,7 @@ theorem afterAdvance_source :
       | none => rfl
       | some bounds =>
         obtain ⟨j0,j1⟩ := bounds
-        simp [afterAdvanceSuffix,AdvanceWaitReceipt.pass,timerWaitFinish]
+        simp [afterAdvanceSuffix,afterAdvanceSuffixWith,AdvanceWaitReceipt.pass,timerWaitFinish]
 
 /-- Dropping the returned receipt runs exactly the original operation,
 including its original stopped outcomes. -/
@@ -91,7 +99,7 @@ theorem afterAdvancePrefix_recorded_provenance (initial final : World)
         .ok (some receipt.jEnd,initial) ∧ final = initial := by
   have present : initial.ambient.hidden.isNone = false := by
     cases hidden : initial.ambient.hidden <;> simp_all
-  unfold afterAdvancePrefix at run
+  unfold afterAdvancePrefix afterAdvancePrefixWith at run
   change ((do
     if initial.ambient.hidden.isNone then
       let jHi := initial.wg.jiffiesLast.getD 0 + initial.ambient.timing.advanceWait.toUInt64

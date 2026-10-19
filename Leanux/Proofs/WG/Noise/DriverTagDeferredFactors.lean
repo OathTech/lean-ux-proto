@@ -39,4 +39,17 @@ theorem send_erases_native {E : Type} (hooks : Hooks E)
     | (with_reducible split; all_goals try simp_all only []; all_goals try subst_vars)
     | (with_reducible intro x; try dsimp only)
 
+def placeholderWithNative {m : Type → Type} [Monad m]
+    (lift : {α : Type} → Leanux.M α → m α) (saved : m Device)
+    (pass : UInt64 → m Unit) (cryptWork sendWork clearWork : m Unit)
+    (jHi : UInt64) : m Unit := do
+  lift (modifyWG fun w => {w with queuedThisCall := []})
+  if (← lift getWG).dev.isNone then return
+  pass jHi
+  cryptWork
+  sendWork
+  for _ in [0:(← saved).clearWorkQueue.length + 1] do
+    if (← saved).clearWorkQueue.isEmpty then break
+    clearWork
+
 end Leanux.Proofs.WG.Noise.DriverTags.Deferred
