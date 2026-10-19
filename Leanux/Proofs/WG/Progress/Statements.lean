@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.Progress.DecryptSuffixClaims
+import Leanux.Proofs.WG.Progress.CommittedTrafficClaims
+import Leanux.Proofs.WG.Progress.PipeRoundupClaims
+import Leanux.Proofs.WG.Progress.ActivationRecordClaims
+import Leanux.Proofs.WG.Progress.CommittedDeferredClaims
+import Leanux.Proofs.WG.Progress.CurveFiniteClaims
 import Leanux.Proofs.WG.Progress.RecordSuffixClaims
 import Leanux.Proofs.WG.Progress.CommittedRunClaims
 import Leanux.Proofs.WG.Progress.DecryptOccupancyClaims
@@ -843,5 +849,120 @@ theorem original_reschedule_record_decrease (worker : Worker) (records : List Hi
       (fun yielded s=>RecordSuffix.Tail records s.ambient.hidden ∧
         (yielded=true→RecordSuffix.StrictTail records s.ambient.hidden)) :=
   RecordSuffix.condResched_record_suffix worker records
+
+
+/-- Every original deferred call retains its exact outcome and the committed
+scheduler run receipts reached before it. This extends callback coverage;
+it does not establish arbitrary receipt provenance or callback termination. -/
+theorem original_deferred_committed_runs (call : Leanux.Proofs.WG.Lifetimes.EnvDeferredCall) :
+    (do let result ← CommittedRuns.Deferred.observed call; pure result.1) =
+      Campaign2.Product.inspect call.original ∧
+    Campaign2.Product.Returns (CommittedRuns.Deferred.observed call) (fun _ => True)
+      (fun result _ => ∀ receipt ∈ result.2,
+        ActivationExitFacts receipt.activation receipt.exit) :=
+  CommittedRuns.Deferred.original_deferred_journal call
+
+/-- Original X25519 has a completed finite evaluation on every byte-list input.
+The exact clamp, point decode and encoding are retained; no curve-validity,
+nonzero-output or whole-driver termination conclusion is asserted. -/
+theorem original_x25519_finite_evaluation (key point : Key) :
+    x25519Finite key point = some (x25519 key point) :=
+  original_x25519_finite key point
+
+/-- The actual curve wrapper has a completed finite evaluation, including
+both possible values of its null-point test. -/
+theorem original_curve25519_finite_evaluation (secret point : Key) :
+    curve25519Finite secret point = some (curve25519 secret point) :=
+  original_curve25519_finite secret point
+
+
+/-- Actual native allocation retains an ambient record suffix through every
+count/mode branch on normal return. No normal-return premise is guaranteed. -/
+theorem original_allocation_record_suffix (records : List HiddenRecord) (site : AllocSite) :
+    Campaign2.Ensures (hiddenAlloc site : WG.M Bool)
+      (fun s => s.ambient.hidden = some records)
+      (fun _ s => RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.hiddenAlloc_record_suffix records site
+
+/-- Actual packet decryption cannot extend recorded input on normal return. -/
+theorem original_decrypt_packet_record_suffix (records : List HiddenRecord) (packet : RxPacket) :
+    Campaign2.Ensures (decryptPacket packet)
+      (fun s => s.ambient.hidden = some records)
+      (fun _ s => RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.decryptPacket_record_suffix records packet
+
+/-- The exact RX publication cut preserves recorded suffixes; IRQ/NAPI and
+final peer release are later callbacks outside this source cut. -/
+theorem original_rx_publish_record_suffix (records : List HiddenRecord) (id : SkbId)
+    (state : PacketState) :
+    Campaign2.Ensures (Queues.RxWorkers.publishSource id state)
+      (fun s => s.ambient.hidden = some records)
+      (fun _ s => RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.publish_record_suffix records id state
+
+/-- The original dequeue/decrypt/publication source cut preserves a suffix.
+Callback evaluation and full activation adequacy remain separate. -/
+theorem original_rx_prepare_record_suffix (records : List HiddenRecord) :
+    Campaign2.Ensures Queues.RxWorkers.prepareSource
+      (fun s => s.ambient.hidden = some records)
+      (fun _ s => RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.prepare_record_suffix records
+
+/-- Actual injection retains committed scheduler run receipts through its
+original deferred continuation, including prefixes before a Stop. -/
+theorem original_inject_committed_runs (family port : Nat) (msg : List UInt8)
+    (tos : Nat) (ll : Bool) (dest : Nat) :
+    (do let result ← CommittedRuns.Traffic.observed
+          (CommittedRuns.Traffic.inject family port msg tos ll dest); pure result.1) =
+      Campaign2.Product.inspect (Env.inject family port msg tos ll dest) ∧
+    Campaign2.Product.Returns (CommittedRuns.Traffic.observed
+      (CommittedRuns.Traffic.inject family port msg tos ll dest)) (fun _ => True)
+      (fun result _ => CommittedRuns.ValidHistory result.2) :=
+  CommittedRuns.Traffic.original_inject_journal family port msg tos ll dest
+
+/-- Actual batch completion retains ordered run receipts with exact outcomes. -/
+theorem original_after_batch_committed_runs :
+    (do let result ← CommittedRuns.Traffic.observed CommittedRuns.Traffic.afterBatch;
+        pure result.1) = Campaign2.Product.inspect Env.afterBatch ∧
+    Campaign2.Product.Returns
+      (CommittedRuns.Traffic.observed CommittedRuns.Traffic.afterBatch) (fun _ => True)
+      (fun result _ => CommittedRuns.ValidHistory result.2) :=
+  CommittedRuns.Traffic.original_afterBatch_journal
+
+/-- Actual flood input keeps its deferred committed-run journal. -/
+theorem original_flood_committed_runs (count port family : Nat)
+    (messages : List (List UInt8)) :
+    (do let result ← CommittedRuns.Traffic.observed
+          (CommittedRuns.Traffic.flood count port family messages); pure result.1) =
+      Campaign2.Product.inspect (Env.flood count port family messages) ∧
+    Campaign2.Product.Returns (CommittedRuns.Traffic.observed
+      (CommittedRuns.Traffic.flood count port family messages)) (fun _ => True)
+      (fun result _ => CommittedRuns.ValidHistory result.2) :=
+  CommittedRuns.Traffic.original_flood_journal count port family messages
+
+/-- Actual mixed batches keep the scheduler receipts reached by their tail. -/
+theorem original_batch_committed_runs (items : List Env.BatchItem) :
+    (do let result ← CommittedRuns.Traffic.observed (CommittedRuns.Traffic.batch items);
+        pure result.1) = Campaign2.Product.inspect (Env.batch items) ∧
+    Campaign2.Product.Returns (CommittedRuns.Traffic.observed
+      (CommittedRuns.Traffic.batch items)) (fun _ => True)
+      (fun result _ => CommittedRuns.ValidHistory result.2) :=
+  CommittedRuns.Traffic.original_batch_journal items
+
+/-- Actual observation includes its original idle wait and committed runs. -/
+theorem original_observe_committed_runs :
+    (do let result ← CommittedRuns.Traffic.observed CommittedRuns.Traffic.observe;
+        pure result.1) = Campaign2.Product.inspect Env.observe ∧
+    Campaign2.Product.Returns
+      (CommittedRuns.Traffic.observed CommittedRuns.Traffic.observe) (fun _ => True)
+      (fun result _ => CommittedRuns.ValidHistory result.2) :=
+  CommittedRuns.Traffic.original_observe_journal
+
+/-- The original pipe-size rounding loop has a completed finite evaluation
+for every Nat input. This does not assert termination of a whole pipe call. -/
+theorem original_pipe_roundup_finite_evaluation (target : Nat) :
+    PipeRoundup.finite target = some (roundupPowOfTwoUL target) ∧
+      target ≤ roundupPowOfTwoUL target :=
+  original_pipe_roundup_finite target
 
 end Leanux.Proofs.WG.Progress

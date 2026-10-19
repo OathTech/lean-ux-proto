@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.TrafficErasureSource
 import Leanux.Proofs.WG.Noise.DriverTagTrafficFrames
 
 set_option autoImplicit false
@@ -145,48 +146,30 @@ theorem batch_preserves (entry : TagMap) (items : List Env.BatchItem) :
   TrafficSource.batch_preserves (safe entry) (state_product_store entry) _ _
     (batchItem_preserves entry) (afterBatch_preserves entry) items
 
-macro "driver_traffic_erase" : tactic => `(tactic| first
-  | (maintenance_head receive; exact receive_erases _ _)
-  | (maintenance_head transmit; exact transmit_erases _ _ _ _)
-  | (maintenance_head multicast; exact multicast_erases _ _)
-  | (maintenance_head drained; exact drained_erases _ _)
-  | (maintenance_head Scheduled.deferred; exact Scheduled.deferred_erases _)
-  | (maintenance_head Scheduled.schedule; exact Scheduled.schedule_erases _)
-  | (maintenance_head Scheduled.inlinePoll; exact erasesPrefix_lift _)
-  | (maintenance_head afterBatch; exact afterBatch_erases)
-  | rx_env_traffic_erasure)
+
 
 theorem inject_erases (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
-    ErasesPrefix (inject family port msg tos ll dest) (Env.inject family port msg tos ll dest) := by
-  unfold inject TrafficSource.injectWith Env.inject
-  repeat' driver_traffic_erase
+    ErasesPrefix (inject family port msg tos ll dest) (Env.inject family port msg tos ll dest) :=
+  Progress.TrafficErasure.inject _ _ _ receive_erases (Scheduled.deferred_erases .crypt)
+    drained_erases family port msg tos ll dest
 
-theorem afterBatch_erases : ErasesPrefix afterBatch Env.afterBatch := by
-  unfold afterBatch TrafficSource.afterBatchWith Env.afterBatch
-  repeat' driver_traffic_erase
+theorem afterBatch_erases : ErasesPrefix afterBatch Env.afterBatch :=
+  Progress.TrafficErasure.afterBatch _ _ _ _ _ (Scheduled.deferred_erases .crypt)
+    (Scheduled.deferred_erases .sendAll) (Scheduled.deferred_erases .sendOne)
+    Scheduled.schedule_erases drained_erases
 
 theorem flood_erases (count port family : Nat) (messages : List (List UInt8)) :
-    ErasesPrefix (flood count port family messages) (Env.flood count port family messages) := by
-  unfold flood TrafficSource.floodWith Env.flood
-  repeat' first
-    | (maintenance_head afterBatch; exact afterBatch_erases)
-    | driver_traffic_erase
+    ErasesPrefix (flood count port family messages) (Env.flood count port family messages) :=
+  Progress.TrafficErasure.flood _ _ _ _ receive_erases (erasesPrefix_lift _)
+    afterBatch_erases drained_erases count port family messages
 
 theorem batchItem_erases (device : Device) (cqes : List Int) (item : Env.BatchItem) :
-    ErasesPrefix (batchItem device cqes item) (Environment.batchItemSource device cqes item) := by
-  cases item
-  all_goals
-    unfold batchItem batchItemWith Environment.batchItemSource
-    repeat' driver_traffic_erase
-  all_goals contradiction
+    ErasesPrefix (batchItem device cqes item) (Environment.batchItemSource device cqes item) :=
+  Progress.TrafficErasure.batchItem _ _ _ _ receive_erases (erasesPrefix_lift _)
+    multicast_erases transmit_erases device cqes item
 
-theorem batch_erases (items : List Env.BatchItem) : ErasesPrefix (batch items) (Env.batch items) := by
-  rw [← Environment.batchSource_eq]
-  unfold batch TrafficSource.batchWith Environment.batchSource
-  repeat' first
-    | (maintenance_head batchItem; exact batchItem_erases _ _ _)
-    | (maintenance_head afterBatch; exact afterBatch_erases)
-    | driver_traffic_erase
+theorem batch_erases (items : List Env.BatchItem) : ErasesPrefix (batch items) (Env.batch items) :=
+  Progress.TrafficErasure.batch _ _ batchItem_erases afterBatch_erases items
 
 def observe : ProductObs (Int × Lean.Json) := do
   Scheduled.deferred .idle
