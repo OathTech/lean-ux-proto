@@ -75,6 +75,8 @@ Source-52 defines receipt-to-terminal completeness on the same ledger, proves ex
 
 Source-53 composes full Entry through native handshake checking and the complete handshake worker, flushed send/clear workers, saved configuration metadata writes, configuration tail and interface opening. Fresh completion rekeying derives its own borrow and exact nonfinal repayment. Purge and both peer-release observers now retain Entry and terminal completeness on the identical successor ledger, including actual stopped cuts. The combined root passes 3396 jobs and fourteen focused standard-axiom queries. Whole initialized conservation and converse transport remain open. This checkpoint, `51c7344a`, also passes the aggregate gate, fresh root replay, all twelve counterexample recipes, default model build and unit suite.
 
+Source-54 closes the Entry-only crypted completion callback and composes actual peer/device configuration, opening and removal. Native allocation freshness is transported on the same observed run. Admission and creation retain terminal completeness on the same ledger, including refusal and stopped cuts; the release evidence is derived from actual reference funding. The combined root passes 3424 jobs and seventeen focused standard-axiom queries. Initialized conservation and whole-history terminal completeness remain open. The last aggregate gate and fresh replay checkpoint remains source-53 `51c7344a`.
+
 ## Current register
 
 The proof tree is current over the namespace-pin landing `218d3ffd`: after
