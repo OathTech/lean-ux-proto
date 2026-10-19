@@ -1,6 +1,7 @@
 # Binary experiment: landing preparation and validation
 
-Status: **landing conditions in progress**, rebased onto main `3308c49a`, using
+Status: **landing conditions complete; coordinator reruns pending**, rebased
+onto main `3308c49a`, using
 the actual split mirror and an explicit s5 image pin. At the preceding
 `9af3b709` checkpoint, the full build, standalone
 binary gate, unit tests, selected differential recordings, exact witnesses,
@@ -587,3 +588,27 @@ outside the package's build and theorem closure; no compiled proof is removed.
 pyelftools requirements beside the Lean toolchain setup, including an import
 check. The bootstrap runs outside the bundle, so the dependency must be
 available to the invoking host interpreter.
+
+The only operational mirror change relative to `3308c49a` is in
+`Leanux/Env.lean`, in `observe`'s hexadecimal formatting helper:
+`String.mk` becomes `String.ofList`. This is the behavior-preserving Lean
+4.35 spelling update that removes the deprecation warning. There are no other
+mirror source edits; the mirror proof tree, root Lake settings, `AGENTS.md`,
+and mirror proof gate match main. Binary definitions, headline statements,
+and trust declarations are unchanged from the accepted `9af3b709` checkpoint.
+
+The landing conditions are complete. Static checks confirm the intended file
+scope, the restored root settings, and retention of the drafts on the original
+experiment branch; the documented host-Python pyelftools import also passes.
+The coordinator's package-gate and fast-tier reruns on this series remain
+pending. The historical external acceptance records its exact export commit;
+this cleanup does not claim a new external replay or close any named M1
+obligation. Main and the experiment branch have not been advanced.
+
+The incremental `git diff --check 9af3b709 HEAD` passes. The full-branch
+whitespace scan against `3308c49a` fails with diagnostics identical to those
+at `9af3b709`: extra blank lines at EOF in `GuardedServiceCall.lean` and
+`PairCallbackAdequacy.lean`, plus whitespace in the committed Kraken patch
+files (including unified-diff context and mail trailers). Those inherited
+findings are unchanged by these landing conditions; no whitespace cleanup of
+the pinned patch series was performed.
