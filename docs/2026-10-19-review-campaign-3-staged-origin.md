@@ -127,7 +127,7 @@ for the full T2 outcome. Finding 1 is repaired in the current tranche:
 same allocation entry as the key core, and `StagedSocketFinal` joins it to
 the socket peer. The owner may later be cleared; the historical evidence
 and immutable core are retained. The 1970-job scoped statement build passes;
-aggregate validation is pending for this strengthening.
+the aggregate gate and fresh root replay pass for this strengthening.
 
 Findings 2 and 3 remain open campaign obligations. Cross-allocation
 conservation and converse emission coverage are not discharged by the present

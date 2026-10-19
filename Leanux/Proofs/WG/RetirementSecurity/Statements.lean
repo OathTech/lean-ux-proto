@@ -8,6 +8,10 @@ import Leanux.Proofs.WG.RetirementSecurity.TxRunnerSuspended
 import Leanux.Proofs.WG.RetirementSecurity.TxRunnerInitialSuspension
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkLifecycle
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkDeviceLifetime
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkNetworkSyscall
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkTraffic
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkDataDispatch
+import Leanux.Proofs.WG.RetirementSecurity.TxSuspensionTaskWork
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkDescriptorCalls
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkRouteControls
 import Leanux.Proofs.WG.RetirementSecurity.TxSuspensionConfiguration
@@ -2999,5 +3003,58 @@ theorem original_socket_wrapper_tx_service (fd : Nat) (body : Leanux.M Int)
     Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active)
       (rtnetlinkRequest body) :=
   ⟨TxWork.socket_actor fd body keeps,TxWork.netlink_actor body keeps,TxWork.rtnetlink_actor body keeps⟩
+
+/-- Native return-to-user file cleanup preserves allocated-TX service and
+actual suspended workers, including every source release callback. Pipe-loop
+progress follows the original ring bound, and wake recursion follows its native
+fuel. This is a normal endpoint frame, not a terminal TX disposal or a
+stopped-prefix conservation claim. -/
+theorem original_task_work_tx_service
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt active w)
+    (run : (liftFS taskWorkRun).run w=.ok (result,v)) :
+    TxWork.At (TxWork.Covered locals crypt) crypt active v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp TxWork.task_work_actor w result v before run
+
+/-- The original network syscall entry and return tail preserve allocated-TX
+service through current-task validation, actual file cleanup and every native
+post-dispatch scheduler/timer callback. This local composition explicitly
+requires its dispatch service contract and absent filtered syscall number;
+initialized dispatch coverage remains a separate obligation. -/
+theorem original_network_syscall_tx_service (call : Syscall) (number : syscallNr call=none)
+    (dispatch_keeps : Leanux.Proofs.Framing.Preserves
+      (TxWork.At (TxWork.Covered [] []) [] []) (dispatch call)) :
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered [] []) [] []) (Leanux.syscall call) :=
+  TxWork.syscall_network_actor call number dispatch_keeps
+
+/-- Native UDP admission and every complete injection, batch and flood retain
+allocated-TX service through RX refusal, dead publication, inline polls and
+recorded deferred scheduling. The actual suspended activations are included;
+this normal-return contract does not assert stopped-prefix terminal coverage. -/
+theorem original_ingress_traffic_tx_service (msg : List UInt8) (src : SkbSource)
+    (family port tos dest count : Nat) (ll : Bool) (items : List Env.BatchItem)
+    (messages : List (List UInt8)) :
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active)
+      (liftWG (WG.wgReceive msg src)) ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt [])
+      (Env.inject family port msg tos ll dest) ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt [])
+      (Env.batch items) ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt [])
+      (Env.flood count port family messages) :=
+  ⟨TxWork.ingress_actor msg src,TxWork.inject_actor family port msg tos ll dest,
+    TxWork.batch_actor items,TxWork.flood_actor count port family messages⟩
+
+/-- Full and stepped native netlink dumps preserve allocated-TX service and
+actual suspended workers, including cursor acquisition and final peer release.
+This is a normal-return frame for each original dispatch handler; it does not
+treat cursor bookkeeping as packet disposal or assume cursor completion. -/
+theorem original_dump_dispatch_tx_service (ref : DeviceRef) :
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered [] []) [] active)
+      (dispatch (.wgGet ref)) ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered [] []) [] active)
+      (dispatch (.wgGetStart ref)) ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered [] []) [] active)
+      (dispatch .wgGetRecv) :=
+  ⟨TxWork.dispatch_dump_actor ref,TxWork.dispatch_dump_start_actor ref,TxWork.dispatch_dump_recv_actor⟩
 
 end Leanux.Proofs.WG.RetirementSecurity

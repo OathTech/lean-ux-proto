@@ -11,6 +11,8 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionNativeProduct
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionTimers
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionPoll
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCarrierReceive
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionDeferred
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionAuthorization
 import Leanux.Proofs.WG.AuthenticatedEffects.ResponseLookupLoan
 import Leanux.Proofs.WG.AuthenticatedEffects.RefusalPositivePeers
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSocketReceipts
@@ -1584,5 +1586,41 @@ theorem delivery_preserves_preclear_occurrence_certificate :
       (fun h w => CausalJournal.Emissions.Deliveries.Carrier h w.wg)
       CausalJournal.Emissions.Deliveries.Safe CausalJournal.hooks.deliver :=
   CausalJournal.Emissions.Deliveries.deliver
+
+/-- Security: every indexed datagram saved at an actual initialized delivery
+comes from its own strictly earlier native append, authorized by a finite fixture
+or authenticated causal chain or the qualified bounded cookie exception. Exact
+append ordinals distinguish equal-valued transmissions; the certificate survives
+buffer clearing and a Stop inside delivery or any later caller. -/
+theorem initialized_predelivery_occurrence_has_its_own_authorized_append
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event) (sent : List SentDatagram)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      before ++ .delivery sent :: after)
+    (index : Nat) (datagram : SentDatagram) (atPosition : sent[index]? = some datagram) :
+    ∃ receiptBefore event receiptAfter inside,
+      before = receiptBefore ++ event :: receiptAfter ∧
+      (CausalJournal.Emissions.added event)[inside]? = some datagram ∧
+      (CausalJournal.Emissions.emitted before).length - sent.length + index =
+        (CausalJournal.Emissions.emitted receiptBefore).length + inside ∧
+      CausalJournal.Emissions.AuthorizedAppend receiptBefore event :=
+  CausalJournal.Emissions.initialized_delivery trace placeholders before after sent position index datagram atPosition
+
+/-- Security: every retained append ordinal in the initialized native socket
+stream has its own valid socket receipt and fixture/authenticated causal root,
+or the native-qualified cookie exception. This includes appends before a later
+Stop that prevents delivery; the separate pre-delivery theorem supplies converse
+coverage of each actual buffer occurrence, rather than value membership. -/
+theorem initialized_retained_append_has_its_own_authorized_cause
+    (trace : Runner.Trace) (placeholders : Bool)
+    (ordinal : Nat) (datagram : SentDatagram)
+    (atPosition : (CausalJournal.Emissions.emitted
+      (runPrefixOuter (CausalJournal.execute trace placeholders) []).2)[ordinal]? = some datagram) :
+    ∃ before event after inside,
+      (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 = before ++ event :: after ∧
+      (CausalJournal.Emissions.added event)[inside]? = some datagram ∧
+      ordinal = (CausalJournal.Emissions.emitted before).length + inside ∧
+      CausalJournal.Emissions.AuthorizedAppend before event :=
+  CausalJournal.Emissions.initialized_stream trace placeholders ordinal datagram atPosition
 
 end Leanux.Proofs.WG.AuthenticatedEffects

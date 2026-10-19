@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityInitialized
+import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityFocusedProduct
+import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityEffectsHistory
 import Leanux.Proofs.WG.TransmitSecurity.StagedAvailabilityBank
 import Leanux.Proofs.WG.TransmitSecurity.EmissionDispatchFrames
 import Leanux.Proofs.WG.TransmitSecurity.EmissionCleanupFrames
@@ -1107,8 +1110,8 @@ theorem staged_birth_ticket_identity
 
 /-- Security: one staged birth ticket cannot fund two allocation positions
 in a bank carrying the unconsumed-credit invariant. BankValid is an explicit
-premise here; its native initialized derivation and complete terminal
-accounting remain open, so this is a conditional conservation result. -/
+premise here; the initialized theorem below discharges it for the actual
+runner. Complete terminal accounting remains a separate obligation. -/
 theorem staged_available_ticket_unique
     {history : List CausalJournal.Event} {bank : Staged.Availability.Bank}
     {firstIndex secondIndex leftIndex rightIndex : Nat} {ticket : Staged.Origins.Ticket}
@@ -1136,5 +1139,50 @@ Any active send callback is accounted for separately at its native source. -/
 theorem native_namespace_cleanup_preserves_sent_buffer :
     Framing.SameView EmissionOuter.Sent Env.netnsCleanup :=
   EmissionCleanup.env_cleanup
+
+/-- Security: native staging consumes an existing live birth credit only at
+its actual allocation; no-key and counter-limit exits restore the saved
+credits. This source contract keeps its incoming availability carrier explicit;
+the initialized theorem below discharges that carrier from boot. Terminal
+completeness remains a separate obligation. -/
+theorem native_staging_preserves_available_births (pid : PeerId) :
+    Staged.Availability.StateSafe (Driver.stagingObserved CausalJournal.hooks pid) :=
+  Staged.Availability.staging_observed pid
+
+/-- Security: accepted routing and keepalive creation introduce fresh birth
+credits before native staging consumes them. This is the actual transmit
+source with an explicit incoming availability carrier. -/
+theorem native_transmit_preserves_available_births (family addr : Nat) (packets : List Packet) (mtu : Nat) :
+    Staged.Availability.StateSafe (Driver.transmitObserved CausalJournal.hooks family addr packets mtu) :=
+  Staged.Availability.transmit_observed family addr packets mtu
+
+/-- Security: each actual transport allocation in the initialized native
+runner consumes an ordered bank of live staging credits. Initialization
+supplies the bank invariant, including histories retained before Stop;
+there is no incoming carrier or campaign-2 hypothesis. This does not classify
+every disposal or establish terminal completeness. -/
+theorem initialized_available_birth_bank (trace : Runner.Trace) (placeholders : Bool) :
+    Staged.Availability.BankValid (runPrefixOuter (CausalJournal.execute trace placeholders) []).2
+      (Staged.Availability.bank (runPrefixOuter (CausalJournal.execute trace placeholders) []).2) :=
+  Staged.Availability.bank_valid (Staged.Availability.initialized trace placeholders)
+
+/-- Security: one routing/keepalive birth occurrence cannot supply two
+transport packet allocation positions in an initialized native run, even
+with equal payloads or a later Stop. The bank comes from that same execution;
+no reachability, successful-return or input-invariant premise is assumed. -/
+theorem initialized_available_birth_unique (trace : Runner.Trace) (placeholders : Bool)
+    (history : List CausalJournal.Event)
+    (execution : history = (runPrefixOuter (CausalJournal.execute trace placeholders) []).2)
+    {firstIndex secondIndex leftIndex rightIndex : Nat} {ticket : Staged.Origins.Ticket}
+    {firstPackets secondPackets : List DataPacket}
+    {firstRun secondRun : WGRunWitness (List SkbId)}
+    (first : history[firstIndex]? = some (.old (.allocated firstPackets firstRun)))
+    (second : history[secondIndex]? = some (.old (.allocated secondPackets secondRun)))
+    (left : (Staged.Availability.bank history firstIndex)[leftIndex]? = some ticket)
+    (right : (Staged.Availability.bank history secondIndex)[rightIndex]? = some ticket) :
+    firstIndex = secondIndex ∧ leftIndex = rightIndex := by
+  subst history
+  exact Staged.Availability.bank_ticket_injective
+    (initialized_available_birth_bank trace placeholders) first second left right
 
 end Leanux.Proofs.WG.TransmitSecurity
