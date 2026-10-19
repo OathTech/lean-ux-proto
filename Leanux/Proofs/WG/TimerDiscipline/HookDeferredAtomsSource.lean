@@ -54,10 +54,26 @@ theorem hooks_erases (sendOne : PrefixM E Unit)
     Noise.DriverTags.Deferred.HookErases (hooks sendOne) :=
   ⟨erases,erasesPrefix_lift _,fun _ _ _ _ _=>erasesPrefix_lift _,fun _=>erasesPrefix_lift _⟩
 
+structure StateLeaves (I : List E → World → Prop) (S : List E → Prop) : Prop where
+  quiet : Noise.DriverTags.Deferred.QuietAtoms I S (fun {_} a => HookScheduler.old a)
+  clearOne : PrefixPreserves I S (liftPrefix Env.runOneClearWorker)
+  timer : ∀ w pid timer entry prior,
+    PrefixPreserves I S (liftPrefix (timerDispatchUnit w pid timer entry prior))
+  placeholder : ∀ j, PrefixPreserves I S (liftPrefix (RxHistory.placeholderTimerPassSource j))
+
+theorem hooks_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (leaves : StateLeaves I S) (sendOne : PrefixM E Unit)
+    (keeps : PrefixPreserves I S sendOne) :
+    Noise.DriverTags.Deferred.HookContracts I S (hooks sendOne) :=
+  ⟨keeps,leaves.clearOne,leaves.timer,leaves.placeholder⟩
+
+theorem history_leaves (S : List E → Prop) : StateLeaves (fun h _ => S h) S :=
+  ⟨quiet_atoms S,HookScheduler.quiet S _,fun _ _ _ _ _ => HookScheduler.quiet S _,
+    fun _ => HookScheduler.quiet S _⟩
+
 theorem hooks_preserves (S : List E → Prop) (sendOne : PrefixM E Unit)
     (keeps : PrefixPreserves (fun h _=>S h) S sendOne) :
     Noise.DriverTags.Deferred.HookContracts (fun h _=>S h) S (hooks sendOne) :=
-  ⟨keeps,HookScheduler.quiet S _,fun _ _ _ _ _=>HookScheduler.quiet S _,
-    fun _=>HookScheduler.quiet S _⟩
+  hooks_preserves_state (history_leaves S) sendOne keeps
 
 end Leanux.Proofs.WG.TimerDiscipline.HookDeferred

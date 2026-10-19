@@ -91,62 +91,135 @@ theorem observed_erases (c : Callbacks E) (h : ErasureContracts c)
     (placeholder_erases c h sendOne hs) (idle_erases c h sendOne hs)
     (afterAdvance_erases c h sendOne hs) call
 
+theorem crypt_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (workerLeaves : HookScheduler.StateLeaves I S) (c : Callbacks E) (h : StateContracts I S c) :
+    PrefixPreserves I S (crypt c) :=
+  RxHistory.DeferredSource.crypt_preserves (I:=I) (S:=S)
+    safe (HookState.product_transport store) _ (HookScheduler.schedule_preserves_state safe store c h workerLeaves none)
+
+theorem sendAll_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (workerLeaves : HookScheduler.StateLeaves I S) (leaves : StateLeaves I S) (c : Callbacks E) (h : StateContracts I S c)
+    (sendOne : PrefixM E Unit) (hs : PrefixPreserves I S sendOne) :
+    PrefixPreserves I S (sendAll c sendOne) :=
+  Noise.DriverTags.Deferred.send_preserves (I:=I) (S:=S)
+    safe (HookState.product_transport store) _ (hooks_preserves_state leaves sendOne hs) _
+      (HookScheduler.schedule_preserves_state safe store c h workerLeaves none)
+
+theorem afterXmit_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (workerLeaves : HookScheduler.StateLeaves I S) (leaves : StateLeaves I S) (c : Callbacks E) (h : StateContracts I S c)
+    (sendOne : PrefixM E Unit) (hs : PrefixPreserves I S sendOne) :
+    PrefixPreserves I S (afterXmit c sendOne) :=
+  Noise.DriverTags.Deferred.afterXmit_preserves (I:=I) (S:=S)
+    safe (HookState.product_transport store) _ leaves.quiet _ _
+      (crypt_preserves_state safe store workerLeaves c h) (sendAll_preserves_state safe store workerLeaves leaves c h sendOne hs)
+
+theorem timers_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (workerLeaves : HookScheduler.StateLeaves I S) (leaves : StateLeaves I S) (c : Callbacks E) (h : StateContracts I S c)
+    (sendOne : PrefixM E Unit) (hs : PrefixPreserves I S sendOne) (j : UInt64) :
+    PrefixPreserves I S (timers c sendOne j) :=
+  Noise.DriverTags.Deferred.timers_preserves (I:=I) (S:=S)
+    safe (HookState.product_transport store) _ leaves.quiet _
+      (hooks_preserves_state leaves sendOne hs) _ (crypt_preserves_state safe store workerLeaves c h) j
+
+theorem placeholder_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (workerLeaves : HookScheduler.StateLeaves I S) (leaves : StateLeaves I S) (c : Callbacks E) (h : StateContracts I S c)
+    (sendOne : PrefixM E Unit) (hs : PrefixPreserves I S sendOne) (j : UInt64) :
+    PrefixPreserves I S (placeholder c sendOne j) :=
+  Noise.DriverTags.Deferred.placeholder_preserves (I:=I) (S:=S)
+    safe (HookState.product_transport store) _ leaves.quiet _
+      (hooks_preserves_state leaves sendOne hs) _ _ (crypt_preserves_state safe store workerLeaves c h)
+      (sendAll_preserves_state safe store workerLeaves leaves c h sendOne hs) j
+
+theorem idle_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (workerLeaves : HookScheduler.StateLeaves I S) (leaves : StateLeaves I S) (c : Callbacks E) (h : StateContracts I S c)
+    (sendOne : PrefixM E Unit) (hs : PrefixPreserves I S sendOne) :
+    PrefixPreserves I S (idle c sendOne) :=
+  Noise.DriverTags.Deferred.idle_preserves (I:=I) (S:=S)
+    safe (HookState.product_transport store) _ leaves.quiet _ _
+      (timers_preserves_state safe store workerLeaves leaves c h sendOne hs) (placeholder_preserves_state safe store workerLeaves leaves c h sendOne hs)
+
+theorem afterAdvance_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (workerLeaves : HookScheduler.StateLeaves I S) (leaves : StateLeaves I S) (c : Callbacks E) (h : StateContracts I S c)
+    (sendOne : PrefixM E Unit) (hs : PrefixPreserves I S sendOne) :
+    PrefixPreserves I S (afterAdvance c sendOne) :=
+  Noise.DriverTags.Deferred.afterAdvance_preserves (I:=I) (S:=S)
+    safe (HookState.product_transport store) _ leaves.quiet _ _
+      (timers_preserves_state safe store workerLeaves leaves c h sendOne hs) (placeholder_preserves_state safe store workerLeaves leaves c h sendOne hs)
+
+theorem observed_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (workerLeaves : HookScheduler.StateLeaves I S) (leaves : StateLeaves I S) (c : Callbacks E) (h : StateContracts I S c)
+    (sendOne : PrefixM E Unit) (hs : PrefixPreserves I S sendOne)
+    (call : EnvDeferredCall) : PrefixPreserves I S (observed c sendOne call) :=
+  Noise.DriverTags.Deferred.deferred_preserves _ leaves.quiet _ (hooks_preserves_state leaves sendOne hs)
+    _ _ _ _ _ _ _ (crypt_preserves_state safe store workerLeaves c h) (sendAll_preserves_state safe store workerLeaves leaves c h sendOne hs)
+    (afterXmit_preserves_state safe store workerLeaves leaves c h sendOne hs) (timers_preserves_state safe store workerLeaves leaves c h sendOne hs)
+    (placeholder_preserves_state safe store workerLeaves leaves c h sendOne hs) (idle_preserves_state safe store workerLeaves leaves c h sendOne hs)
+    (afterAdvance_preserves_state safe store workerLeaves leaves c h sendOne hs) call
+
+/-- The append contracts use existing trivial-safety preservation, without
+another induction over any deferred loop. -/
 theorem crypt_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c) :
     PrefixPreserves (fun h _=>S h) S (crypt c) :=
-  RxHistory.DeferredSource.crypt_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ pre=>pre) (fun _ _ _ _ pre=>pre) _ (HookScheduler.schedule_preserves S c h none)
+  crypt_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) (HookScheduler.history_leaves S)
+    c (history_state S c h)
 
 theorem sendAll_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (sendOne : PrefixM E Unit) (hs : PrefixPreserves (fun h _=>S h) S sendOne) :
     PrefixPreserves (fun h _=>S h) S (sendAll c sendOne) :=
-  Noise.DriverTags.Deferred.send_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ pre=>pre) (fun _ _ _ _ pre=>pre) _ (hooks_preserves S sendOne hs) _
-      (HookScheduler.schedule_preserves S c h none)
+  sendAll_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) (HookScheduler.history_leaves S) (history_leaves S)
+    c (history_state S c h) sendOne hs
 
 theorem afterXmit_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (sendOne : PrefixM E Unit) (hs : PrefixPreserves (fun h _=>S h) S sendOne) :
     PrefixPreserves (fun h _=>S h) S (afterXmit c sendOne) :=
-  Noise.DriverTags.Deferred.afterXmit_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ pre=>pre) (fun _ _ _ _ pre=>pre) _ (quiet_atoms S) _ _
-      (crypt_preserves S c h) (sendAll_preserves S c h sendOne hs)
+  afterXmit_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) (HookScheduler.history_leaves S) (history_leaves S)
+    c (history_state S c h) sendOne hs
 
 theorem timers_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (sendOne : PrefixM E Unit) (hs : PrefixPreserves (fun h _=>S h) S sendOne) (j : UInt64) :
     PrefixPreserves (fun h _=>S h) S (timers c sendOne j) :=
-  Noise.DriverTags.Deferred.timers_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ pre=>pre) (fun _ _ _ _ pre=>pre) _ (quiet_atoms S) _
-      (hooks_preserves S sendOne hs) _ (crypt_preserves S c h) j
+  timers_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) (HookScheduler.history_leaves S) (history_leaves S)
+    c (history_state S c h) sendOne hs j
 
 theorem placeholder_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (sendOne : PrefixM E Unit) (hs : PrefixPreserves (fun h _=>S h) S sendOne) (j : UInt64) :
     PrefixPreserves (fun h _=>S h) S (placeholder c sendOne j) :=
-  Noise.DriverTags.Deferred.placeholder_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ pre=>pre) (fun _ _ _ _ pre=>pre) _ (quiet_atoms S) _
-      (hooks_preserves S sendOne hs) _ _ (crypt_preserves S c h)
-      (sendAll_preserves S c h sendOne hs) j
+  placeholder_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) (HookScheduler.history_leaves S) (history_leaves S)
+    c (history_state S c h) sendOne hs j
 
 theorem idle_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (sendOne : PrefixM E Unit) (hs : PrefixPreserves (fun h _=>S h) S sendOne) :
     PrefixPreserves (fun h _=>S h) S (idle c sendOne) :=
-  Noise.DriverTags.Deferred.idle_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ pre=>pre) (fun _ _ _ _ pre=>pre) _ (quiet_atoms S) _ _
-      (timers_preserves S c h sendOne hs) (placeholder_preserves S c h sendOne hs)
+  idle_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) (HookScheduler.history_leaves S) (history_leaves S)
+    c (history_state S c h) sendOne hs
 
 theorem afterAdvance_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (sendOne : PrefixM E Unit) (hs : PrefixPreserves (fun h _=>S h) S sendOne) :
     PrefixPreserves (fun h _=>S h) S (afterAdvance c sendOne) :=
-  Noise.DriverTags.Deferred.afterAdvance_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ pre=>pre) (fun _ _ _ _ pre=>pre) _ (quiet_atoms S) _ _
-      (timers_preserves S c h sendOne hs) (placeholder_preserves S c h sendOne hs)
+  afterAdvance_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) (HookScheduler.history_leaves S) (history_leaves S)
+    c (history_state S c h) sendOne hs
 
 theorem observed_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (sendOne : PrefixM E Unit) (hs : PrefixPreserves (fun h _=>S h) S sendOne)
     (call : EnvDeferredCall) : PrefixPreserves (fun h _=>S h) S (observed c sendOne call) :=
-  Noise.DriverTags.Deferred.deferred_preserves _ (quiet_atoms S) _ (hooks_preserves S sendOne hs)
-    _ _ _ _ _ _ _ (crypt_preserves S c h) (sendAll_preserves S c h sendOne hs)
-    (afterXmit_preserves S c h sendOne hs) (timers_preserves S c h sendOne hs)
-    (placeholder_preserves S c h sendOne hs) (idle_preserves S c h sendOne hs)
-    (afterAdvance_preserves S c h sendOne hs) call
+  observed_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) (HookScheduler.history_leaves S) (history_leaves S)
+    c (history_state S c h) sendOne hs call
 
 /-- The append contracts use existing trivial-safety preservation, without
 another induction over any deferred loop. -/

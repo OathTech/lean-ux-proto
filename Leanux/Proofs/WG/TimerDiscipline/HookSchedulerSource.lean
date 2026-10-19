@@ -43,26 +43,53 @@ theorem nested_erases (c : Callbacks E) (h : ErasureContracts c) (worker : Worke
   · exact schedule_erases c h _
   · exact erasesPrefix_pure _
 
+theorem run_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (c : Callbacks E) (h : StateContracts I S c) (leaves : StateLeaves I S) (a : Activation) :
+    PrefixPreserves I S (run c a) :=
+  SourceScheduler.run_preserves safe (HookState.product_transport store) _
+    (iteration_preserves_state safe store c h leaves) a
+
+theorem dispatch_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (c : Callbacks E) (h : StateContracts I S c) (leaves : StateLeaves I S) (worker : Worker) :
+    PrefixPreserves I S (dispatch c worker) :=
+  SourceScheduler.dispatch_preserves safe (HookState.product_transport store)
+    (fun pid => by simpa only [old_native] using leaves.atoms.work (fun q => q.erase pid)) _ (iteration_preserves_state safe store c h leaves) worker
+
+theorem schedule_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (c : Callbacks E) (h : StateContracts I S c) (leaves : StateLeaves I S) (stack : Option Worker) :
+    PrefixPreserves I S (schedule c stack) :=
+  SourceScheduler.schedule_preserves safe (HookState.product_transport store)
+    (fun pid => by simpa only [old_native] using leaves.atoms.work (fun q => q.erase pid)) _ _ (iteration_preserves_state safe store c h leaves) h.softirq stack
+
+theorem nested_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (c : Callbacks E) (h : StateContracts I S c) (leaves : StateLeaves I S) (worker : Worker) :
+    PrefixPreserves I S (nested c worker) :=
+  RxHistory.SchedulerSource.nested_preserves safe (HookState.product_transport store) _
+    (schedule_preserves_state safe store c h leaves) worker
+
 theorem run_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c) (a : Activation) :
     PrefixPreserves (fun h _=>S h) S (run c a) :=
-  SourceScheduler.run_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ hi=>hi) (fun _ _ _ _ hi=>hi) _ (iteration_preserves S c h) a
+  run_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) c (history_state S c h) (history_leaves S) a
 
 theorem dispatch_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (worker : Worker) : PrefixPreserves (fun h _=>S h) S (dispatch c worker) :=
-  SourceScheduler.dispatch_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ hi=>hi) (fun _ _ _ _ hi=>hi) (fun _=>quiet S _) _ (iteration_preserves S c h) worker
+  dispatch_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) c (history_state S c h) (history_leaves S) worker
 
 theorem schedule_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (stack : Option Worker) : PrefixPreserves (fun h _=>S h) S (schedule c stack) :=
-  SourceScheduler.schedule_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ hi=>hi) (fun _ _ _ _ hi=>hi) (fun _=>quiet S _) _ _
-      (iteration_preserves S c h) h.softirq stack
+  schedule_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) c (history_state S c h) (history_leaves S) stack
 
 theorem nested_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (worker : Worker) : PrefixPreserves (fun h _=>S h) S (nested c worker) :=
-  RxHistory.SchedulerSource.nested_preserves (I:=fun h _=>S h) (S:=S)
-    (fun _ _ hi=>hi) (fun _ _ _ _ hi=>hi) _ (schedule_preserves S c h) worker
+  nested_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi)
+    (fun _ _ _ _ hi => hi) c (history_state S c h) (history_leaves S) worker
 
 /-- Appending is the existing trivial-safety preservation contract, so no
 second traversal of the scheduler loops is needed for the append proof. -/

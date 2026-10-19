@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.HookCountedClaims
 import Leanux.Proofs.WG.TimerDiscipline.HookInitializedClaims
 import Leanux.Proofs.WG.TimerDiscipline.SessionFrontierClaims
 import Leanux.Proofs.WG.TimerDiscipline.HookSchedulerClaims
@@ -1195,5 +1196,43 @@ theorem original_receive_step_session_allocation_distinct :
     (do let result←inspect step;pure result.1)=Campaign2.inspect receiveStep ∧
     Campaign2.Returns (inspect step) (fun _=>True) (fun result _=>AllocationFacts result) :=
   HandshakeJournal.original_step_allocation
+
+/-- The original scheduler has distinct successful session stamps and at most
+one completed session-derived wheel enqueue per stamp, including histories
+retained before Stop. Normal results retain the final counter bound. -/
+theorem original_scheduler_session_counts (worker : Option Worker) :
+    (do let result←HookCommon.inspect (HookCommon.schedule worker);pure result.1)=
+      Campaign2.Product.inspect (Env.schedule worker) ∧
+    Campaign2.Product.Returns (HookCommon.inspect (HookCommon.schedule worker)) (fun _=>True)
+      (fun result _=>HookCommon.CountedResult result) :=
+  HookCommon.original_schedule_counted worker
+
+/-- Every deferred constructor has the same allocation-relative counts over
+its exact original hook history; no final wheel state is claimed on Stop. -/
+theorem original_deferred_session_counts (call : Lifetimes.EnvDeferredCall) :
+    (do let result←HookCommon.inspect (HookCommon.deferred call);pure result.1)=
+      Campaign2.Product.inspect call.original ∧
+    Campaign2.Product.Returns (HookCommon.inspect (HookCommon.deferred call)) (fun _=>True)
+      (fun result _=>HookCommon.CountedResult result) :=
+  HookCommon.original_deferred_counted call
+
+/-- Every original syscall retains ordered allocation stamps and bounds
+completed session-derived enqueues, with no callback or invariant premise. -/
+theorem original_syscall_session_counts (c : Syscall) :
+    (do let result←HookCommon.inspect (HookCommon.syscall c);pure result.1)=
+      Campaign2.Product.inspect (Leanux.syscall c) ∧
+    Campaign2.Product.Returns (HookCommon.inspect (HookCommon.syscall c)) (fun _=>True)
+      (fun result _=>HookCommon.CountedResult result) :=
+  HookCommon.original_syscall_counted c
+
+/-- The initialized runner preserves exact JSON and indexed Stops while
+successful allocation stamps remain distinct across the full observed run.
+Each stamp has at most one derived hook and at most one completed enqueue;
+give-up cleanup is a separate cause, and Stop supplies no final wheel state. -/
+theorem original_initialized_session_counts (trace : Leanux.Runner.Trace) (placeholders : Bool) :
+    (HookCommon.Initialized.inspection trace placeholders).1.map Prod.fst=
+      Leanux.Runner.executeTrace trace placeholders ∧
+    HookCommon.CountedResult (HookCommon.Initialized.inspection trace placeholders) :=
+  HookCommon.original_initialized_counted trace placeholders
 
 end Leanux.Proofs.WG.TimerDiscipline

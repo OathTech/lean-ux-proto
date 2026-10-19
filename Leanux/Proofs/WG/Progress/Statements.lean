@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Progress.ConsumeSuffixClaims
+import Leanux.Proofs.WG.Progress.ReceiveTerminalClaims
 import Leanux.Proofs.WG.Progress.ClearWorkerRecordClaims
 import Leanux.Proofs.WG.Progress.PipeReadClaims
 import Leanux.Proofs.WG.Progress.PipeWriteOuterClaims
@@ -1131,5 +1133,60 @@ theorem original_clear_worker_record_decrease (records : List HiddenRecord) :
       (fun s=>s.ambient.hidden=some records)
       (fun _ s=>StrictTail records s.ambient.hidden) :=
   RecordSuffix.original_clear_worker_record_decrease records
+
+open RecordSuffix Leanux.Env in
+/-- A false receive-step return is the actual empty-ring cut and preserves WG state and hidden records. -/
+theorem original_receive_empty_return (entry : Campaign2.Snapshot) :
+    Campaign2.Ensures WG.receiveStep (fun s => s = entry)
+      (fun value final => value = false →
+        (∃ d, entry.wg.device = some d ∧ d.handshakeQueue.peek = none) ∧
+        final.wg = entry.wg ∧ final.ambient.hidden = entry.ambient.hidden) :=
+  RecordSuffix.original_receive_empty_return entry
+
+open RecordSuffix Leanux.Env in
+/-- An ended receive iteration starts with an empty ring and leaves WG state and hidden records unchanged. -/
+theorem original_receive_ended_return (active : Activation)
+    (receive : active.worker = .receiveWorker) (entry : Campaign2.Product.Snapshot) :
+    Campaign2.Product.Ensures (Activation.iter active) (fun s => s = entry)
+      (fun value final => value = .ended →
+        (∃ d, entry.wg.device = some d ∧ d.handshakeQueue.peek = none) ∧
+        final.wg = entry.wg ∧ final.ambient.hidden = entry.ambient.hidden) :=
+  RecordSuffix.original_receive_ended_return active receive entry
+
+open RecordSuffix Leanux.Env in
+/-- An original receive activation starting empty strictly consumes supplied records on normal completion. -/
+theorem original_empty_receive_activation_decrease (active : Activation)
+    (receive : active.worker = .receiveWorker) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (Activation.run active)
+      (fun s => s.ambient.hidden = some records ∧
+        ∃ d, s.wg.device = some d ∧ d.handshakeQueue.peek = none)
+      (fun _ s => StrictTail records s.ambient.hidden) :=
+  RecordSuffix.original_empty_receive_activation_decrease active receive records
+
+open RecordSuffix Leanux.Env in
+/-- The original activation audit retains its actual final empty receive cut and section-stop record decrease. -/
+theorem original_receive_terminal_records (active : Activation)
+    (receive : active.worker = .receiveWorker) :
+    Campaign2.Product.Returns (observedActivationExit active) (fun _ => True)
+      (fun audit _ => ReceiveTerminal audit ∧ ActivationExitFacts active audit) :=
+  RecordSuffix.original_receive_terminal_records active receive
+
+/-- Actual receive completion preserves a suffix of supplied records on
+normal return, with the endpoint and allowed-IP dependencies discharged. -/
+theorem original_consume_data_done_record_suffix (records : List HiddenRecord)
+    (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
+    Campaign2.Ensures (consumeDataDone pid pkt ep)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.consumeDataDone_record_suffix records pid pkt ep
+
+/-- The exact product lift retains the same supplied-record suffix on normal
+return; this contract does not assert that execution completes. -/
+theorem original_product_consume_data_done_record_suffix (records : List HiddenRecord)
+    (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
+    Campaign2.Product.Ensures (liftWG (consumeDataDone pid pkt ep))
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.consumeDataDone_product_record_suffix records pid pkt ep
 
 end Leanux.Proofs.WG.Progress

@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.Roaming.PollEndpointModel
 import Leanux.Proofs.Logged.PrefixGro
 import Leanux.Proofs.WG.Queues.PollPreservation
+import Leanux.Proofs.WG.TimerDiscipline.PollCounterFrames
 set_option autoImplicit false
 /-! The owned native poll spine with explicit consume and GRO callbacks.
 The original PollEndpointSource functions are native instances. -/
@@ -160,6 +161,81 @@ theorem lift_safe (S : List E → Prop) {α : Type} (action : Leanux.M α) :
   PrefixEnsures.preserves (PrefixEnsures.lift action
     (fun (h : List E) (_ : World) (pre : S h)=>pre) (fun _ _ _ _ pre _=>pre))
 
+section StatePreservation
+open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
+open TimerDiscipline.HandshakeJournal Lifetimes TimerDiscipline.PollCounterFrames
+macro "poll_counter_lift" : tactic => `(tactic|
+ (apply counter_product_frame
+  first
+  | (snapshot_head liftWG; exact ready _)
+  | env_operation_source [] using
+    [peer,writePeer,packet,freePacket,peek,endpoint,key,release,counter,branch_counter,invariant_counter,unsupported_counter,ambient]))
+variable {I : List E→World→Prop} {S : List E→Prop}
+theorem step_preserves_state
+    (safe : ∀h w,I h w→S h)
+    (native : ∀{α : Type} (action : Leanux.M α), ProductCounterMono action→PrefixPreserves I S (liftPrefix action))
+    (consume : PeerId→RxPacket→Endpoint→PrefixM E (Option (List UInt8)))
+    (toStack : List (List UInt8)→PrefixM E Unit)
+    (hc : ∀p pkt ep,PrefixPreserves I S (consume p pkt ep))
+    (hs : ∀packets,PrefixPreserves I S (toStack packets)) (pid budget n state) :
+    PrefixPreserves I S
+      (stepWith (fun {_} a=>liftPrefix a) consume (napiGroReceivePrefix toStack) pid budget n state) := by
+  unfold stepWith
+  dsimp only
+  repeat' first
+    | (hook_poll_head consume; exact hc _ _ _)
+    | (hook_poll_head napiGroReceivePrefix; exact napiGroReceivePrefix_preserves toStack safe hs _ _)
+    | (hook_poll_head liftPrefix; apply native; poll_counter_lift)
+    | (hook_poll_head Pure.pure; exact PrefixPreserves.pure safe _)
+    | (hook_poll_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ safe)
+    | (hook_poll_head Bind.bind; apply PrefixPreserves.bind)
+    | (hook_poll_head ite; split)
+    | (hook_poll_head dite; split)
+    | maintenance_intro
+    | (with_reducible split)
+
+theorem finish_preserves_state
+    (safe : ∀h w,I h w→S h)
+    (native : ∀{α : Type} (action : Leanux.M α), ProductCounterMono action→PrefixPreserves I S (liftPrefix action))
+    (toStack : List (List UInt8)→PrefixM E Unit)
+    (hs : ∀packets,PrefixPreserves I S (toStack packets)) (pid budget state) :
+    PrefixPreserves I S
+      (finishWith (fun {_} a=>liftPrefix a) (napiGroFlushAllPrefix toStack) pid budget state) := by
+  unfold finishWith
+  dsimp only
+  repeat' first
+    | (hook_poll_head napiGroFlushAllPrefix; exact napiGroFlushAllPrefix_preserves toStack safe hs _)
+    | (hook_poll_head liftPrefix; apply native; poll_counter_lift)
+    | (hook_poll_head Pure.pure; exact PrefixPreserves.pure safe _)
+    | (hook_poll_head Bind.bind; apply PrefixPreserves.bind)
+    | (hook_poll_head ite; split)
+    | (hook_poll_head dite; split)
+    | maintenance_intro
+    | (with_reducible split)
+
+theorem poll_preserves_state
+    (safe : ∀h w,I h w→S h)
+    (native : ∀{α : Type} (action : Leanux.M α), ProductCounterMono action→PrefixPreserves I S (liftPrefix action))
+    (consume : PeerId→RxPacket→Endpoint→PrefixM E (Option (List UInt8)))
+    (toStack : List (List UInt8)→PrefixM E Unit)
+    (hc : ∀p pkt ep,PrefixPreserves I S (consume p pkt ep))
+    (hs : ∀packets,PrefixPreserves I S (toStack packets)) (pid budget) :
+    PrefixPreserves I S
+      (pollWith (fun {_} a=>liftPrefix a) consume
+        (napiGroReceivePrefix toStack) (napiGroFlushAllPrefix toStack) pid budget) := by
+  unfold pollWith
+  apply PrefixPreserves.bind (native _ (counter_product_frame (branch_counter _ _)))
+  intro noBudget
+  split
+  · exact PrefixPreserves.pure safe _
+  · apply PrefixPreserves.bind
+    · apply PrefixPreserves.range _ _ _ safe
+      intro n state
+      exact step_preserves_state safe native consume toStack hc hs pid budget n state
+    · intro state
+      exact finish_preserves_state safe native toStack hs pid budget state
+end StatePreservation
+
 theorem step_preserves (S : List E → Prop)
     (consume : PeerId → RxPacket → Endpoint → PrefixM E (Option (List UInt8)))
     (toStack : List (List UInt8) → PrefixM E Unit)
@@ -167,38 +243,18 @@ theorem step_preserves (S : List E → Prop)
     (hs : ∀ packets, PrefixPreserves (fun h _=>S h) S (toStack packets))
     (pid budget n state) :
     PrefixPreserves (fun h _=>S h) S
-      (stepWith (fun {_} a=>liftPrefix a) consume (napiGroReceivePrefix toStack) pid budget n state) := by
-  unfold stepWith
-  dsimp only
-  repeat' first
-    | (hook_poll_head consume; exact hc _ _ _)
-    | (hook_poll_head napiGroReceivePrefix; exact napiGroReceivePrefix_preserves toStack (fun (h : List E) (_ : World) (pre : S h)=>pre) hs _ _)
-    | (hook_poll_head liftPrefix; exact lift_safe S _)
-    | (hook_poll_head Pure.pure; exact PrefixPreserves.pure (fun (h : List E) (_ : World) (pre : S h)=>pre) _)
-    | (hook_poll_head ForIn.forIn; apply PrefixPreserves.forIn _ _ _ (fun (h : List E) (_ : World) (pre : S h)=>pre))
-    | (hook_poll_head Bind.bind; apply PrefixPreserves.bind)
-    | (hook_poll_head ite; split)
-    | (hook_poll_head dite; split)
-    | maintenance_intro
-    | (with_reducible split)
+      (stepWith (fun {_} a=>liftPrefix a) consume (napiGroReceivePrefix toStack) pid budget n state) :=
+  step_preserves_state (I:=fun h _=>S h) (S:=S) (fun _ _ prior=>prior)
+    (fun action _=>lift_safe S action) consume toStack hc hs pid budget n state
 
 theorem finish_preserves (S : List E → Prop)
     (toStack : List (List UInt8) → PrefixM E Unit)
     (hs : ∀ packets, PrefixPreserves (fun h _=>S h) S (toStack packets))
     (pid budget state) :
     PrefixPreserves (fun h _=>S h) S
-      (finishWith (fun {_} a=>liftPrefix a) (napiGroFlushAllPrefix toStack) pid budget state) := by
-  unfold finishWith
-  dsimp only
-  repeat' first
-    | (hook_poll_head napiGroFlushAllPrefix; exact napiGroFlushAllPrefix_preserves toStack (fun (h : List E) (_ : World) (pre : S h)=>pre) hs _)
-    | (hook_poll_head liftPrefix; exact lift_safe S _)
-    | (hook_poll_head Pure.pure; exact PrefixPreserves.pure (fun (h : List E) (_ : World) (pre : S h)=>pre) _)
-    | (hook_poll_head Bind.bind; apply PrefixPreserves.bind)
-    | (hook_poll_head ite; split)
-    | (hook_poll_head dite; split)
-    | maintenance_intro
-    | (with_reducible split)
+      (finishWith (fun {_} a=>liftPrefix a) (napiGroFlushAllPrefix toStack) pid budget state) :=
+  finish_preserves_state (I:=fun h _=>S h) (S:=S) (fun _ _ prior=>prior)
+    (fun action _=>lift_safe S action) toStack hs pid budget state
 
 theorem poll_preserves (S : List E → Prop)
     (consume : PeerId → RxPacket → Endpoint → PrefixM E (Option (List UInt8)))
@@ -208,18 +264,10 @@ theorem poll_preserves (S : List E → Prop)
     (pid budget) :
     PrefixPreserves (fun h _=>S h) S
       (pollWith (fun {_} a=>liftPrefix a) consume
-        (napiGroReceivePrefix toStack) (napiGroFlushAllPrefix toStack) pid budget) := by
-  unfold pollWith
-  apply PrefixPreserves.bind (lift_safe S _)
-  intro noBudget
-  split
-  · exact PrefixPreserves.pure (fun (h : List E) (_ : World) (pre : S h)=>pre) _
-  · apply PrefixPreserves.bind
-    · apply PrefixPreserves.range _ _ _ (fun (h : List E) (_ : World) (pre : S h)=>pre)
-      intro n state
-      exact step_preserves S consume toStack hc hs pid budget n state
-    · intro state
-      exact finish_preserves S toStack hs pid budget state
+        (napiGroReceivePrefix toStack) (napiGroFlushAllPrefix toStack) pid budget) :=
+  poll_preserves_state (I:=fun h _=>S h) (S:=S) (fun _ _ prior=>prior)
+    (fun action _=>lift_safe S action) consume toStack hc hs pid budget
+
 end Leanux.Proofs.WG.Roaming.PollHookRules
 
 namespace Leanux.Proofs.WG.Roaming.PollHookRules

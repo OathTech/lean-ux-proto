@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.HookStateFrames
 import Leanux.Proofs.WG.Queues.SchedulerPreservation
 import Leanux.Proofs.WG.Queues.NapiSource
 import Leanux.Proofs.WG.Queues.RxWaitAppends
@@ -7,7 +8,7 @@ parameters. Actual transmit, receive, and NAPI callbacks must be provided;
 only non-hook preparation, encryption, payment and scheduling atoms are quiet. -/
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.TimerDiscipline.HookScheduler
-open Leanux Leanux.WG Leanux.Proofs.Logged
+open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Leanux.Proofs.WG.Queues Leanux.Proofs.WG.Lifetimes
 open RxHistory.SchedulerSource
 variable {E : Type}
@@ -92,23 +93,69 @@ theorem receive_erases (c : Callbacks E) (h : ErasureContracts c) :
       (workerIter .receiveWorker none (liftWG WG.receiveStep) (Env.condResched .receiveWorker)) :=
   workerIterPrefix_erases _ _ h.receive (erasesPrefix_lift _)
 
+structure StateContracts (I : List E → World → Prop) (S : List E → Prop)
+    (c : Callbacks E) : Prop where
+  transmit : ∀ pid, PrefixPreserves I S (c.transmit pid)
+  receive : PrefixPreserves I S c.receive
+  softirq : PrefixPreserves I S c.softirq
+  irq : PrefixPreserves I S c.irq
+
+structure StateLeaves (I : List E → World → Prop) (S : List E → Prop) : Prop where
+  atoms : AtomContracts I S (fun {_} a => old a)
+  poll : PrefixPreserves I S (liftPrefix (liftWG TxRing.pollSource))
+  tail : ∀ item, PrefixPreserves I S (liftPrefix (RxWorkers.encryptTailSource item))
+  prepare : PrefixPreserves I S (liftPrefix (liftWG RxWorkers.prepareSource))
+  put : ∀ pid, PrefixPreserves I S (liftPrefix (liftWG (peerPut (some pid))))
+
+theorem history_state (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c) :
+    StateContracts (fun h _ => S h) S c :=
+  ⟨h.transmit,h.receive,h.softirq,h.irq⟩
+
+theorem history_leaves (S : List E → Prop) : StateLeaves (fun h _ => S h) S :=
+  ⟨atoms S,quiet S _,fun _ => quiet S _,quiet S _,fun _ => quiet S _⟩
+
+theorem encrypt_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (c : Callbacks E) (h : StateContracts I S c) (leaves : StateLeaves I S) :
+    PrefixPreserves I S (encrypt c) :=
+  leaves.poll.bind (fun _ => h.softirq.bind (fun _ => leaves.tail _))
+
+theorem decryptStep_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history)
+    (c : Callbacks E) (h : StateContracts I S c) (leaves : StateLeaves I S) :
+    PrefixPreserves I S (decryptStep c) :=
+  NapiSource.decrypt_preserves safe leaves.prepare leaves.put h.softirq h.irq
+
+theorem decrypt_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (c : Callbacks E) (h : StateContracts I S c) (leaves : StateLeaves I S) :
+    PrefixPreserves I S (decrypt c) :=
+  workerIterPrefix_preserves _ _ safe (decryptStep_preserves_state safe c h leaves)
+    ((HookState.lift_store safe store _ (condResched_sameKernel _)).bind
+      (fun _ => HookState.ambient safe store (AmbientM.branch _ _)))
+
+theorem receive_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (c : Callbacks E) (h : StateContracts I S c) :
+    PrefixPreserves I S (receive c) :=
+  workerIterPrefix_preserves _ _ safe h.receive
+    (HookState.lift_store safe store _ (condResched_sameKernel _))
+
 theorem encrypt_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c) :
     PrefixPreserves (fun h _=>S h) S (encrypt c) :=
-  (quiet S _).bind (fun _=>h.softirq.bind (fun _=>quiet S _))
+  encrypt_preserves_state c (history_state S c h) (history_leaves S)
 
 theorem decryptStep_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c) :
     PrefixPreserves (fun h _=>S h) S (decryptStep c) :=
-  NapiSource.decrypt_preserves (I:=fun h _=>S h) (fun _ _ hi=>hi)
-    (quiet S _) (fun _=>quiet S _) h.softirq h.irq
+  decryptStep_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi) c (history_state S c h) (history_leaves S)
 
 theorem decrypt_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c) :
     PrefixPreserves (fun h _=>S h) S (decrypt c) :=
-  workerIterPrefix_preserves _ _ (I:=fun h _=>S h) (fun _ _ hi=>hi)
-    (decryptStep_preserves S c h) ((quiet S _).bind (fun _=>quiet S _))
+  decrypt_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi) (fun _ _ _ _ hi => hi) c
+    (history_state S c h) (history_leaves S)
 
 theorem receive_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c) :
     PrefixPreserves (fun h _=>S h) S (receive c) :=
-  workerIterPrefix_preserves _ _ (I:=fun h _=>S h) (fun _ _ hi=>hi) h.receive (quiet S _)
+  receive_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi) (fun _ _ _ _ hi => hi) c (history_state S c h)
 
 theorem encrypt_appends (c : Callbacks E) (h : AppendContracts c) : Appends (encrypt c) :=
   (Appends.lift _).bind (fun _=>h.softirq.bind (fun _=>Appends.lift _))
@@ -129,15 +176,28 @@ def ahead (c : Callbacks E) (pid : PeerId) : PrefixM E Unit :=
 def iteration (c : Callbacks E) (a : Activation) : PrefixM E IterResult :=
   iterationWith (fun {_} a=>old a) (encrypt c) (ahead c) c.transmit (decrypt c) (receive c) a
 
+theorem ahead_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history)
+    (c : Callbacks E) (h : StateContracts I S c) (leaves : StateLeaves I S) (pid : PeerId) :
+    PrefixPreserves I S (ahead c pid) :=
+  cryptAhead_preserves safe _ leaves.atoms _ (encrypt_preserves_state c h leaves) pid
+
+theorem iteration_preserves_state {I : List E → World → Prop} {S : List E → Prop}
+    (safe : ∀ history w, I history w → S history) (store : HookState.StoreTransport I)
+    (c : Callbacks E) (h : StateContracts I S c) (leaves : StateLeaves I S) (a : Activation) :
+    PrefixPreserves I S (iteration c a) :=
+  RxHistory.SchedulerSource.iteration_preserves _ leaves.atoms _ _ _ _ _
+    (encrypt_preserves_state c h leaves) (ahead_preserves_state safe c h leaves) h.transmit
+    (decrypt_preserves_state safe store c h leaves) (receive_preserves_state safe store c h) a
+
 theorem ahead_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (pid : PeerId) : PrefixPreserves (fun h _=>S h) S (ahead c pid) :=
-  cryptAhead_preserves (I:=fun h _=>S h) (fun _ _ hi=>hi) _ (atoms S) _ (encrypt_preserves S c h) pid
+  ahead_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi) c (history_state S c h) (history_leaves S) pid
 
 theorem iteration_preserves (S : List E → Prop) (c : Callbacks E) (h : HistoryContracts S c)
     (a : Activation) : PrefixPreserves (fun h _=>S h) S (iteration c a) :=
-  RxHistory.SchedulerSource.iteration_preserves _ (atoms S) _ _ _ _ _
-    (encrypt_preserves S c h) (ahead_preserves S c h) h.transmit
-    (decrypt_preserves S c h) (receive_preserves S c h) a
+  iteration_preserves_state (I := fun h _ => S h) (S := S) (fun _ _ hi => hi) (fun _ _ _ _ hi => hi) c
+    (history_state S c h) (history_leaves S) a
 
 theorem ahead_appends (c : Callbacks E) (h : AppendContracts c) (pid : PeerId) :
     Appends (ahead c pid) :=
