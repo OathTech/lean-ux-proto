@@ -24,14 +24,15 @@ theorem Safe.cuts (before : Safe debts history) :
   | selected ledger generation pid peer position h kept =>
     exact Or.inr ⟨ledger,generation,pid,peer,position,kept,kept.1.1.accounted⟩
 
-/-- Both retained cuts imply the full canonical fixed-ledger account at one
-connected native snapshot. This forgets the cut distinction only after the
-source contract has established it; callers can use `Safe.cuts` to retain it. -/
+/-- Both branches imply a canonical fixed-ledger account at one snapshot.
+The accounted branch does not itself retain an execution-reachability relation;
+that additional source claim must be kept separately. `Safe.cuts` retains the
+branch distinction and the selected branch's recorded take. -/
 theorem Safe.account (before : Safe debts history) :
     ∃ ledger w, Core history ledger debts w ∧ Justified history ledger ∧
       AllocationLinks history ledger ∧ Complete history ledger := by
   rcases before.cuts with ⟨ledger,locals,w,kept⟩ | ⟨ledger,generation,pid,peer,position,kept,r,_,_,core,_⟩
   · exact ⟨ledger,w,kept.entry.core,kept.entry.justified,kept.entry.allocationLinks,kept.complete⟩
-  · exact ⟨ledger,r.run.after,core,kept.1.2.1,kept.1.2.2.1,kept.2⟩
+  · exact ⟨ledger,r.run.after,core,kept.1.2.1,kept.1.2.2.1,kept.2.1⟩
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.CompleteTransmit

@@ -43,10 +43,13 @@ theorem decorate {action : WGPrefix Event α} {Safe : List Event → Prop}
   intro w a h before
   obtain ⟨suffix,extended,active,post⟩ := rule w a h before.toReady
   obtain ⟨_,_,complete,_⟩ := history w a h before.complete
-  refine ⟨suffix,extended,frontier _ ⟨active,complete⟩,?_⟩
+  have anchor : NativeAnchor position (runPrefix (action.run w) a h).2 := by
+    rw [extended]
+    exact before.nativeAnchor.append suffix
+  refine ⟨suffix,extended,frontier _ ⟨active,complete,anchor⟩,?_⟩
   cases result : (runPrefix (action.run w) a h).1 with
   | error stop => trivial
-  | ok out => exact ⟨by simpa only [result] using post,complete⟩
+  | ok out => exact ⟨by simpa only [result] using post,complete,anchor⟩
 
 variable {Safe : List Event → Prop}
 variable (frontier : ∀ h, Active ledger debts generation pid peer position h → Safe h)

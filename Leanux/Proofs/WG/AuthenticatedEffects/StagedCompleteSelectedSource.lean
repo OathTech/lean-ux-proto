@@ -21,21 +21,24 @@ theorem borrow (ledger : Ledger) (debts : List CleanupDebt) (locals : List Retir
     (SoundHeld.Active ledger debts generation pid peer position) (fun _ => id) w a h before.toReady
   obtain ⟨_,_,complete,_⟩ := Driver.History.state_lift (Safe := fun h => Complete h ledger)
     (Take.borrow (some peer)) w a h before.complete
-  refine ⟨suffix,extended,frontier _ ⟨active,complete⟩,?_⟩
+  have anchor : NativeAnchor position (runPrefix ((liftWGPrefix (Take.borrow (some peer))).run w) a h).2 := by
+    rw [extended]
+    exact before.nativeAnchor.append suffix
+  refine ⟨suffix,extended,frontier _ ⟨active,complete,anchor⟩,?_⟩
   cases result : (runPrefix ((liftWGPrefix (Take.borrow (some peer))).run w) a h).1 with
   | error stop => trivial
   | ok out =>
     obtain ⟨⟨value,v⟩,b⟩ := out
     rw [result] at post
     obtain ⟨keypair,chosen,ready⟩ := post
-    exact ⟨keypair,chosen,ready,complete⟩
+    exact ⟨keypair,chosen,ready,complete,anchor⟩
 
 theorem selected_event (before : Ready ledger debts locals generation pid peer position h w a)
     (run : WGRunWitness (Option (Peer × Option KeypairId))) :
     Ready ledger debts locals generation pid peer position
       (h ++ [Event.old (.responder (.selected pid run))]) w a :=
   ⟨ReadyCarrier.selected_event before.toReady run,before.complete.append_quiet
-    (fun _ member => by cases List.mem_singleton.mp member; intro pos; rfl)⟩
+    (fun _ member => by cases List.mem_singleton.mp member; intro pos; rfl),before.nativeAnchor.append _⟩
 
 theorem checked (ledger : Ledger) (debts : List CleanupDebt) (locals : List RetirementSecurity.TxLocalBatch)
     (generation : Nat) (pid : PeerId) (peer : Peer) (position : Nat) (keypair : Option KeypairId)

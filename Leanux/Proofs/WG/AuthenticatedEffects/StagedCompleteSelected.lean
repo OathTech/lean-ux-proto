@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.StagedObligationReadySource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteConsequencesSelectedAnchorFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedEntryCompleteCarrier
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedTerminalCompleteLedgerFrames
 
@@ -16,13 +16,15 @@ structure Ready (ledger : Ledger) (debts : List CleanupDebt) (locals : List Reti
     (history : List Event) (w : WGWorld) (a : Ambient) : Prop
     extends toReady : ReadyCarrier.Ready ledger debts locals generation pid peer position history w a where
   complete : Complete history ledger
+  nativeAnchor : NativeAnchor position history
 
 def Active (ledger : Ledger) (debts : List CleanupDebt) (generation : Nat) (pid : PeerId)
     (peer : Peer) (position : Nat) (history : List Event) : Prop :=
-  SoundHeld.Active ledger debts generation pid peer position history ∧ Complete history ledger
+  SoundHeld.Active ledger debts generation pid peer position history ∧
+    Complete history ledger ∧ NativeAnchor position history
 
 theorem Ready.active (before : Ready ledger debts locals generation pid peer position history w a) :
-    Active ledger debts generation pid peer position history := ⟨before.toSound.active,before.complete⟩
+    Active ledger debts generation pid peer position history := ⟨before.toSound.active,before.complete,before.nativeAnchor⟩
 
 /-- The selected ledger is the exact native take transfer. No separate
 successor is chosen for its terminal-receipt completeness. -/
@@ -41,7 +43,7 @@ theorem taken (r : Take.Receipt) (native : r.Valid) (chosen : r.run.value = some
   have base : HeldFrontier.Held after debts generation r.pid peer history.length
       (history ++ [.stagingTaken r]) r.run.after r.run.ambientAfter :=
     ⟨core,vacant,aligned,⟨history,[],r,by simp,rfl,rfl,native,chosen,core,vacant,aligned,by simp⟩⟩
-  refine ⟨after,generation,accounted.step,sameLedger,⟨⟨⟨base,?_,?_,?_⟩,?_⟩,?_⟩⟩
+  refine ⟨after,generation,accounted.step,sameLedger,⟨⟨⟨base,?_,?_,?_⟩,?_⟩,?_,?_⟩⟩
   · rw [sameLedger]
     exact (before.entry.justified.transfer _ _).append _
   · rw [sameLedger]
@@ -51,5 +53,7 @@ theorem taken (r : Take.Receipt) (native : r.Valid) (chosen : r.run.value = some
   · rw [sameLedger]
     exact (before.complete.transferred _ _).append_quiet
       (fun _ member => by cases List.mem_singleton.mp member; intro position; rfl)
+
+  · exact NativeAnchor.here r (TakeFrames.physical before.entry native)
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.CompleteSelected
