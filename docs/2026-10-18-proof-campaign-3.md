@@ -2,7 +2,7 @@
 
 ## Progress
 
-Current checkpoint: source-80 `0fc64409` is fully validated over main `3f3879e0`, merged at `adc57aca`. The inherited C1 carry (`74b03922`, `0c8f59fb`, `7a189c9e`) remains separate from C3 repair `38efba22` and the combined source-point integration. T2 remains open; the other five outcomes retain their stated boundaries.
+Current source: source-81 `4656199a` passes the build, gate and focused queries over main `3f3879e0`, merged at `adc57aca`. Source-80 `0fc64409` remains the latest fresh replay and counterexample checkpoint. The inherited C1 carry (`74b03922`, `0c8f59fb`, `7a189c9e`) remains separate from C3 repair `38efba22` and the combined source-point integration. T2 remains open; the other five outcomes retain their stated boundaries.
 
 [AGENT 2026-10-18] Work begins on `proofs/campaign-3` at `783510e8`, under
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
@@ -476,3 +476,5 @@ links were replaced and its dependency closure rebuilt with private output files
 
 The branch is preserved without merging or pushing. Completed checkpoint
 history and its individual validation counts remain in the branch commits.
+
+Source-81 `4656199a` expands the actual key/device lookup, owner dereference and index writeback source points. Reservation getter cuts retain the original captured before-state and the selected cohort on the same ledger. Queued-initiation interiors and complete initialized caller coverage remain open. The four-module delta passes the 4244-job root build, the 1563-declaration gate across thirteen roots and all 33 standard-or-empty public-declaration queries. All 4197 frozen hashes and fifty inherited carry paths match. Fresh replay and the twelve recipes last passed at source-80 `0fc64409`; they were not repeated for this intermediate checkpoint. Main and mirror are unchanged.

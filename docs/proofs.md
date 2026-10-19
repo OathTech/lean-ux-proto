@@ -11,7 +11,7 @@ claims, premises and mirror pins.
 ## Campaign 3
 
 The [campaign-3 report](2026-10-18-proof-campaign-3.md) tracks
-`proofs/campaign-3` is current over main `3f3879e0` at source-80 `0fc64409`. T1, T3, T4, T5 and amended T6 are complete at their stated boundaries; T2 remains open. The separate inherited C1 carry is `74b03922`, `0c8f59fb`, `7a189c9e` (48 repaired modules, two helpers; six public native frames added, three repaired, none deleted, plus two private read frames). Its isolated gate, fresh replay and twelve recipes pass. Main has not received this series. The combined campaign passes 4243 build jobs, the 1563-declaration gate, 43 focused queries over the latest seven-module delta, fresh kernel replay and all twelve recipes. Campaign-2 source facts remain named hypotheses.
+`proofs/campaign-3` is current over main `3f3879e0` at source-81 `4656199a`. T1, T3, T4, T5 and amended T6 are complete at their stated boundaries; T2 remains open. The separate inherited C1 carry is `74b03922`, `0c8f59fb`, `7a189c9e` (48 repaired modules, two helpers; six public native frames added, three repaired, none deleted, plus two private read frames). Its isolated gate, fresh replay and twelve recipes pass. Main has not received this series. Source-81 passes 4244 build jobs, the 1563-declaration gate and 33 public-declaration queries over its four-module delta. Fresh kernel replay and all twelve recipes last passed at source-80 `0fc64409`. Campaign-2 source facts remain named hypotheses.
 
 | Outcome | Result, assumptions and remaining boundary |
 | --- | --- |
@@ -1435,3 +1435,5 @@ on their initial representation and untouched-byte separation. It does not
 prove physical allocation membership/absence or whole-trace S1–S3/R1–R6/H1–H6.
 Those results need their remaining anchors and the milestone-4 entry-realism
 check. The mirror proof register's existing lag is unchanged by this work.
+
+Source-81 `4656199a` expands the actual key/device lookup, owner dereference and index writeback source points. Reservation getter cuts retain the original captured before-state and the selected cohort on the same ledger. Queued-initiation interiors and complete initialized caller coverage remain open. The four-module delta passes the 4244-job root build, the 1563-declaration gate across thirteen roots and all 33 standard-or-empty public-declaration queries. All 4197 frozen hashes and fifty inherited carry paths match. Fresh replay and the twelve recipes last passed at source-80 `0fc64409`; they were not repeated for this intermediate checkpoint. Main and mirror are unchanged.
