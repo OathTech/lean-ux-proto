@@ -157,3 +157,26 @@ and no OOM is inferred from that banner. A wrong-directory edit/build command
 also failed without changing the intended file. The final checked mutator
 proofs contain no admitted theorem. Lookup first-return, sequence integration,
 closing review and external export acceptance remain outstanding.
+
+### Conditional-memory review repairs, 18:45 UTC
+
+The independent review identified two test defects: the fixtures left
+conditionally unused metadata mapped, and an initial negative-control helper
+accepted any failure. Both are repaired. Seventeen positive cases remove bytes
+that the selected path must not read. Thirty-nine negative cases require the
+specific expected error and address, so a step-budget failure or unrelated
+fetch failure does not pass. Four missing-return-word cases are runner entry
+rejections during its initial metadata read, not ISA memory faults.
+
+The reviewer independently reran the executable: 3,032 KCOV cases, 50 BH cases,
+17 conditional positives, 39 negatives, and 51,935 instructions in successful
+cases. All passed. The review's lookup/sequence boundary finding remains open.
+
+The new `history_guard` lemma recovers an interior guard from a universally
+proved complete region history. Its witness selection establishes only the
+current guard; the execution proof still retains every undefined branch.
+Lookup's ten-instruction prologue, its first callback, and reusable guarded
+coverage calls now check using this mechanism and the original memory proofs.
+This is intermediate progress, not a lookup first-return theorem. The sibling
+composition scripts still duplicate existing bookkeeping; that cost remains
+visible in this increment's assessment.

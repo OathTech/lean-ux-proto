@@ -76,6 +76,77 @@ def checkKcov (kind : KcovKind) (s : MachineState) (seed : UInt64) : Except Stri
   checkStores s run stores
   return run.pcs.size
 
+/-- Unmap actual bytes to test conditional read dependencies, rather than
+merely supplying benign values in a fully mapped fixture. -/
+def unmap (s : MachineState) (spans : List (Nat × Nat)) : MachineState := Id.run do
+  let mut memory := s.data.dmem
+  for (address,size) in spans do
+    for i in [:size] do
+      memory := memory.erase (.ofNat 64 (address+i))
+  return {s with data := {s.data with dmem := memory}}
+
+def checkRejected (label expectedError : String) (ready : Bool) (s : MachineState) : Except String Unit := do
+  if ready then throw s!"callback.control.{label}.readiness-accepted"
+  match execute 0 s with
+  | .error error =>
+    unless error==expectedError do
+      throw s!"callback.control.{label}.wrong-failure: expected {expectedError}; got {error}"
+  | .ok _ => throw s!"callback.control.{label}.execution-returned"
+
+/-- Positive cases execute to the ABI return with unread fields absent;
+negative cases must fail both readiness and actual instruction execution. -/
+def conditionalReads : Except String (Nat × Nat × Nat) := do
+  let mut positive := 0
+  let mut negative := 0
+  let mut instructions := 0
+  let later := [(0x8006e4,4),(0x8006e8,8),(0x900000,8)]
+  for kind in [KcovKind.pc,.cmp4,.constCmp4,.constCmp1] do
+    let activeMode := if kind==.pc then 2 else 3
+    let active := fixture (address kind) 0 activeMode 0 16 0 0x900000
+    for (label,s) in [
+        ("hardirq",unmap (fixture (address kind) 65536 0 0 16 0 0x900000)
+          ([(0x8006e0,4),(0x800704,4)]++later)),
+        ("softirq-disabled",unmap (fixture (address kind) 256 0 0 16 0 0x900000)
+          ([(0x8006e0,4)]++later)),
+        ("wrong-mode",unmap (fixture (address kind) 0 0 0 16 0 0x900000)
+          ([(0x800704,4)]++later)),
+        ("active-no-softirq-read",unmap active [(0x800704,4)])] do
+      instructions := instructions+(← (checkKcov kind s 0).mapError (fun e => s!"conditional.{label}: {e}"))
+      positive := positive+1
+    for (label,span) in [("preempt",(preemptCountAddress.toNat,4)),
+        ("task",(currentTaskAddress.toNat,8)),("mode",(0x8006e0,4)),
+        ("capacity",(0x8006e4,4)),("area",(0x8006e8,8)),
+        ("header",(0x900000,8)),("return-word",(stackAddr,8)),
+        ("destination",(0x900008,8))] do
+      let s := unmap active [span]
+      let expected := if label=="return-word" then s!"unmapped read at {stackAddr}"
+        else if label=="destination" then s!"unmapped write {BitVec.ofNat 64 span.1}"
+        else s!"unmapped read {BitVec.ofNat 64 span.1}"
+      checkRejected label expected (readyCheck kind s) s
+      negative := negative+1
+    let required := unmap (fixture (address kind) 256 activeMode 1 16 0 0x900000) [(0x800704,4)]
+    checkRejected "softirq-enabled" s!"unmapped read {BitVec.ofNat 64 0x800704}" (readyCheck kind required) required
+    negative := negative+1
+  let bh (count : Nat) :=
+    let s := fixture 0xffffffff810732c0 count 0 0 0 0 0x900000
+    {s with data := {s.data with regs := {s.data.regs with rsi := 512}}}
+  let absent := unmap (bh 1024) [(softirqPendingAddress.toNat,2)]
+  unless bhReadyCheck absent do throw "callback.bh.unread-pending-rejected"
+  let run ← execute 0 absent
+  checkABI absent run
+  unless (← readNat run.state preemptCountAddress.toNat 4)==512 do throw "callback.bh.unread-pending-effect"
+  positive := positive+1
+  instructions := instructions+run.pcs.size
+  let missing := unmap (bh 512) [(softirqPendingAddress.toNat,2)]
+  checkRejected "bh-required-pending" s!"unmapped read {softirqPendingAddress}" (bhReadyCheck missing) missing
+  let pending := bh 512
+  let pending := {pending with data := {pending.data with dmem := put pending.data.dmem softirqPendingAddress.toNat 2 1}}
+  let pending := {pending with data := {pending.data with dmem := put pending.data.dmem (stackAddr-8) 8 0}}
+  checkRejected "bh-pending-work" s!"callback.fetch: {(0xffffffff81073270 : Nat)}" (bhReadyCheck pending) pending
+  let hardirq := bh 65536
+  checkRejected "bh-hardirq" s!"callback.fetch: {(0xffffffff810732ea : Nat)}" (bhReadyCheck hardirq) hardirq
+  return (positive,negative+3,instructions)
+
 def suite : Except String Json := do
   for (pc,_,_) in ServiceImage.listing do
     match ServiceImage.fetch (.ofNat pc), ServiceImage.runtimeFetch (.ofNat pc) with
@@ -121,8 +192,11 @@ def suite : Except String Json := do
           unless a==preemptCountAddress.toNat && n==4 do throw "callback.bh.frame"
         instructions := instructions+run.pcs.size
         bhCases := bhCases+1
+  let (conditionalPositive,conditionalNegative,conditionalInstructions) ← conditionalReads
+  instructions := instructions+conditionalInstructions
   return Json.mkObj [("status",toJson "pass"),("origin",toJson "generated states"),
     ("kcov_cases",toJson cases),("bh_cases",toJson bhCases),("instructions",toJson instructions),
+    ("conditional_positive",toJson conditionalPositive),("conditional_negative",toJson conditionalNegative),
     ("return_overlap_control",toJson "rejected")]
 
 end Binary.Callback
