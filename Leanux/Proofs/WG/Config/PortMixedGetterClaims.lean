@@ -1,8 +1,5 @@
-import Leanux.Proofs.WG.Config.PortMixedGetterFrames
-import Leanux.Proofs.WG.Config.MixedGetterInputFrames
-import Leanux.Proofs.WG.Config.PeerKeyGetterFrames
+import Leanux.Proofs.WG.Config.MixedGetterFieldClaims
 import Leanux.Proofs.WG.Config.PortRefusalSource
-import Leanux.Proofs.WG.Config.MixedGetterClaims
 
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Config
@@ -69,72 +66,22 @@ theorem port_refusal_mixed_get_after_set (d : Device) (peers : PeerId → Peer)
     have lookup : ∀ q : PeerId, (current.peers[q]?).map keyGetterPeerView =
         ((portRefusalBase d mark).peers[q]?).map keyGetterPeerView :=
       clearedPeerStore_getter_frame d current d.peerList effect
-    let values := keyGetterPeers (portRefusalBase d mark) current peers
-    have baseResidents : ∀ q ∈ (portRefusalBase d mark).peerList,
-        (portRefusalBase d mark).peers[q]? = some (peers q) := residents
-    obtain ⟨currentResidents,same⟩ := keyGetterPeers_frame _ current peers lookup baseResidents
-    change (∀ q ∈ d.peerList, current.peers[q]? = some (values q)) at currentResidents
-    change (∀ q, keyGetterPeerView (values q) = keyGetterPeerView (peers q)) at same
-    have details (q : PeerId) :
-        (values q).remoteStatic = (peers q).remoteStatic ∧
-        peerFixedAttrs (values q) = peerFixedAttrs (peers q) ∧
-        peerFixedSpace (values q) = peerFixedSpace (peers q) ∧
-        (values q).allowedipsList = (peers q).allowedipsList ∧
-        (values q).refcount = (peers q).refcount ∧
-        (values q).isDead = (peers q).isDead := by
-      simpa only [keyGetterPeerView,Prod.mk.injEq] using same q
-    have members : current.peerList = d.peerList := by
-      have h := congrArg Device.peerList fields
-      exact h
-    have space : devicePrefixSpace current = devicePrefixSpace (portRefusalBase d mark) :=
-      by have h := congrArg devicePrefixSpace fields; exact h
-    have index : current.ifindex = d.ifindex := by
-      have h := congrArg Device.ifindex fields
-      exact h
-    have name : current.ifname = d.ifname := by
-      have h := congrArg Device.ifname fields
-      exact h
-    have attrs : deviceFixedAttrs current = deviceFixedAttrs (portRefusalBase d mark) :=
-      by have h := congrArg deviceFixedAttrs fields; exact h
-    have sequence : current.peerAllowedips.seq = (portRefusalBase d mark).peerAllowedips.seq := by
-      have h := congrArg (fun base : Device => base.peerAllowedips.seq) fields
-      exact h
-    have nodesEq : current.nodes = d.nodes := by
-      have h := congrArg Device.nodes fields
-      exact h
-    obtain ⟨rowsEq,json,freshEq,cursorEq⟩ := mixedGetter_data_congr (portRefusalBase d mark) current
-      peers values members attrs same lookup nodes
-    have translatedReady : MixedPageReady current values nodes
-        (mixedInitialRows (portRefusalBase d mark) peers) {hasWg := true} :=
-      (mixedPageReady_getter_congr (portRefusalBase d mark) current peers values space same nodes _ _).mpr ready
-    have currentReady : MixedPageReady current values nodes (mixedInitialRows current values) {hasWg := true} := by
-      simpa only [rowsEq] using translatedReady
-    have plan : mixedPages current values nodes (mixedInitialRows current values) {hasWg := true} currentReady =
-        mixedPages (portRefusalBase d mark) peers nodes (mixedInitialRows (portRefusalBase d mark) peers)
-          {hasWg := true} ready := by
-      simpa only [rowsEq] using mixedPages_getter_congr (portRefusalBase d mark) current peers values space
-        sequence same nodes _ {hasWg := true} ready translatedReady
-    have selection : selectsDevice middle current := by
-      have original : selectsDevice entry d := pre.2.1
-      simpa [selectsDevice,framed.2,index,name] using original
-    obtain ⟨dump,out,rest,getRun,dumped,finalDevice,finalSocket,held⟩ :=
-      mixed_getter_returns current values nodes sock currentReady
-        (by simpa only [members] using currentResidents)
-        (by intro q member id belongs
-            rw [nodesEq]
-            exact readable q (members ▸ member) id ((details q).2.2.2.1 ▸ belongs))
-        (by simpa only [space] using headerFits)
-        (by rw [plan]; exact (freshEq _).mpr fresh)
-        (by rw [plan]; exact (cursorEq _).mpr cursorData)
-        idle emptyQueue (by simpa only [plan] using within)
-        middle next ⟨device,framed.1,selection⟩
-    have selector : byIndex d = byIndex current := by simp [byIndex,index]
+
+    obtain ⟨dump,out,rest,getRun,dumped,values,currentResidents,same,finalDevice,finalSocket,held⟩ :=
+      mixed_getter_fields_returns (portRefusalBase d mark) current peers nodes sock fields lookup
+        residents readable ready headerFits fresh cursorData within idle emptyQueue
+        middle next ⟨device,framed.1,by
+          change selectsDevice middle (portRefusalBase d mark)
+          have original : selectsDevice entry d := pre.2.1
+          simpa [selectsDevice,framed.2,portRefusalBase] using original⟩
+    change (∀ q ∈ d.peerList,current.peers[q]? = some (values q)) at currentResidents
+    have selector : byIndex d = byIndex (portRefusalBase d mark) := rfl
     rw [setRun] at run
     change (((wgGetDevice (byIndex d)).run middle).run next >>= fun ((dump,out),rest) =>
       Except.ok (((ret,dump),out),rest)) = _ at run
     rw [selector,getRun] at run
     cases run
-    exact ⟨by simp [code,dumped,json], current,values,fields,effect,
-      currentResidents,same,by simpa only [plan] using finalDevice,finalSocket,by simpa only [plan] using held⟩
+    exact ⟨by simp [code,dumped],current,values,fields,effect,currentResidents,same,
+      finalDevice,finalSocket,held⟩
 
 end Leanux.Proofs.WG.Config

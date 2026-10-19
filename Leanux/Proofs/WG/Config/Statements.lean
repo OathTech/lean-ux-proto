@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.Config.RequestReadbackClaims
+import Leanux.Proofs.WG.Config.RequestMetadataClaims
+import Leanux.Proofs.WG.Config.KeyStageEntryClaims
+import Leanux.Proofs.WG.Config.InitializedReadbackClaims
 import Leanux.Proofs.WG.Config.RequestInputClaims
 import Leanux.Proofs.WG.Config.KeyStageClaims
 import Leanux.Proofs.WG.Config.GetterPeerCommandClaims
@@ -2897,5 +2901,102 @@ theorem original_mixed_device_initial_port_refusal (attrs : DeviceAttrs) (initia
       final.wg.nlSock7 = initial.wg.nlSock7 ∧
       final.wg.fixtureNetDevices = initial.wg.fixtureNetDevices :=
   RequestOrder.certificate_initial_port_refusal attrs initial result facts ret final normal d entry r member port kind nonzero refused
+
+
+/-- The actual initialized endpoint supplies readable and fresh mixed getter data; static space, reference, socket and receive bounds remain explicit. -/
+theorem original_initialized_mixed_readback (trace : Runner.Trace)
+    (shape : Configuration.TraceAddressShape trace) (placeholders : Bool)
+    (json : Lean.Json) (final : Campaign2.Product.Snapshot)
+    (run : (InitializedRouting.inspection trace placeholders).outcome=.ok (json,final))
+    (d : Device) (present : final.wg.device=some d)
+    (selected : ClaimView.selectsDevice final.toSnapshot d)
+    (ready : MixedPageReady d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true})
+    (headerFits : devicePrefixSpace d ≤ NLMSG_GOODSIZE)
+    (cursorData : MixedPlanCursorData d
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready))
+    (idle : final.wg.nlSock7.cbRunning=false) (emptyQueue : final.wg.nlSock7.queue=[])
+    (within : mixedPageReceiveCount
+      (mixedPages d (routingReadPeer d) (routingReadNode d)
+        (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready) ≤ 4096) :
+    let pages := mixedPages d (routingReadPeer d) (routingReadNode d)
+      (mixedInitialRows d (routingReadPeer d)) {hasWg:=true} ready
+    Campaign2.Returns (wgGetDevice (byIndex d))
+      (fun s=>s=final.toSnapshot)
+      (fun result s=>result=.ok (mixedGetterJson d (routingReadPeer d) (routingReadNode d)) ∧
+        s.wg.device=some (mixedPagesDevice d pages) ∧
+        s.wg.nlSock7=socketReadbackFinal final.wg.nlSock7 d ∧
+        CursorHeld d (mixedPagesDevice d pages) none) :=
+  initialized_mixed_readback trace shape placeholders json final run d present selected ready headerFits cursorData idle emptyQueue within
+
+/-- Every completed key stage of an arbitrary original request has its account and exact all-branch effect derived from funding at the outer entry, including before later Stops. -/
+theorem original_mixed_device_funded_key_effects (cs : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (OwnerConfiguration.ProjectedEntry cs loans)
+      (fun initial outcome=>∃ result : RequestOrder.Inspection,
+        result.outcome=outcome ∧ RequestOrder.Certificate attrs initial result ∧ KeyStage.RequestEffects cs loans attrs result) :=
+  KeyStage.original_request_effects cs loans attrs
+
+/-- Completed key and peer receipts agree on getter metadata; on normal return they agree with the actual final metadata. Stops retain completed receipt consistency. -/
+theorem original_mixed_device_metadata_certificate (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (fun _=>True)
+      (fun entry outcome=>∃result : RequestOrder.Inspection,
+        result.outcome=outcome ∧ RequestOrder.Certificate attrs entry result ∧ RequestOrder.MetadataFacts result) :=
+  RequestOrder.original_request_metadata attrs
+
+/-- The getter metadata after any completed key stage is exactly the normal whole request's final metadata. -/
+theorem original_mixed_device_key_final_metadata (attrs : DeviceAttrs) (entry : Campaign2.Snapshot)
+    (result : RequestOrder.Inspection) (facts : RequestOrder.Certificate attrs entry result)
+    (ret : Int) (final : Campaign2.Snapshot) (normal : result.outcome=.ok (ret,final))
+    (r : RequestOrder.Receipt) (member : r ∈ result.receipts) (kind : r.kind=.keyStage) :
+    getterMetadataObservation r.after=getterMetadataObservation final :=
+  RequestOrder.certificate_key_final_metadata attrs entry result facts ret final normal r member kind
+
+/-- Each completed peer command's entry and exit getter metadata equals the normal whole request's final metadata. -/
+theorem original_mixed_device_peer_final_metadata (attrs : DeviceAttrs) (entry : Campaign2.Snapshot)
+    (result : RequestOrder.Inspection) (facts : RequestOrder.Certificate attrs entry result)
+    (ret : Int) (final : Campaign2.Snapshot) (normal : result.outcome=.ok (ret,final))
+    (r : RequestOrder.Receipt) (member : r ∈ result.receipts) (p : PeerAttrs) (kind : r.kind=.peer p) :
+    getterMetadataObservation r.before=getterMetadataObservation final ∧
+      getterMetadataObservation r.after=getterMetadataObservation final :=
+  RequestOrder.certificate_peer_final_metadata attrs entry result facts ret final normal r member p kind
+
+/-- An actual arbitrary setter/getter pair returns the computed committed prefix JSON and cursor effects when its same-run certificate contains a normal nonzero-port refusal. Other outcomes retain their exact provenance. -/
+theorem original_mixed_device_refusal_readback (attrs : DeviceAttrs) (d : Device)
+    (peers : PeerId → Peer) (nodes : NodeId → AipNode) (sock : NlSock)
+
+    (residents : ∀ q ∈ d.peerList,d.peers[q]? = some (peers q))
+    (readable : ∀ pid ∈ d.peerList,∀ id ∈ (peers pid).allowedipsList,
+      d.nodes[id]? = some (nodes id))
+    (ready : MixedPageReady (RequestOrder.prefixDevice attrs d) peers nodes
+      (mixedInitialRows (RequestOrder.prefixDevice attrs d) peers) {hasWg := true})
+    (headerFits : devicePrefixSpace (RequestOrder.prefixDevice attrs d) ≤ NLMSG_GOODSIZE)
+    (fresh : MixedPlanFresh (RequestOrder.prefixDevice attrs d) peers
+      (mixedPages (RequestOrder.prefixDevice attrs d) peers nodes
+        (mixedInitialRows (RequestOrder.prefixDevice attrs d) peers) {hasWg := true} ready))
+    (cursorData : MixedPlanCursorData (RequestOrder.prefixDevice attrs d)
+      (mixedPages (RequestOrder.prefixDevice attrs d) peers nodes
+        (mixedInitialRows (RequestOrder.prefixDevice attrs d) peers) {hasWg := true} ready))
+    (within : mixedPageReceiveCount
+      (mixedPages (RequestOrder.prefixDevice attrs d) peers nodes
+        (mixedInitialRows (RequestOrder.prefixDevice attrs d) peers) {hasWg := true} ready) ≤ 4096)
+    (idle : sock.cbRunning = false) (emptyQueue : sock.queue = [])
+:
+    let pages := mixedPages (RequestOrder.prefixDevice attrs d) peers nodes
+      (mixedInitialRows (RequestOrder.prefixDevice attrs d) peers) {hasWg := true} ready
+    Campaign2.Observes (do
+      let ret ← wgSetDevice attrs
+      let dump ← wgGetDevice (byIndex d)
+      pure (ret,dump))
+      (fun s => s.wg.device = some d ∧ ClaimView.selectsDevice s d ∧ s.wg.nlSock7 = sock)
+      (fun initial outcome => ∃ inspected : RequestOrder.Inspection,
+        RequestOrder.Certificate attrs initial inspected ∧ RequestOrder.ReadbackMatches attrs d initial inspected outcome ∧
+        ∀ ret middle, inspected.outcome = .ok (ret,middle) →
+          ∀ r ∈ inspected.receipts, ∀ port, r.kind = .port port → port ≠ 0 → r.result ≠ 0 →
+            ret = (portOutcome (RequestOrder.prefixDevice attrs d) port initial.wg.portBound).1 ∧
+            ∃ final, outcome = .ok ((ret,.ok (mixedGetterJson (RequestOrder.prefixDevice attrs d) peers nodes)),final) ∧
+              RequestOrder.MixedRefusalReadback attrs d peers nodes sock pages
+                (.ok (mixedGetterJson (RequestOrder.prefixDevice attrs d) peers nodes)) final) :=
+  RequestOrder.original_refusal_mixed_readback attrs d peers nodes sock residents readable ready headerFits fresh cursorData within idle emptyQueue
 
 end Leanux.Proofs.WG.Config
