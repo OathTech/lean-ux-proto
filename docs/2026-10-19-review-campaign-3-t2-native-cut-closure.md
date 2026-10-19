@@ -294,3 +294,11 @@ connections; the counted erasure intervals retain the original ticket cohort.
 The aggregate gate, fresh replay and twelve recipes pass. These are progress
 on findings 2–4, not their closure: all remaining caller families and concrete
 child contracts still require the closed final instance.
+
+Source-72 `e1156284` connects routed take, worker socket-result and publication
+release-finish native intervals to initialized callers. Pending queue and
+socket receipts retain their original cohort and ledger, and the native
+release-finish guard and two writes retain the original remainder. Local
+take, restore and keepalive cases include normal and stopped paths. The gate,
+fresh replay and twelve recipes pass. Other callers, concrete child instances
+and stopped socket-front interiors remain open; findings 2–4 remain open.

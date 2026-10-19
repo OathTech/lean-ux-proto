@@ -223,4 +223,11 @@ source finding.
    twelve recipes pass; finding 2 remains open across the remaining callers
    and intervals.
 
+   Source-72 `e1156284` adds initialized take, socket result and release-finish
+   intervals. The same ticket cohort survives silent native updates, and the
+   actual receipt settles it exactly once. The timer guard and separate work
+   and timer writes retain the original initialized continuation. Gate, fresh
+   replay and twelve recipes pass; finding 2 remains open for other callers,
+   concrete child contracts and stopped socket-front interiors.
+
 No mirror change or narrower T2 outcome is adopted.
