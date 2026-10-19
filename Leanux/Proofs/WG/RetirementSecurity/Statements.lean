@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.RetirementSecurity.TxActorScheduler
+import Leanux.Proofs.WG.RetirementSecurity.TxActorCryptAhead
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPoll
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPublicationCoverage
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkTransfers
@@ -2714,5 +2715,45 @@ theorem original_scheduler_tx_service
     (run : (Env.schedule stack).run w=.ok ((),v)) : TxWork.At P crypt [] v :=
   (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp
     (TxWork.scheduler_service work iteration napi stack) w () v before run
+
+/-- Native TX iteration retains every resident packet's physical owner and
+service obligation through actual socket completion and reference disposal.
+An ended iteration discharges its active peer only after the native empty or
+uncrypted-head test; yielded work remains active for the scheduler's suspension
+cut. The incoming local inventory is explicit, and this theorem does not yet
+claim initialized whole-driver conservation or stopped-world completion. -/
+theorem original_tx_worker_iteration_service
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt [pid] w)
+    (run : (txIter pid (Env.condResched .txWorker)).run w=.ok (result,v)) :
+    TxWork.At (TxWork.Covered locals crypt) crypt
+      (if result=.ended then [] else [pid]) v :=
+  TxWork.transmit_iteration before run
+
+/-- The original encrypt iteration retains a consumed ring alias as a selected
+service obligation through the actual NAPI cut and discharges it only at native
+DEAD/CRYPTED publication. Its physical packet owners and resident coverage
+survive. NAPI service remains an explicit local premise; initialized caller
+coverage and stopped-prefix terminal accounting are separate obligations. -/
+theorem original_encrypt_iteration_tx_service
+    (callback : ∀item : Option (List SkbId),Leanux.Proofs.Framing.Preserves
+      (TxWork.At (TxWork.Covered locals (item.toList++crypt)) (item.toList++crypt) tx) Env.napiSoftirq)
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt tx w)
+    (run : (encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)).run w=
+      .ok (result,v)) : TxWork.At (TxWork.Covered locals crypt) crypt tx v :=
+  TxWork.encrypt_iteration_service callback before run
+
+/-- Native crypt-ahead transfers its active TX obligation to the real work
+queue during encryption, restores it after dispatch, and retains every suspended
+TX actor when it advances the selected encryption record. It cannot silently
+abandon a ready head. The actual NAPI service contract remains explicit until
+its receive/staging callers close; no scheduling progress is asserted. -/
+theorem original_crypt_ahead_tx_service
+    (callback : ∀item : Option (List SkbId),Leanux.Proofs.Framing.Preserves
+      (TxWork.At (TxWork.Covered locals (item.toList++crypt)) (item.toList++crypt) []) Env.napiSoftirq)
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt [pid] w)
+    (run : (Env.cryptAhead pid).run w=.ok ((),v)) :
+    TxWork.At (TxWork.Covered locals crypt) crypt [pid] v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp
+    (TxWork.crypt_ahead_service callback pid) w () v before run
 
 end Leanux.Proofs.WG.RetirementSecurity

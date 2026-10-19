@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedProduct
+import Leanux.Proofs.WG.TransmitSecurity.StagedTimerTransport
+import Leanux.Proofs.WG.TransmitSecurity.StagedNativeSupportFrames
 import Leanux.Proofs.WG.TransmitSecurity.StagedEffectsOrigins
 import Leanux.Proofs.WG.TransmitSecurity.StagedSocketSendFrames
 import Leanux.Proofs.WG.TransmitSecurity.StagedAdmission
@@ -964,5 +967,36 @@ theorem initialized_keepalive_preparation (trace : Runner.Trace) (placeholders :
         (Staged.stagedAt r.after pid = some (stamp,packets) ∨
           (packets = [] ∧ r.value = true ∧ Staged.stagedAt r.after pid = some (stamp,[{mtu}]))) :=
   Staged.initialized_keepalive_preparation trace placeholders pre post pid r position
+
+
+/-- Handshake processing preserves the staged packets' exact routing or
+keepalive occurrences; a local incoming carrier is explicit until initialized
+runner transport is closed. Authentication is proved separately. -/
+theorem native_handshake_preserves_staged_origins :
+    Staged.Origins.StateSafe (Driver.handshakeObserved AuthenticatedEffects.CausalJournal.hooks) :=
+  Staged.Origins.handshake_observed
+
+/-- Receive completion preserves staged occurrence origins through actual
+confirmation and staging, so it cannot invent a staged packet's history.
+This native contract has the local staged carrier as its entry premise. -/
+theorem native_receive_preserves_staged_origins (pid : PeerId) (packet : RxPacket) (endpoint : Endpoint) :
+    Staged.Origins.StateSafe
+      (Driver.consumeObserved AuthenticatedEffects.CausalJournal.hooks pid packet endpoint) :=
+  Staged.Origins.consume_observed pid packet endpoint
+
+/-- Native handshake send work retains staged origins while releasing its
+actual references; this local frame does not assert initialized conservation. -/
+theorem native_send_work_preserves_staged_origins (pid : PeerId) :
+    Staged.Origins.StateSafe (AuthenticatedEffects.CausalJournal.flushedSend pid) :=
+  Staged.Origins.flushed_send_observed pid
+
+/-- Timer callbacks retain exact staged origins and use the actual keepalive
+preparation for any new packet. Timer authorization is a separate outcome;
+the incoming staged carrier remains explicit in this source contract. -/
+theorem native_timers_preserve_staged_origins (pid : PeerId) (timer : PeerTimer) :
+    Staged.Origins.StateSafe (AuthenticatedEffects.TimerEffects.timerWith
+      AuthenticatedEffects.CausalJournal.effects
+      (Driver.keepaliveObserved AuthenticatedEffects.CausalJournal.hooks) pid timer) :=
+  Staged.Origins.timer _ Staged.Origins.keepalive_observed_source pid timer
 
 end Leanux.Proofs.WG.TransmitSecurity

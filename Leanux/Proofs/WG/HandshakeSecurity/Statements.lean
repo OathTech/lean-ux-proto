@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceHandshakeFrames
+import Leanux.Proofs.WG.HandshakeSecurity.AllocationSelectionBinding
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionFinal
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionDeferred
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionNapi
@@ -1764,5 +1766,37 @@ theorem initialized_responder_confirmation_discipline
     (trace : Runner.Trace) (placeholders : Bool) :
     PendingPromotion.Discipline (PendingPromotion.finalHistory trace placeholders) :=
   PendingPromotion.discipline facts rotation trace placeholders
+
+
+/-- Security: each actual AEAD uses the allocation, role and sending key selected
+as current by that same packet's peer when staging was drained. The native
+selection and its strict earlier journal position are explicit; no incoming
+alignment, lifetime, history or H1 premise is assumed. Routing admission and
+socket endpoint binding are separate joins on the same packet allocation. -/
+theorem initialized_encryption_uses_own_peer_current_key
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List TransmitSecurity.Journal.Event) (r : TransmitSecurity.WorkerEncryption.Receipt)
+    (position : ((runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
+      AuthenticatedEffects.CausalJournal.old?) = pre ++ .encrypted r :: post) :
+    r.Valid ∧ ∃ left right selected peer d,
+      pre = left ++ TransmitSecurity.Journal.Event.responder (.selected r.read.value.peer selected) :: right ∧
+      selected.Valid (Responder.selectionPrefix r.read.value.peer) ∧
+      selected.value = some (peer,some r.read.value.keypair) ∧
+      selected.before.dev = some d ∧ d.peers[r.read.value.peer]? = some peer ∧
+      peer.keypairCurrent = some r.read.value.keypair ∧
+      Responder.current selected.before r.read.value.peer = some (Responder.keyCore r.cipher.keyRead.value) := by
+  obtain ⟨valid,selection⟩ := AllocationSelection.final_encryption trace placeholders pre post r position
+  exact ⟨valid,selection.current⟩
+
+/-- Security: the native lookup and both handshake consumers cannot leave a
+zero-count resident peer after normal completion when every resident was
+positive at entry. This local transport fact supplies the refusal proof's
+state prerequisite; initialized lookup-entry coverage is a separate claim. -/
+theorem native_handshake_preserves_positive_peer_references
+    (kinds : List IndexKind) (index : Nat) (msg : Key) :
+    Framing.Preserves PeerReference.Inv (indexLookup kinds index) ∧
+    Framing.Preserves PeerReference.Inv (consumeInitiation msg) ∧
+    Framing.Preserves PeerReference.Inv (consumeResponse msg) :=
+  ⟨PeerReference.lookup kinds index,PeerReference.initiation msg,PeerReference.response msg⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

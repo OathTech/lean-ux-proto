@@ -1,5 +1,7 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsSockets
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCookie
 import Leanux.Proofs.WG.AuthenticatedEffects.ResponseLookupLoan
+import Leanux.Proofs.WG.AuthenticatedEffects.RefusalPositivePeers
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSocketReceipts
 import Leanux.Proofs.WG.AuthenticatedEffects.CookieSocketSource
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSenderOther
@@ -1453,5 +1455,51 @@ theorem response_refusal_rebalances_actual_successful_lookup
     (refused : ((consumeResponse msg).run w).run a = .ok ((none,v),c)) :
     ResponseLoan.residents v = ResponseLoan.residents w :=
   ResponseLoan.response_after_lookup msg w u v device owner pid a b c present identity lookup refused
+
+/-- Security: every actual protocol-socket append is followed immediately by
+its own receipt, before any later append-only continuation can Stop. The local
+premise names the native cut after routing and loopback checks; this theorem
+does not claim initialized whole-driver emission coverage. -/
+theorem protocol_append_receipt_survives_later_stop
+    (record : ProtocolSocket.Receipt Context → E) (context : Context) (args : ProtocolSocket.Args)
+    (w u : WGWorld) (a b : Ambient) (history : List E) (datagram : SentDatagram)
+    (front : (args.beforeAppend.run w).run a = .ok ((.ok datagram,u),b))
+    (next : Int → WGPrefix E α) (appends : ∀ result, StateAppends (next result)) :
+    ∃ suffix, (runWGPrefix (ProtocolSocket.socket record context args >>= next) w a history).2 =
+      history ++ record ⟨context,args,⟨0,w,{u with sent := u.sent ++ [datagram]},a,b⟩⟩ :: suffix :=
+  ProtocolSocket.append_receipt_retained record context args w u a b history datagram front next appends
+
+/-- Security: the actual cookie sender preserves an exact ordered suffix of
+append receipts for the native sent list, so equal datagram values cannot
+collapse separate emissions. This is a local source contract; initialization
+and whole-driver coverage remain separate obligations. -/
+theorem cookie_sender_preserves_emission_occurrences
+    (mac : HandshakeMac) (msg : List UInt8) (src : SkbSource) :
+    CausalJournal.Emissions.StateSafe
+      (CookieSocket.observed CausalJournal.Event.cookieSocket mac msg src) :=
+  CausalJournal.Emissions.cookie mac msg src
+
+/-- Security: a normally refused native response preserves every peer field
+and the egress list, including a failed index-lookup arm, provided resident
+reference counts are positive at this actual consumer entry. Initialization
+of that visible entry condition is a separate driver obligation. -/
+theorem response_refusal_from_positive_residents
+    (msg : Key) (w v : WGWorld) (a b : Ambient) (positive : ResponseLoan.Positive w)
+    (run : ((consumeResponse msg).run w).run a = .ok ((none,v),b)) :
+    ResponseLoan.residents v = ResponseLoan.residents w ∧ v.sent = w.sent :=
+  ⟨ResponseLoan.response_refusal msg w v a b positive run,
+    (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp (consumeResponse_sent msg) w a none v b run⟩
+
+/-- Security: an unauthenticated cookie consumer preserves every peer field
+and the egress list, including reference counts and owner words. Actual entry
+positivity is visible; successful lookup loans are derived from the source,
+and absence of an authentication receipt selects the refusal path. -/
+theorem cookie_refusal_from_positive_residents
+    (msg : Key) (w v : WGWorld) (a b : Ambient) (positive : ResponseLoan.Positive w)
+    (unaccepted : (runWGPrefix (acceptedCookie msg) w a []).2 = [])
+    (run : ((cookieMessageConsume msg).run w).run a = .ok (((),v),b)) :
+    ResponseLoan.residents v = ResponseLoan.residents w ∧ v.sent = w.sent :=
+  ⟨ResponseLoan.cookie_refusal msg w v a b positive unaccepted run,
+    (Lifetimes.ProjectedAction.iff_run_ambient _ _ _).mp (cookieMessageConsume_sent msg) w a () v b run⟩
 
 end Leanux.Proofs.WG.AuthenticatedEffects
