@@ -1,3 +1,12 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationCreateTailSource
+import Leanux.Proofs.WG.AuthenticatedEffects.AllocatedObligationFirstTerminalSendSuffix
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedAdmissionFrontOutcome
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationAllocationCarrier
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationKeepaliveCarrier
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationNativeDisposalCarrier
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationReleaseCarrier
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationRestoreCarrier
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationRoutingCarrier
 import Leanux.Proofs.WG.TransmitSecurity.StagedObligationStoppedTake
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedAdmissionNative
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedAdmissionOverflow
@@ -1254,6 +1263,7 @@ theorem original_transmit_refusal_charged_once (family addr : Nat) (packets : Li
 
 section
 open Staged.Obligations Staged.Origins
+variable {births : List Staged.Origins.Ticket}
 
 /-- Security: the actual full staged purge settles every incoming queue ticket
 at its own counted purge receipt, retains every ledger identity and prior

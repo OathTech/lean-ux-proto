@@ -32,13 +32,13 @@ locals and the complete pending/terminal partition remain open. Original early
 transmit refusals now have their exact invocation-level error charge; a GSO
 packet list does not multiply that charge.
 
-The current source-44 checkpoint passes the 3107-job aggregate build and
-1523-declaration axiom gate across thirteen roots, using only the three standard
-axioms. Fresh root kernel replay, all twelve counterexample recipes, the 66-job
-default model build and 131 unit tests pass (one configured-kernel skip, 22.756
-seconds). All 3061 frozen proof-source hashes match; all 916 inherited proof
-modules, mirror `77c9b555` and main `783510e8` are unchanged. The previous
-validated checkpoint is `3db44e32`. The inherited warning and repaired
+Source-45 passes the 3168-job aggregate build and 1523-declaration axiom gate
+across thirteen roots, using only the three standard axioms; nine focused core
+queries also pass. Fresh root kernel replay, all twelve counterexample recipes,
+the 66-job default model build and 131 unit tests pass (one configured-kernel
+skip, 22.092 seconds). All 3121 frozen proof-source hashes match; all 916 inherited
+proof modules, mirror `77c9b555` and main `783510e8` are unchanged. The preceding
+validated checkpoint is `e3eab800`. The inherited warning and repaired
 development failures are recorded in the report.
 
 The final Driver now exposes actual take, restore, terminal disposal and nested
@@ -47,8 +47,12 @@ the aggregate checks. Local admission creates fresh fixed tickets; native
 allocation preserves their backing and injection under explicit entry carriers.
 A stopped borrow retains the completed staging take and selected tickets even
 without an outer selection receipt. These local facts do not establish the full
-initialized pending/terminal partition. General stopped ownership frontiers,
-first-terminal transport and initialized conservation remain open. Mirror/C1/C2
+initialized pending/terminal partition. The source-45 tranche adds explicit cleanup debts, mixed pending/debt uniqueness,
+actual first-terminal source cuts and a canonical journal-derived birth domain.
+Native take, restore, keepalive, allocation, purge, overflow, release and routing
+transport this combined core. The whole front retains canonical queue accounting
+at its stopped checkpoint. These local results pass aggregate checks. General stopped
+ownership frontiers, first-terminal transport and initialized conservation remain open. Mirror/C1/C2
 claims are unchanged.
 
 ## Current register

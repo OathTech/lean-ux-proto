@@ -242,16 +242,38 @@ remain conditional on explicit incoming carriers. T2 still needs their
 transport through the initialized Runner and the complete fixed-ticket
 pending/terminal partition.
 
+The source-45 tranche distinguishes a pending allocated ticket from a terminal
+ticket whose native cell awaits cleanup. Converse cell coverage and mixed
+pending/debt uniqueness are explicit local carriers. Actual socket/refusal cuts
+create the corresponding cleanup debt; ordinary source cleanup discharges it
+without inventing another terminal event. Native allocation/publication and
+front selection/body contracts compile under visible entry obligations. The
+actual front charges one error per refused invocation, independently of segment
+count. These local source facts do not establish initialized conservation.
+
+The new core ledger uses a canonical birth list computed from the final journal,
+so its domain cannot omit an admission by choosing a smaller list. Native
+staging take, restoration and all three keepalive-preparation cases transport
+the combined queue and physical carriers. Composition caught an incorrect draft
+birth guard: preparation can return true for an already nonempty staged queue.
+The corrected domain requires a true result and an empty pre-queue, matching the
+native allocation arm and the existing birth relation. This was a proof-model
+error, not a mirror finding. The source-45 additions pass aggregate validation below. Exact native allocation,
+purge, overflow, final/nonfinal release and routed admission now transport the
+combined core ledger. The whole observed front also retains canonical queue
+accounting at its last completed stopped checkpoint. Whole completion batches,
+stopped ownership frontiers and full initialized transport remain open.
+
 ## Validation
 
-The current source-44 checkpoint passes the 3107-job aggregate build and
-1523-declaration gate across thirteen roots, with only `propext`,
-`Classical.choice` and `Quot.sound`. All twelve counterexample recipes and
-fresh root kernel replay pass. The default model build passes 66 jobs; the unit
-suite passes 131 tests (one configured-kernel skip, 22.756 seconds). All 3061
-frozen proof-source hashes match; all 916 inherited proof modules, main at
-`783510e8` and mirror `77c9b555` are unchanged. The preceding validated
-checkpoint is `3db44e32`.
+Source-45 passes the 3168-job aggregate build and 1523-declaration gate across
+thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`.
+Nine focused core-transport queries also use only those axioms. All twelve
+counterexample recipes and fresh root kernel replay pass. The default model
+build passes 66 jobs; the unit suite passes 131 tests (one configured-kernel
+skip, 22.092 seconds). All 3121 frozen proof-source hashes match; all 916
+inherited proof modules, main at `783510e8` and mirror `77c9b555` are unchanged.
+The preceding validated checkpoint is `e3eab800`.
 
 Reproduce the proof and model checks from the campaign worktree:
 
@@ -276,7 +298,9 @@ mirror or weakening statements. In this tranche, the first gate stopped on a
 nested terminal namespace; flattening the exports and resolving their names
 repairs it, and the complete gate passes. Source-44 aggregate attempts also failed on downstream callback adapters,
 missing imports and exhaustive event cases. Those failures were repaired before
-the successful complete rebuild; scoped passes did not replace them. New source
+the successful complete rebuild; scoped passes did not replace them. Source-45 first failed on two implicit
+statement binders shadowed by the new canonical `births` definition; explicit
+local binders repair that failure without changing either statement. New source
 files have no warnings.
 
 The earlier unchecked tactic-array panic and later SIGBUS were preserved in
