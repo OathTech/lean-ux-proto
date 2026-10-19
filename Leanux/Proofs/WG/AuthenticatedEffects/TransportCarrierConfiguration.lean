@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierTraffic
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierRemoval
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportConfigurationFrames
 
 /-! Actual peer/device netlink and device-open callers transport the shared
@@ -64,50 +64,59 @@ theorem configTail_safe (h : StagingSafe extra origin replay hooks) (attrs : Pee
     | (transport_carrier_head configTailFinish; exact configTailFinish_safe h _ _ _ _)
     | transport_config_step
 
-theorem configUpdate_safe (h : StagingSafe extra origin replay hooks) (attrs : PeerAttrs)
+theorem configUpdate_safe (h : StagingSafe extra origin replay hooks)
+    (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) (attrs : PeerAttrs)
     (peer : Option PeerId) (flags : UInt32) (psk : Option Key) (pid : PeerId) :
     StateSafe extra origin replay (configUpdate hooks attrs peer flags psk pid) := by
   unfold configUpdate peerConfigUpdateWith
   repeat' first
     | (transport_carrier_head configOut; exact configOut_safe _ _ _)
     | (transport_carrier_head configTail; exact configTail_safe h _ _ _)
+    | (transport_carrier_head removeObserved; exact remove flushed _)
     | transport_config_step
 
-theorem configPeer_safe (h : StagingSafe extra origin replay hooks) (attrs : PeerAttrs) :
+theorem configPeer_safe (h : StagingSafe extra origin replay hooks)
+    (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) (attrs : PeerAttrs) :
     StateSafe extra origin replay (configPeer hooks attrs) := by
   unfold configPeer setPeerCmdWith peerCommandAcquiredWith
   repeat' first
     | (transport_carrier_head configOut; exact configOut_safe _ _ _)
-    | (transport_carrier_head configUpdate; exact configUpdate_safe h _ _ _ _ _)
+    | (transport_carrier_head configUpdate; exact configUpdate_safe h flushed _ _ _ _ _)
     | transport_config_step
 
-theorem configPeers_safe (h : StagingSafe extra origin replay hooks) (attrs : DeviceAttrs) :
+theorem configPeers_safe (h : StagingSafe extra origin replay hooks)
+    (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) (attrs : DeviceAttrs) :
     StateSafe extra origin replay (configPeers hooks attrs) := by
   unfold configPeers devicePeersWith
   repeat' first
-    | (transport_carrier_head configPeer; exact configPeer_safe h _)
+    | (transport_carrier_head configPeer; exact configPeer_safe h flushed _)
     | transport_config_step
 
-theorem configKey_safe (h : StagingSafe extra origin replay hooks) (attrs : DeviceAttrs) :
+theorem configKey_safe (h : StagingSafe extra origin replay hooks)
+    (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) (attrs : DeviceAttrs) :
     StateSafe extra origin replay (configKey hooks attrs) := by
   unfold configKey deviceKeyWith
   repeat' first
-    | (transport_carrier_head configPeers; exact configPeers_safe h _)
+    | (transport_carrier_head configPeers; exact configPeers_safe h flushed _)
+    | (transport_carrier_head removeObserved; exact remove flushed _)
     | (transport_carrier_head stagingObserved; exact staging h _)
     | transport_config_step
 
-theorem configDeviceUpdate_safe (h : StagingSafe extra origin replay hooks) (attrs : DeviceAttrs) (flags : UInt32) :
+theorem configDeviceUpdate_safe (h : StagingSafe extra origin replay hooks)
+    (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) (attrs : DeviceAttrs) (flags : UInt32) :
     StateSafe extra origin replay (configDeviceUpdate hooks attrs flags) := by
   unfold configDeviceUpdate deviceUpdateWith
   repeat' first
-    | (transport_carrier_head configKey; exact configKey_safe h _)
+    | (transport_carrier_head configKey; exact configKey_safe h flushed _)
+    | (transport_carrier_head removeAllObserved; exact removeAll flushed)
     | transport_config_step
 
-theorem configDevice_safe (h : StagingSafe extra origin replay hooks) (attrs : DeviceAttrs) :
+theorem configDevice_safe (h : StagingSafe extra origin replay hooks)
+    (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) (attrs : DeviceAttrs) :
     StateSafe extra origin replay (configDevice hooks attrs) := by
   unfold configDevice setDeviceWith
   repeat' first
-    | (transport_carrier_head configDeviceUpdate; exact configDeviceUpdate_safe h _ _)
+    | (transport_carrier_head configDeviceUpdate; exact configDeviceUpdate_safe h flushed _ _)
     | transport_config_step
 
 theorem opened (h : StagingSafe extra origin replay hooks) :

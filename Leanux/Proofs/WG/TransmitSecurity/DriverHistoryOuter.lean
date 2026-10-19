@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryTraffic
-import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryConfiguration
+import Leanux.Proofs.WG.TransmitSecurity.DriverLifecycleHistory
 import Leanux.Proofs.WG.Origins.RunnerInvariant
 
 /-! One generic initialized native-runner history theorem. Every hook contract
@@ -39,6 +39,7 @@ theorem retained_history (h : ActorHistorySafe Safe g) (call : Syscall) :
     ProductHistorySafe Safe (retainedObserved g call) := by
   cases call <;> unfold retainedObserved
   case wgUp => exact History.socketCall _ _ (envUp_history h)
+  case wgDown => exact History.socketCall _ _ (envDown_history h)
   all_goals exact History.product_lift _
 
 theorem observe_history (h : ActorHistorySafe Safe g) :
@@ -62,8 +63,9 @@ theorem dispatchSet_history (h : ActorHistorySafe Safe g) (attrs : DeviceAttrs) 
 theorem dispatchCreate_history : ProductHistorySafe Safe dispatchCreateObserved :=
   History.rtnetlink _ (History.product_lift _)
 
-theorem dispatchDelete_history : ProductHistorySafe Safe dispatchDeleteObserved :=
-  History.rtnetlink _ (History.product_lift _)
+theorem dispatchDelete_history (h : ActorHistorySafe Safe g) :
+    ProductHistorySafe Safe (dispatchDeleteObserved g) :=
+  History.rtnetlink _ (envDelete_history h)
 
 theorem dispatch_history (h : ActorHistorySafe Safe g) (call : Syscall) :
     ProductHistorySafe Safe (dispatchObserved g call) := by
@@ -71,7 +73,7 @@ theorem dispatch_history (h : ActorHistorySafe Safe g) (call : Syscall) :
   · exact fun call _ => retained_history h call
   · exact dispatchSet_history h
   · exact dispatchCreate_history
-  · exact dispatchDelete_history
+  · exact dispatchDelete_history h
   · exact syscallXmit_history h
   · intro family port message tos ll dest
     exact History.socketCall _ _ (inject_history h family port message tos ll dest)

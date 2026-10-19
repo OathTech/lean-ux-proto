@@ -188,7 +188,7 @@ and authentication invariants remain separate obligations.
   exclusion carrier now proves local worker non-repetition through Stop and
   keeps every old/new encrypted identity out of pending aliases on normal return.
   Native poll transfers an alias; native batch allocation returns IDs separate
-  from that history; admission preserves the exclusion on all queue outcomes.
+  from that history; complete native staged send preserves the exclusion through admission, every refusal and cleanup arm.
   These cuts retain their incoming carrier until the whole-driver transport
   is proved. Historical key-material continuity, routing linkage, global
   encryption non-reuse, complete egress
@@ -212,7 +212,7 @@ and authentication invariants remain separate obligations.
   sources and candidate scopes now preserve native returns and Stops; a
   candidate label alone does not authorize its effects. Buffered GRO packets
   need their own causal occurrence carrier. Owned implementations through
-  `c5911e3f` are copied without a branch merge.
+  `415bb2b0` are copied without a branch merge.
 - T4/T5: timestamp and response/session replay contracts remain explicit;
   H1 projections are named dependencies, not silently discharged. Native
   confirmation cuts precede later Stop. Shared responder authorization now
@@ -229,9 +229,12 @@ and authentication invariants remain separate obligations.
   decryption/TX workers, scheduling, timer actors, configuration, lifecycle and
   the initialized outer Runner, including stopped histories. No entry/archive
   premise remains for retained-peer timestamp advancement. Native handshake
-  send/drain callback factors cover scheduled work and direct configuration
-  drains. Complete exchange identity and prohibition on premature encryption
-  remain open. Owned implementations through `7bb30e70` are copied.
+  send/drain callback factors now cover scheduled work, direct configuration
+  drains and nested timer/lifecycle drains. Five actual callback receipts identify
+  native exchange starts, strictly increasing successful response/install epochs,
+  and one allocation per completed session. Their history carrier and H1 edges
+  stay visible until initialized exchange transport closes. Complete exchange identity and prohibition on premature encryption
+  remain open. Owned implementations through `9fa8de3e` are copied.
 - T6: allocation-stamped credits distinguish slot unpublication from final
   store removal. Native creation, acquisition, clearing, rotation, session
   installation and disposal retain exact reference payments. Actual
@@ -257,9 +260,12 @@ and authentication invariants remain separate obligations.
   native input and transferred active batch, including receipts before Stop.
   Successful handshake consumers retain the actual acquired peer credit through
   staging/keepalive, supplying the final put without an independent funding
-  premise. Initialized key-holder accounting, historical selection uniqueness,
+  premise. Full native handshake receive, send/clear drains, timer shutdown and
+  single/bulk peer removal now transport the exact key account with explicit
+  peer funding and slot anchors. Native successful configuration lookup supplies
+  the acquired caller credit and base selection. Initialized key-holder accounting, historical selection uniqueness,
   orphan completeness and conditional retirement progress remain open. Owned
-  implementations through `c26609c8` are copied.
+  implementations through `359013fa` are copied.
 
 [AGENT 2026-10-19] Historical encryption identities pair a device epoch with
 a packet ID. Pending-alias exclusion and allocation-frontier bounds transport
@@ -270,18 +276,16 @@ continuity and is not yet initialized over the whole driver.
 The register names each module's assumptions and boundaries. All six campaign
 outcomes remain open; these are compositional results toward those outcomes.
 
-The fourteenth source checkpoint passes all 1626 proof-build jobs and the
-1211-declaration gate across thirteen root modules, with only standard axioms.
+The fifteenth source checkpoint passes all 1669 proof-build jobs and the
+1225-declaration gate across thirteen root modules, with only standard axioms.
 All twelve witness recipes and fresh-root kernel replay pass at the default
 cap. The model executable build passes 130 jobs, and the unit suite
-completes 131 tests with one kernel-build-dependent skip. This checkpoint closes
-the initialized retained-peer timestamp archive and physical ownership at each
-actual shared-journal encryption poll. It adds local historical-encryption
-exclusion cuts, exact send/drain and scoped receive source factors, and stronger
-handshake peer-reference transport. All six outcomes remain open.
-The first token scan rejected a helper identifier matching a forbidden tactic;
-renaming that fully proved helper resolved the scan, and the complete gate was
-rerun successfully.
+completes 131 tests with one kernel-build-dependent skip. This checkpoint
+exposes shared candidate scopes and every send-capable lifecycle drain,
+restores the existing initialized claims through exact neutral equalities,
+and transports historical encryption exclusion through full native staged
+send. Local exchange epochs and native receive/removal holder contracts are
+also checked. All six outcomes remain open.
 No differential guest run is needed for this proof-only checkpoint: the mirror
 and its pin are unchanged. The inherited Env deprecation warning remains outside
 the permitted edit scope; campaign-owned code has no compiler warning.
@@ -295,6 +299,20 @@ refs with branches untouched. The bounded replacement command is
 `capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs`, which
 replays the root's complete environment in one task. It passed at 32 GiB
 over the 1000-job checkpoint (before the subsequent timestamp extensions).
+
+[AGENT 2026-10-19] Use one shared
+flushed-send callback through scheduled work, direct drains, timer shutdown,
+device down and device deletion. The source audit found nested drains beneath
+`timersStop` and lifecycle calls that the earlier observer left opaque; these
+are observer coverage gaps, not mirror defects. Namespace pre-exit contains
+no send drain. Exact neutral callback equalities retain the preceding driver,
+and generic lifecycle history/projection checks pass. Concrete carrier repairs
+and complete checkpoint validation pass.
+Native exchange receipts now have local start/response/install epoch contracts
+with visible H1 edges. Native holder accounting extends through handshake
+receive, send/clear drains and single/bulk peer removal. Initialized exchange
+and holder closure remain open. Full native staged submission now preserves
+the supplied historical encryption exclusion and physical frontier carrier.
 
 ## Validation
 

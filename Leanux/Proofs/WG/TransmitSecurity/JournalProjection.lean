@@ -94,7 +94,9 @@ theorem session_projects (pid : PeerId) :
 theorem hooks_projects : Driver.HooksProjects nonce? hooks Driver.nonceHooks where
   handshake := AuthenticatedEffects.HandshakeWorker.observed_projects Event.handshake handshake? nonce?
     (fun _ => rfl)
-  sendWorker := projectsPrefix_lift nonce? _
+  flushedSend := fun _ => Driver.Projection.state_lift nonce? _
+  candidate := ⟨id, (fun _ _ => projectsPrefix_pure nonce? id 0),
+    (fun _ => projectsPrefix_pure nonce? id ())⟩
   prepare := AuthenticatedEffects.TransportDriver.prepare_projects_other Event.rxOrigin origin? nonce? (fun _ => rfl)
   counterCheck := AuthenticatedEffects.TransportDriver.counter_projects_other Event.replay nonce? (fun _ => rfl)
   timerSelected := fun d j pid t we =>

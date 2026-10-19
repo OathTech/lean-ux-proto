@@ -16,7 +16,7 @@ theorem encryptTail_history (h : ActorHistorySafe Safe g) (item : Option (List S
   unfold encryptTailObserved workerIterPrefix
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head Hooks.encrypt; exact h.encrypt _)
     | (driver_history_head reschedObserved; exact resched_history _ _)
     | driver_product_history_step
@@ -26,7 +26,7 @@ theorem encryptIter_history (h : ActorHistorySafe Safe g) :
   unfold encryptIterObserved
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head Hooks.poll; exact h.poll)
     | (driver_history_head softirqObserved; exact softirq_history h)
     | (driver_history_head encryptTailObserved; exact encryptTail_history h _)
@@ -37,7 +37,7 @@ theorem txIter_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
   unfold txIterObserved workerIterPrefix
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head Hooks.transmit; exact h.transmit _)
     | (driver_history_head reschedObserved; exact resched_history _ _)
     | driver_product_history_step
@@ -47,7 +47,7 @@ theorem decryptStep_history (h : ActorHistorySafe Safe g) :
   unfold decryptStepObserved RxWorkers.decryptWith
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head softirqObserved; exact softirq_history h)
     | (driver_history_head irqExitObserved; exact irqExit_history h)
     | driver_product_history_step
@@ -57,7 +57,7 @@ theorem decryptIter_history (h : ActorHistorySafe Safe g) :
   unfold decryptIterObserved workerIterPrefix
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head decryptStepObserved; exact decryptStep_history h)
     | (driver_history_head reschedObserved; exact resched_history _ _)
     | driver_product_history_step
@@ -67,7 +67,7 @@ theorem receiveIter_history (h : ActorHistorySafe Safe g) :
   unfold receiveIterObserved workerIterPrefix
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head handshakeObserved; exact (handshake_history h).liftWGObserver)
     | driver_product_history_step
 
@@ -76,7 +76,7 @@ theorem cryptAhead_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
   unfold cryptAheadObserved
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head encryptIterObserved; exact encryptIter_history h)
     | driver_product_history_step
 
@@ -85,7 +85,7 @@ theorem iteration_history (h : ActorHistorySafe Safe g) (act : Activation) :
   unfold iterationObserved
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head encryptIterObserved; exact encryptIter_history h)
     | (driver_history_head decryptIterObserved; exact decryptIter_history h)
     | (driver_history_head receiveIterObserved; exact receiveIter_history h)
@@ -98,7 +98,7 @@ private theorem schedulerRun (h : ActorHistorySafe Safe g) (act : Activation) :
   unfold SourceScheduler.run
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head iterationObserved; exact iteration_history h _)
     | driver_product_history_step
 
@@ -107,7 +107,7 @@ private theorem schedulerDispatch (h : ActorHistorySafe Safe g) (worker : Worker
   unfold SourceScheduler.dispatch
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head SourceScheduler.run; exact schedulerRun h _)
     | driver_product_history_step
 
@@ -116,7 +116,7 @@ theorem schedule_history (h : ActorHistorySafe Safe g) (stack : Option Worker) :
   unfold scheduleObserved SourceScheduler.schedule
   repeat' first
     | (driver_history_head Hooks.prepare; exact h.prepare)
-    | (driver_history_head Hooks.sendWorker; exact h.sendWorker)
+    | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head SourceScheduler.run; exact schedulerRun h _)
     | (driver_history_head SourceScheduler.dispatch; exact schedulerDispatch h _)
     | (driver_history_head softirqObserved; exact softirq_history h)

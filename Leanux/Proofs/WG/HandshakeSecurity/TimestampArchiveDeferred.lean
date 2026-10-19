@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverNeutralCalls
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveEnvWorkers
 import Leanux.Proofs.WG.Queues.SchedulerPreservation
 
@@ -15,7 +16,7 @@ macro "archive_driver_deferred_step " : tactic => `(tactic| first
   | (scheduler_preserve_at getDev; exact product_native _ (fun h => frame_store h _ getDev_sameWGStore))
   | (scheduler_preserve_at delTimer; exact product_native _ (del_timer _ _))
   | (scheduler_preserve_at Env.runOneSendWorker; exact send_one)
-  | (nonce_product_head Driver.Hooks.sendWorker; exact send_one)
+  | (nonce_product_head Driver.sendWorkerObserved; rw [Driver.sendWorker_lift TimestampDriver.hooks rfl]; exact send_one)
   | (scheduler_preserve_at Env.runOneClearWorker; exact clear_one)
   | (scheduler_preserve_at Env.requireDrained; exact product_store _ (Nonce.Frames.drained _ _))
   | (scheduler_preserve_at Env.requireNoCryptWork; exact product_store _ requireNoCryptWork_sameKernel)

@@ -15,7 +15,8 @@ variable {E : Type} {extra : List E → Prop}
 structure DeferredSafe (extra : List E → Prop) (origin : E → Option TransportDriver.OriginEvent)
     (replay : E → Option TransportDriver.Replay) (hooks : Hooks E) : Prop extends
     WorkerSafe extra origin replay hooks, StagingSafe extra origin replay hooks where
-  sendWorker : ProductSafe extra origin replay hooks.sendWorker
+  sendWorker : ProductSafe extra origin replay (sendWorkerObserved hooks)
+  flushedSend : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)
   selected : ∀ d j pid t we, ProductSafe extra origin replay (hooks.timerSelected d j pid t we)
 
 macro "transport_deferred_native" : tactic => `(tactic| first
@@ -54,7 +55,7 @@ theorem sendWorkers (h : DeferredSafe extra origin replay hooks) :
     ProductSafe extra origin replay (sendWorkersObserved hooks) := by
   unfold sendWorkersObserved
   repeat' first
-    | (transport_carrier_head Hooks.sendWorker; exact h.sendWorker)
+    | (transport_carrier_head sendWorkerObserved; exact h.sendWorker)
     | (transport_carrier_head scheduleObserved; exact schedule h.toWorkerSafe _)
     | transport_deferred_step
 
@@ -81,7 +82,7 @@ theorem timers (h : DeferredSafe extra origin replay hooks) (j : UInt64) :
     ProductSafe extra origin replay (timersObserved hooks j) := by
   unfold timersObserved
   repeat' first
-    | (transport_carrier_head Hooks.sendWorker; exact h.sendWorker)
+    | (transport_carrier_head sendWorkerObserved; exact h.sendWorker)
     | (transport_carrier_head Hooks.timerSelected; exact h.selected _ _ _ _ _)
     | (transport_carrier_head cryptObserved; exact crypt h)
     | (transport_carrier_head timerSectionObserved

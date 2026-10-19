@@ -1,7 +1,8 @@
 import Leanux.Proofs.WG.TransmitSecurity.NonceInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderStagingSource
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerSource
-import Leanux.Proofs.WG.AuthenticatedEffects.IndexedPollSource
+import Leanux.Proofs.WG.AuthenticatedEffects.CandidatePollSource
+import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeLifecycleSource
 
 /-! The nonce source driver parameterized at native TX boundaries. Its nonce
 specialization is proved equal to the initialized observer in the companion
@@ -16,7 +17,9 @@ open HandshakeSecurity.Confirmation.Poll
 structure Hooks (E : Type) where
   handshake : (PeerId → WGPrefix E Bool) → (PeerId → WGPrefix E Unit) → WGPrefix E Bool :=
     AuthenticatedEffects.HandshakeWorker.source
-  sendWorker : PrefixM E Unit := liftPrefix Env.runOneSendWorker
+  flushedSend : PeerId → WGPrefix E Unit := fun pid => liftWGPrefix (runFlushedSendWork pid)
+  candidateEnter : SkbId → RxPacket → PrefixM E Nat := fun _ _ => pure 0
+  candidateLeave : Nat → PrefixM E Unit := fun _ => pure ()
   prepare : PrefixM E (Option PeerId) := liftPrefix (liftWG RxWorkers.prepareSource)
   counterCheck : SkbId → RxPacket → PrefixM E Bool :=
     fun _ pkt => liftWGObserver (liftWGPrefix (counterValidate pkt.keypair pkt.nonce))
@@ -31,6 +34,10 @@ structure Hooks (E : Type) where
   poll : PrefixM E (Option (List SkbId))
   encrypt : Option (List SkbId) → PrefixM E Bool
   transmit : PeerId → PrefixM E Bool
+
+/-- Scheduled and directly flushed sends share the same native callback. -/
+def sendWorkerObserved (hooks : Hooks E) : PrefixM E Unit :=
+  HandshakeSecurity.SendExchange.oneWith liftPrefix (fun pid => liftWGObserver (hooks.flushedSend pid))
 
 def stagingObserved (hooks : Hooks E) (pid : PeerId) : WGPrefix E Unit := do
   let some (p,keypair) ← hooks.selection pid | return
@@ -128,8 +135,8 @@ def consumeObserved (hooks : Hooks E) (pid : PeerId) (pkt : RxPacket) (ep : Endp
 
 def pollObserved (hooks : Hooks E) (pid : PeerId) (budget : Nat)
     (toStack : List (List UInt8) → PrefixM E Unit) : PrefixM E Nat :=
-  AuthenticatedEffects.IndexedPoll.sourceWith (fun a => liftWGObserver (liftWGPrefix a))
-    hooks.counterCheck
+  AuthenticatedEffects.CandidatePoll.sourceWith (fun a => liftWGObserver (liftWGPrefix a))
+    hooks.candidateEnter hooks.candidateLeave hooks.counterCheck
     (fun peer pkt ep => liftWGObserver ((consumeObserved hooks) peer pkt ep))
     (napiGroReceivePrefix toStack) (napiGroFlushAllPrefix toStack) pid budget
 
@@ -224,7 +231,7 @@ def sendWorkersObserved (hooks : Hooks E) : PrefixM E Unit := do
   liftPrefix (modifyWG fun w => {w with queuedThisCall := []})
   for _ in [0:(← liftPrefix recordBudget)] do
     if (← liftPrefix (liftWG getDev)).sendWorkQueue.isEmpty then liftPrefix Env.deliverSent; return
-    hooks.sendWorker
+    (sendWorkerObserved hooks)
     (scheduleObserved hooks) none
   liftPrefix (budgetExhausted "the send work queue")
 
@@ -287,7 +294,7 @@ def timersObserved (hooks : Hooks E) (jPass : UInt64) : PrefixM E Bool := do
         liftPrefix (Env.requireStepComplete b)
         step := none
       if !fired then break
-      else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then hooks.sendWorker
+      else if site == startOf .sendWorker && !d.sendWorkQueue.isEmpty then (sendWorkerObserved hooks)
       else
         (cryptObserved hooks)
         if (← liftPrefix Env.peekNextSite) == some site then break
@@ -361,7 +368,7 @@ def injectObserved (hooks : Hooks E) (family port : Nat) (msg : List UInt8) (tos
 
 def afterBatchObserved (hooks : Hooks E) : PrefixM E Unit :=
   TrafficSource.afterBatchWith (cryptObserved hooks) (sendWorkersObserved hooks)
-    (hooks.sendWorker) (fun stack => (scheduleObserved hooks) stack) drainObserved
+    ((sendWorkerObserved hooks)) (fun stack => (scheduleObserved hooks) stack) drainObserved
 
 def floodObserved (hooks : Hooks E) (count port family : Nat) (messages : List (List UInt8)) : PrefixM E Int :=
   TrafficSource.floodWith receiveEntryObserved (inlinePollObserved hooks) (afterBatchObserved hooks) drainObserved count port family messages
@@ -376,6 +383,16 @@ def batchObserved (hooks : Hooks E) (items : List Env.BatchItem) : PrefixM E Int
 def syscallXmitObserved (hooks : Hooks E) (family addr : Nat) (payload : List UInt8) (opts : Env.XmitOpts) : PrefixM E Int :=
   syscallXmitWith multicastObserved
     (fun family addr packets mtu => liftWGObserver ((transmitObserved hooks) family addr packets mtu)) family addr payload opts
+
+def sendDrainObserved (hooks : Hooks E) (upTo : Option PeerId) : WGPrefix E Unit :=
+  HandshakeSecurity.SendExchange.drainWith liftWGPrefix hooks.flushedSend
+    (fun pid => liftWGPrefix (runFlushedClearWork pid)) upTo
+
+def removeObserved (hooks : Hooks E) (peer : Option PeerId) : WGPrefix E Unit :=
+  HandshakeSecurity.SendExchange.removeWith liftWGPrefix (sendDrainObserved hooks) peer
+
+def removeAllObserved (hooks : Hooks E) : WGPrefix E Unit :=
+  HandshakeSecurity.SendExchange.removeAllWith liftWGPrefix (sendDrainObserved hooks)
 
 def configOut {E : Type} (a : PeerAttrs) (peer : Option PeerId) (ret : Int) : WGPrefix E Int := do
   liftWGPrefix (peerPut peer)
@@ -399,7 +416,7 @@ def configTail (hooks : Hooks E) (a : PeerAttrs) (peer : Option PeerId) (pid : P
     (fun ip => liftWGPrefix (setAllowedip pid ip)) (configOut a peer) a ((configTailFinish hooks) a peer pid)
 
 def configUpdate (hooks : Hooks E) (a : PeerAttrs) (peer : Option PeerId) (flags : UInt32) (psk : Option Key) (pid : PeerId) : WGPrefix E Int :=
-  peerConfigUpdateWith (fun {_} a => liftWGPrefix a) (liftWGPrefix (peerRemove peer))
+  peerConfigUpdateWith (fun {_} a => liftWGPrefix a) (removeObserved hooks peer)
     (do let p ← liftWGPrefix (getPeer pid); liftWGPrefix (setPeer pid {p with presharedKey := psk.getD []}))
     (liftWGPrefix (removeByPeer pid)) (fun e => liftWGPrefix (setPeerEndpoint pid e))
     (configOut a peer) ((configTail hooks) a peer pid) a flags psk
@@ -416,13 +433,13 @@ def configPeers (hooks : Hooks E) (a : DeviceAttrs) : WGPrefix E Int :=
 
 def configKey (hooks : Hooks E) (a : DeviceAttrs) : WGPrefix E Int :=
   deviceKeyWith (fun {_} a => liftWGPrefix a) (fun key => liftWGPrefix (pubkeyLookup key))
-    (fun peer => liftWGPrefix (peerPut peer)) (fun peer => liftWGPrefix (peerRemove peer))
+    (fun peer => liftWGPrefix (peerPut peer)) (removeObserved hooks)
     (fun pid => liftWGPrefix (precomputeStaticStatic pid)) (fun pid => liftWGPrefix (expireCurrentPeerKeypairs pid))
     (stagingObserved hooks) ((configPeers hooks) a) a
 
 def configDeviceUpdate (hooks : Hooks E) (a : DeviceAttrs) (flags : UInt32) : WGPrefix E Int :=
   deviceUpdateWith (fun {_} a => liftWGPrefix a) (fun pid => liftWGPrefix (clearPeerEndpointSrc pid))
-    (fun port => liftWGPrefix (setPort port)) (liftWGPrefix peerRemoveAll) ((configKey hooks) a) a flags
+    (fun port => liftWGPrefix (setPort port)) (removeAllObserved hooks) ((configKey hooks) a) a flags
 
 def configDevice (hooks : Hooks E) (a : DeviceAttrs) : WGPrefix E Int :=
   setDeviceWith (fun {_} a => liftWGPrefix a) ((configDeviceUpdate hooks) a) a
@@ -459,9 +476,23 @@ def envUpObserved (hooks : Hooks E) : PrefixM E Int := do
   if ret == 0 then liftPrefix (modifyEnv fun w => {w with routesPending := true})
   pure ret
 
+def downObserved (hooks : Hooks E) : WGPrefix E Unit :=
+  HandshakeSecurity.SendExchange.downWith liftWGPrefix (sendDrainObserved hooks)
+
+def destructObserved (hooks : Hooks E) : WGPrefix E Unit :=
+  HandshakeSecurity.SendExchange.destructWith liftWGPrefix (sendDrainObserved hooks)
+
+def envDownObserved (hooks : Hooks E) : PrefixM E Int :=
+  HandshakeSecurity.SendExchange.envDownWith liftPrefix (liftWGObserver (downObserved hooks))
+
+def envDeleteObserved (hooks : Hooks E) : PrefixM E Int :=
+  HandshakeSecurity.SendExchange.envDeleteWith liftPrefix
+    (liftWGObserver (downObserved hooks)) (liftWGObserver (destructObserved hooks))
+
 def retainedObserved (hooks : Hooks E) (call : Syscall) : PrefixM E Int :=
   match call with
   | .wgUp => socketCallOnWith (fun {_} a => liftPrefix a) SENDER_FD (envUpObserved hooks)
+  | .wgDown => socketCallOnWith (fun {_} a => liftPrefix a) SENDER_FD (envDownObserved hooks)
   | _ => liftPrefix (Leanux.dispatch call)
 
 def observeObserved (hooks : Hooks E) : PrefixM E (Int × Lean.Json) := do
@@ -479,11 +510,11 @@ def dispatchSetObserved (hooks : Hooks E) (attrs : DeviceAttrs) : PrefixM E Int 
 def dispatchCreateObserved {E : Type} : PrefixM E Int :=
   rtnetlinkRequestWith (fun {_} a => liftPrefix a) (liftPrefix (liftWG wgCreate))
 
-def dispatchDeleteObserved {E : Type} : PrefixM E Int :=
-  rtnetlinkRequestWith (fun {_} a => liftPrefix a) (liftPrefix Env.wgDelete)
+def dispatchDeleteObserved (hooks : Hooks E) : PrefixM E Int :=
+  rtnetlinkRequestWith (fun {_} a => liftPrefix a) (envDeleteObserved hooks)
 
 def dispatchObserved (hooks : Hooks E) (call : Syscall) : PrefixM E Int :=
-  dispatchWith (retainedObserved hooks) (dispatchSetObserved hooks) dispatchCreateObserved dispatchDeleteObserved
+  dispatchWith (retainedObserved hooks) (dispatchSetObserved hooks) dispatchCreateObserved (dispatchDeleteObserved hooks)
     (syscallXmitObserved hooks) (fun family port message tos ll dest =>
       socketCallOnWith (fun {_} a => liftPrefix a) SENDER_FD ((injectObserved hooks) family port message tos ll dest))
     (floodObserved hooks) (batchObserved hooks) (dispatchObserveObserved hooks) call

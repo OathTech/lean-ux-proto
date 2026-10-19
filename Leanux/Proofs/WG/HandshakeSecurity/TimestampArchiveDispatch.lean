@@ -8,7 +8,14 @@ theorem retained_dispatch (call : Syscall)
   by_cases up : call = .wgUp
   · subst call
     exact Outer.socketCallOn _ _ env_up
-  · simp only [Driver.retainedObserved]
+  · have native : Driver.retainedObserved TimestampDriver.hooks call = liftPrefix (Leanux.dispatch call) := by
+      cases call <;> unfold Driver.retainedObserved
+      case wgUp => exact False.elim (up rfl)
+      case wgDown =>
+        rw [Driver.envDown_lift TimestampDriver.hooks rfl,Driver.socketCall_lift]
+        rfl
+      all_goals rfl
+    rw [native]
     exact product_lift _ (fun h => Frames.quiet_dispatch call h retained up)
 
 theorem observe :
@@ -30,7 +37,11 @@ theorem dispatch (call : Syscall) :
   dispatchWith_preserves _ _ _ _ _ _ _ _ _ (retained_dispatch)
     (fun attrs => Outer.netlinkRequest _ (product_safe (config_device attrs)))
     (Outer.rtnetlinkRequest _ (product_native _ device_create))
-    (Outer.rtnetlinkRequest _ (product_lift _ (env_delete)))
+    (by
+      change ProductPreserves (Driver.dispatchDeleteObserved TimestampDriver.hooks)
+      unfold Driver.dispatchDeleteObserved
+      rw [Driver.envDelete_lift TimestampDriver.hooks rfl]
+      exact Outer.rtnetlinkRequest _ (product_lift _ (env_delete)))
     syscall_xmit
     (fun family port message tos ll dest => Outer.socketCallOn _ _ (inject family port message tos ll dest))
     (flood) (batch) (dispatch_observe) call

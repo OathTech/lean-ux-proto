@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverNeutralCalls
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveConfiguration
 
 set_option maxHeartbeats 200000
@@ -74,6 +75,7 @@ macro "archive_driver_config_step " : tactic => `(tactic| first
   | (nonce_source_head Driver.keepaliveObserved; exact keepalive _)
   | (nonce_source_head Driver.stagingObserved; exact staging _)
   | (nonce_source_head setAllowedip; exact lift _ (allowed_ip _ _))
+  | (nonce_source_head Driver.removeObserved; rw [Driver.remove_lift TimestampDriver.hooks rfl])
   | (nonce_source_head peerRemove; exact lift _ (remove _))
   | (nonce_source_head removeByPeer; exact lift _ (remove_ips _))
   | (nonce_source_head setPeerEndpoint; exact lift _ (endpoint _ _))
@@ -200,8 +202,10 @@ private theorem update_control (a : PeerAttrs) (flags : UInt32) (psk : Option Ke
 
 theorem config_update (a : PeerAttrs) (peer : Option PeerId)
     (flags : UInt32) (psk : Option Key) (pid : PeerId) :
-    Preserves (Driver.configUpdate TimestampDriver.hooks a peer flags psk pid) :=
-  update_control a flags psk _ _ _ _ _ _ (lift _ (remove peer))
+    Preserves (Driver.configUpdate TimestampDriver.hooks a peer flags psk pid) := by
+  unfold Driver.configUpdate
+  rw [Driver.remove_lift TimestampDriver.hooks rfl]
+  exact update_control a flags psk _ _ _ _ _ _ (lift _ (remove peer))
     (psk_write pid (psk.getD [])) (lift _ (remove_ips pid))
     (fun ep => lift _ (endpoint pid ep)) (config_out a peer) (config_tail a peer pid)
 

@@ -81,7 +81,12 @@ private theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (
 
 theorem quiet : QuietHooksSafe Good Journal.hooks where
   handshake := handshake
-  sendWorker := Driver.History.product_lift _
+  sendWorker := by
+    rw [Driver.sendWorker_lift Journal.hooks rfl]
+    exact Driver.History.product_lift _
+  flushedSend := fun _ => Driver.History.state_lift _
+  candidateEnter := fun _ _ => Driver.History.product_pure _
+  candidateLeave := fun _ => Driver.History.product_pure _
   prepare := focus_product _ _ (fun _ => rfl) _
   counterCheck := fun _ _ => receipt_product _ _ (fun _ => rfl) (Driver.History.product_lift _)
   timerSelected := timer

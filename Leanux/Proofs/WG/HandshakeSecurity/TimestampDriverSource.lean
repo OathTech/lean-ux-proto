@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.HandshakeSecurity.WorkerClaims
 import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryOuter
 import Leanux.Proofs.WG.TransmitSecurity.DriverOuterProjection
+import Leanux.Proofs.WG.TransmitSecurity.DriverNeutralCalls
 
 /-! Committed timestamp writes on the common native driver. The handshake
 worker keeps its actual session and keepalive callbacks, including staging
@@ -102,7 +103,12 @@ theorem worker_safe
 
 theorem hooks_safe : Driver.HooksHistorySafe IncreasingReceipts hooks where
   handshake := worker_safe
-  sendWorker := Driver.History.product_lift _
+  sendWorker := by
+    rw [Driver.sendWorker_lift hooks rfl]
+    exact Driver.History.product_lift _
+  flushedSend := fun _ => Driver.History.state_lift _
+  candidateEnter := fun _ _ => Driver.History.product_pure _
+  candidateLeave := fun _ => Driver.History.product_pure _
   prepare := Driver.History.product_lift _
   counterCheck := fun _ _ => Driver.History.product_state (Driver.History.state_lift _)
   timerSelected := fun _ _ _ _ _ => Driver.History.product_pure _

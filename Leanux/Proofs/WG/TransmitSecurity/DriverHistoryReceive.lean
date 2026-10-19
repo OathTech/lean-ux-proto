@@ -42,9 +42,11 @@ theorem poll_history (h : ActorHistorySafe Safe g) (pid : PeerId) (budget : Nat)
     (cb : List (List UInt8) → PrefixM E Unit)
     (hc : ∀ ps, ProductHistorySafe Safe (cb ps)) :
     ProductHistorySafe Safe (pollObserved g pid budget cb) := by
-  unfold pollObserved AuthenticatedEffects.IndexedPoll.sourceWith
+  unfold pollObserved AuthenticatedEffects.CandidatePoll.sourceWith
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
+    | (driver_history_head Hooks.candidateEnter; exact h.candidateEnter _ _)
+    | (driver_history_head Hooks.candidateLeave; exact h.candidateLeave _)
     | (driver_history_head Hooks.counterCheck; exact h.counterCheck _ _)
     | (driver_history_head consumeObserved; exact (consume_history h _ _ _).liftWGObserver)
     | (driver_history_head liftWGPrefix; exact (History.state_lift _).liftWGObserver)

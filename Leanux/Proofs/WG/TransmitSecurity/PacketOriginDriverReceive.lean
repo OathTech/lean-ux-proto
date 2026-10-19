@@ -99,8 +99,10 @@ theorem poll (pid : PeerId) (budget : Nat) (callback : List (List UInt8) → Pre
     (callbacks : ∀ packets, ProductSafe (callback packets)) :
     ProductSafe (Driver.pollObserved Journal.hooks pid budget callback) := by
   change PrefixPreserves ProductInv Safe _
-  unfold Driver.pollObserved AuthenticatedEffects.IndexedPoll.sourceWith
+  unfold Driver.pollObserved
   dsimp only [Journal.hooks]
+  rw [AuthenticatedEffects.CandidatePoll.neutral]
+  unfold AuthenticatedEffects.IndexedPoll.sourceWith
   simp only [Std.Legacy.Range.forIn_eq_forIn_range']
   repeat' first
     | (nonce_product_head napiGroReceivePrefix

@@ -6,13 +6,22 @@ work. No peer-removal failure, guard, or queue drain is skipped. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.SendExchange
 open Leanux Leanux.WG Leanux.Proofs.Logged
 
+def timersStopWith {m : Type → Type} [Monad m]
+    (step : {α : Type} → WG.M α → m α)
+    (drain : Option PeerId → m Unit) (pid : PeerId) : m Unit := do
+  for timer in PeerTimer.all do step (delTimer pid timer)
+  if (← step getDev).clearWorkQueue.contains pid then drain (some pid)
+
+theorem timersStop_factor (pid : PeerId) :
+    timersStopWith (fun {_} a => a) drainHandshakeSendWq pid = timersStop pid := rfl
+
 def afterDeadWith {m : Type → Type} [Monad m]
     (step : {α : Type} → WG.M α → m α)
     (drain : Option PeerId → m Unit) (pid : PeerId) : m Unit := do
   if ← step (branch .peerRemoveNotDead !(← step (getPeer pid)).isDead) then
     step (unsupported "peer_remove_after_dead: WARN_ON(!peer->is_dead)")
   step (keypairsClear pid)
-  step (timersStop pid)
+  timersStopWith step drain pid
   let d ← step getDev
   if !d.encryptQueue.empty || !d.decryptQueue.empty || !d.txWorkQueue.isEmpty
       || d.peers.toList.any (·.2.napiScheduled) then

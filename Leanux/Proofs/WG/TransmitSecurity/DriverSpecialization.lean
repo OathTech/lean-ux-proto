@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.TransmitSecurity.DriverSource
+import Leanux.Proofs.WG.TransmitSecurity.DriverNeutralCalls
 
 /-! The selection receipt factors an original source prefix. The resulting
 driver still executes exactly the existing reservation observer. -/
@@ -83,10 +83,15 @@ theorem nonce_consumeObserved_eq : consumeObserved nonceHooks = Nonce.consumeObs
   simp only [nonce_receiveTailObserved_eq]
   all_goals rfl
 
+private theorem nonce_enter_neutral : nonceHooks.candidateEnter = (fun _ _ => pure 0) := rfl
+private theorem nonce_leave_neutral : nonceHooks.candidateLeave = (fun _ => pure ()) := rfl
+
 theorem nonce_pollObserved_eq : pollObserved nonceHooks = Nonce.pollObserved := by
+  funext pid budget cb
   unfold pollObserved Nonce.pollObserved
-  simp only [nonce_consumeObserved_eq]
-  all_goals rfl
+  rw [nonce_enter_neutral,nonce_leave_neutral,AuthenticatedEffects.CandidatePoll.neutral]
+  rw [nonce_consumeObserved_eq]
+  exact AuthenticatedEffects.IndexedPoll.unindexed _ _ _ _ _ pid budget
 
 theorem nonce_stackObserved_eq : stackObserved nonceHooks = Nonce.stackObserved := by
   unfold stackObserved Nonce.stackObserved
@@ -174,7 +179,7 @@ theorem nonce_cryptObserved_eq : cryptObserved nonceHooks = Nonce.cryptObserved 
 
 theorem nonce_sendWorkersObserved_eq : sendWorkersObserved nonceHooks = Nonce.sendWorkersObserved := by
   unfold sendWorkersObserved Nonce.sendWorkersObserved
-  simp only [nonce_scheduleObserved_eq]
+  simp only [nonce_scheduleObserved_eq, sendWorker_lift nonceHooks rfl]
   all_goals rfl
 
 theorem nonce_afterXmitObserved_eq : afterXmitObserved nonceHooks = Nonce.afterXmitObserved := by
@@ -192,7 +197,7 @@ private theorem timer_selected_neutral (d : Device) (j : UInt64) (pid : PeerId)
 
 theorem nonce_timersObserved_eq : timersObserved nonceHooks = Nonce.timersObserved := by
   unfold timersObserved Nonce.timersObserved
-  simp only [nonce_timerObserved_eq, nonce_cryptObserved_eq, nonce_timerSectionObserved_eq,timer_selected_neutral,pure_bind]
+  simp only [nonce_timerObserved_eq, nonce_cryptObserved_eq, nonce_timerSectionObserved_eq,timer_selected_neutral,pure_bind,sendWorker_lift nonceHooks rfl]
   all_goals rfl
 
 theorem nonce_placeholderTimersObserved_eq : placeholderTimersObserved nonceHooks = Nonce.placeholderTimersObserved := by
@@ -229,7 +234,7 @@ theorem nonce_injectObserved_eq : injectObserved nonceHooks = Nonce.injectObserv
 
 theorem nonce_afterBatchObserved_eq : afterBatchObserved nonceHooks = Nonce.afterBatchObserved := by
   unfold afterBatchObserved Nonce.afterBatchObserved
-  simp only [nonce_scheduleObserved_eq, nonce_cryptObserved_eq, nonce_sendWorkersObserved_eq, nonce_drainObserved_eq]
+  simp only [nonce_scheduleObserved_eq, nonce_cryptObserved_eq, nonce_sendWorkersObserved_eq, nonce_drainObserved_eq, sendWorker_lift nonceHooks rfl]
   all_goals rfl
 
 theorem nonce_floodObserved_eq : floodObserved nonceHooks = Nonce.floodObserved := by
@@ -268,7 +273,7 @@ theorem nonce_configTail_eq : configTail nonceHooks = Nonce.configTail := by
 
 theorem nonce_configUpdate_eq : configUpdate nonceHooks = Nonce.configUpdate := by
   unfold configUpdate Nonce.configUpdate
-  simp only [nonce_configOut_eq, nonce_configTail_eq]
+  simp only [nonce_configOut_eq, nonce_configTail_eq, remove_lift nonceHooks rfl]
   all_goals rfl
 
 theorem nonce_configPeer_eq : configPeer nonceHooks = Nonce.configPeer := by
@@ -281,14 +286,17 @@ theorem nonce_configPeers_eq : configPeers nonceHooks = Nonce.configPeers := by
   simp only [nonce_configPeer_eq]
   all_goals rfl
 
+private theorem nonce_remove_function : removeObserved nonceHooks = fun peer => liftWGPrefix (peerRemove peer) :=
+  funext (remove_lift nonceHooks rfl)
+
 theorem nonce_configKey_eq : configKey nonceHooks = Nonce.configKey := by
   unfold configKey Nonce.configKey
-  simp only [nonce_staging_function, nonce_configPeers_eq]
+  simp only [nonce_staging_function, nonce_configPeers_eq, nonce_remove_function]
   all_goals rfl
 
 theorem nonce_configDeviceUpdate_eq : configDeviceUpdate nonceHooks = Nonce.configDeviceUpdate := by
   unfold configDeviceUpdate Nonce.configDeviceUpdate
-  simp only [nonce_configKey_eq]
+  simp only [nonce_configKey_eq, removeAll_lift nonceHooks rfl]
   all_goals rfl
 
 theorem nonce_configDevice_eq : configDevice nonceHooks = Nonce.configDevice := by
@@ -312,8 +320,12 @@ theorem nonce_envUpObserved_eq : envUpObserved nonceHooks = Nonce.envUpObserved 
   all_goals rfl
 
 theorem nonce_retainedObserved_eq : retainedObserved nonceHooks = Nonce.retainedObserved := by
-  unfold retainedObserved Nonce.retainedObserved
-  simp only [nonce_envUpObserved_eq]
+  funext call
+  cases call <;> unfold retainedObserved Nonce.retainedObserved
+  case wgUp => rw [nonce_envUpObserved_eq]
+  case wgDown =>
+    rw [envDown_lift nonceHooks rfl,socketCall_lift]
+    rfl
   all_goals rfl
 
 theorem nonce_observeObserved_eq : observeObserved nonceHooks = Nonce.observeObserved := by
@@ -335,9 +347,9 @@ theorem nonce_dispatchCreateObserved_eq : (@dispatchCreateObserved Nonce.Allocat
   unfold dispatchCreateObserved Nonce.dispatchCreateObserved
   all_goals rfl
 
-theorem nonce_dispatchDeleteObserved_eq : (@dispatchDeleteObserved Nonce.Allocation) = Nonce.dispatchDeleteObserved := by
+theorem nonce_dispatchDeleteObserved_eq : dispatchDeleteObserved nonceHooks = Nonce.dispatchDeleteObserved := by
   unfold dispatchDeleteObserved Nonce.dispatchDeleteObserved
-  all_goals rfl
+  rw [envDelete_lift nonceHooks rfl]
 
 theorem nonce_dispatchObserved_eq : dispatchObserved nonceHooks = Nonce.dispatchObserved := by
   unfold dispatchObserved Nonce.dispatchObserved

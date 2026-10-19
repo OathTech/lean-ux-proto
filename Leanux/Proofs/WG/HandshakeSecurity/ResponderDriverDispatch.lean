@@ -8,7 +8,14 @@ theorem retained_dispatch (H1 : H1ResponderCurrentEdges) (call : Syscall)
   by_cases up : call = .wgUp
   · subst call
     exact Outer.socketCallOn _ _ env_up
-  · simp only [Driver.retainedObserved]
+  · have native : Driver.retainedObserved hooks call = liftPrefix (Leanux.dispatch call) := by
+      cases call <;> unfold Driver.retainedObserved
+      case wgUp => exact False.elim (up rfl)
+      case wgDown =>
+        rw [Driver.envDown_lift hooks rfl,Driver.socketCall_lift]
+        rfl
+      all_goals rfl
+    rw [native]
     exact product_lift _ (fun h => Frames.quiet_dispatch H1 call h retained up)
 
 theorem observe (H1 : H1ResponderCurrentEdges) :
@@ -30,7 +37,11 @@ theorem dispatch (H1 : H1ResponderCurrentEdges) (call : Syscall) :
   dispatchWith_preserves _ _ _ _ _ _ _ _ _ (retained_dispatch H1)
     (fun attrs => Outer.netlinkRequest _ (product_safe (config_device H1 attrs)))
     (Outer.rtnetlinkRequest _ (product_native _ carrier_device_create))
-    (Outer.rtnetlinkRequest _ (product_lift _ (carrier_env_delete H1)))
+    (by
+      change ProductPreserves (Driver.dispatchDeleteObserved hooks)
+      unfold Driver.dispatchDeleteObserved
+      rw [Driver.envDelete_lift hooks rfl]
+      exact Outer.rtnetlinkRequest _ (product_lift _ (carrier_env_delete H1)))
     syscall_xmit
     (fun family port message tos ll dest => Outer.socketCallOn _ _ (inject H1 family port message tos ll dest))
     (flood H1) (batch H1) (dispatch_observe H1) call

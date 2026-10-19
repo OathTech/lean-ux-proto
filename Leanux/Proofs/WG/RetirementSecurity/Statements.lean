@@ -1,3 +1,7 @@
+import Leanux.Proofs.WG.RetirementSecurity.HolderBulkRemoval
+import Leanux.Proofs.WG.RetirementSecurity.HolderRemovalConfiguration
+import Leanux.Proofs.WG.RetirementSecurity.HolderRemoval
+import Leanux.Proofs.WG.RetirementSecurity.HolderDrains
 import Leanux.Proofs.WG.RetirementSecurity.OccurrenceJournalOuter
 import Leanux.Proofs.WG.RetirementSecurity.OccurrenceJournalDeferred
 import Leanux.Proofs.WG.RetirementSecurity.OccurrenceJournalWorkers
@@ -66,6 +70,7 @@ import Leanux.Proofs.WG.RetirementSecurity.TxCryptWorker
 import Leanux.Proofs.WG.RetirementSecurity.TxCryptStaging
 import Leanux.Proofs.WG.RetirementSecurity.TxStagingFunding
 import Leanux.Proofs.WG.RetirementSecurity.HolderHandshakePeerFrames
+import Leanux.Proofs.WG.RetirementSecurity.HolderReceiveStep
 
 /-! Campaign 3, T6: local original-operation retirement contracts. The
 initialized key-reference ledger, complete caller coverage and conditional
@@ -1487,5 +1492,95 @@ and three-slot compatibility remain separately named local prerequisites. -/
 theorem original_keepalive_acquired_peer (pid selected : PeerId) :
     Preserves (HolderKeepalive.Selected temporary selected) (sendKeepalive pid) :=
   HolderKeepalive.keepalive_selected pid
+
+
+/-- Native handshake receive preserves exact key-reference credit through
+both Noise arms, their session/socket/keepalive calls, cookies and the real
+final peer payments. The source's own nonzero acquisition discharges those
+payments. Allocation and configured/current-slot session support remain
+explicit incoming prerequisites until whole-run key-account closure. -/
+theorem original_handshake_receive_key_accounts (msg : List UInt8) (src : SkbSource) :
+    Preserves (HolderReceive.Ready temporary) (receiveHandshakePacket msg src) ∧
+    Preserves (HolderReceive.Ready temporary) receiveStep :=
+  ⟨HolderReceive.receive msg src,HolderReceive.step⟩
+
+/-- The original cookie consumer preserves the exact key ledger for success,
+authentication rejection and lookup miss. Its own acquired peer reference
+protects every actual final put; no separate peer-funding premise is assumed. -/
+theorem original_cookie_consumer_key_account (msg : List UInt8) :
+    Preserves (HolderAccount temporary) (cookieMessageConsume msg) :=
+  HolderConsume.cookie msg
+
+/-- Native workqueue draining preserves the exact key-reference account while
+paying only selected peer work references. Published key slots keep their
+independent base/caller anchors. Incoming key and peer accounts are explicit;
+initialized whole-driver closure is a separate obligation. -/
+theorem original_work_drain_key_accounts
+    (keys : HolderAccount temporary w)
+    (peers : holders.Funded carriers loans w)
+    (stable : Queues.RxCredits.StableRx carriers w)
+    (anchors : SlotPeerReferences holders loans w) (upTo : Option PeerId)
+    (a b : Ambient)
+    (run : ((drainHandshakeSendWq upTo).run w).run a = .ok (((),v),b)) :
+    HolderDrain.Ready holders carriers loans temporary v :=
+  (hoare_iff_run_ambient _ _ _).mp (HolderDrain.drain upTo) w a () v b
+    (HolderDrain.initial keys peers stable anchors) run
+
+/-- Deleting a peer's timers and flushing its pending clear work retain the
+same exact key account and independent slot anchors through the actual native
+queue selections; elapsed time alone is not asserted to complete retirement. -/
+theorem original_timers_stop_key_accounts
+    (keys : HolderAccount temporary w)
+    (peers : holders.Funded carriers loans w)
+    (stable : Queues.RxCredits.StableRx carriers w)
+    (anchors : SlotPeerReferences holders loans w) (pid : PeerId)
+    (a b : Ambient)
+    (run : ((timersStop pid).run w).run a = .ok (((),v),b)) :
+    HolderDrain.Ready holders carriers loans temporary v :=
+  (hoare_iff_run_ambient _ _ _).mp (HolderDrain.timers_stop pid) w a () v b
+    (HolderDrain.initial keys peers stable anchors) run
+
+/-- Native post-dead peer removal clears publication slots before its actual
+inline drains and pays the detached peer occurrence exactly once. The exact
+key account retains all remaining physical key holders, so unpublication is
+not confused with allocation destruction. Incoming accounts remain explicit. -/
+theorem original_after_dead_key_accounts
+    (before : HolderDrain.Ready original carriers (o :: loans) temporary w)
+    (a b : Ambient)
+    (run : ((peerRemoveAfterDead o.slot).run w).run a = .ok (((),v),b)) :
+    HolderDrain.Ready original carriers loans temporary v ∧ SlotsCleared o.slot v :=
+  HolderRemoval.after_dead before a b run
+
+/-- Native configuration removal pays its selected base reference and its
+separate acquired caller reference, preserving the exact key account of all
+remaining physical holders. Selection and caller funding come from the actual
+successful lookup; initial list coherence and both ledgers remain visible. -/
+theorem original_lookup_removal_key_accounts
+    (key : Key) (attrs : PeerAttrs) (flags : UInt32) (psk : Option Key)
+    (keys : HolderAccount temporary w) (peers : holders.Funded carriers loans w)
+    (stable : Queues.RxCredits.StableRx carriers w)
+    (anchors : SlotPeerReferences holders loans w)
+    (coherent : Queues.RxCredits.BaseCoherence.Inv w) (configured : ConfiguredIdentity.Inv w)
+    (remove : (flags &&& WGPEER_F_REMOVE_ME != 0) = true) (a middle b : Ambient)
+    (lookup : ((pubkeyLookup key).run w).run a = .ok ((some pid,u),middle))
+    (update : ((Configuration.peerConfigUpdateSource attrs (some pid) flags psk pid).run u).run middle =
+      .ok ((result,v),b)) :
+    result = 0 ∧ HolderDrain.Ready
+      (holders.withoutBase (Queues.RxCredits.BaseRemoval.live holders.base pid))
+      carriers loans temporary v :=
+  HolderRemoval.lookup_update_remove key attrs flags psk keys peers stable anchors coherent configured remove
+    a middle b lookup update
+
+/-- Native bulk removal detaches and pays every actual saved base occurrence
+while retaining exact credit for physical key holders. Inline drains may pay
+work occurrences; equal saved slots retain their multiplicities. No immediate
+allocation destruction or initialized whole-driver invariant is assumed. -/
+theorem original_bulk_removal_key_accounts
+    (keys : HolderAccount temporary w) (peers : holders.Funded carriers loans w)
+    (stable : Queues.RxCredits.StableRx carriers w)
+    (anchors : SlotPeerReferences holders loans w) (a b : Ambient)
+    (run : (peerRemoveAll.run w).run a = .ok (((),v),b)) :
+    HolderDrain.Ready (holders.withoutBase []) carriers loans temporary v :=
+  HolderRemoval.all_peers keys peers stable anchors a b run
 
 end Leanux.Proofs.WG.RetirementSecurity

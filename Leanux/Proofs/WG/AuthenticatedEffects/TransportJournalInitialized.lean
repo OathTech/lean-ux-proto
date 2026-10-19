@@ -45,6 +45,7 @@ theorem ordered_callbacks : DeferredSafe Order.Good origin? replay? Journal.hook
       Order.quiet.session keepalive_order)
   napi := fun pid budget => product_join (nativePoll pid budget) (Order.nativePoll pid budget)
   sendWorker := product_join sendWorker Order.quiet.sendWorker
+  flushedSend := fun pid => state_join (flushedSend pid) (Order.quiet.flushedSend pid)
   selected := fun d j pid t entry => product_join (timer d j pid t entry) (Order.quiet.timerSelected d j pid t entry)
 
 /-- Both independent positional claims hold on the actual initialized full

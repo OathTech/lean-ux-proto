@@ -42,6 +42,8 @@ theorem shared_consumer_authorized (hooks : TransmitSecurity.Driver.Hooks E)
 theorem shared_poll_authorized (hooks : TransmitSecurity.Driver.Hooks E)
     (inverse : ∀ r, replay (record r) = some r) (quiet : ∀ r, origin (record r) = none)
     (counter : hooks.counterCheck = TransportDriver.counter record)
+    (enter : hooks.candidateEnter = fun _ _ => pure 0)
+    (leave : hooks.candidateLeave = fun _ => pure ())
     (hc : ∀ pid kid, PrefixEnsures (ConfirmationInput origin replay record pid kid)
       (Safe origin replay) (liftWGObserver (hooks.confirmation pid kid)) (fun _ => Inv origin replay))
     (ht : ∀ pid pkt value, Preserves (origin := origin) (replay := replay)
@@ -55,7 +57,7 @@ theorem shared_poll_authorized (hooks : TransmitSecurity.Driver.Hooks E)
     Preserves (origin := origin) (replay := replay)
       (TransmitSecurity.Driver.pollObserved hooks pid budget toStack) := by
   unfold TransmitSecurity.Driver.pollObserved
-  simp only [liftWGObserver_lift,counter]
+  simp only [liftWGObserver_lift,counter,enter,leave,CandidatePoll.neutral]
   exact poll_authorized origin replay record inverse quiet _ _ _
     (shared_consumer_authorized hooks hc ht) hr hf pid budget
 

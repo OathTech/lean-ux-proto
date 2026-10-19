@@ -17,7 +17,10 @@ structure HooksHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
     (∀ pid, StateHistorySafe Safe (session pid)) →
     (∀ pid, StateHistorySafe Safe (keepalive pid)) →
     StateHistorySafe Safe (hooks.handshake session keepalive)
-  sendWorker : ProductHistorySafe Safe hooks.sendWorker
+  sendWorker : ProductHistorySafe Safe (sendWorkerObserved hooks)
+  flushedSend : ∀ pid, StateHistorySafe Safe (hooks.flushedSend pid)
+  candidateEnter : ∀ skb pkt, ProductHistorySafe Safe (hooks.candidateEnter skb pkt)
+  candidateLeave : ∀ token, ProductHistorySafe Safe (hooks.candidateLeave token)
   prepare : ProductHistorySafe Safe hooks.prepare
   counterCheck : ∀ skb pkt, ProductHistorySafe Safe (hooks.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we, ProductHistorySafe Safe (hooks.timerSelected d j pid t we)
@@ -42,7 +45,10 @@ structure ActorHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop whe
     (∀ pid, StateHistorySafe Safe (session pid)) →
     (∀ pid, StateHistorySafe Safe (keepalive pid)) →
     StateHistorySafe Safe (hooks.handshake session keepalive)
-  sendWorker : ProductHistorySafe Safe hooks.sendWorker
+  sendWorker : ProductHistorySafe Safe (sendWorkerObserved hooks)
+  flushedSend : ∀ pid, StateHistorySafe Safe (hooks.flushedSend pid)
+  candidateEnter : ∀ skb pkt, ProductHistorySafe Safe (hooks.candidateEnter skb pkt)
+  candidateLeave : ∀ token, ProductHistorySafe Safe (hooks.candidateLeave token)
   prepare : ProductHistorySafe Safe hooks.prepare
   counterCheck : ∀ skb pkt, ProductHistorySafe Safe (hooks.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we, ProductHistorySafe Safe (hooks.timerSelected d j pid t we)

@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierConfiguration
+import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierLifecycle
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportOuterNative
 import Leanux.Proofs.WG.Origins.RunnerInvariant
 
@@ -6,7 +6,7 @@ import Leanux.Proofs.WG.Origins.RunnerInvariant
 runner. All native callbacks and the initial empty receive store remain explicit. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrier
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
-open Lifetimes Queues Configuration TransmitSecurity.Driver
+open Lifetimes Queues Configuration TransmitSecurity.Driver HandshakeSecurity.SendExchange
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
 set_option pp.structureInstances false
@@ -89,6 +89,30 @@ theorem envUp (h : StagingSafe extra origin replay hooks) :
     | (transport_carrier_head upObserved; exact product_state (up h))
     | transport_outer_step
 
+theorem envDown (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
+    ProductSafe extra origin replay (envDownObserved hooks) := by
+  unfold envDownObserved envDownWith
+  repeat' first
+    | (transport_carrier_head downObserved; exact product_state (down flushed))
+    | (transport_product_native Env.requireIdleDevice
+       exact product_storeLift _ (pinned_const _private.Leanux.Proofs.WG.Origins.OwnerControlCalls.«0».Leanux.Proofs.WG.OwnerControlCalls.idle_store))
+    | transport_outer_step
+
+theorem envDelete (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) :
+    ProductSafe extra origin replay (envDeleteObserved hooks) := by
+  unfold envDeleteObserved HandshakeSecurity.SendExchange.envDeleteWith Configuration.envDeleteWith
+  repeat' first
+    | (transport_carrier_head downObserved; exact product_state (down flushed))
+    | (transport_carrier_head destructObserved; exact product_state (destruct flushed))
+    | (transport_product_native Env.requireIdleDevice
+       exact product_storeLift _ (pinned_const _private.Leanux.Proofs.WG.Origins.OwnerControlCalls.«0».Leanux.Proofs.WG.OwnerControlCalls.idle_store))
+    | (transport_product_native liftWG
+       apply product_wg
+       exact TransportPublication.store_rx _ mayHaveSlept_sameWGStore)
+    | (transport_product_native Env.inetdevDestroy
+       exact product_storeLift _ (pinned_const _private.Leanux.Proofs.WG.Origins.OwnerControlCalls.«0».Leanux.Proofs.WG.OwnerControlCalls.inetdevDestroy_store))
+    | transport_outer_step
+
 theorem socketCall (fd : Nat) (body : PrefixM E Int) (hb : ProductSafe extra origin replay body) :
     ProductSafe extra origin replay (socketCallOnWith (fun {_} a => liftPrefix a) fd body) := by
   unfold socketCallOnWith
@@ -116,13 +140,19 @@ theorem rtnetlink (body : PrefixM E Int) (hb : ProductSafe extra origin replay b
     | (transport_carrier_head socketCallOnWith; apply socketCall)
     | transport_outer_step
 
-theorem retained (h : StagingSafe extra origin replay hooks) (call : Syscall)
+theorem retained (h : StagingSafe extra origin replay hooks)
+    (flushed : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)) (call : Syscall)
     (kept : DispatchRetained call) : ProductSafe extra origin replay (retainedObserved hooks call) := by
   by_cases up : call = .wgUp
   · subst call
     exact socketCall _ _ (envUp h)
-  · simp only [retainedObserved]
-    exact product_native _ (fun history => TransportOuterNative.quiet_dispatch call history kept up)
+  · by_cases stopped : call = .wgDown
+    · subst call
+      exact socketCall _ _ (envDown flushed)
+    · have same : retainedObserved hooks call = liftPrefix (Leanux.dispatch call) := by
+        cases call <;> simp_all only [retainedObserved] <;> contradiction
+      rw [same]
+      exact product_native _ (fun history => TransportOuterNative.quiet_dispatch call history kept up)
 
 theorem observe (h : DeferredSafe extra origin replay hooks) :
     ProductSafe extra origin replay (observeObserved hooks) :=
@@ -139,12 +169,12 @@ theorem dispatch (h : DeferredSafe extra origin replay hooks)
     (front : ∀ family addr packets mtu, StateSafe extra origin replay (hooks.front family addr packets mtu))
     (call : Syscall) : ProductSafe extra origin replay (dispatchObserved hooks call) := by
   apply dispatchWith_preserves
-  · exact retained h.toStagingSafe
-  · intro attrs; exact netlink _ (product_state (configDevice_safe h.toStagingSafe attrs))
+  · exact retained h.toStagingSafe h.flushedSend
+  · intro attrs; exact netlink _ (product_state (configDevice_safe h.toStagingSafe h.flushedSend attrs))
   · apply rtnetlink
     simpa only [liftWGObserver_lift] using product_state (extra := extra) (origin := origin)
       (replay := replay) (state_native _ TransportLifecycle.create)
-  · exact rtnetlink _ (product_native _ TransportControl.env_delete)
+  · exact rtnetlink _ (envDelete h.flushedSend)
   · exact syscallXmit h front
   · intro family port message tos ll dest
     exact socketCall _ _ (inject h family port message tos ll dest)

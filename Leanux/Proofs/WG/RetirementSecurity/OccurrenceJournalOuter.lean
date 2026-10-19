@@ -150,8 +150,15 @@ theorem retained (call : Syscall)
   by_cases up : call = .wgUp
   · subst call
     exact socketCall _ _ (envUp)
-  · simp only [retainedObserved]
-    exact product_lift _ (OccurrenceSyscall.dispatch_native call)
+  · by_cases down : call = .wgDown
+    · subst call
+      apply socketCall
+      rw [Driver.envDown_lift Journal.hooks rfl]
+      exact product_lift _ OccurrenceControls.env_down
+    · cases call <;> first
+        | exact False.elim (up rfl)
+        | exact False.elim (down rfl)
+        | exact product_lift _ (OccurrenceSyscall.dispatch_native _)
 
 theorem observe :
     ProductSafe (observeObserved Journal.hooks) :=
@@ -172,7 +179,9 @@ theorem dispatch
   · intro attrs; exact netlink _ (state_product (configDevice_safe  attrs))
   · apply rtnetlink
     exact product_native _ OccurrenceLifecycle.create
-  · exact rtnetlink _ (product_lift _ OccurrenceControls.env_delete)
+  · apply rtnetlink
+    rw [Driver.envDelete_lift Journal.hooks rfl]
+    exact product_lift _ OccurrenceControls.env_delete
   · exact syscall_xmit
   · intro family port message tos ll dest
     exact socketCall _ _ (inject family port message tos ll dest)

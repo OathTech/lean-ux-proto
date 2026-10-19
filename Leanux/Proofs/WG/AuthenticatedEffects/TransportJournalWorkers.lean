@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportJournalStaging
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportWorkerFrames
+import Leanux.Proofs.WG.TransmitSecurity.DriverNeutralCalls
 
 /-! Concrete ring, encryption, completion and timer selection hooks retain
 RX authentication certificates and cannot invent a replay receipt. -/
@@ -31,8 +32,12 @@ theorem prepare : ProductSafe Journal.hooks.prepare := by
   obtain ⟨suffix,eq⟩ := Appends.focus Event.rxOrigin origin? (liftWGObserver RxOrigin.prepare) w h
   exact ⟨suffix,eq,True.intro,by split <;> trivial⟩
 
-theorem sendWorker : ProductSafe Journal.hooks.sendWorker :=
-  product_rx _ TransportHookFrames.sendWorker
+theorem sendWorker : ProductSafe (Driver.sendWorkerObserved Journal.hooks) := by
+  rw [Driver.sendWorker_lift Journal.hooks rfl]
+  exact product_rx _ TransportHookFrames.sendWorker
+
+theorem flushedSend (pid : PeerId) : StateSafe (Journal.hooks.flushedSend pid) :=
+  state_rx _ ((TransportRemoval.flushedSend_geometry pid).factor Prod.snd)
 
 theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (entry : WheelEntry) :
     ProductSafe (Journal.hooks.timerSelected d j pid t entry) := by
@@ -59,6 +64,6 @@ theorem nativePoll (pid : PeerId) (budget : Nat) :
     (fun gro => base (gro_flush _ (TransportCarrier.flush staging front) gro)) pid budget
   unfold TransportReplay.Preserves TransportReplay.Inv at carrier
   simpa only [ProductSafe,TransportCarrier.ProductSafe,and_true,liftWGObserver_lift,
-    Driver.nativePollObserved,Driver.pollObserved,Journal.hooks] using carrier
+    Driver.nativePollObserved,Driver.pollObserved,Journal.hooks,CandidatePoll.neutral] using carrier
 
 end Leanux.Proofs.WG.AuthenticatedEffects.TransportJournal

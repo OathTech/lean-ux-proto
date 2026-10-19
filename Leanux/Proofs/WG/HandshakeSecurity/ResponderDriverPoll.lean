@@ -31,6 +31,10 @@ theorem poll (H1 : H1ResponderCurrentEdges) (pid : PeerId) (budget : Nat)
     (callbacks : ∀ packets, ProductPreserves (callback packets)) :
     ProductPreserves (Driver.pollObserved hooks pid budget callback) := by
   change PrefixPreserves ProductInv Safe _
+  unfold Driver.pollObserved
+  change PrefixPreserves ProductInv Safe
+    (AuthenticatedEffects.CandidatePoll.sourceWith _ (fun _ _ => Pure.pure 0) (fun _ => Pure.pure ()) _ _ _ _ _ _)
+  rw [AuthenticatedEffects.CandidatePoll.neutral]
   change PrefixPreserves ProductInv Safe
     (sourceWith (fun a => liftWGObserver (liftWGPrefix a))
       (fun pkt => liftWGObserver (liftWGPrefix (counterValidate pkt.keypair pkt.nonce)))

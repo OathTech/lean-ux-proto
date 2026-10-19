@@ -65,7 +65,7 @@ theorem inject (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (d
 
 theorem after_batch : ProductSafe (Driver.afterBatchObserved Journal.hooks) :=
   TrafficSource.afterBatch_preserves (fun _ _ hi => hi.2) product_stable _ _ _ _ _ crypt send_workers
-    send_one schedule drain
+    (by rw [Driver.sendWorker_lift Journal.hooks rfl]; exact send_one) schedule drain
 
 theorem flood (count port family : Nat) (messages : List (List UInt8)) :
     ProductSafe (Driver.floodObserved Journal.hooks count port family messages) :=

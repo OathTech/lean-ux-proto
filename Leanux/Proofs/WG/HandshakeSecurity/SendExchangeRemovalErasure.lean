@@ -13,10 +13,20 @@ variable (sg : {α : Type} → WG.M α → WGPrefix E α)
   (hd : ∀ peer, ErasesStatePrefix (dg peer) (drainHandshakeSendWq peer))
 
 include hs hd in
+theorem timersStop_erases (pid : PeerId) :
+    ErasesStatePrefix (timersStopWith sg dg pid) (timersStop pid) := by
+  unfold timersStopWith timersStop
+  repeat' first | exact hs _ | exact hd _ | work_root_erasure_step
+
+include hs hd in
 theorem afterDead_erases (pid : PeerId) :
     ErasesStatePrefix (afterDeadWith sg dg pid) (peerRemoveAfterDead pid) := by
   unfold afterDeadWith peerRemoveAfterDead
-  repeat' first | exact hs _ | exact hd _ | work_root_erasure_step
+  repeat' first
+    | exact hs _
+    | exact hd _
+    | exact timersStop_erases sg hs dg hd _
+    | work_root_erasure_step
 
 include hs hd in
 theorem remove_erases (peer : Option PeerId) :

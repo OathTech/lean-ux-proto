@@ -18,6 +18,7 @@ macro "responder_driver_device_step " H1:term : tactic => `(tactic| first
   | (nonce_source_head expireCurrentPeerKeypairs; exact lift _ (carrier_expire _))
   | (nonce_source_head clearPeerEndpointSrc; exact lift _ (carrier_clear_endpoint _))
   | (nonce_source_head setPort; exact lift _ (carrier_port _))
+  | (nonce_source_head Driver.removeAllObserved; rw [Driver.removeAll_lift hooks rfl])
   | (nonce_source_head peerRemoveAll; exact lift _ (carrier_remove_all $H1))
   | (nonce_source_head peerPut; exact lift _ (carrier_peer_put _))
   | (nonce_source_head modifyDev
@@ -48,8 +49,12 @@ private theorem config_key_with (H1 : H1ResponderCurrentEdges) (a : DeviceAttrs)
     | responder_driver_device_step H1
 
 theorem config_key (H1 : H1ResponderCurrentEdges) (a : DeviceAttrs) :
-    Preserves (Driver.configKey hooks a) :=
-  config_key_with H1 a _ (config_peers H1 a)
+    Preserves (Driver.configKey hooks a) := by
+  unfold Driver.configKey
+  have removal : Driver.removeObserved hooks = fun peer => liftWGPrefix (peerRemove peer) :=
+    funext (Driver.remove_lift hooks rfl)
+  rw [removal]
+  exact config_key_with H1 a _ (config_peers H1 a)
 
 theorem config_device_update (H1 : H1ResponderCurrentEdges) (a : DeviceAttrs) (flags : UInt32) :
     Preserves (Driver.configDeviceUpdate hooks a flags) := by

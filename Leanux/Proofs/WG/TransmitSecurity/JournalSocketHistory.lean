@@ -117,7 +117,12 @@ private theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (
 
 theorem hooks_safe : HooksHistorySafe Safe Journal.hooks where
   handshake := handshake
-  sendWorker := History.product_lift _
+  sendWorker := by
+    rw [Driver.sendWorker_lift _ rfl]
+    exact History.product_lift _
+  flushedSend := fun _ => History.state_lift _
+  candidateEnter := fun _ _ => History.product_pure _
+  candidateLeave := fun _ => History.product_pure _
   prepare := product_focus _ _ (fun _ => rfl) _
   counterCheck := fun _ _ => product_quiet (Appends.lift _).receiptObserved
     (HistoryFrame.receiptObserved (HistoryFrame.lift _ _) (fun _ => rfl))

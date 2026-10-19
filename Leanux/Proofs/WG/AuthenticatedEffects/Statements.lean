@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEffectsFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerParametric
+import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsErasure
 import Leanux.Proofs.WG.AuthenticatedEffects.CandidateCarrier
 import Leanux.Proofs.WG.AuthenticatedEffects.CandidatePollSource
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEffects
@@ -824,14 +827,16 @@ theorem shared_replay_has_prior_authentication
 
 /-- Security: the actual shared poll supplies confirmation only with its own
 immediately preceding successful replay receipt and prior AEAD publication for
-the same peer and keypair. The concrete confirmation/tail/GRO contracts and
-entry carrier remain explicit; initialized driver transport is still open. -/
+the same peer and keypair. This local claim keeps neutral candidate markers,
+the concrete confirmation/tail/GRO contracts and its entry carrier explicit. -/
 theorem shared_poll_supplies_authenticated_confirmation
     (origin : E → Option TransportDriver.OriginEvent)
     (replay : E → Option TransportDriver.Replay) (record : TransportDriver.Replay → E)
     (hooks : TransmitSecurity.Driver.Hooks E)
     (inverse : ∀ r, replay (record r) = some r) (quiet : ∀ r, origin (record r) = none)
     (counter : hooks.counterCheck = TransportDriver.counter record)
+    (enter : hooks.candidateEnter = fun _ _ => pure 0)
+    (leave : hooks.candidateLeave = fun _ => pure ())
     (hc : ∀ pid kid, PrefixEnsures (TransportReplay.ConfirmationInput origin replay record pid kid)
       (TransportReplay.Safe origin replay) (liftWGObserver (hooks.confirmation pid kid))
         (fun _ => TransportReplay.Inv origin replay))
@@ -845,7 +850,7 @@ theorem shared_poll_supplies_authenticated_confirmation
     (pid : PeerId) (budget : Nat) :
     TransportReplay.Preserves (origin := origin) (replay := replay)
       (TransmitSecurity.Driver.pollObserved hooks pid budget toStack) :=
-  TransportReplay.shared_poll_authorized hooks inverse quiet counter hc ht toStack hr hf pid budget
+  TransportReplay.shared_poll_authorized hooks inverse quiet counter enter leave hc ht toStack hr hf pid budget
 
 /-- Security: at that concrete confirmation-entry cut, the journal's last
 receipt is a successful native replay check on this peer and keypair, certified
@@ -1036,5 +1041,49 @@ theorem scoped_candidate_retains_authenticated_confirmation
     responder decode inverse quiet scopeRecord candidate scopeOrigin scopeReplay scopeQuiet
     hooks confirmed toStack consumeCarrier receiveCarrier flushCarrier
     tailOrder receiveOrder flushOrder pid budget
+
+/-- Security: exposing the receive-side timer arms and handshake queue appends
+preserves the exact native packet-maintenance result and Stop. Causal validity
+of the supplied effect context remains an initialized-driver obligation. -/
+theorem packet_effects_preserve_original_receive
+    (decode : E → Option (CausalScope.Event Cause))
+    (recordArm : TimerEffects.Arm (CausalEffects.Context Cause) → E)
+    (recordQueue : TimerEffects.Queued (CausalEffects.Context Cause) → E)
+    (pid : PeerId) (pkt : RxPacket) :
+    ErasesStatePrefix
+      (PacketEffects.prepareWith (CausalEffects.ops decode recordArm recordQueue) pid pkt)
+      (Queues.RxCredits.prepareRest pid pkt) :=
+  PacketEffects.prepare_erases (CausalEffects.ops_erases decode recordArm recordQueue) pid pkt
+
+/-- Security: the callback-parametric handshake source is the existing worker
+at its original cookie/MAC prefix and accepted suffix. Completed native receipts
+can wrap the actual consumers and response creation before a later Stop. -/
+theorem handshake_callback_source_keeps_existing_worker
+    (record : HandshakeCausal.Event → E) (decode : E → Option HandshakeCausal.Event)
+    (session : PeerId → WGPrefix E Bool) (keepalive : PeerId → WGPrefix E Unit) :
+    HandshakeWorker.observed record decode session keepalive =
+      HandshakeWorker.observedWith (HandshakeWorker.observedOps record decode session keepalive) :=
+  HandshakeWorker.observed_factor record decode session keepalive
+
+/-- Security: neutral packet-maintenance callbacks are exactly the original
+native action lifted once. Source factoring adds no hidden side effect or
+journal event, including on a failed receive suffix. -/
+theorem native_effect_callbacks_are_transparent (pid : PeerId) (pkt : RxPacket) :
+    PacketEffects.prepareWith (TimerEffects.lifted : TimerEffects.Ops (WGPrefix E)) pid pkt =
+      liftWGPrefix (Queues.RxCredits.prepareRest pid pkt) :=
+  PacketEffects.prepare_lifted pid pkt
+
+/-- Security: packet-maintenance receipts leave the active causal scope
+unchanged; each later arm or queue append in that callback reads the same scope.
+This frame does not declare the current scope authorized. -/
+theorem packet_effects_retain_current_scope
+    (decode : E → Option (CausalScope.Event Cause))
+    (recordArm : TimerEffects.Arm (CausalEffects.Context Cause) → E)
+    (recordQueue : TimerEffects.Queued (CausalEffects.Context Cause) → E)
+    (ha : ∀ r, decode (recordArm r) = none) (hq : ∀ r, decode (recordQueue r) = none)
+    (pid : PeerId) (pkt : RxPacket) :
+    StateHistoryFrame decode
+      (PacketEffects.prepareWith (CausalEffects.ops decode recordArm recordQueue) pid pkt) :=
+  PacketEffects.prepare_frame decode (CausalEffects.ops_frames decode recordArm recordQueue decode ha hq) pid pkt
 
 end Leanux.Proofs.WG.AuthenticatedEffects

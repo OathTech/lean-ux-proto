@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeNativeFrames
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeOrigins
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeObservation
 import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeRemovalProjection
 import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeRemovalErasure
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderPriorConfirmation
@@ -882,5 +885,34 @@ theorem native_removal_exchange_erasure {E : Type}
     ErasesStatePrefix (SendExchange.removeAllWith step drain) peerRemoveAll :=
   ⟨SendExchange.remove_erases step nativeStep drain nativeDrain peer,
     SendExchange.removeAll_erases step nativeStep drain nativeDrain⟩
+
+/-- Given the native exchange-history carrier, two successful response
+consumptions for one peer require different initiation epochs. The carrier is
+an explicit boundary: initialized whole-driver transport is still required. -/
+theorem exchange_response_consumed_once {history : List Exchange.Event} {ledger : Exchange.Ledger}
+    (carrier : Exchange.History history ledger)
+    (pre between post : List Exchange.Event) (first second : List UInt8)
+    (r s : WGRunWitness (Option PeerId)) (pid : PeerId)
+    (position : history = pre ++ Exchange.Event.consumeResponse first r :: between ++
+      Exchange.Event.consumeResponse second s :: post)
+    (accepted₁ : r.value = some pid) (accepted₂ : s.value = some pid) :
+    ∃ epoch₁ epoch₂, Exchange.ResponseAt pre pid epoch₁ ∧
+      Exchange.ResponseAt (pre ++ Exchange.Event.consumeResponse first r :: between) pid epoch₂ ∧
+      epoch₁ < epoch₂ :=
+  Exchange.response_no_repeat carrier pre between post first second r s pid position accepted₁ accepted₂
+
+/-- Given the native exchange-history carrier, a completed session has an
+earlier native exchange start and advances the key-allocation counter exactly
+once. H1's source effect and the history premise remain visible. -/
+theorem exchange_installation_count (H1 : H1SessionEffects)
+    {history : List Exchange.Event} {ledger : Exchange.Ledger}
+    (carrier : Exchange.History history ledger) (pre post : List Exchange.Event)
+    (pid : PeerId) (r : WGRunWitness Bool)
+    (position : history = pre ++ Exchange.Event.session pid r :: post) (success : r.value = true) :
+    r.after.keypairCounter = r.before.keypairCounter + 1 ∧
+    ∃ epoch, Exchange.InstallAt pre pid epoch ∧ Exchange.Origin pre pid epoch := by
+  obtain ⟨epoch,binding⟩ := carrier.install_epoch pre post pid r position success
+  exact ⟨Exchange.installation_count H1 carrier pre post pid r position success,
+    epoch,binding,carrier.install_origin pre post pid r position epoch binding⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

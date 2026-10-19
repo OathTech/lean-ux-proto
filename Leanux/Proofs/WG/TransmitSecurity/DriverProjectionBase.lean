@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.TransmitSecurity.DriverSource
 import Leanux.Proofs.Logged.ProjectsOuter
+import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeRemovalProjection
 
 /-! Exact event projection through the shared TX source driver. These laws
 preserve the native result and both states, as well as every failed prefix. -/
@@ -12,7 +13,10 @@ structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop
     (∀ pid, StateProjectsPrefix ρ id (sg pid) (sa pid)) →
     (∀ pid, StateProjectsPrefix ρ id (kg pid) (ka pid)) →
     StateProjectsPrefix ρ id (g.handshake sg kg) (a.handshake sa ka)
-  sendWorker : ProjectsPrefix ρ id g.sendWorker a.sendWorker
+  flushedSend : ∀ pid, StateProjectsPrefix ρ id (g.flushedSend pid) (a.flushedSend pid)
+  candidate : ∃ scopeMap : Nat → Nat,
+    (∀ skb pkt, ProjectsPrefix ρ scopeMap (g.candidateEnter skb pkt) (a.candidateEnter skb pkt)) ∧
+    (∀ token, ProjectsPrefix ρ id (g.candidateLeave token) (a.candidateLeave (scopeMap token)))
   prepare : ProjectsPrefix ρ id g.prepare a.prepare
   counterCheck : ∀ skb pkt, ProjectsPrefix ρ id (g.counterCheck skb pkt) (a.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we,
@@ -99,6 +103,29 @@ theorem prefix_range (r : Std.Legacy.Range) (b : β)
   exact prefix_forIn ρ _ b g a ha
 
 end Projection
+
+theorem sendWorker_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
+    (h : HooksProjects ρ g a) : ProjectsPrefix ρ id (sendWorkerObserved g) (sendWorkerObserved a) :=
+  HandshakeSecurity.SendExchange.one_projects ρ liftPrefix liftPrefix
+    (fun _ => projectsPrefix_lift ρ _) _ _ (fun pid => (h.flushedSend pid).liftWGObserver ρ id)
+
+theorem sendDrain_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
+    (h : HooksProjects ρ g a) (upTo : Option PeerId) :
+    StateProjectsPrefix ρ id (sendDrainObserved g upTo) (sendDrainObserved a upTo) :=
+  HandshakeSecurity.SendExchange.drain_projects ρ liftWGPrefix liftWGPrefix
+    (fun _ => Projection.state_lift ρ _) _ _ h.flushedSend _ _
+    (fun _ => Projection.state_lift ρ _) upTo
+
+theorem remove_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
+    (h : HooksProjects ρ g a) (peer : Option PeerId) :
+    StateProjectsPrefix ρ id (removeObserved g peer) (removeObserved a peer) :=
+  HandshakeSecurity.SendExchange.remove_projects ρ liftWGPrefix liftWGPrefix
+    (fun _ => Projection.state_lift ρ _) _ _ (sendDrain_projects h) peer
+
+theorem removeAll_projects {ρ : E → Option F} {g : Hooks E} {a : Hooks F}
+    (h : HooksProjects ρ g a) : StateProjectsPrefix ρ id (removeAllObserved g) (removeAllObserved a) :=
+  HandshakeSecurity.SendExchange.removeAll_projects ρ liftWGPrefix liftWGPrefix
+    (fun _ => Projection.state_lift ρ _) _ _ (sendDrain_projects h)
 
 macro "driver_state_step " rho:ident : tactic => `(tactic| first
   | (maintenance_head liftWGPrefix; exact Projection.state_lift $rho _)

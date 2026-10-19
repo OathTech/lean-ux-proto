@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TransmitSecurity.DriverNeutralCalls
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverConfigFrames
 
 set_option maxHeartbeats 200000
@@ -74,6 +75,7 @@ macro "responder_driver_config_step " H1:term : tactic => `(tactic| first
   | (nonce_source_head Driver.keepaliveObserved; exact keepalive _)
   | (nonce_source_head Driver.stagingObserved; exact staging _)
   | (nonce_source_head setAllowedip; exact lift _ (carrier_allowedip _ _))
+  | (nonce_source_head Driver.removeObserved; rw [Driver.remove_lift hooks rfl])
   | (nonce_source_head peerRemove; exact lift _ (carrier_remove $H1 _))
   | (nonce_source_head removeByPeer; exact lift _ (carrier_remove_ips _))
   | (nonce_source_head setPeerEndpoint; exact lift _ (carrier_endpoint _ _))
@@ -201,8 +203,10 @@ private theorem update_control (a : PeerAttrs) (flags : UInt32) (psk : Option Ke
 
 theorem config_update (H1 : H1ResponderCurrentEdges) (a : PeerAttrs) (peer : Option PeerId)
     (flags : UInt32) (psk : Option Key) (pid : PeerId) :
-    Preserves (Driver.configUpdate hooks a peer flags psk pid) :=
-  update_control a flags psk _ _ _ _ _ _ (lift _ (carrier_remove H1 peer))
+    Preserves (Driver.configUpdate hooks a peer flags psk pid) := by
+  unfold Driver.configUpdate
+  rw [Driver.remove_lift hooks rfl]
+  exact update_control a flags psk _ _ _ _ _ _ (lift _ (carrier_remove H1 peer))
     (psk_write pid (psk.getD [])) (lift _ (carrier_remove_ips pid))
     (fun ep => lift _ (carrier_endpoint pid ep)) (config_out a peer) (config_tail a peer pid)
 

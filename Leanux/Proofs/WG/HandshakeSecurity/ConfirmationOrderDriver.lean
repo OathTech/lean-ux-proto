@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.HandshakeSecurity.ConfirmationOrderQuiet
+import Leanux.Proofs.WG.AuthenticatedEffects.CandidateOrder
 
 /-! Source wrappers for confirmation ordering. The temporary neutral
 confirmation hook below is used only where it is definitionally absent from
@@ -14,7 +15,10 @@ structure QuietHooksSafe (Good : List E → Prop) (hooks : Driver.Hooks E) : Pro
     (∀ pid, StateHistorySafe Good (session pid)) →
     (∀ pid, StateHistorySafe Good (keepalive pid)) →
     StateHistorySafe Good (hooks.handshake session keepalive)
-  sendWorker : ProductHistorySafe Good hooks.sendWorker
+  sendWorker : ProductHistorySafe Good (Driver.sendWorkerObserved hooks)
+  flushedSend : ∀ pid, StateHistorySafe Good (hooks.flushedSend pid)
+  candidateEnter : ∀ skb pkt, ProductHistorySafe Good (hooks.candidateEnter skb pkt)
+  candidateLeave : ∀ token, ProductHistorySafe Good (hooks.candidateLeave token)
   prepare : ProductHistorySafe Good hooks.prepare
   counterCheck : ∀ skb pkt, ProductHistorySafe Good (hooks.counterCheck skb pkt)
   timerSelected : ∀ d j pid t we, ProductHistorySafe Good (hooks.timerSelected d j pid t we)
@@ -35,6 +39,9 @@ private theorem quiet_hooks (h : QuietHooksSafe Good hooks) :
     HooksHistorySafe Good (neutralConfirmation hooks) where
   handshake := h.handshake
   sendWorker := h.sendWorker
+  flushedSend := h.flushedSend
+  candidateEnter := h.candidateEnter
+  candidateLeave := h.candidateLeave
   prepare := h.prepare
   counterCheck := h.counterCheck
   timerSelected := h.timerSelected
@@ -86,8 +93,11 @@ theorem quiet_nativePoll (record : AuthenticatedEffects.TransportDriver.Replay �
     (h : QuietHooksSafe (Safe record decode) hooks)
     (counter : hooks.counterCheck = AuthenticatedEffects.TransportDriver.counter record)
     (confirmed : hooks.confirmation = confirmation responder decode) (pid : PeerId) (budget : Nat) :
-    ProductHistorySafe (Safe record decode) (Driver.nativePollObserved hooks pid budget) :=
-  shared_poll record responder decode inverse quiet hooks counter confirmed
+    ProductHistorySafe (Safe record decode) (Driver.nativePollObserved hooks pid budget) := by
+  unfold Driver.nativePollObserved Driver.pollObserved
+  rw [counter]
+  exact AuthenticatedEffects.CandidateOrder.shared_poll record responder decode inverse quiet hooks
+    hooks.candidateEnter hooks.candidateLeave h.candidateEnter h.candidateLeave confirmed
     (fun pid pkt value => (quiet_receiveTail h pid pkt value).liftWGObserver)
     (Driver.stackFlushObserved hooks)
     (quiet_groReceive _ (quiet_stackFlush h))

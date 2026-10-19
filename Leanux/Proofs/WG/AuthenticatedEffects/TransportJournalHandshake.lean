@@ -151,6 +151,7 @@ theorem callbacks : DeferredSafe (fun _ => True) origin? replay? Journal.hooks w
   handshake := handshake
   napi := nativePoll
   sendWorker := sendWorker
+  flushedSend := flushedSend
   selected := timer
 
 /-- Every actual replay-check receipt from an initialized shared execution

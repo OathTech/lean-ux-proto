@@ -18,6 +18,7 @@ macro "archive_driver_device_step " : tactic => `(tactic| first
   | (nonce_source_head expireCurrentPeerKeypairs; exact lift _ (expire _))
   | (nonce_source_head clearPeerEndpointSrc; exact lift _ (clear_endpoint _))
   | (nonce_source_head setPort; exact lift _ (port _))
+  | (nonce_source_head Driver.removeAllObserved; rw [Driver.removeAll_lift TimestampDriver.hooks rfl])
   | (nonce_source_head peerRemoveAll; exact lift _ (remove_all ))
   | (nonce_source_head peerPut; exact lift _ (peer_put _))
   | (nonce_source_head modifyDev
@@ -48,8 +49,12 @@ private theorem config_key_with (a : DeviceAttrs)
     | archive_driver_device_step
 
 theorem config_key (a : DeviceAttrs) :
-    Preserves (Driver.configKey TimestampDriver.hooks a) :=
-  config_key_with a _ (config_peers a)
+    Preserves (Driver.configKey TimestampDriver.hooks a) := by
+  unfold Driver.configKey
+  have removal : Driver.removeObserved TimestampDriver.hooks = fun peer => liftWGPrefix (peerRemove peer) :=
+    funext (Driver.remove_lift TimestampDriver.hooks rfl)
+  rw [removal]
+  exact config_key_with a _ (config_peers a)
 
 theorem config_device_update (a : DeviceAttrs) (flags : UInt32) :
     Preserves (Driver.configDeviceUpdate TimestampDriver.hooks a flags) := by

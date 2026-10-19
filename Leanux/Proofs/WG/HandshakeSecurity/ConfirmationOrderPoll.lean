@@ -165,6 +165,8 @@ theorem shared_poll (record : TransportDriver.Replay → E)
     (inverse : ∀ event, decode (responder event) = some event)
     (quiet : ∀ r, Unconfirmed decode (record r)) (hooks : TransmitSecurity.Driver.Hooks E)
     (counter : hooks.counterCheck = TransportDriver.counter record)
+    (enter : hooks.candidateEnter = fun _ _ => Pure.pure 0)
+    (leave : hooks.candidateLeave = fun _ => Pure.pure ())
     (confirmed : hooks.confirmation = confirmation responder decode)
     (tail : ∀ pid pkt value, PrefixPreserves (Base record decode) (Safe record decode)
       (liftWGObserver (TransmitSecurity.Driver.receiveTailObserved hooks pid pkt value)))
@@ -176,7 +178,7 @@ theorem shared_poll (record : TransportDriver.Replay → E)
     PrefixPreserves (Base record decode) (Safe record decode)
       (TransmitSecurity.Driver.pollObserved hooks pid budget toStack) := by
   unfold TransmitSecurity.Driver.pollObserved
-  simp only [liftWGObserver_lift,counter]
+  simp only [liftWGObserver_lift,counter,enter,leave,CandidatePoll.neutral]
   exact poll record decode quiet _ _ _
     (shared_consumer record responder decode inverse hooks confirmed tail) receive flush pid budget
 

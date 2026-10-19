@@ -24,7 +24,7 @@ theorem inject (H1 : H1ResponderCurrentEdges) (family port : Nat) (msg : List UI
 theorem after_batch (H1 : H1ResponderCurrentEdges) :
     ProductPreserves (Driver.afterBatchObserved hooks) :=
   TrafficSource.afterBatch_preserves (fun _ _ hi => hi.2) product_stable _ _ _ _ _
-    (crypt H1) (send_workers H1) send_one (schedule H1) drain
+    (crypt H1) (send_workers H1) (by rw [Driver.sendWorker_lift hooks rfl]; exact send_one) (schedule H1) drain
 
 theorem flood (H1 : H1ResponderCurrentEdges) (count port family : Nat)
     (messages : List (List UInt8)) :

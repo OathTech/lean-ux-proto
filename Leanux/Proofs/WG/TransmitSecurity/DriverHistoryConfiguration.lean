@@ -6,6 +6,35 @@ variable {E : Type} {Safe : List E → Prop} {g : Hooks E}
 set_option maxHeartbeats 600000
 set_option pp.structureInstances false
 
+theorem sendDrain_history (h : ActorHistorySafe Safe g) (upTo : Option PeerId) :
+    StateHistorySafe Safe (sendDrainObserved g upTo) := by
+  unfold sendDrainObserved HandshakeSecurity.SendExchange.drainWith
+  repeat' first
+    | (driver_history_head Hooks.flushedSend; exact h.flushedSend _)
+    | driver_state_history_step
+
+private theorem afterDead_history (h : ActorHistorySafe Safe g) (pid : PeerId) :
+    StateHistorySafe Safe
+      (HandshakeSecurity.SendExchange.afterDeadWith liftWGPrefix (sendDrainObserved g) pid) := by
+  unfold HandshakeSecurity.SendExchange.afterDeadWith HandshakeSecurity.SendExchange.timersStopWith
+  repeat' first
+    | (driver_history_head sendDrainObserved; exact sendDrain_history h _)
+    | driver_state_history_step
+
+theorem remove_history (h : ActorHistorySafe Safe g) (peer : Option PeerId) :
+    StateHistorySafe Safe (removeObserved g peer) := by
+  unfold removeObserved HandshakeSecurity.SendExchange.removeWith peerRemoveWith
+  repeat' first
+    | (driver_history_head HandshakeSecurity.SendExchange.afterDeadWith; exact afterDead_history h _)
+    | driver_state_history_step
+
+theorem removeAll_history (h : ActorHistorySafe Safe g) :
+    StateHistorySafe Safe (removeAllObserved g) := by
+  unfold removeAllObserved HandshakeSecurity.SendExchange.removeAllWith peerRemoveAllWith
+  repeat' first
+    | (driver_history_head HandshakeSecurity.SendExchange.afterDeadWith; exact afterDead_history h _)
+    | driver_state_history_step
+
 theorem configOut_history (attrs : PeerAttrs) (peer : Option PeerId) (ret : Int) :
     StateHistorySafe Safe (configOut attrs peer ret) := by
   unfold configOut
@@ -16,6 +45,8 @@ theorem configTailFinish_history (h : ActorHistorySafe Safe g) (attrs : PeerAttr
     StateHistorySafe Safe (configTailFinish g attrs peer pid ret) := by
   unfold configTailFinish
   repeat' first
+    | (driver_history_head removeObserved; exact remove_history h _)
+    | (driver_history_head removeAllObserved; exact removeAll_history h)
     | (driver_history_head configOut; exact configOut_history _ _ _)
     | (driver_history_head stagingObserved; exact h.staging _)
     | (driver_history_head keepaliveObserved; exact keepalive_actor_history h _)
@@ -26,6 +57,8 @@ theorem configTail_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs)
     StateHistorySafe Safe (configTail g attrs peer pid) := by
   unfold configTail peerAllowedIpsWith
   repeat' first
+    | (driver_history_head removeObserved; exact remove_history h _)
+    | (driver_history_head removeAllObserved; exact removeAll_history h)
     | (driver_history_head configOut; exact configOut_history _ _ _)
     | (driver_history_head configTailFinish; exact configTailFinish_history h _ _ _ _)
     | driver_state_history_step
@@ -35,6 +68,8 @@ theorem configUpdate_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs)
     StateHistorySafe Safe (configUpdate g attrs peer flags psk pid) := by
   unfold configUpdate peerConfigUpdateWith
   repeat' first
+    | (driver_history_head removeObserved; exact remove_history h _)
+    | (driver_history_head removeAllObserved; exact removeAll_history h)
     | (driver_history_head configOut; exact configOut_history _ _ _)
     | (driver_history_head configTail; exact configTail_history h _ _ _)
     | driver_state_history_step
@@ -43,6 +78,8 @@ theorem configPeer_history (h : ActorHistorySafe Safe g) (attrs : PeerAttrs) :
     StateHistorySafe Safe (configPeer g attrs) := by
   unfold configPeer setPeerCmdWith peerCommandAcquiredWith
   repeat' first
+    | (driver_history_head removeObserved; exact remove_history h _)
+    | (driver_history_head removeAllObserved; exact removeAll_history h)
     | (driver_history_head configOut; exact configOut_history _ _ _)
     | (driver_history_head configUpdate; exact configUpdate_history h _ _ _ _ _)
     | driver_state_history_step
@@ -58,6 +95,7 @@ theorem configKey_history (h : ActorHistorySafe Safe g) (attrs : DeviceAttrs) :
     StateHistorySafe Safe (configKey g attrs) := by
   unfold configKey deviceKeyWith
   repeat' first
+    | (driver_history_head removeObserved; exact remove_history h _)
     | (driver_history_head configPeers; exact configPeers_history h _)
     | (driver_history_head stagingObserved; exact h.staging _)
     | driver_state_history_step
@@ -66,6 +104,7 @@ theorem configDeviceUpdate_history (h : ActorHistorySafe Safe g) (attrs : Device
     StateHistorySafe Safe (configDeviceUpdate g attrs flags) := by
   unfold configDeviceUpdate deviceUpdateWith
   repeat' first
+    | (driver_history_head removeAllObserved; exact removeAll_history h)
     | (driver_history_head configKey; exact configKey_history h _)
     | driver_state_history_step
 

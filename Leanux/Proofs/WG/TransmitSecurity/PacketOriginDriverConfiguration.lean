@@ -62,6 +62,7 @@ theorem configUpdate_safe (attrs : PeerAttrs)
     StateSafe (configUpdate Journal.hooks attrs peer flags psk pid) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold configUpdate peerConfigUpdateWith
+  simp only [remove_lift Journal.hooks rfl]
   repeat' first
     | (nonce_source_head configOut; exact configOut_safe _ _ _)
     | (nonce_source_head configTail; exact configTail_safe _ _ _)
@@ -88,6 +89,7 @@ theorem configKey_safe (attrs : DeviceAttrs) :
     StateSafe (configKey Journal.hooks attrs) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold configKey deviceKeyWith
+  simp only [remove_lift Journal.hooks rfl]
   repeat' first
     | (nonce_source_head configPeers; exact configPeers_safe _)
     | (nonce_source_head stagingObserved; exact staging _)
@@ -97,6 +99,7 @@ theorem configDeviceUpdate_safe (attrs : DeviceAttrs) (flags : UInt32) :
     StateSafe (configDeviceUpdate Journal.hooks attrs flags) := by
   change StatePrefixPreserves (fun h w _ => JournalInv h w) Safe _
   unfold configDeviceUpdate deviceUpdateWith
+  simp only [removeAll_lift Journal.hooks rfl]
   repeat' first
     | (nonce_source_head configKey; exact configKey_safe _)
     | origin_config_step

@@ -51,7 +51,9 @@ macro "occurrence_journal_deferred_step" : tactic => `(tactic| first
   | (scheduler_preserve_at getDev; exact product_native _ get_dev)
   | (scheduler_preserve_at delTimer; exact product_native _ (OccurrenceTimers.maintenance (.deleteTimer _ _)))
   | (scheduler_preserve_at Env.runOneSendWorker; exact send_one)
-  | (nonce_product_head Driver.Hooks.sendWorker; exact send_one)
+  | (nonce_product_head Driver.sendWorkerObserved
+     rw [Driver.sendWorker_lift Journal.hooks rfl]
+     exact send_one)
   | (scheduler_preserve_at Env.runOneClearWorker; exact clear_one)
   | (scheduler_preserve_at Env.requireDrained; exact product_store _ (Nonce.Frames.drained _ _))
   | (scheduler_preserve_at Env.requireNoCryptWork; exact product_store _ requireNoCryptWork_sameKernel)

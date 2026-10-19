@@ -24,7 +24,7 @@ theorem inject (family port : Nat) (msg : List UInt8)
 theorem after_batch :
     ProductPreserves (Driver.afterBatchObserved TimestampDriver.hooks) :=
   TrafficSource.afterBatch_preserves (fun _ _ hi => hi.1) product_stable _ _ _ _ _
-    (crypt) (send_workers) send_one (schedule) drain
+    (crypt) (send_workers) (by rw [Driver.sendWorker_lift TimestampDriver.hooks rfl]; exact send_one) (schedule) drain
 
 theorem flood (count port family : Nat)
     (messages : List (List UInt8)) :

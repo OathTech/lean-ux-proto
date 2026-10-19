@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.HandshakeWorkerSafety
 import Leanux.Proofs.WG.TransmitSecurity.DriverHistoryBase
+import Leanux.Proofs.WG.TransmitSecurity.DriverNeutralCalls
 
 /-! Authentication-root specialization of the one shared driver. Native hooks
 are quiet in this projection; handshake callbacks retain their own admissions. -/
@@ -29,6 +30,7 @@ theorem hooks_safe : Driver.HooksHistorySafe HandshakeCausal.Safe hooks := by
   · exact HandshakeWorker.HistorySafety.observed_preserves
   all_goals intros
   all_goals first
+    | (rw [Driver.sendWorker_lift hooks rfl]; exact Driver.History.product_lift _)
     | exact Driver.History.state_lift _
     | exact Driver.History.product_lift _
     | exact Driver.History.product_state (Driver.History.state_lift _)

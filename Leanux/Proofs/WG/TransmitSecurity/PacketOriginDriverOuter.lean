@@ -125,8 +125,13 @@ theorem retained (call : Syscall)
   by_cases up : call = .wgUp
   · subst call
     exact socketCall _ _ (envUp)
-  · simp only [retainedObserved]
-    exact product_lift _ (fun history => OuterNative.quiet_dispatch call history kept up)
+  · by_cases down : call = .wgDown
+    · subst call
+      unfold retainedObserved
+      rw [envDown_lift Journal.hooks rfl,socketCall_lift]
+      exact product_lift _ (fun history => OuterNative.quiet_dispatch .wgDown history kept up)
+    · simp only [retainedObserved]
+      exact product_lift _ (fun history => OuterNative.quiet_dispatch call history kept up)
 
 theorem observe :
     ProductSafe (observeObserved Journal.hooks) :=
@@ -147,7 +152,9 @@ theorem dispatch
   · intro attrs; exact netlink _ (product_state (configDevice_safe  attrs))
   · apply rtnetlink
     simpa only [liftWGObserver_lift] using product_state (state_lift _ (fun _ => NativeFrames.device_create))
-  · exact rtnetlink _ (product_lift _ Control.env_delete)
+  · unfold dispatchDeleteObserved
+    rw [envDelete_lift Journal.hooks rfl]
+    exact rtnetlink _ (product_lift _ Control.env_delete)
   · exact syscall_xmit
   · intro family port message tos ll dest
     exact socketCall _ _ (inject family port message tos ll dest)

@@ -24,6 +24,9 @@ theorem HooksHistorySafe.actors (h : HooksHistorySafe Safe g) : ActorHistorySafe
   staging := staging_history h
   handshake := h.handshake
   sendWorker := h.sendWorker
+  flushedSend := h.flushedSend
+  candidateEnter := h.candidateEnter
+  candidateLeave := h.candidateLeave
   prepare := h.prepare
   counterCheck := h.counterCheck
   timerSelected := h.timerSelected

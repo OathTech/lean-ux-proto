@@ -46,15 +46,11 @@ theorem poll_projects (h : HooksProjects ρ g a) (pid : PeerId) (budget : Nat)
     (cb : List (List UInt8) → PrefixM E Unit) (ca : List (List UInt8) → PrefixM F Unit)
     (hc : ∀ ps, ProjectsPrefix ρ id (cb ps) (ca ps)) :
     ProjectsPrefix ρ id (pollObserved g pid budget cb) (pollObserved a pid budget ca) := by
-  unfold pollObserved AuthenticatedEffects.IndexedPoll.sourceWith
-  simp only [Std.Legacy.Range.forIn_eq_forIn_range']
-  repeat' first
-    | (maintenance_head Hooks.counterCheck; exact h.counterCheck _ _)
-    | (maintenance_head consumeObserved; exact (consume_projects h _ _ _).liftWGObserver ρ id)
-    | (maintenance_head liftWGPrefix; exact (Projection.state_lift ρ _).liftWGObserver ρ id)
-    | (maintenance_head napiGroReceivePrefix; exact groReceive cb ca hc _ _)
-    | (maintenance_head napiGroFlushAllPrefix; exact groFlush cb ca hc _)
-    | driver_product_step ρ
+  obtain ⟨scopeMap,enter,leave⟩ := h.candidate
+  exact AuthenticatedEffects.CandidatePoll.projects ρ scopeMap _ _ _ _ _ _ _ _ _ _ _ _ _ _
+    enter leave (fun _ => (Projection.state_lift ρ _).liftWGObserver ρ id)
+    h.counterCheck (fun peer pkt ep => (consume_projects h peer pkt ep).liftWGObserver ρ id)
+    (groReceive cb ca hc) (groFlush cb ca hc) pid budget
 
 private theorem reply_projects (h : HooksProjects ρ g a) (dst : Nat) (bytes : List UInt8) :
     ProjectsPrefix ρ id

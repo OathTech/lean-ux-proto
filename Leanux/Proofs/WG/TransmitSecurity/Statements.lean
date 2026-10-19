@@ -18,7 +18,7 @@ import Leanux.Proofs.WG.TransmitSecurity.PacketOriginDriverOuter
 import Leanux.Proofs.WG.TransmitSecurity.ReservationEncryption
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionCompletion
 import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastPoll
-import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastAdmission
+import Leanux.Proofs.WG.TransmitSecurity.EncryptionPastStaging
 
 /-! Campaign 3, T1 initialized counter reservations and local AEAD contracts.
 Transport from reservation through every actual AEAD invocation remains open. -/
@@ -527,5 +527,14 @@ theorem original_admission_history_exclusion (pid : PeerId) (items : List SkbId)
     EncryptionPast.Inv past active (EncryptionPast.view v) ∧
       EncryptionPast.Admissible past items (EncryptionPast.view v) :=
   EncryptionPast.enqueue pid items physical before fresh a b run
+
+/-- Security: the complete native staged-send action preserves exclusion of
+previously encrypted packet identities from pending work through all admission,
+message-limit, no-key and refusal arms. The incoming physical/live bound and
+historical carrier remain explicit; global initialized non-reuse and key-material
+continuity are separate obligations. -/
+theorem original_staged_send_history_exclusion (pid : PeerId) :
+    Framing.Preserves (EncryptionPast.Ready past active) (sendStagedPackets pid) :=
+  EncryptionPast.send pid
 
 end Leanux.Proofs.WG.TransmitSecurity

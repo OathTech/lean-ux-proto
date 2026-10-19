@@ -15,10 +15,24 @@ variable (ρ : E → Option F)
   (hd : ∀ peer, StateProjectsPrefix ρ id (dg peer) (dt peer))
 
 include hs hd in
+theorem timersStop_projects (pid : PeerId) :
+    StateProjectsPrefix ρ id (timersStopWith sg dg pid) (timersStopWith st dt pid) := by
+  unfold timersStopWith
+  repeat' first
+    | exact hs _
+    | exact hd _
+    | (maintenance_head ForIn.forIn; apply loop_projects ρ)
+    | handshake_worker_project_step ρ
+
+include hs hd in
 theorem afterDead_projects (pid : PeerId) :
     StateProjectsPrefix ρ id (afterDeadWith sg dg pid) (afterDeadWith st dt pid) := by
   unfold afterDeadWith
-  repeat' first | exact hs _ | exact hd _ | handshake_worker_project_step ρ
+  repeat' first
+    | exact hs _
+    | exact hd _
+    | exact timersStop_projects ρ sg st hs dg dt hd _
+    | handshake_worker_project_step ρ
 
 include hs hd in
 theorem remove_projects (peer : Option PeerId) :

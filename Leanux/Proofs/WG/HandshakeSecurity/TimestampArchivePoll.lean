@@ -29,6 +29,10 @@ theorem poll (pid : PeerId) (budget : Nat)
     (callbacks : ∀ packets, ProductPreserves (callback packets)) :
     ProductPreserves (Driver.pollObserved TimestampDriver.hooks pid budget callback) := by
   change PrefixPreserves ProductInv History _
+  unfold Driver.pollObserved
+  change PrefixPreserves ProductInv History
+    (AuthenticatedEffects.CandidatePoll.sourceWith _ (fun _ _ => Pure.pure 0) (fun _ => Pure.pure ()) _ _ _ _ _ _)
+  rw [AuthenticatedEffects.CandidatePoll.neutral]
   change PrefixPreserves ProductInv History
     (sourceWith (fun a => liftWGObserver (liftWGPrefix a))
       (fun pkt => liftWGObserver (liftWGPrefix (counterValidate pkt.keypair pkt.nonce)))
