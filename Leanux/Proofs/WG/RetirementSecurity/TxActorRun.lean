@@ -96,6 +96,10 @@ theorem activation_service (iteration : IterationContract P crypt)
   have same:u=w := (ProjectedAction.iff_run _ _ _).mp (TxActorFrames.occupancy act) w capacity u counted
   subst u
   rw [MaterialOrigin.bind_ok] at run
+  obtain ⟨refills,u,counted,run⟩:=run
+  have same:u=w := (ProjectedAction.iff_run _ _ _).mp TxActorFrames.refills w refills u counted
+  subst u
+  rw [MaterialOrigin.bind_ok] at run
   obtain ⟨state,t,loop,tail⟩:=run
   rw [Std.Legacy.Range.forIn_eq_forIn_range'] at loop
   have kept:=loop_service iteration _ before loop

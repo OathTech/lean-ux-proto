@@ -30,6 +30,17 @@ theorem occupancy (a : Activation) : SameView EmissionOuter.Sent (Env.Activation
   have ambient {α : Type} (m : AmbientM α) : Preserves P (monadLift m : Leanux.M α) := EmissionOuter.ambient m initial
   routing_tx_source [Env.Activation.occupancy,invariant] using [dev,peer,ambient]
 
+theorem refills : SameView EmissionOuter.Sent Env.Activation.refills := by
+  unfold Env.Activation.refills
+  apply (EmissionOuter.wg getDev (by sent_frame [] using [])).bind
+  intro device
+  exact (EmissionOuter.ambient AmbientM.recordsLeft).bind (fun _ => SameView.pure _ _)
+
+theorem pending_device (worker : Worker) (queued : Bool) :
+    SameView EmissionOuter.Sent (Env.pendingDevice worker queued) := by
+  unfold Env.pendingDevice
+  exact (EmissionOuter.ambient (get : AmbientM Ambient)).bind (fun _ => SameView.pure _ _)
+
 theorem has_work (a : Activation) : SameView EmissionOuter.Sent (Env.Activation.hasWork a) := by
   intro initial
   let P := fun w : World => EmissionOuter.Sent w = initial

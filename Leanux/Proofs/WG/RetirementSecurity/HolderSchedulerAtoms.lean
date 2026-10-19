@@ -62,7 +62,7 @@ theorem work_queue (f : List PeerId→List PeerId) : Preserves (Extra temporary 
 theorem atoms : RxHistory.SchedulerSource.AtomContracts
     (Inv initial loans before temporary locals active) OwnerChecks.Safe (fun {_} g=>g) := by
   have old := HolderAuxScheduler.atoms initial loans before
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α action
     exact join_native (old.ambient action) (RxHistory.mixed_erases (erasesPrefix_lift _))
       (extra_product (fun _=>productAmbient_spec action _ (fun _ _ hi=>hi)))
@@ -88,6 +88,8 @@ theorem atoms : RxHistory.SchedulerSource.AtomContracts
   · intro activation
     exact join_native (old.occupancy activation) (RxHistory.mixed_erases (activationOccupancyPrefix_erases activation))
       (extra_product (activationOccupancy_sameKernel activation))
+  · exact join_native old.refills (RxHistory.mixed_erases activationRefillsPrefix_erases)
+      (extra_product activationRefills_sameKernel)
   · intro next
     exact join_native (old.pending next) (RxHistory.mixed_erases (pendingNapiPrefix_erases next))
       (extra_product (SourceScheduler.pendingNapi_kernel next))

@@ -16,6 +16,8 @@ inductive Native : {α : Type} → Leanux.M α → Type 1 where
   | ambient : Native getAmbient
   | budget : Native recordBudget
   | occupancy (a : Activation) : Native (Env.Activation.occupancy a)
+  | refills : Native Env.Activation.refills
+  | pendingDevice (worker : Worker) (queued : Bool) : Native (Env.pendingDevice worker queued)
   | pending (next : Option Nat) : Native (Lifetimes.pendingNapi next)
   | work (a : Activation) : Native (Env.Activation.hasWork a)
   | trials (active : List Activation) : Native (active.filterM Env.Activation.consistent)

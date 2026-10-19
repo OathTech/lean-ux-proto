@@ -97,8 +97,9 @@ noncomputable def afterCallShape (op : Operation) (state : State) (ret : Int) (w
   | some records =>
     cases records
     all_goals cases suspended : v.ambient.suspended
+    all_goals cases pending : v.ambient.pendingWork
     all_goals cases raised : v.wg.netRxRaised
-    all_goals simp only [hidden,suspended,raised]
+    all_goals simp only [hidden,suspended,pending,raised]
     all_goals repeat' first
       | (exact .pure _)
       | (exact .stopped _)

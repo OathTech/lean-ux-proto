@@ -86,16 +86,31 @@ theorem begin_service
     · cases tail; exact before
   | encryptWorker=>
     dsimp only at tail
+    rw [MaterialOrigin.bind_ok] at tail
+    obtain ⟨eligible,u,queried,tail⟩:=tail
+    have same:u=w := (ProjectedAction.iff_run _ _ _).mp
+      (TxActorFrames.pending_device .encryptWorker !d.encryptQueue.empty) w eligible u queried
+    subst u
     split at tail
     · cases tail; exact before
     · exact start_service (act:={worker:=.encryptWorker}) before tail
   | decryptWorker=>
     dsimp only at tail
+    rw [MaterialOrigin.bind_ok] at tail
+    obtain ⟨eligible,u,queried,tail⟩:=tail
+    have same:u=w := (ProjectedAction.iff_run _ _ _).mp
+      (TxActorFrames.pending_device .decryptWorker !d.decryptQueue.empty) w eligible u queried
+    subst u
     split at tail
     · cases tail; exact before
     · exact start_service (act:={worker:=.decryptWorker}) before tail
   | receiveWorker=>
     dsimp only at tail
+    rw [MaterialOrigin.bind_ok] at tail
+    obtain ⟨eligible,u,queried,tail⟩:=tail
+    have same:u=w := (ProjectedAction.iff_run _ _ _).mp
+      (TxActorFrames.pending_device .receiveWorker !d.handshakeQueue.empty) w eligible u queried
+    subst u
     split at tail
     · cases tail; exact before
     · exact start_service (act:={worker:=.receiveWorker}) before tail

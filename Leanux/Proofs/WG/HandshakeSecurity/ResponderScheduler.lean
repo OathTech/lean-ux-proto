@@ -44,6 +44,10 @@ theorem pendingNapi (next : Option Nat) : Preserves (RxHistory.mixed (pendingNap
   unfold Lifetimes.pendingNapi
   exact SameView.bind (liftWG_sameProductStore getDev getDev_sameWGStore) (fun _ => SameView.pure _ _)
 
+theorem refills : Preserves (RxHistory.mixed activationRefillsPrefix) :=
+  from_global _ (pinned_const _private.Leanux.Proofs.WG.Packets.PublicationEnvironment.«0».Leanux.Proofs.WG.PublicationJoint.refills)
+    (Global.mixed _ _ activationRefillsPrefix_erases (native_product_store activationRefills_sameKernel))
+
 theorem filter_probe : Preserves (RxHistory.audit consistentFilterAudit) := by
   apply from_global _ PublicationJoint.filter_probe
   apply Global.audited _ _ consistentFilterAudit_erases
@@ -69,6 +73,8 @@ macro "responder_env_steps " H1:term : tactic => `(tactic| first
   | (current_env_at getPeerMixed; exact peer _)
   | (current_env_at getTxSkbPrefix; exact packet _)
   | (current_env_at activationOccupancyPrefix; exact occupancy _)
+  | (current_env_at activationRefillsPrefix; exact refills)
+  | (current_env_at Env.pendingDevice; exact lift_store _ (pendingDevice_sameKernel _ _))
   | (current_env_at activationHasWorkPrefix; exact hasWork _)
   | (current_env_at pendingNapiPrefix; exact pendingNapi _)
   | (current_env_at txIterPrefix; exact txIteration _)

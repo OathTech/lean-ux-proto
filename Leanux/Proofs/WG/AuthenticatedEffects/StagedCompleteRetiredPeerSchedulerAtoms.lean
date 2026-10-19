@@ -17,7 +17,7 @@ private theorem stored (g : PrefixM LifetimeEvent α) (original : Leanux.M α)
 theorem exact_atoms (initial : Ledger) (loans : Reservations) (before : List RxHistory.Event) :
     RxHistory.SchedulerSource.AtomContracts (ExactAt initial loans before) (fun _ => True)
       (fun {_} g => g) := by
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a
     exact stored _ _ (erasesPrefix_lift _) (fun _ => productAmbient_spec a _ (fun _ _ hi => hi))
   · intro α e
@@ -39,6 +39,7 @@ theorem exact_atoms (initial : Ledger) (loans : Reservations) (before : List RxH
       (fun _ => ExactBoundary.lift _ (ExactBoundary.native_fields (HolderTxHistory.work_fields f)))
   · intro a
     exact stored _ _ (activationOccupancyPrefix_erases a) (activationOccupancy_sameKernel a)
+  · exact stored _ _ activationRefillsPrefix_erases activationRefills_sameKernel
   · intro next
     exact stored _ _ (pendingNapiPrefix_erases next) (SourceScheduler.pendingNapi_kernel next)
   · intro a
@@ -57,13 +58,14 @@ theorem atoms (initial : Ledger) (loans : Reservations) (before : List RxHistory
       (fun {_} g => g) := by
   have old := HolderAuxScheduler.atoms initial loans before
   have exactAccount := exact_atoms initial loans before
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro α a; exact pair_preserves _ (old.ambient a) (exactAccount.ambient a)
   · intro α e; exact pair_preserves _ (old.stopped e) (exactAccount.stopped e)
   · intro pid; exact pair_preserves _ (old.peer pid) (exactAccount.peer pid)
   · intro id; exact pair_preserves _ (old.packet id) (exactAccount.packet id)
   · intro f; exact pair_preserves _ (old.work f) (exactAccount.work f)
   · intro a; exact pair_preserves _ (old.occupancy a) (exactAccount.occupancy a)
+  · exact pair_preserves _ old.refills exactAccount.refills
   · intro next; exact pair_preserves _ (old.pending next) (exactAccount.pending next)
   · intro a; exact pair_preserves _ (old.hasWork a) (exactAccount.hasWork a)
   · exact pair_preserves _ old.trial exactAccount.trial

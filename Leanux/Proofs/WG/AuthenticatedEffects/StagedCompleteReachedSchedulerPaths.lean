@@ -9,8 +9,8 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Queues TransmitSecurity CausalJournal
 
 def indices (bound : Nat) : List Nat := List.range' 0 bound
 
-theorem runBody_list (a : Activation) (occupancy : Nat) :
-    runBody a occupancy = (forIn (indices (occupancy + 1)) (none,a) runStep >>= runFinish a occupancy) := by
+theorem runBody_list (a : Activation) (occupancy refills : Nat) :
+    runBody a occupancy refills = (forIn (indices (occupancy + refills + 1)) (none,a) runStep >>= runFinish a occupancy refills) := by
   simp only [runBody,indices,Std.Legacy.Range.forIn_eq_forIn_range',Std.Legacy.Range.size,
     Nat.sub_zero,Nat.add_sub_cancel,Nat.div_one]
 
@@ -33,10 +33,10 @@ def iterationTail (a : Activation) (result : IterResult) : PrefixM Event (ForInS
 theorem runStep_factor (index : Nat) (acc : RunState) :
     runStep index acc = (iteration acc.2 >>= iterationTail acc.2) := rfl
 
-def runAfter (a : Activation) (occupancy : Nat) (remaining : List Nat) :
+def runAfter (a : Activation) (occupancy refills : Nat) (remaining : List Nat) :
     ForInStep RunState → PrefixM Event Unit
-  | .done acc => runFinish a occupancy acc
-  | .yield acc => forIn remaining acc runStep >>= runFinish a occupancy
+  | .done acc => runFinish a occupancy refills acc
+  | .yield acc => forIn remaining acc runStep >>= runFinish a occupancy refills
 
 def scheduleAfter (stack : Option Worker) (remaining : List Nat) :
     ForInStep ScheduleState → PrefixM Event Unit
@@ -45,7 +45,8 @@ def scheduleAfter (stack : Option Worker) (remaining : List Nat) :
 
 def runEntryPrefix (a : Activation) (count : Nat) : PrefixM Event RunState := do
   let occupancy ← liftPrefix (Env.Activation.occupancy a)
-  forIn ((indices (occupancy + 1)).take count) (none,a) runStep
+  let refills ← liftPrefix Env.Activation.refills
+  forIn ((indices (occupancy + refills + 1)).take count) (none,a) runStep
 
 def scheduleEntryPrefix (stack : Option Worker) (count : Nat) : PrefixM Event Choice := do
   let budget ← liftPrefix recordBudget
@@ -59,12 +60,17 @@ structure RunPath (a : Activation) (w : World) (history : List Event)
   readHistory : List Event
   read : runPrefix (liftPrefix (Env.Activation.occupancy a)) w history =
     (.ok (occupancy,readWorld),readHistory)
+  refills : Nat
+  refillWorld : World
+  refillHistory : List Event
+  readRefills : runPrefix (liftPrefix Env.Activation.refills) readWorld readHistory =
+    (.ok (refills,refillWorld),refillHistory)
   done : List Nat
   index : Nat
   remaining : List Nat
-  shape : indices (occupancy + 1) = done ++ index :: remaining
+  shape : indices (occupancy + refills + 1) = done ++ index :: remaining
   tag : Option Unit
-  leading : Yields runStep done (none,a) readWorld readHistory (tag,active) u middle
+  leading : Yields runStep done (none,a) refillWorld refillHistory (tag,active) u middle
 
 structure SchedulePath (stack : Option Worker) (w : World) (history : List Event)
     (choice : Choice) (u : World) (middle : List Event) where
@@ -83,7 +89,7 @@ structure SchedulePath (stack : Option Worker) (w : World) (history : List Event
   chosen : runPrefix (choose stack) beforeChoice beforeHistory = (.ok (choice,u),middle)
 
 theorem RunPath.bound (path : RunPath a w history active u middle) :
-    path.done.length < path.occupancy + 1 := by
+    path.done.length < path.occupancy + path.refills + 1 := by
   have length := congrArg List.length path.shape
   simp only [indices,List.length_range',List.length_append,List.length_cons] at length
   omega
@@ -103,24 +109,29 @@ theorem checked_normal {action : PrefixM Event α}
 
 theorem RunPath.carrier (path : RunPath a w history active u middle)
     (before : CompleteProduct.Carrier history w) : CompleteProduct.Carrier middle u :=
-  path.leading.carrier runStep_checked (checked_normal (occupancy_checked a) before path.read)
+  path.leading.carrier runStep_checked
+    (checked_normal refills_checked (checked_normal (occupancy_checked a) before path.read) path.readRefills)
 
 theorem RunPath.prefix (path : RunPath a w history active u middle) :
     runPrefix (runEntryPrefix a path.done.length) w history = (.ok ((path.tag,active),u),middle) := by
   rw [runEntryPrefix,runPrefix_bind,path.read]
-  have taken : (indices (path.occupancy + 1)).take path.done.length = path.done := by
+  change runPrefix (liftPrefix Env.Activation.refills >>= _) path.readWorld path.readHistory = _
+  rw [runPrefix_bind,path.readRefills]
+  have taken : (indices (path.occupancy + path.refills + 1)).take path.done.length = path.done := by
     rw [path.shape]; simp
-  change runPrefix (forIn ((indices (path.occupancy + 1)).take path.done.length) (none,a) runStep)
-    path.readWorld path.readHistory = _
+  change runPrefix (forIn ((indices (path.occupancy + path.refills + 1)).take path.done.length) (none,a) runStep)
+    path.refillWorld path.refillHistory = _
   rw [taken]
   exact path.leading.run
 
 theorem RunPath.continuation (path : RunPath a w history active u middle) :
     runPrefix (SourceScheduler.run iteration a) w history =
       runPrefix (iteration active >>= fun result => iterationTail active result >>=
-        runAfter a path.occupancy path.remaining) u middle := by
+        runAfter a path.occupancy path.refills path.remaining) u middle := by
   rw [run_factor,runPrefix_bind,path.read]
-  change runPrefix (runBody a path.occupancy) path.readWorld path.readHistory = _
+  change runPrefix (liftPrefix Env.Activation.refills >>= _) path.readWorld path.readHistory = _
+  rw [runPrefix_bind,path.readRefills]
+  change runPrefix (runBody a path.occupancy path.refills) path.refillWorld path.refillHistory = _
   rw [runBody_list,path.shape,path.leading.continue]
   rw [List.forIn_cons,bind_assoc,runStep_factor,bind_assoc]
   apply congrArg (fun body : PrefixM Event Unit => runPrefix body u middle)

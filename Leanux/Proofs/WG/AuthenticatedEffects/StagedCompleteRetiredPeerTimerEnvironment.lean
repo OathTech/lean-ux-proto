@@ -219,13 +219,8 @@ theorem advance_at (ticks : Nat) :
   audit_at _ _ (erasesPrefix_lift _) (fun _ => advance ticks)
 
 private theorem drained_source (what : String) (queues : List Bool) :
-    Preserves (fun w : World => ExactBoundary cs loans w.wg) (Env.requireDrained what queues) := by
-  unfold Env.requireDrained
-  simp (config := {zeta := false}) only [unsupported,invariant]
-  repeat' first
-    | (allocation_release_lift_from WG.M
-       exact stored _ (liftWG_sameProductStore getDev getDev_sameWGStore))
-    | retired_timer_product_step
+    Preserves (fun w : World => ExactBoundary cs loans w.wg) (Env.requireDrained what queues) :=
+  stored _ (requireDrained_sameKernel what queues)
 
 private theorem idleDevice_source :
     Preserves (fun w : World => ExactBoundary cs loans w.wg) Env.requireIdleDevice := by

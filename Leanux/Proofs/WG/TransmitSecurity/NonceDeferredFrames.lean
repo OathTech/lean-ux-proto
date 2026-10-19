@@ -44,14 +44,8 @@ theorem env_read : PrefixPreserves (fun h (w : World) => Inv (view w.wg) h) List
   cases hr
   exact hi
 
-theorem drained (what : String) (queues : List Bool) : SameProductStore (Env.requireDrained what queues) := by
-  intro initial
-  let P := fun w => productStoreView w = initial
-  have read : Preserves P (monadLift getDev : Leanux.M Device) := productGetDev_spec (· = initial)
-  have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : Leanux.M α) :=
-    productAmbient_spec a P (fun _ _ hi => hi)
-  change Preserves P _
-  routing_tx_source [Env.requireDrained] using [read,ambient]
+theorem drained (what : String) (queues : List Bool) : SameProductStore (Env.requireDrained what queues) :=
+  requireDrained_sameKernel what queues
 
 theorem run_worker (worker : Worker) {body : Leanux.M Unit}
     (safe : ∀ h, Preserves (fun w : World => Inv (view w.wg) h) body) (h : List Allocation) :

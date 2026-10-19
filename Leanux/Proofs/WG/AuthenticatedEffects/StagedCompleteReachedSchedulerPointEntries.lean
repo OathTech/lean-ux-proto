@@ -8,20 +8,22 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues TransmitSecurity Cau
 
 variable {native inside : ChildPoints}
 
-/-- Original occupancy read plus a yielded range prefix reaches the same
+/-- Original occupancy and refill reads plus a yielded range prefix reach the same
 worker-step point, regardless of what the later iteration or finish does. -/
 theorem run_visit (a : Activation)
     (read : runPrefix (liftPrefix (Env.Activation.occupancy a)) w h = (.ok (occupancy,u),middle))
-    (visit : LoopVisit (runStepShape occupancy) (Scheduler.indices (occupancy + 1))
-      (none,a) u middle index acc v last)
+    (refillRead : runPrefix (liftPrefix Env.Activation.refills) u middle = (.ok (refills,ready),prepared))
+    (visit : LoopVisit (runStepShape occupancy) (Scheduler.indices (occupancy + refills + 1))
+      (none,a) ready prepared index acc v last)
     (point : Point inside (runStepShape occupancy index acc) v last site x ending) :
     ∃ enclosingSite, Point inside (runShape a) w h enclosingSite x ending := by
   obtain ⟨loopSite,loopPoint⟩ := visit.point point
-  refine ⟨.marked (.run a) (.right (.left loopSite)),?_⟩
+  refine ⟨.marked (.run a) (.right (.right (.left loopSite))),?_⟩
   apply Point.marked
   apply Point.source_mpr (run_factor a)
   apply Point.right (.native (.occupancy a)) _ read
-  apply Point.source_mpr (runBody_list a occupancy)
+  apply Point.right (.native .refills) _ refillRead
+  apply Point.source_mpr (runBody_list a occupancy refills)
   exact .left _ loopPoint
 
 /-- The budget is the value returned at the original record site; the visited

@@ -84,10 +84,10 @@ def IterationPath.afterIteration (path : IterationPath stack w history active u 
     (result : IterResult) : PrefixM Event Unit :=
   match path with
   | .dispatched selected _ running => do
-    iterationTail active result >>= runAfter running.initialActivation running.occupancy running.remaining
+    iterationTail active result >>= runAfter running.initialActivation running.occupancy running.refills running.remaining
     finishSchedule stack selected.remaining
   | .resumed selected running => do
-    iterationTail active result >>= runAfter running.initialActivation running.occupancy running.remaining
+    iterationTail active result >>= runAfter running.initialActivation running.occupancy running.refills running.remaining
     finishSchedule stack selected.remaining
 
 theorem IterationPath.carrier (path : IterationPath stack w history active u middle)

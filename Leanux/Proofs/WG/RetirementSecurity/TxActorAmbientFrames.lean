@@ -29,11 +29,12 @@ theorem hidden (site : HiddenSite) : SameView Ambient.suspended (AmbientM.hidden
   have first := (ProjectedAction.iff_run _ _ _).mp skip w () u skipped
   have second := (ProjectedAction.iff_run _ _ _).mp (note site.info.id) u () t noted
   have tail : v.suspended=t.suspended := by
-    simp only [MaterialOrigin.bind_ok] at run
-    obtain ⟨saved,z,read,run⟩:=run
-    cases read
-    split at run
-    all_goals repeat' first | (change Except.error _ = Except.ok _ at run; cases run) | split at run | (rw [MaterialOrigin.bind_ok] at run; obtain ⟨x,y,step,run⟩:=run; cases step) | (cases run; rfl)
+    repeat' first
+      | (change Except.error _ = Except.ok _ at run; cases run)
+      | (dsimp (config := {failIfUnchanged := true}) only at run)
+      | split at run
+      | (rw [MaterialOrigin.bind_ok] at run; obtain ⟨x,y,step,run⟩:=run; cases step)
+      | (cases run; rfl)
   exact tail.trans (second.trans first)
 
 theorem lift_ambient {action : AmbientM α} (frame : SameView Ambient.suspended action) :
@@ -136,6 +137,22 @@ theorem occupancy (act : Activation) : SameView id (Env.Activation.occupancy act
   have readPeer (pid : PeerId) : Preserves (fun w : World=>w=initial) (monadLift (getPeer pid) : Leanux.M Peer) := peer pid initial
   change Preserves (fun w : World=>w=initial) _
   routing_tx_source [Env.Activation.occupancy] using [dev,readPeer,stopped]
+
+theorem refills : SameView id Env.Activation.refills := by
+  have read : SameView id (recordsLeft : Leanux.M Nat) := by
+    apply (ProjectedAction.iff_run _ _ _).mpr
+    intro w result v run
+    cases run
+    rfl
+  unfold Env.Activation.refills
+  exact device.bind (fun _ => read.bind (fun _ => SameView.pure _ _))
+
+theorem pending_device (worker : Worker) (queued : Bool) :
+    SameView id (Env.pendingDevice worker queued) := by
+  apply (ProjectedAction.iff_run _ _ _).mpr
+  intro w result v run
+  cases run
+  rfl
 
 theorem packet (skb : SkbId) : SameView id (liftWG (getTxSkb skb)) :=
   native_read (fun w a p v b run=>

@@ -23,26 +23,29 @@ def runStep (_ : Nat) (state : RunState) : PrefixM Event (ForInStep RunState) :=
     liftPrefix (modifyAmbient fun s => {s with suspended := s.suspended ++ [{act with iterations := act.iterations + 1}]})
     return .done (some (),act)
 
-def runFinish (a : Activation) (occupancy : Nat) (state : RunState) : PrefixM Event Unit :=
+def runFinish (a : Activation) (occupancy refills : Nat) (state : RunState) : PrefixM Event Unit :=
   match state.1 with
   | some value => pure value
-  | none => liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) in one run")
+  | none => liftPrefix (invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})")
 
-def runBody (a : Activation) (occupancy : Nat) : PrefixM Event Unit := do
-  let result ← forIn ([0:occupancy + 1] : Std.Legacy.Range) (none,a) runStep
-  runFinish a occupancy result
+def runBody (a : Activation) (occupancy refills : Nat) : PrefixM Event Unit := do
+  let result ← forIn ([0:occupancy + refills + 1] : Std.Legacy.Range) (none,a) runStep
+  runFinish a occupancy refills result
 
 theorem run_factor (a : Activation) :
     SourceScheduler.run iteration a = (do
       let occupancy ← liftPrefix (Env.Activation.occupancy a)
-      runBody a occupancy) := by
+      let refills ← liftPrefix Env.Activation.refills
+      runBody a occupancy refills) := by
   unfold SourceScheduler.run runBody
   apply congrArg (fun next => liftPrefix (Env.Activation.occupancy a) >>= next)
   funext occupancy
+  apply congrArg (fun next => liftPrefix Env.Activation.refills >>= next)
+  funext refills
   dsimp only
   apply congr
   · apply congrArg (fun body : PrefixM Event RunState => fun finish : RunState → PrefixM Event Unit => body >>= finish)
-    apply congrArg (fun step => forIn ([0:occupancy + 1] : Std.Legacy.Range) (none,a) step)
+    apply congrArg (fun step => forIn ([0:occupancy + refills + 1] : Std.Legacy.Range) (none,a) step)
     funext index state
     unfold runStep
     apply congrArg (fun next => iteration state.2 >>= next)
@@ -59,9 +62,9 @@ def dispatchChoose (worker : Worker) : PrefixM Event (Option Activation) := do
   let d ← liftPrefix (liftWG getDev)
   let mut pid : Option Nat := none
   match worker with
-  | .encryptWorker => if d.encryptQueue.empty then return none
-  | .decryptWorker => if d.decryptQueue.empty then return none
-  | .receiveWorker => if d.handshakeQueue.empty then return none
+  | .encryptWorker => if !(← liftPrefix (Env.pendingDevice worker !d.encryptQueue.empty)) then return none
+  | .decryptWorker => if !(← liftPrefix (Env.pendingDevice worker !d.decryptQueue.empty)) then return none
+  | .receiveWorker => if !(← liftPrefix (Env.pendingDevice worker !d.handshakeQueue.empty)) then return none
   | .txWorker =>
     let some headPid := d.txWorkQueue.head? | return none
     let p ← match ← liftPrefix (peekUnit .txWorker) with
@@ -83,7 +86,7 @@ theorem dispatch_factor (worker : Worker) :
   simp only [bind_assoc]
   congr 1
   funext d
-  cases worker <;> simp only [pure_bind,dispatchAfter]
+  cases worker <;> simp only [pure_bind,dispatchAfter,bind_assoc]
   all_goals repeat' first
     | rfl
     | (split; all_goals simp_all only [pure_bind,dispatchAfter,bind_assoc])
@@ -99,11 +102,12 @@ inductive Choice where
 def choose (stack : Option Worker) : PrefixM Event Choice := do
   if (← liftPrefix getAmbient).hidden.isNone then
     let d ← liftPrefix (liftWG getDev)
+    let pending := (← liftPrefix getAmbient).pendingWork
     let next := [Worker.receiveWorker,.decryptWorker,.encryptWorker,.txWorker].find? fun w =>
       match w with
-      | .receiveWorker => !d.handshakeQueue.empty
-      | .decryptWorker => !d.decryptQueue.empty
-      | .encryptWorker => !d.encryptQueue.empty
+      | .receiveWorker => !d.handshakeQueue.empty || pending.contains w.index
+      | .decryptWorker => !d.decryptQueue.empty || pending.contains w.index
+      | .encryptWorker => !d.encryptQueue.empty || pending.contains w.index
       | _ => !d.txWorkQueue.isEmpty
     let some worker := next | return .idle
     return .dispatch worker true

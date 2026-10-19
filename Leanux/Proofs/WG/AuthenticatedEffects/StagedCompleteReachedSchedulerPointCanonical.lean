@@ -39,6 +39,7 @@ macro "scheduler_shape_step" : tactic => `(tactic|
   | (scheduler_shape_head Pure.pure; exact .pure _)
   | (scheduler_shape_head Bind.bind; apply Shape.bind)
   | (scheduler_native_head getDev; exact .native .device)
+  | (scheduler_native_head Env.pendingDevice; exact .native (.pendingDevice _ _))
   | (scheduler_native_head getAmbient; exact .native .ambient)
   | (scheduler_native_head peekHiddenSite; exact .native .hiddenSite)
   | (scheduler_native_head peekUnit; exact .native (.unit _))
@@ -66,8 +67,8 @@ noncomputable def runStepShape (occupancy index : Nat) (state : RunState) : Shap
   | continued => exact .pure _
   | yielded => exact .bind (.native (.suspend state.2)) (fun _ => .pure _)
 
-noncomputable def runFinishShape (a : Activation) (occupancy : Nat) (state : RunState) :
-    Shape (runFinish a occupancy state) := by
+noncomputable def runFinishShape (a : Activation) (occupancy refills : Nat) (state : RunState) :
+    Shape (runFinish a occupancy refills state) := by
   unfold runFinish
   cases state.1 <;> dsimp only
   · exact .native (.invariant _)
@@ -78,9 +79,11 @@ noncomputable def runShape (a : Activation) : Shape (SourceScheduler.run iterati
   rw [run_factor]
   apply Shape.bind (.native (.occupancy a))
   intro occupancy
+  apply Shape.bind (.native .refills)
+  intro refills
   rw [runBody_list]
   apply Shape.bind (listShape _ _ _ (runStepShape occupancy))
-  exact runFinishShape a occupancy
+  exact runFinishShape a occupancy refills
 
 noncomputable def dispatchChooseShape (worker : Worker) : Shape (dispatchChoose worker) := by
   unfold dispatchChoose

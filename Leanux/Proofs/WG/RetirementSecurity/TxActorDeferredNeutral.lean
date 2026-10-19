@@ -20,8 +20,14 @@ theorem deliver_actor : Preserves (At (Covered locals crypt) crypt active) Env.d
 
 theorem drained_actor (what : String) (queues : List Bool) :
     Preserves (At (Covered locals crypt) crypt active) (Env.requireDrained what queues) := by
+  have pending : Preserves (At (Covered locals crypt) crypt active) (pendingDeviceUnits : Leanux.M (List Worker)) := by
+    apply at_world
+    apply (ProjectedAction.iff_run _ _ _).mpr
+    intro w result v run
+    cases run
+    rfl
   unfold Env.requireDrained
-  repeat' actor_neutral_step
+  repeat' first | exact pending | actor_neutral_step
 
 theorem no_crypt_actor : Preserves (At (Covered locals crypt) crypt active) Env.requireNoCryptWork := by
   unfold Env.requireNoCryptWork

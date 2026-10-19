@@ -36,7 +36,7 @@ theorem drained (what : String) (queues : List Bool) : SameView EmissionOuter.Se
   change Preserves P _
   have ambient {α : Type} (a : AmbientM α) : Preserves P (monadLift a : Leanux.M α) := EmissionOuter.ambient a initial
   have dev : Preserves P (monadLift getDev : Leanux.M Device) := EmissionOuter.wg _ (by sent_frame [] using []) initial
-  routing_tx_source [Env.requireDrained,invariant,unsupported] using [ambient,dev]
+  routing_tx_source [Env.requireDrained,pendingDeviceUnits,invariant,unsupported] using [ambient,dev]
 
 theorem no_crypt : SameView EmissionOuter.Sent Env.requireNoCryptWork := by
   intro initial

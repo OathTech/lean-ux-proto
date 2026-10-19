@@ -22,6 +22,9 @@ theorem dispatch_checked (worker : Worker) : Checked (SourceScheduler.dispatch i
 theorem occupancy_checked (a : Activation) : Checked (liftPrefix (Env.Activation.occupancy a)) :=
   product_store _ (SourceScheduler.occupancy_kernel a)
 
+theorem refills_checked : Checked (liftPrefix Env.Activation.refills) :=
+  product_store _ activationRefills_sameKernel
+
 theorem runStep_checked (index : Nat) (state : RunState) : Checked (runStep index state) := by
   unfold runStep
   apply bind_checked (iteration_checked state.2)
@@ -38,7 +41,9 @@ theorem dispatchChoose_checked (worker : Worker) : Checked (dispatchChoose worke
   cases worker <;> dsimp only
   all_goals first
     | exact pure_checked _
-    | exact conditional _ (fun _ => pure_checked _)
+    | apply bind_checked (product_store _ (pendingDevice_sameKernel _ _))
+      intro eligible
+      exact conditional _ (fun _ => pure_checked _)
         (fun _ => bind_checked (ambient _) (fun _ => pure_checked _))
     | skip
   cases chosen : device.txWorkQueue.head? with

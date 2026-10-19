@@ -25,6 +25,8 @@ private theorem occupancy (a : Activation) : Preserves (RxHistory.mixed (activat
   ((pinned_const _private.Leanux.Proofs.WG.Packets.PublicationEnvironment.«0».Leanux.Proofs.WG.PublicationJoint.occupancy) a)
 private theorem hasWork (a : Activation) : Preserves (RxHistory.mixed (activationHasWorkPrefix a)) := mixed _
   ((pinned_const _private.Leanux.Proofs.WG.Packets.PublicationEnvironment.«0».Leanux.Proofs.WG.PublicationJoint.hasWork) a)
+private theorem refills : Preserves (RxHistory.mixed activationRefillsPrefix) := mixed _
+  (pinned_const _private.Leanux.Proofs.WG.Packets.PublicationEnvironment.«0».Leanux.Proofs.WG.PublicationJoint.refills)
 private theorem pendingNapi (next : Option Nat) : Preserves (RxHistory.mixed (pendingNapiPrefix next)) := mixed _
   ((pinned_const _private.Leanux.Proofs.WG.Packets.PublicationEnvironment.«0».Leanux.Proofs.WG.PublicationJoint.pendingNapi) next)
 
@@ -54,6 +56,8 @@ macro "transport_env_steps" : tactic => `(tactic| first
   | (current_env_at getPeerMixed; exact peer _)
   | (current_env_at getTxSkbPrefix; exact packet _)
   | (current_env_at activationOccupancyPrefix; exact occupancy _)
+  | (current_env_at activationRefillsPrefix; exact refills)
+  | (current_env_at Env.pendingDevice; exact lift_store _ (pendingDevice_sameKernel _ _))
   | (current_env_at activationHasWorkPrefix; exact hasWork _)
   | (current_env_at pendingNapiPrefix; exact pendingNapi _)
   | (current_env_at txIterPrefix; exact txIteration _)

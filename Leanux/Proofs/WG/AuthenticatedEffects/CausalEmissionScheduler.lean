@@ -58,6 +58,7 @@ theorem scheduler_run (activation : Activation) : ProductSafe (SourceScheduler.r
   repeat' first
     | (emission_head Driver.iterationObserved; exact iteration _)
     | (emission_product_native_head Env.Activation.occupancy; exact product_native _ (EmissionFrames.occupancy _))
+    | (emission_product_native_head Env.Activation.refills; exact product_native _ EmissionFrames.refills)
     | solve | emission_scheduler_native
     | emission_product_step
 
@@ -65,6 +66,7 @@ theorem scheduler_dispatch (worker : Worker) : ProductSafe (SourceScheduler.disp
   unfold SourceScheduler.dispatch
   repeat' first
     | (emission_head SourceScheduler.run; exact scheduler_run _)
+    | (emission_product_native_head Env.pendingDevice; exact product_native _ (EmissionFrames.pending_device _ _))
     | solve | emission_scheduler_native
     | emission_product_step
 
