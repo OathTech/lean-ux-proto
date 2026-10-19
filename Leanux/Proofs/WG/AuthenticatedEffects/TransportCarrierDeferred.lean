@@ -15,6 +15,7 @@ variable {E : Type} {extra : List E → Prop}
 structure DeferredSafe (extra : List E → Prop) (origin : E → Option TransportDriver.OriginEvent)
     (replay : E → Option TransportDriver.Replay) (hooks : Hooks E) : Prop extends
     WorkerSafe extra origin replay hooks, StagingSafe extra origin replay hooks where
+  deliver : ProductSafe extra origin replay hooks.deliver
   sendWorker : ProductSafe extra origin replay (sendWorkerObserved hooks)
   flushedSend : ∀ pid, StateSafe extra origin replay (hooks.flushedSend pid)
   selected : ∀ d j pid t we, ProductSafe extra origin replay (hooks.timerSelected d j pid t we)
@@ -50,12 +51,13 @@ macro "transport_deferred_step" : tactic => `(tactic| first
 
 theorem crypt (h : DeferredSafe extra origin replay hooks) :
     ProductSafe extra origin replay (cryptObserved hooks) :=
-  product_bind (schedule h.toWorkerSafe none) (fun _ => product_storeLift _ deliverSent_sameKernel)
+  product_bind (schedule h.toWorkerSafe none) (fun _ => h.deliver)
 
 theorem sendWorkers (h : DeferredSafe extra origin replay hooks) :
     ProductSafe extra origin replay (sendWorkersObserved hooks) := by
   unfold sendWorkersObserved
   repeat' first
+    | (transport_carrier_head Hooks.deliver; exact h.deliver)
     | (transport_carrier_head sendWorkerObserved; exact h.sendWorker)
     | (transport_carrier_head scheduleObserved; exact schedule h.toWorkerSafe _)
     | transport_deferred_step
@@ -64,6 +66,7 @@ theorem afterXmit (h : DeferredSafe extra origin replay hooks) :
     ProductSafe extra origin replay (afterXmitObserved hooks) := by
   unfold afterXmitObserved
   repeat' first
+    | (transport_carrier_head Hooks.deliver; exact h.deliver)
     | (transport_carrier_head cryptObserved; exact crypt h)
     | (transport_carrier_head sendWorkersObserved; exact sendWorkers h)
     | transport_deferred_step
@@ -83,6 +86,7 @@ theorem timers (h : DeferredSafe extra origin replay hooks) (j : UInt64) :
     ProductSafe extra origin replay (timersObserved hooks j) := by
   unfold timersObserved
   repeat' first
+    | (transport_carrier_head Hooks.deliver; exact h.deliver)
     | (transport_carrier_head sendWorkerObserved; exact h.sendWorker)
     | (transport_carrier_head Hooks.timerSelected; exact h.selected _ _ _ _ _)
     | (transport_carrier_head Hooks.timerFinished; exact h.finished _)
@@ -96,6 +100,7 @@ theorem placeholderTimers (h : DeferredSafe extra origin replay hooks) (j : UInt
     ProductSafe extra origin replay (placeholderTimersObserved hooks j) := by
   unfold placeholderTimersObserved
   repeat' first
+    | (transport_carrier_head Hooks.deliver; exact h.deliver)
     | (transport_carrier_head Hooks.timerSelected; exact h.selected _ _ _ _ _)
     | (transport_carrier_head Hooks.timerFinished; exact h.finished _)
     | (transport_carrier_head cryptObserved; exact crypt h)
@@ -110,6 +115,7 @@ theorem idleTimers (h : DeferredSafe extra origin replay hooks) :
   unfold idleTimersObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (transport_carrier_head Hooks.deliver; exact h.deliver)
     | (transport_carrier_head timersObserved; exact timers h _)
     | (transport_carrier_head placeholderTimersObserved; exact placeholderTimers h _)
     | transport_deferred_step
@@ -119,6 +125,7 @@ theorem afterAdvance (h : DeferredSafe extra origin replay hooks) :
   unfold afterAdvanceObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (transport_carrier_head Hooks.deliver; exact h.deliver)
     | (transport_carrier_head timersObserved; exact timers h _)
     | (transport_carrier_head placeholderTimersObserved; exact placeholderTimers h _)
     | transport_deferred_step

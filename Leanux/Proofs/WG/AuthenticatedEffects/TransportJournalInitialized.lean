@@ -33,6 +33,7 @@ private theorem keepalive_order (pid : PeerId) :
     | driver_state_history_step
 
 theorem ordered_callbacks : DeferredSafe Order.Good origin? replay? Journal.hooks where
+  deliver := product_storeLift _ Leanux.Proofs.Framing.deliverSent_sameKernel
   keepalivePrepare := fun pid => state_join (keepalive_prepare pid) (Order.quiet.keepalivePrepare pid)
   fixtureEnter := fun _ => state_pure _
   fixtureLeave := fun _ => state_pure _

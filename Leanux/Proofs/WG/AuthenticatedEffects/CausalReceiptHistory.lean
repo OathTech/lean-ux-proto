@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalSource
-import Leanux.Proofs.WG.AuthenticatedEffects.CookieCallerContracts
+import Leanux.Proofs.WG.AuthenticatedEffects.CookieConsumptionContracts
 import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsHistory
 
 /-! Actual timer/work receipts are valid native executions and retain the
@@ -9,6 +9,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Receipts
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity
 
 def Checked (pre : List Event) : Event → Prop
+  | .cookieConsumed receipt => receipt.Valid
   | .keepalivePrepared pid receipt => receipt.Valid (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid)
   | .armed receipt => receipt.Valid ∧ receipt.cause = CausalScope.current scope? pre
   | .queued receipt => receipt.Valid ∧ receipt.cause = CausalScope.current scope? pre
@@ -22,7 +23,7 @@ def Safe (history : List Event) : Prop :=
   ∀ pre event post, history = pre ++ event :: post → Checked pre event
 
 def Unchecked : Event → Prop
-  | .armed _ | .queued _ | .keepalivePrepared _ _ | .protocolSocket _ | .cookieSocket _ => False
+  | .cookieConsumed _ | .armed _ | .queued _ | .keepalivePrepared _ _ | .protocolSocket _ | .cookieSocket _ => False
   | _ => True
 
 theorem Safe.empty : Safe [] := by

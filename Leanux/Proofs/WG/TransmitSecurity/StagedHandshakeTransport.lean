@@ -17,7 +17,12 @@ elab "staged_origin_function " wanted:term : tactic => withMainContext do
   let expected ← Lean.Elab.Term.elabTerm wanted none
   unless action.consumeMData.headBeta.getAppFn == expected do throwError "different supplied callback"
 
+theorem cookie_consumed_observed (msg : Key) :
+    StateSafe (CookieConsumption.observed Event.cookieConsumed msg) :=
+  state_receipt (state_lift _ (fun _ => Native.cookie_consume msg)) _ (fun _ => True.intro)
+
 macro "staged_handshake_observation" : tactic => `(tactic| first
+  | (staged_origin_head CookieConsumption.observed; exact cookie_consumed_observed _)
   | (staged_origin_head ProtocolSocket.observed; exact protocol_send_observed _ _)
   | (staged_origin_head CookieSocket.observed; exact cookie_send_observed _ _ _)
   | (staged_origin_head liftWGPrefix; apply state_lift; intro history; repeat' staged_origin_native; done)
@@ -55,14 +60,14 @@ private theorem after_mac
 private theorem receive
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, StateSafe (session pid)) (hk : ∀ pid, StateSafe (keepalive pid))
-    (msg : Key) (src : SkbSource) : StateSafe (HandshakeWorker.receiveWith
+    (msg : Key) (src : SkbSource) : StateSafe (CookieConsumption.receiveWith (CookieConsumption.observed Event.cookieConsumed)
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
             (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
               handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src) := by
-  unfold HandshakeWorker.receiveWith
+  unfold CookieConsumption.receiveWith
   repeat' first
     | (staged_origin_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)
     | (staged_origin_head captureWGRun; change StateSafe (captureWGObserved (liftWGPrefix _)); apply state_capture)
@@ -74,9 +79,9 @@ theorem handshake_carrier
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, StateSafe (session pid)) (hk : ∀ pid, StateSafe (keepalive pid)) :
     StateSafe (CausalJournal.handshake session keepalive) := by
-  unfold CausalJournal.handshake HandshakeWorker.observedWith HandshakeWorker.workerWith
+  unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
-    | (staged_origin_head HandshakeWorker.receiveWith; exact receive session keepalive hs hk _ _)
+    | (staged_origin_head CookieConsumption.receiveWith; exact receive session keepalive hs hk _ _)
     | staged_handshake_observation
     | trivial
     | staged_origin_step

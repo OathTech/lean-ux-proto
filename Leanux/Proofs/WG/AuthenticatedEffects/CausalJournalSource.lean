@@ -5,6 +5,8 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CausalSourceMetadata
 import Leanux.Proofs.WG.AuthenticatedEffects.SendEffectsSource
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeJointWorker
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSenderOps
+import Leanux.Proofs.WG.AuthenticatedEffects.CookieConsumptionSource
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliverySource
 
 /-! One final extension of the existing combined journal on the same native
 Driver spine. The old event type is embedded intact. Causal scope metadata is
@@ -16,6 +18,8 @@ abbrev Cause := CausalSources.Cause
 abbrev Context := CausalEffects.Context Cause
 
 inductive Event where
+  | delivery (sent : List SentDatagram)
+  | cookieConsumed (receipt : CookieConsumption.Receipt)
   | keepalivePrepared (pid : PeerId) (run : WGRunWitness Bool)
   | old (value : Journal.Event)
   | scope (value : CausalScope.Event Cause)
@@ -64,7 +68,7 @@ def session (pid : PeerId) : WGPrefix Event Bool :=
 
 def handshake (session : PeerId → WGPrefix Event Bool)
     (keepalive : PeerId → WGPrefix Event Unit) : WGPrefix Event Bool :=
-  HandshakeWorker.observedWith fun mac =>
+  CookieConsumption.workerWith (CookieConsumption.observed Event.cookieConsumed) fun mac =>
     HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
       (HandshakeSecurity.ExchangeJoint.receiveOps Event.exchange
         (HandshakeEffects.withEffects
@@ -86,6 +90,7 @@ def keepalivePrepare (pid : PeerId) : WGPrefix Event Bool :=
     (.keepalivePrepared pid)
 
 def hooks : Driver.Hooks Event where
+  deliver := DeliverySource.observed Event.delivery
   keepalivePrepare := keepalivePrepare
   fixtureEnter := (CausalSources.fixtureHooks Event.scope).enter
   fixtureLeave := (CausalSources.fixtureHooks Event.scope).leave

@@ -19,6 +19,7 @@ macro "exchange_driver_deferred_step " facts:term : tactic => `(tactic| first
   | (scheduler_preserve_at Env.runOneClearWorker; exact product_lift _ (clear_one_frame ($facts).control))
   | (scheduler_preserve_at Env.requireDrained; exact product_store _ (Nonce.Frames.drained _ _))
   | (scheduler_preserve_at Env.requireNoCryptWork; exact product_store _ requireNoCryptWork_sameKernel)
+  | (nonce_product_head Driver.Hooks.deliver; exact product_store _ deliverSent_sameKernel)
   | (scheduler_preserve_at Env.deliverSent; exact product_store _ deliverSent_sameKernel)
   | (scheduler_preserve_at Env.peekNextSite; exact product_store _ peekNextSite_sameKernel)
   | (scheduler_preserve_at Env.timerWorker; exact product_store _ (timerWorker_sameKernel _))

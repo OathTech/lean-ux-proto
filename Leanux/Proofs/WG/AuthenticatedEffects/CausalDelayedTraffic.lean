@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedIngress
-import Leanux.Proofs.WG.Lifetimes.TrafficPreservation
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryPreservation
 
 /-! Actual fixture ingress, flood, batch and transmit callbacks transport live
 delayed occurrences through their interleaved native worker and poll schedule. -/
@@ -45,8 +45,8 @@ theorem inject (family port : Nat)
 
 theorem afterBatch :
     ProductSafe (afterBatchObserved hooks) :=
-  TrafficSource.afterBatch_preserves safe product_store _ _ _ _ _ crypt sendWorkers
-    send_worker schedule drain
+  DeliverySource.afterBatch_preserves safe product_store _ _ _ _ _ _ crypt sendWorkers
+    send_worker schedule drain deliver
 
 theorem flood (count port family : Nat)
     (messages : List (List UInt8)) :

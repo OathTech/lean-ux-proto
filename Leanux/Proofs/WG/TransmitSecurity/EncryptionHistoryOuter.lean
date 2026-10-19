@@ -164,8 +164,11 @@ theorem retained (call : Syscall)
         (OccurrenceSyscall.dispatch_native call))
 
 theorem observe :
-    ProductSafe (observeObserved Journal.hooks) :=
-  product_bind (idle_timers) (fun _ => product_store _ observeTail_sameKernel)
+    ProductSafe (observeObserved Journal.hooks) := by
+  change PrefixPreserves _ _ (Driver.idleTimersObserved Journal.hooks >>= fun _ =>
+    AuthenticatedEffects.DeliverySource.observeWith (liftPrefix Env.deliverSent))
+  rw [AuthenticatedEffects.DeliverySource.observe_native]
+  exact product_bind (idle_timers) (fun _ => product_store _ observeTail_sameKernel)
 
 theorem dispatchObserve :
     ProductSafe (dispatchObserveObserved Journal.hooks) := by

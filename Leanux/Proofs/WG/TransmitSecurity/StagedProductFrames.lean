@@ -5,6 +5,15 @@ namespace Leanux.Proofs.WG.TransmitSecurity.Staged.Origins
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open AuthenticatedEffects AuthenticatedEffects.CausalJournal
 
+theorem product_wg_store (h : List Event) (w v : World)
+    (same : wgStoreView v.wg = wgStoreView w.wg) (before : Carrier h w.wg) : Carrier h v.wg := by
+  have device := congrArg WGStoreView.dev same
+  change v.wg.dev = w.wg.dev at device
+  refine ⟨before.1.retains ?_ ?_,before.2⟩
+  · simp only [Packets.epoch,device]
+  · intro pid cell found
+    simpa only [stagedAt,device] using found
+
 theorem product_stable (h : List Event) (w v : World)
     (same : productStoreView v = productStoreView w) (before : Carrier h w.wg) : Carrier h v.wg := by
   have device := congrArg (fun s : ProductStore43 => s.2.2.2.dev) same

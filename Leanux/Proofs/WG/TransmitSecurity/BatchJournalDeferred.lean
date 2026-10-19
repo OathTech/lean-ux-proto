@@ -62,6 +62,7 @@ macro "batch_journal_deferred_step" : tactic => `(tactic| first
   | (scheduler_preserve_at Env.requireDrained; exact product_store _ (Nonce.Frames.drained _ _))
   | (scheduler_preserve_at Env.requireNoCryptWork; exact product_store _ requireNoCryptWork_sameKernel)
   | (scheduler_preserve_at Env.deliverSent; exact product_store _ deliverSent_sameKernel)
+  | (nonce_product_head Driver.Hooks.deliver; exact product_store _ deliverSent_sameKernel)
   | (scheduler_preserve_at Env.peekNextSite; exact product_store _ peekNextSite_sameKernel)
   | (scheduler_preserve_at Env.timerWorker; exact product_store _ (timerWorker_sameKernel _))
   | (scheduler_preserve_at Env.requireStepComplete; exact product_store _ (Nonce.Frames.step_complete _))

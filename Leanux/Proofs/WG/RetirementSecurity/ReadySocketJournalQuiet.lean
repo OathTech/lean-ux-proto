@@ -105,6 +105,7 @@ paths. The actual softirq expression remains definitionally unchanged. -/
 def nontransmitHooks : Driver.Hooks Journal.Event := {Journal.hooks with transmit := fun _ => pure false}
 
 theorem hooks_safe : HooksHistorySafe (Stable past) nontransmitHooks where
+  deliver := History.product_lift _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   handshake := handshake
   sendWorker := by

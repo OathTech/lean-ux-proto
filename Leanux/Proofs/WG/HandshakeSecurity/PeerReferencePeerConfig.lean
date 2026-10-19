@@ -4,18 +4,19 @@ import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceRemovalObserved
 set_option maxHeartbeats 200000
 set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues Origins TransmitSecurity Configuration
 
 theorem config_out (a : PeerAttrs) (peer : Option PeerId) (ret : Int) :
-    Observed (Driver.configOut a peer ret) := by
+    Observed (E := E) (Driver.configOut a peer ret) := by
   unfold Driver.configOut
   exact StatePrefixEnsures.bind (lift _ (peer_put peer)) (fun _ =>
     StatePrefixEnsures.bind (ambient _) (fun _ => pure ret))
 
 private theorem finish_end (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId)
-    (ret : Int) (running : Bool) : Observed (do
-      if ← liftWGPrefix (branch .peerRunning running) then Driver.stagingObserved ExchangeDriver.hooks pid
+    (ret : Int) (running : Bool) : Observed (E := E) (do
+      if ← liftWGPrefix (branch .peerRunning running) then Driver.stagingObserved EntrySource.hooks (E := E) pid
       Driver.configOut a peer ret) := by
   apply StatePrefixEnsures.bind (ambient _)
   intro active
@@ -35,9 +36,9 @@ private theorem decide_keepalive (p : Peer) (interval : Nat) (running : Bool) : 
     | rx_retention_step
 
 theorem config_finish (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (ret : Int) :
-    Observed (Driver.configTailFinish ExchangeDriver.hooks a peer pid ret) := by
+    Observed (E := E) (Driver.configTailFinish EntrySource.hooks (E := E) a peer pid ret) := by
   unfold Driver.configTailFinish
-  rw [show Driver.fixtureOps ExchangeDriver.hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
+  rw [show Driver.fixtureOps EntrySource.hooks (E := E) = AuthenticatedEffects.FixtureEffects.neutral from rfl,
     AuthenticatedEffects.FixtureEffects.peerFinish_neutral]
   unfold AuthenticatedEffects.FixtureEffects.peerFinishWith
   apply StatePrefixEnsures.bind (lift _ (store getDev_sameWGStore))
@@ -61,11 +62,11 @@ theorem config_finish (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) (ret
     | false => exact finish_end a peer pid ret d.running
     | true => exact StatePrefixEnsures.bind (keepalive pid) (fun _ => finish_end a peer pid ret d.running)
 
-private def pskSource (pid : PeerId) (psk : Key) : WGPrefix Exchange.Event Unit := do
+private def pskSource (pid : PeerId) (psk : Key) : WGPrefix E Unit := do
   let p ← liftWGPrefix (getPeer pid)
   liftWGPrefix (setPeer pid {p with presharedKey := psk})
 
-private theorem psk_write (pid : PeerId) (psk : Key) : Observed (pskSource pid psk) :=
+private theorem psk_write (pid : PeerId) (psk : Key) : Observed (E := E) (pskSource pid psk) :=
   StatePrefixEnsures.bind (Saved.read_saved pid) (fun p => Saved.write_saved pid p
     (fun p => {p with presharedKey := psk}) (fun _ => rfl))
 
@@ -101,15 +102,14 @@ macro "peer_reference_driver_config_step " : tactic => `(tactic| first
   | (nonce_source_head Bind.bind; apply StatePrefixEnsures.bind)
   | (nonce_source_head ForIn.forIn
      apply loop
-     intro x b
-     change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _)
+     intro x b)
   | maintenance_intro
   | maintenance_reduce
   | maintenance_reduce_match
   | (with_reducible split))
 
 theorem config_tail (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) :
-    Observed (Driver.configTail ExchangeDriver.hooks a peer pid) := by
+    Observed (E := E) (Driver.configTail EntrySource.hooks (E := E) a peer pid) := by
   unfold Driver.configTail peerAllowedIpsWith
   apply StatePrefixEnsures.bind (ambient _)
   intro has
@@ -152,7 +152,7 @@ theorem config_tail (a : PeerAttrs) (peer : Option PeerId) (pid : PeerId) :
         exact config_finish a peer pid ret
 
 private theorem guard_and (d : Decision) (b : Bool) (e : Decision) (c : Bool) :
-    Observed (liftWGPrefix (WG.andM (branch d b) (branch e c))) := by
+    Observed (E := E) (liftWGPrefix (WG.andM (branch d b) (branch e c))) := by
   apply lift
   unfold WG.andM
   apply preserves_bind (hoare_liftAmbient (AmbientM.branch d b) Inv)
@@ -174,13 +174,13 @@ elab "peer_reference_config_callback " name:ident : tactic => withMainContext do
     throwError "different callback head"
 
 private theorem update_control (a : PeerAttrs) (flags : UInt32) (psk : Option Key)
-    (remove setPsk replace : WGPrefix Exchange.Event Unit) (endpoint : Endpoint → WGPrefix Exchange.Event Unit)
-    (out : Int → WGPrefix Exchange.Event Int) (tail : WGPrefix Exchange.Event Int)
-    (hr : Observed remove) (hs : Observed setPsk) (hp : Observed replace)
-    (he : ∀ ep, Observed (endpoint ep)) (ho : ∀ ret, Observed (out ret)) (ht : Observed tail) :
-    Observed (peerConfigUpdateWith (fun {_} a => liftWGPrefix a)
+    (remove setPsk replace : WGPrefix E Unit) (endpoint : Endpoint → WGPrefix E Unit)
+    (out : Int → WGPrefix E Int) (tail : WGPrefix E Int)
+    (hr : Observed (E := E) remove) (hs : Observed (E := E) setPsk) (hp : Observed (E := E) replace)
+    (he : ∀ ep, Observed (E := E) (endpoint ep)) (ho : ∀ ret, Observed (E := E) (out ret)) (ht : Observed (E := E) tail) :
+    Observed (E := E) (peerConfigUpdateWith (fun {_} a => liftWGPrefix a)
       remove setPsk replace endpoint out tail a flags psk) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold peerConfigUpdateWith
   unfold StatePrefixPreserves
   cases a.endpoint
@@ -205,21 +205,21 @@ private theorem update_control (a : PeerAttrs) (flags : UInt32) (psk : Option Ke
 
 theorem config_update (a : PeerAttrs) (peer : Option PeerId)
     (flags : UInt32) (psk : Option Key) (pid : PeerId) :
-    Observed (Driver.configUpdate ExchangeDriver.hooks a peer flags psk pid) := by
+    Observed (E := E) (Driver.configUpdate EntrySource.hooks (E := E) a peer flags psk pid) := by
   unfold Driver.configUpdate
   exact update_control a flags psk _ _ _ _ _ _ (remove_observed peer)
     (psk_write pid (psk.getD [])) (lift _ (remove_ips pid))
     (fun ep => lift _ (endpoint pid ep)) (config_out a peer) (config_tail a peer pid)
 
 private theorem acquired_control
-    (out : Int → WGPrefix Exchange.Event Int)
-    (update : Option PeerId → UInt32 → Option Key → PeerId → WGPrefix Exchange.Event Int)
-    (ho : ∀ ret, Observed (out ret)) (hu : ∀ p f k pid, Observed (update p f k pid))
+    (out : Int → WGPrefix E Int)
+    (update : Option PeerId → UInt32 → Option Key → PeerId → WGPrefix E Int)
+    (ho : ∀ ret, Observed (E := E) (out ret)) (hu : ∀ p f k pid, Observed (E := E) (update p f k pid))
     (key : Key) (psk : Option Key) (flags : UInt32) (peer : Option PeerId) :
-    Observed (peerCommandAcquiredWith (fun {_} a => liftWGPrefix a)
+    Observed (E := E) (peerCommandAcquiredWith (fun {_} a => liftWGPrefix a)
       (fun key psk => liftWGPrefix (peerCreate key psk)) (fun pid => liftWGPrefix (peerGet pid))
       out update key psk flags peer) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold peerCommandAcquiredWith
   unfold StatePrefixPreserves
   cases peer
@@ -241,12 +241,12 @@ private theorem acquired_control
     | maintenance_reduce_match
     | split
 
-private theorem command_control (a : PeerAttrs) (out : Int → WGPrefix Exchange.Event Int)
-    (acquired : Key → Option Key → UInt32 → Option PeerId → WGPrefix Exchange.Event Int)
-    (ho : ∀ ret, Observed (out ret)) (ha : ∀ k p f peer, Observed (acquired k p f peer)) :
-    Observed (setPeerCmdWith (fun {_} a => liftWGPrefix a)
+private theorem command_control (a : PeerAttrs) (out : Int → WGPrefix E Int)
+    (acquired : Key → Option Key → UInt32 → Option PeerId → WGPrefix E Int)
+    (ho : ∀ ret, Observed (E := E) (out ret)) (ha : ∀ k p f peer, Observed (E := E) (acquired k p f peer)) :
+    Observed (E := E) (setPeerCmdWith (fun {_} a => liftWGPrefix a)
       (fun key => liftWGPrefix (pubkeyLookup key)) out acquired a) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold setPeerCmdWith
   unfold StatePrefixPreserves
   cases a.publicKey
@@ -267,7 +267,7 @@ private theorem command_control (a : PeerAttrs) (out : Int → WGPrefix Exchange
     | split
 
 theorem config_peer (a : PeerAttrs) :
-    Observed (Driver.configPeer ExchangeDriver.hooks a) :=
+    Observed (E := E) (Driver.configPeer EntrySource.hooks (E := E) a) :=
   command_control a _ _ (config_out a none)
     (acquired_control _ _ (config_out a none) (config_update a))
 

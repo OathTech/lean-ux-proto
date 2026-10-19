@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.HandshakeSecurity.DriverDeliveryNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionDispatchFrames
 
 namespace Leanux.Proofs.WG.HandshakeSecurity.PendingPromotion
@@ -29,8 +30,9 @@ theorem retained_dispatch (facts : H1DriverFrames) (call : Syscall)
     exact product_lift _ (fun h => DispatchFrames.quiet_dispatch facts.lifecycle call h retained up)
 
 theorem observe (facts : H1DriverFrames) :
-    ProductPreserves (Driver.observeObserved hooks) :=
-  PrefixPreserves.bind (idle_timers facts.deferred) (fun _ => product_store _ observeTail_sameKernel)
+    ProductPreserves (Driver.observeObserved hooks) := by
+  rw [DriverDelivery.observe _ rfl]
+  exact PrefixPreserves.bind (idle_timers facts.deferred) (fun _ => product_store _ observeTail_sameKernel)
 
 theorem dispatch_observe (facts : H1DriverFrames) :
     ProductPreserves (Driver.dispatchObserveObserved hooks) := by

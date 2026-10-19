@@ -33,6 +33,7 @@ theorem keepalive_staging_history
     | driver_state_history_step
 
 theorem HooksHistorySafe.core (h : HooksHistorySafe Safe g) : ActorCoreHistorySafe Safe g where
+  deliver := h.deliver
   keepalivePrepare := h.keepalivePrepare
   staging := staging_history h
   fixtureEnter := h.fixtureEnter

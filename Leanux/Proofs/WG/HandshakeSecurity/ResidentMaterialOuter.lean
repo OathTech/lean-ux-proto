@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.HandshakeSecurity.DriverDeliveryNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialConfiguration
 import Leanux.Proofs.WG.HandshakeSecurity.ResidentMaterialOuterFrames
 import Leanux.Proofs.WG.Origins.RunnerInvariant
@@ -134,8 +135,9 @@ theorem retained (call : Syscall)
       exact product_carrier_lift _ (fun history => OuterNative.quiet_dispatch call history kept up)
 
 theorem observe :
-    ProductSafe (observeObserved Journal.hooks) :=
-  product_bind (idle_timers_carrier) (fun _ => product_store _ observeTail_sameKernel)
+    ProductSafe (observeObserved Journal.hooks) := by
+  rw [DriverDelivery.observe _ rfl]
+  exact product_bind (idle_timers_carrier) (fun _ => product_store _ observeTail_sameKernel)
 
 theorem dispatchObserve :
     ProductSafe (dispatchObserveObserved Journal.hooks) := by

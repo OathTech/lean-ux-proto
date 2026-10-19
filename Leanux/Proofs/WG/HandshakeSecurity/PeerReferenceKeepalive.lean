@@ -3,25 +3,26 @@ import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceStaging
 /-! A saved peer record carries its positive count through keepalive allocation
 choices. The source uses the same staging callback as packet sends. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues TransmitSecurity
 
-theorem keepalive (pid : PeerId) : Observed (Driver.keepaliveObserved ExchangeDriver.hooks pid) := by
+theorem keepalive (pid : PeerId) : Observed (E := E) (Driver.keepaliveObserved EntrySource.hooks (E := E) pid) := by
   rw [Driver.keepalive_native _ rfl]
   unfold Driver.keepaliveInline
-  let Saved := fun (p : Peer) h w (_ : Ambient) => StateInv h w ∧ 0 < p.refcount
-  have read : StatePrefixEnsures (fun h w _ => StateInv h w) Safe (liftWGPrefix (getPeer pid)) Saved := by
+  let Saved := fun (p : Peer) h w (_ : Ambient) => StateInv (E := E) h w ∧ 0 < p.refcount
+  have read : StatePrefixEnsures (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) (liftWGPrefix (getPeer pid)) Saved := by
     apply StatePrefixEnsures.lift _ (fun _ _ _ hi => hi.1)
     intro h w a p v b hi run
     obtain ⟨positive,count⟩ := (hoare_iff_run_ambient _ _ _).mp (read_saved pid) w a p v b hi.2 run
     exact ⟨⟨hi.1,positive⟩,count⟩
   have effect (p : Peer) {α : Type} (a : AmbientM α) :
-      StatePrefixPreserves (Saved p) Safe (liftWGPrefix (monadLift a : WG.M α)) := by
+      StatePrefixPreserves (Saved p) (Safe (E := E)) (liftWGPrefix (monadLift a : WG.M α)) := by
     apply StatePrefixEnsures.lift _ (fun _ _ _ hi => hi.1.1)
     intro h w b x v c hi run
-    exact (hoare_iff_run_ambient _ _ _).mp (hoare_liftAmbient a (fun w => StateInv h w ∧ 0 < p.refcount))
+    exact (hoare_iff_run_ambient _ _ _).mp (hoare_liftAmbient a (fun w => StateInv (E := E) h w ∧ 0 < p.refcount))
       w b x v c hi run
-  have finish (p : Peer) {α : Type} {action : WGPrefix Exchange.Event α} (checked : Observed action) :
-      StatePrefixEnsures (Saved p) Safe action (fun _ h w _ => StateInv h w) :=
+  have finish (p : Peer) {α : Type} {action : WGPrefix E α} (checked : Observed (E := E) action) :
+      StatePrefixEnsures (Saved p) (Safe (E := E)) action (fun _ h w _ => StateInv (E := E) h w) :=
     checked.consequence (fun _ _ _ hi => hi.1) (fun _ _ _ _ hi => hi)
   apply StatePrefixEnsures.bind read
   intro p
@@ -38,7 +39,7 @@ theorem keepalive (pid : PeerId) : Observed (Driver.keepaliveObserved ExchangeDr
         (P := Saved p) (Q := fun _ => Saved p) getDev (fun _ _ _ hi => hi.1.1) ?_)
       · intro d
         apply StatePrefixEnsures.bind (StatePrefixEnsures.lift
-          (P := Saved p) (Q := fun _ h w _ => StateInv h w)
+          (P := Saved p) (Q := fun _ h w _ => StateInv (E := E) h w)
           (setPeer pid {p with staged := p.staged ++ [{mtu := d.mtu}]})
           (fun _ _ _ hi => hi.1.1) ?_)
         · intro _

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.HandshakeSecurity.DriverDeliveryNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.ResponderDriverDispatchFrames
 
 namespace Leanux.Proofs.WG.HandshakeSecurity.Responder.DriverCuts
@@ -19,8 +20,9 @@ theorem retained_dispatch (H1 : H1ResponderCurrentEdges) (call : Syscall)
     exact product_lift _ (fun h => Frames.quiet_dispatch H1 call h retained up)
 
 theorem observe (H1 : H1ResponderCurrentEdges) :
-    ProductPreserves (Driver.observeObserved hooks) :=
-  PrefixPreserves.bind (idle_timers H1) (fun _ => product_store _ observeTail_sameKernel)
+    ProductPreserves (Driver.observeObserved hooks) := by
+  rw [DriverDelivery.observe _ rfl]
+  exact PrefixPreserves.bind (idle_timers H1) (fun _ => product_store _ observeTail_sameKernel)
 
 theorem dispatch_observe (H1 : H1ResponderCurrentEdges) :
     ProductPreserves (Driver.dispatchObserveObserved hooks) := by

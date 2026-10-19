@@ -6,6 +6,7 @@ import Leanux.Proofs.WG.Queues.SchedulerPreservation
 actual queued sends and timer callbacks before later Stop. -/
 set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues TransmitSecurity
 
 macro "peer_reference_driver_deferred_step " : tactic => `(tactic| first
@@ -19,6 +20,7 @@ macro "peer_reference_driver_deferred_step " : tactic => `(tactic| first
   | (scheduler_preserve_at Env.runOneClearWorker; exact clear_one)
   | (scheduler_preserve_at Env.requireDrained; exact product_store _ (Nonce.Frames.drained _ _))
   | (scheduler_preserve_at Env.requireNoCryptWork; exact product_store _ requireNoCryptWork_sameKernel)
+  | (nonce_product_head Driver.Hooks.deliver; exact product_store _ deliverSent_sameKernel)
   | (scheduler_preserve_at Env.deliverSent; exact product_store _ deliverSent_sameKernel)
   | (scheduler_preserve_at Env.peekNextSite; exact product_store _ peekNextSite_sameKernel)
   | (scheduler_preserve_at Env.timerWorker; exact product_store _ (timerWorker_sameKernel _))
@@ -44,11 +46,11 @@ macro "peer_reference_driver_deferred_step " : tactic => `(tactic| first
   | dsimp (config := {failIfUnchanged := true}) only)
 
 theorem crypt :
-    PrefixPreserves ProductInv Safe (Driver.cryptObserved ExchangeDriver.hooks) :=
+    PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) (Driver.cryptObserved EntrySource.hooks (E := E)) :=
   PrefixPreserves.bind (schedule none) (fun _ => product_store _ deliverSent_sameKernel)
 
 theorem send_workers :
-    PrefixPreserves ProductInv Safe (Driver.sendWorkersObserved ExchangeDriver.hooks) := by
+    PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) (Driver.sendWorkersObserved EntrySource.hooks (E := E)) := by
   unfold Driver.sendWorkersObserved
   repeat' first
     | (nonce_product_head Driver.scheduleObserved; exact schedule _)
@@ -57,7 +59,7 @@ theorem send_workers :
     | peer_reference_driver_deferred_step
 
 theorem after_xmit :
-    PrefixPreserves ProductInv Safe (Driver.afterXmitObserved ExchangeDriver.hooks) := by
+    PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) (Driver.afterXmitObserved EntrySource.hooks (E := E)) := by
   unfold Driver.afterXmitObserved
   repeat' first
     | (nonce_product_head Driver.cryptObserved; exact crypt)
@@ -66,9 +68,9 @@ theorem after_xmit :
     | (nonce_product_head Driver.Hooks.timerFinished; exact product_pure ())
     | peer_reference_driver_deferred_step
 
-theorem timer_section (worker : Worker) {body : PrefixM Exchange.Event Unit}
-    (safe : PrefixPreserves ProductInv Safe body) :
-    PrefixPreserves ProductInv Safe (Driver.timerSectionObserved worker body) := by
+theorem timer_section (worker : Worker) {body : PrefixM E Unit}
+    (safe : PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) body) :
+    PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) (Driver.timerSectionObserved worker body) := by
   unfold Driver.timerSectionObserved
   dsimp only
   split
@@ -79,7 +81,7 @@ theorem timer_section (worker : Worker) {body : PrefixM Exchange.Event Unit}
       runWorkerPrefix_preserves (fun _ _ hi => hi.1) product_stable worker safe)
 
 theorem timers (jPass : UInt64) :
-    PrefixPreserves ProductInv Safe (Driver.timersObserved ExchangeDriver.hooks jPass) := by
+    PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) (Driver.timersObserved EntrySource.hooks (E := E) jPass) := by
   unfold Driver.timersObserved
   repeat' first
     | (nonce_product_head Driver.cryptObserved; exact crypt)
@@ -90,7 +92,7 @@ theorem timers (jPass : UInt64) :
     | peer_reference_driver_deferred_step
 
 theorem placeholder_timers (jHi : UInt64) :
-    PrefixPreserves ProductInv Safe (Driver.placeholderTimersObserved ExchangeDriver.hooks jHi) := by
+    PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) (Driver.placeholderTimersObserved EntrySource.hooks (E := E) jHi) := by
   unfold Driver.placeholderTimersObserved
   repeat' first
     | (nonce_product_head Driver.cryptObserved; exact crypt)
@@ -102,7 +104,7 @@ theorem placeholder_timers (jHi : UInt64) :
     | peer_reference_driver_deferred_step
 
 theorem idle_timers :
-    PrefixPreserves ProductInv Safe (Driver.idleTimersObserved ExchangeDriver.hooks) := by
+    PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) (Driver.idleTimersObserved EntrySource.hooks (E := E)) := by
   unfold Driver.idleTimersObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
@@ -113,7 +115,7 @@ theorem idle_timers :
     | peer_reference_driver_deferred_step
 
 theorem after_advance :
-    PrefixPreserves ProductInv Safe (Driver.afterAdvanceObserved ExchangeDriver.hooks) := by
+    PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) (Driver.afterAdvanceObserved EntrySource.hooks (E := E)) := by
   unfold Driver.afterAdvanceObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first

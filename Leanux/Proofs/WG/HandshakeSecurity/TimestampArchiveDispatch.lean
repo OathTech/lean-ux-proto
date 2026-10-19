@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.HandshakeSecurity.DriverDeliveryNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveDispatchFrames
 
 namespace Leanux.Proofs.WG.HandshakeSecurity.TimestampArchive
@@ -19,8 +20,9 @@ theorem retained_dispatch (call : Syscall)
     exact product_lift _ (fun h => Frames.quiet_dispatch call h retained up)
 
 theorem observe :
-    ProductPreserves (Driver.observeObserved TimestampDriver.hooks) :=
-  PrefixPreserves.bind (idle_timers) (fun _ => product_store _ observeTail_sameKernel)
+    ProductPreserves (Driver.observeObserved TimestampDriver.hooks) := by
+  rw [DriverDelivery.observe _ rfl]
+  exact PrefixPreserves.bind (idle_timers) (fun _ => product_store _ observeTail_sameKernel)
 
 theorem dispatch_observe :
     ProductPreserves (Driver.dispatchObserveObserved TimestampDriver.hooks) := by

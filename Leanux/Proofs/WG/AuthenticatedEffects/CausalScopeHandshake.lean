@@ -49,14 +49,15 @@ private theorem receive
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, StateSafe (session pid))
     (hk : ∀ pid, StateSafe (keepalive pid)) (msg : Key) (src : SkbSource) :
-    StateSafe (HandshakeWorker.receiveWith
+    StateSafe (CookieConsumption.receiveWith (CookieConsumption.observed Event.cookieConsumed)
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
             (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
-  unfold HandshakeWorker.receiveWith
+  unfold CookieConsumption.receiveWith CookieConsumption.observed
   repeat' first
+    | (scope_balance_head receiptWGObserved; refine state_receipt _ ?_ _ (fun _ => rfl))
     | (scope_balance_head ProtocolSocket.observed; exact protocol_send _ _)
     | (scope_balance_head CookieSocket.observed; exact cookie_send _ _ _)
     | (scope_balance_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)
@@ -68,11 +69,11 @@ theorem handshake
     (hs : ∀ pid, StateSafe (session pid))
     (hk : ∀ pid, StateSafe (keepalive pid)) :
     StateSafe (CausalJournal.handshake session keepalive) := by
-  unfold CausalJournal.handshake HandshakeWorker.observedWith HandshakeWorker.workerWith
+  unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
     | (scope_balance_head ProtocolSocket.observed; exact protocol_send _ _)
     | (scope_balance_head CookieSocket.observed; exact cookie_send _ _ _)
-    | (scope_balance_head HandshakeWorker.receiveWith; exact receive session keepalive hs hk _ _)
+    | (scope_balance_head CookieConsumption.receiveWith; exact receive session keepalive hs hk _ _)
     | scope_state_step
 
 

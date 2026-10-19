@@ -4,13 +4,14 @@ import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceConfiguration
 including the drain inside timersStop. Neither native queue guards nor ordinary
 result erasure are used to discard a reachable callback. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues TransmitSecurity
 set_option maxHeartbeats 200000
 set_option pp.structureInstances false
 
 theorem range_loop {β : Type} (r : Std.Legacy.Range) (init : β)
-    (body : Nat → β → WGPrefix Exchange.Event (ForInStep β))
-    (safe : ∀ x b, Observed (body x b)) : Observed (forIn r init body) := by
+    (body : Nat → β → WGPrefix E (ForInStep β))
+    (safe : ∀ x b, Observed (E := E) (body x b)) : Observed (E := E) (forIn r init body) := by
   rw [Std.Legacy.Range.forIn_eq_forIn_range']
   exact loop _ init body safe
 
@@ -43,21 +44,21 @@ macro "peer_reference_removal_step" : tactic => `(tactic| first
   | (with_reducible split))
 
 theorem drain_observed (upTo : Option PeerId) :
-    Observed (Driver.sendDrainObserved ExchangeDriver.hooks upTo) := by
+    Observed (E := E) (Driver.sendDrainObserved EntrySource.hooks (E := E) upTo) := by
   unfold Driver.sendDrainObserved SendExchange.drainWith
   repeat' peer_reference_removal_step
 
 theorem timers_stop_observed (pid : PeerId) :
-    Observed (SendExchange.timersStopWith liftWGPrefix
-      (Driver.sendDrainObserved ExchangeDriver.hooks) pid) := by
+    Observed (E := E) (SendExchange.timersStopWith liftWGPrefix
+      (Driver.sendDrainObserved EntrySource.hooks (E := E)) pid) := by
   unfold SendExchange.timersStopWith
   repeat' first
     | (nonce_source_head Driver.sendDrainObserved; exact drain_observed _)
     | peer_reference_removal_step
 
 theorem after_dead_observed (pid : PeerId) :
-    Observed (SendExchange.afterDeadWith liftWGPrefix
-      (Driver.sendDrainObserved ExchangeDriver.hooks) pid) := by
+    Observed (E := E) (SendExchange.afterDeadWith liftWGPrefix
+      (Driver.sendDrainObserved EntrySource.hooks (E := E)) pid) := by
   unfold SendExchange.afterDeadWith
   repeat' first
     | (nonce_source_head Driver.sendDrainObserved; exact drain_observed _)
@@ -65,14 +66,14 @@ theorem after_dead_observed (pid : PeerId) :
     | peer_reference_removal_step
 
 theorem remove_observed (peer : Option PeerId) :
-    Observed (Driver.removeObserved ExchangeDriver.hooks peer) := by
+    Observed (E := E) (Driver.removeObserved EntrySource.hooks (E := E) peer) := by
   unfold Driver.removeObserved SendExchange.removeWith Configuration.peerRemoveWith
   repeat' first
     | (nonce_source_head SendExchange.afterDeadWith; exact after_dead_observed _)
     | peer_reference_removal_step
 
 theorem remove_all_observed :
-    Observed (Driver.removeAllObserved ExchangeDriver.hooks) := by
+    Observed (E := E) (Driver.removeAllObserved EntrySource.hooks (E := E)) := by
   unfold Driver.removeAllObserved SendExchange.removeAllWith Configuration.peerRemoveAllWith
   repeat' first
     | (nonce_source_head SendExchange.afterDeadWith; exact after_dead_observed _)

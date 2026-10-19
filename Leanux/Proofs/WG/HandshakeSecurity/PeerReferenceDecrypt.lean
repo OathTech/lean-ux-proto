@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceWorker
 /-! Native receive workers retain positive resident peers through decryption,
 publication, NAPI callbacks and repayment of their temporary reference. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues TransmitSecurity
 
 theorem decrypt (pkt : RxPacket)  :
@@ -43,19 +44,19 @@ theorem prepare_worker  :
     | peer_reference_poll_step
 
 theorem product_native (action : WG.M α) (preserved : Framing.Preserves Inv action) :
-    ProductPreserves (liftPrefix (liftWG action)) :=
+    ProductPreserves (E := E) (liftPrefix (liftWG action)) :=
   product_lift _ (PublicationPoll.native_product _ _ preserved)
 
 theorem product_ambient (action : AmbientM α) :
-    ProductPreserves (liftPrefix (monadLift action : Leanux.M α)) :=
+    ProductPreserves (E := E) (liftPrefix (monadLift action : Leanux.M α)) :=
   product_lift _ (productAmbient_spec action _ (fun _ _ hi => hi))
 
 theorem resched (worker : Worker) (site : Decision) :
-    ProductPreserves (Driver.reschedObserved worker site) :=
+    ProductPreserves (E := E) (Driver.reschedObserved worker site) :=
   PrefixPreserves.bind (product_store _ (condResched_sameKernel worker))
     (fun _ => product_ambient _)
 
-theorem decrypt_step : ProductPreserves (Driver.decryptStepObserved ExchangeDriver.hooks) := by
+theorem decrypt_step : ProductPreserves (E := E) (Driver.decryptStepObserved EntrySource.hooks (E := E)) := by
   unfold Driver.decryptStepObserved RxWorkers.decryptWith
   apply PrefixPreserves.bind softirq
   intro _
@@ -68,10 +69,10 @@ theorem decrypt_step : ProductPreserves (Driver.decryptStepObserved ExchangeDriv
       PrefixPreserves.bind (product_native _ (peer_put (some pid))) (fun _ =>
         PrefixPreserves.bind softirq (fun _ => product_pure _)))
 
-theorem decrypt_iteration : ProductPreserves (Driver.decryptIterObserved ExchangeDriver.hooks) :=
+theorem decrypt_iteration : ProductPreserves (E := E) (Driver.decryptIterObserved EntrySource.hooks (E := E)) :=
   workerIterPrefix_preserves _ _ (fun _ _ hi => hi.1) decrypt_step (resched _ _)
 
-theorem receive_iteration : ProductPreserves (Driver.receiveIterObserved ExchangeDriver.hooks) :=
+theorem receive_iteration : ProductPreserves (E := E) (Driver.receiveIterObserved EntrySource.hooks (E := E)) :=
   workerIterPrefix_preserves _ _ (fun _ _ hi => hi.1) (product_safe handshake_worker)
     (product_store _ (condResched_sameKernel _))
 

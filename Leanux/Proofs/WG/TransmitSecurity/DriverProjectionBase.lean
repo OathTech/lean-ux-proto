@@ -3,6 +3,7 @@ import Leanux.Proofs.Logged.ProjectsOuter
 import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeRemovalProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsProjection
 import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsProjection
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryContracts
 
 /-! Exact event projection through the shared TX source driver. These laws
 preserve the native result and both states, as well as every failed prefix. -/
@@ -10,6 +11,7 @@ namespace Leanux.Proofs.WG.TransmitSecurity.Driver
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues
 
 structure HooksProjects (ρ : E → Option F) (g : Hooks E) (a : Hooks F) : Prop where
+  deliver : ProjectsPrefix ρ id g.deliver a.deliver
   keepalivePrepare : ∀ pid, StateProjectsPrefix ρ id (g.keepalivePrepare pid) (a.keepalivePrepare pid)
   fixture : ∃ scopeMap : Nat → Nat,
     (∀ trigger, StateProjectsPrefix ρ scopeMap (g.fixtureEnter trigger) (a.fixtureEnter trigger)) ∧

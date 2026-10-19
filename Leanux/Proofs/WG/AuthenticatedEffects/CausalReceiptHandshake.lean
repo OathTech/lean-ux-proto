@@ -51,13 +51,16 @@ private theorem receive
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, Driver.StateHistorySafe Safe (session pid))
     (hk : ∀ pid, Driver.StateHistorySafe Safe (keepalive pid)) (msg : Key) (src : SkbSource) :
-    Driver.StateHistorySafe Safe (HandshakeWorker.receiveWith
+    Driver.StateHistorySafe Safe (CookieConsumption.receiveWith (CookieConsumption.observed Event.cookieConsumed)
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
             (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
-  apply CookieCaller.receive
+  apply CookieConsumption.receive_history
+  · intro msg
+    exact CookieConsumption.observed_history Safe Event.cookieConsumed msg
+      (fun h receipt hi valid => hi.emit valid)
   · intro mac _
     exact other session keepalive hs hk mac
   · intro mac native loaded state kind
@@ -68,10 +71,10 @@ theorem handshake
     (hs : ∀ pid, Driver.StateHistorySafe Safe (session pid))
     (hk : ∀ pid, Driver.StateHistorySafe Safe (keepalive pid)) :
     Driver.StateHistorySafe Safe (CausalJournal.handshake session keepalive) := by
-  unfold CausalJournal.handshake HandshakeWorker.observedWith HandshakeWorker.workerWith
+  unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
-    | (driver_history_head HandshakeWorker.receiveWith; exact receive session keepalive hs hk _ _)
+    | (driver_history_head CookieConsumption.receiveWith; exact receive session keepalive hs hk _ _)
     | driver_state_history_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Receipts

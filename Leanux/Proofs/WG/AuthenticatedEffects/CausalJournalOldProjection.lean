@@ -26,8 +26,11 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
   change StateProjectsPrefix old? id (handshake sg kg)
     (HandshakeWorker.observed Journal.Event.handshake Journal.handshake? st kt)
   rw [HandshakeWorker.observed_factor]
-  apply HandshakeEffects.worker_projects old? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
+  rw [← CookieConsumption.worker_native]
+  apply CookieConsumption.worker_projects old? _ _ _ _
+  · intro msg; exact CookieConsumption.observed_projects old? Event.cookieConsumed (fun _ => rfl) msg
   intro mac
+  apply HandshakeEffects.scopeOps_projects old? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
   apply HandshakeSecurity.ExchangeJoint.receive_ignored old? Event.exchange (fun _ => rfl)
   have base := ProtocolSender.receive_projects old? (Event.old ∘ Journal.Event.handshake) handshake?
     Journal.Event.handshake Journal.handshake? (fun _ => rfl) (fun _ => rfl)
@@ -83,6 +86,7 @@ private theorem front_appends (family addr : Nat) (packets : List Packet) (mtu :
     StateAppends (Journal.front family addr packets mtu) := (StateAppends.lift _).receiptWGObserved _
 
 theorem hooks_projects : Driver.HooksProjects old? hooks Journal.hooks where
+  deliver := DeliverySource.observed_projects old? Event.delivery (fun _ => rfl)
   keepalivePrepare := fun _ => Journal.state_receipt_projects old? _ _ _
     (fun _ => rfl) (Driver.Projection.state_lift old? _)
   fixture := ⟨(fun _ => 0),

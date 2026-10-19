@@ -58,7 +58,8 @@ theorem retained (call : Syscall) : ProductSafe (Driver.retainedObserved hooks c
   all_goals exact product_lift _
 
 theorem observe : ProductSafe (Driver.observeObserved hooks) :=
-  product_bind idle_timers (fun _ => product_lift _)
+  product_bind idle_timers (fun _ frames => DeliverySource.observe_preserves
+    (fun _ _ ready => ⟨frames,ready⟩) (fun _ _ _ _ ready => ready) _ (deliver frames))
 
 theorem dispatch_observe : ProductSafe (Driver.dispatchObserveObserved hooks) := by
   unfold Driver.dispatchObserveObserved

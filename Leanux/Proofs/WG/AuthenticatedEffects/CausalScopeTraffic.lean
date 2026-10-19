@@ -1,6 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeDeferred
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeFixture
-import Leanux.Proofs.WG.Lifetimes.TrafficPreservation
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryPreservation
 
 /-! Supplied fixture packets, ingress and batch operations use the exact source
 callbacks. Stack replies keep their receive-derived scope rather than gaining a
@@ -19,11 +19,11 @@ theorem inject (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (d
 
 theorem after_batch : ProductSafe (Driver.afterBatchObserved hooks) := by
   intro frames
-  exact TrafficSource.afterBatch_preserves
+  exact DeliverySource.afterBatch_preserves
     (I := fun h _ => CausalScope.stack (h.filterMap scope?) = .ok frames)
     (S := CausalScope.WellFormed scope?) (fun _ _ ready => ⟨frames,ready⟩)
-    (fun _ _ _ _ ready => ready) _ _ _ _ _ (crypt frames) (send_workers frames)
-    (send_worker frames) (fun stack => schedule stack frames) (fun _ _ => product_lift _ frames)
+    (fun _ _ _ _ ready => ready) _ _ _ _ _ _ (crypt frames) (send_workers frames)
+    (send_worker frames) (fun stack => schedule stack frames) (fun _ _ => product_lift _ frames) (deliver frames)
 
 theorem flood (count port family : Nat) (messages : List (List UInt8)) :
     ProductSafe (Driver.floodObserved hooks count port family messages) := by

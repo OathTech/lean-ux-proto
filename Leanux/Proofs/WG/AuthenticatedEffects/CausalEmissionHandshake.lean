@@ -123,15 +123,16 @@ private theorem after_mac
 private theorem receive
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, StateSafe (session pid)) (hk : ∀ pid, StateSafe (keepalive pid))
-    (msg : Key) (src : SkbSource) : StateSafe (HandshakeWorker.receiveWith
+    (msg : Key) (src : SkbSource) : StateSafe (CookieConsumption.receiveWith (CookieConsumption.observed Event.cookieConsumed)
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
             (ProtocolSender.receiveOps (Event.old ∘ TransmitSecurity.Journal.Event.handshake)
               handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
             (Event.old ∘ TransmitSecurity.Journal.Event.handshake) effects))) msg src) := by
-  unfold HandshakeWorker.receiveWith
+  unfold CookieConsumption.receiveWith CookieConsumption.observed
   repeat' first
+    | (emission_head receiptWGObserved; refine state_receipt _ ?_ _ (fun _ => rfl))
     | (emission_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)
     | (emission_head captureWGRun; exact (state_native _ (cookieValidatePacket_sent _ _ _)).captureWGObserved)
     | emission_handshake_native
@@ -141,9 +142,9 @@ theorem handshake
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, StateSafe (session pid)) (hk : ∀ pid, StateSafe (keepalive pid)) :
     StateSafe (CausalJournal.handshake session keepalive) := by
-  unfold CausalJournal.handshake HandshakeWorker.observedWith HandshakeWorker.workerWith
+  unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
-    | (emission_head HandshakeWorker.receiveWith; exact receive session keepalive hs hk _ _)
+    | (emission_head CookieConsumption.receiveWith; exact receive session keepalive hs hk _ _)
     | emission_handshake_native
     | emission_step
 

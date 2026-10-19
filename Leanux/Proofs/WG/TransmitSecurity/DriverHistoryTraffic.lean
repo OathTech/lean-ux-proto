@@ -17,9 +17,9 @@ theorem inject_history (h : ActorHistorySafe Safe g) (family port : Nat)
 
 theorem afterBatch_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (afterBatchObserved g) :=
-  TrafficSource.afterBatch_preserves history_safe (fun _ _ _ _ hi => hi) _ _ _ _ _
+  AuthenticatedEffects.DeliverySource.afterBatch_history Safe _ _ _ _ _ _
     (crypt_history h) (sendWorkers_history h) h.sendWorker (schedule_history h)
-    (fun _ _ => History.product_lift _)
+    (fun _ _ => History.product_lift _) h.deliver
 
 theorem flood_history (h : ActorHistorySafe Safe g) (count port family : Nat)
     (messages : List (List UInt8)) :

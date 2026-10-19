@@ -117,6 +117,7 @@ private def quietHooks : Driver.Hooks Exchange.Event :=
 
 private theorem quietHooks_history (good : List Exchange.Event → Prop) :
     Driver.HooksHistorySafe good quietHooks where
+  deliver := Driver.History.product_lift _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   handshake := fun _ _ _ _ => Driver.History.state_lift _
   fixtureEnter := fun _ => Driver.History.state_pure _

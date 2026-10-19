@@ -7,15 +7,22 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing TransmitSecurit
 set_option maxHeartbeats 600000
 set_option maxRecDepth 4096
 
+theorem deliver : ProductSafe hooks.deliver := by
+  apply product_combine _ Delayed.deliver
+  unfold hooks DeliverySource.observed
+  exact Driver.History.product_bind (Driver.History.product_lift _) (fun w =>
+    Driver.History.product_bind (Selections.product_emit (.delivery w.sent) True.intro) (fun _ =>
+      Driver.History.product_lift _))
+
 macro "selection_deferred_step" : tactic => `(tactic| first
+  | (selection_carrier_head Driver.Hooks.deliver; exact deliver)
   | (selection_carrier_head liftPrefix; apply product_native; solve | causal_delayed_deferred_native)
   | (selection_carrier_head Driver.sendWorkerObserved; exact Selections.send_worker)
   | (selection_carrier_head Driver.scheduleObserved; exact schedule _)
   | selection_carrier_step)
 
 theorem crypt : ProductSafe (Driver.cryptObserved hooks) :=
-  product_bind (schedule none) (fun _ => product_native _
-    (Delayed.product_store_lift _ deliverSent_sameKernel))
+  product_bind (schedule none) (fun _ => deliver)
 
 theorem sendWorkers : ProductSafe (Driver.sendWorkersObserved hooks) := by
   unfold Driver.sendWorkersObserved

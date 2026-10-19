@@ -156,7 +156,8 @@ theorem retained (h : StagingSafe extra origin replay hooks)
 
 theorem observe (h : DeferredSafe extra origin replay hooks) :
     ProductSafe extra origin replay (observeObserved hooks) :=
-  product_bind (idleTimers h) (fun _ => product_storeLift _ observeTail_sameKernel)
+  product_bind (idleTimers h) (fun _ =>
+    DeliverySource.observe_preserves (fun _ _ hi => hi.2) product_store _ h.deliver)
 
 theorem dispatchObserve (h : DeferredSafe extra origin replay hooks) :
     ProductSafe extra origin replay (dispatchObserveObserved hooks) := by

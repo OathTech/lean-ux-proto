@@ -85,6 +85,7 @@ theorem worker_projects
     | driver_state_step rho
 
 theorem native_projection : Driver.HooksProjects NativeDriver.erase hooks NativeDriver.hooks where
+  deliver := projectsPrefix_lift NativeDriver.erase _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.Projection.state_lift NativeDriver.erase _
   handshake := worker_projects
   fixture := ⟨id,fun _ => Driver.Projection.state_pure NativeDriver.erase 0,

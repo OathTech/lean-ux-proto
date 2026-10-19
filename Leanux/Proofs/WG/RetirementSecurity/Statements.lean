@@ -1,5 +1,11 @@
 import Leanux.Proofs.WG.RetirementSecurity.TxActorScheduler
 import Leanux.Proofs.WG.RetirementSecurity.TxActorDecrypt
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkHandshakeReceive
+import Leanux.Proofs.WG.RetirementSecurity.TxActorNativeScheduler
+import Leanux.Proofs.WG.RetirementSecurity.TxActorDeferredWorkers
+import Leanux.Proofs.WG.RetirementSecurity.TxActorDeferred
+import Leanux.Proofs.WG.RetirementSecurity.TxRunnerSuspended
+import Leanux.Proofs.WG.RetirementSecurity.TxWorkLifecycle
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPoll
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPublicationCoverage
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkTransfers
@@ -2809,5 +2815,120 @@ theorem original_decrypt_iteration_tx_service
     (run : (decryptIter Env.napiSoftirq Env.napiIrqExit (Env.condResched .decryptWorker)).run w=
       .ok (result,v)) : TxWork.At (TxWork.Covered locals crypt) crypt active v :=
   (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp TxWork.decrypt_iteration w result v before run
+
+/-- Native handshake receive preserves every resident TX obligation, including
+new response keepalive allocation and final peer cleanup. This local contract
+fixes the external actor list; suspended-actor and initialized scheduler joins
+remain separate. Stops do not assert a fabricated normal endpoint. -/
+theorem original_handshake_receive_tx_service
+    (before : TxWork.Serving locals crypt tx w)
+    (run : (WG.receiveStep.run w).run a=.ok ((result,v),b)) :
+    TxWork.Serving locals crypt tx v :=
+  (Leanux.Proofs.Framing.hoare_iff_run_ambient _ _ _).mp
+    TxWork.serving_receive_step w a result v b before run
+
+/-- Original handshake receive iteration preserves outstanding TX service
+with actual suspended actors, including response keepalive allocation. Native
+clock, index, cookie and socket operations discharge their suspended-record
+frames. Only the explicit incoming carrier remains; no progress is assumed. -/
+theorem original_handshake_iteration_tx_service
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt active w)
+    (run : (workerIter .receiveWorker none (liftWG WG.receiveStep)
+      (Env.condResched .receiveWorker)).run w=.ok (result,v)) :
+    TxWork.At (TxWork.Covered locals crypt) crypt active v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp TxWork.handshake_iteration w result v before run
+
+/-- Original scheduling preserves service for every covered TX packet across
+real dispatch, yielding, suspended activations, resumption and NAPI replies.
+Every worker iteration and callback contract is proved from native source.
+This normal-endpoint transport has an explicit incoming physical/service carrier;
+initialized lifecycle closure and stopped-prefix terminal accounting remain
+separate obligations, and no fair drain or bounded latency is asserted. -/
+theorem original_scheduler_closed_tx_service
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt [] w)
+    (run : (Env.schedule stack).run w=.ok ((),v)) :
+    TxWork.At (TxWork.Covered locals crypt) crypt [] v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp (TxWork.native_scheduler stack) w () v before run
+
+/-- Native timer callbacks preserve outstanding allocated-TX service,
+including keepalive allocation and clear-work queuing. Their actual suspended
+actor frames are proved. Plaintext purge does not discharge an allocated
+packet's obligation; initialized caller transport remains separate. -/
+theorem original_timer_callback_tx_service
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt active w)
+    (run : (liftWG (timerCallback pid timer)).run w=.ok ((),v)) :
+    TxWork.At (TxWork.Covered locals crypt) crypt active v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp (TxWork.callback_actor pid timer) w () v before run
+
+/-- Native queued send and key-clear dispatch preserve every outstanding TX
+service obligation through recorded unit selection, both worker section records
+and final reference payment. This is normal-return transport from the explicit
+carrier; no dispatch fairness or initialized terminal-history claim is assumed. -/
+theorem original_deferred_workers_tx_service :
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active) Env.runOneSendWorker ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active) Env.runOneClearWorker :=
+  ⟨TxWork.send_one_actor,TxWork.clear_one_actor⟩
+
+/-- Every original deferred worker/timer call preserves covered TX service
+through the actual scheduler, recorded wheel selection, dispatch sections,
+clock reads and source drain guards. All worker, callback and suspended-record
+contracts are discharged. The incoming carrier remains explicit until native
+configuration/lifecycle and runner initialization close; no fairness, latency
+bound or terminal-accounting conclusion for Stop prefixes is inferred. -/
+theorem original_deferred_closed_tx_service (call : Lifetimes.EnvDeferredCall) {result : call.Result}
+    (before : TxWork.At (TxWork.Covered locals crypt) crypt [] w)
+    (run : call.original.run w=.ok (result,v)) :
+    TxWork.At (TxWork.Covered locals crypt) crypt [] v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp (TxWork.deferred_actor call) w result v before run
+
+/-- Native peer removal retains allocated-TX service and actual suspended
+activations through allowed-IP cleanup, key unpublication, recorded handshake
+drains and final peer payment. The source crypt-work refusal stays observable.
+This local transport keeps its incoming carrier explicit and does not classify
+device identity reset as a packet disposal. -/
+theorem original_peer_removal_tx_service :
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active)
+      (liftWG (peerRemove peer)) ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active)
+      (liftWG peerRemoveAll) := ⟨TxWork.remove_actor peer,TxWork.remove_all_actor⟩
+
+/-- A normally completed original runner operation leaves no suspended
+worker, by its actual post-syscall guard. This excludes hidden suspended TX
+credit at successful boundaries without assuming a packet or service invariant;
+stopped operations and internal cuts are intentionally not covered. -/
+theorem original_operation_no_suspended_workers {E : Type}
+    (call : Syscall→Leanux.Proofs.Logged.PrefixM E Int) (trace : Runner.Trace)
+    (op : Runner.Operation) (state : Queues.RxCredits.RunnerOperation.State)
+    {h k : List E} {result : ForInStep Queues.RxCredits.RunnerOperation.State}
+    (run : Leanux.Proofs.Logged.runPrefixOuter
+      (Queues.RxCredits.RunnerOperation.operation call trace op state) h=(.ok result,k)) :
+    ∃out,result=.yield out ∧ out.1.ambient.suspended=[] :=
+  TxWork.RunnerBoundary.operation call trace op state run
+
+/-- Native device up/down preserves every allocated-TX service obligation
+through socket replacement, staged sends, keepalives, timer shutdown and key
+unpublication. Suspended actors are retained by their actual source frames.
+The incoming carrier remains explicit until initialized caller closure. -/
+theorem original_up_down_tx_service :
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active)
+      (liftWG wgUp) ∧
+    Leanux.Proofs.Framing.Preserves (TxWork.At (TxWork.Covered locals crypt) crypt active)
+      (liftWG wgDown) := ⟨TxWork.up_actor,TxWork.down_actor⟩
+
+/-- A successful original destructor has no resident TX allocation at the
+actual device-reset cut. The native empty-ring/work guards, converse packet
+coverage and service obligations establish this before reset; logical identity
+retirement is not counted as a packet disposal. Incoming service and an empty
+suspended list are explicit local premises, to be supplied at initialized
+lifecycle entry. No termination or stopped-prefix disposal is asserted. -/
+theorem original_destructor_no_residual_tx
+    (before : TxWork.At (TxWork.Covered [] []) [] [] w)
+    (idle : w.ambient.suspended=[])
+    (run : (liftWG wgDestruct).run w=.ok ((),v)) :
+    ∃u c,(TxWork.Destruct.beforeReset.run w.wg).run w.ambient=.ok (((),u),c) ∧
+      Queues.TxDisposition.txPackets u=(fun _=>none) ∧
+      ((do _root_.modify fun g:WGWorld=>{g with dev:=none}; retireDeviceUnits : WG.M Unit).run u).run c=
+        .ok (((),v.wg),v.ambient) :=
+  TxWork.destruct_no_residual before idle run
 
 end Leanux.Proofs.WG.RetirementSecurity

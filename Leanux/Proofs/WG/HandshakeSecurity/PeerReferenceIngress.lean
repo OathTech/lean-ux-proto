@@ -5,6 +5,7 @@ import Leanux.Proofs.WG.Lifetimes.TxCallSource
 /-! Native datagram admission retains peer-allocation timestamp;
 queue failures and their deleting releases use the actual source paths. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues Origins
 
 theorem rx_enqueue (id : SkbId) :
@@ -58,8 +59,8 @@ theorem rx_entry (msg : List UInt8) (src : SkbSource) :
     | (rx_retention_head ipTunnelGetDsfield; exact (ipTunnelGetDsfield_sameWGWorld _ _).wp Inv)
     | peer_reference_poll_step
 
-theorem product_wg_stable (h : List Exchange.Event) (w v : World)
-    (same : wgStoreView v.wg = wgStoreView w.wg) (hi : ProductInv h w) : ProductInv h v := by
+theorem product_wg_stable (h : List E) (w v : World)
+    (same : wgStoreView v.wg = wgStoreView w.wg) (hi : (ProductInv (E := E)) h w) : (ProductInv (E := E)) h v := by
   have device : v.wg.dev = w.wg.dev := congrArg WGStoreView.dev same
   refine ⟨hi.1,of_residents ?_⟩
   intro d pid peer found stored

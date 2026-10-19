@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsNeutral
 /-! Actual shared staging preserves positive resident peer counts through
 current selection, nonce-limit restoration, allocation and queue failure. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues TransmitSecurity
 
 theorem selection (pid : PeerId) :
@@ -24,18 +25,18 @@ theorem selection (pid : PeerId) :
 
 /-- The exact common staging path retains the positive-reference carrier across all
 nonce allocation and packet queue decisions, including internally stopped runs. -/
-theorem staging (pid : PeerId) : Observed (Driver.stagingObserved ExchangeDriver.hooks pid) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+theorem staging (pid : PeerId) : Observed (E := E) (Driver.stagingObserved EntrySource.hooks (E := E) pid) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold Driver.stagingObserved
-  simp only [Driver.noKey_lift ExchangeDriver.hooks rfl]
-  dsimp only [ExchangeDriver.hooks]
+  simp only [Driver.noKey_lift EntrySource.hooks (E := E) rfl]
+  dsimp only [EntrySource.hooks]
   apply StatePrefixEnsures.bind (lift _ (selection pid))
   intro selected
   cases selected with
   | none => exact pure ()
   | some pair =>
     rcases pair with ⟨p,kp⟩
-    have hout (invalid : Bool) := lift _ (out_no_key pid p.staged kp invalid)
+    have hout (invalid : Bool) := lift (E := E) _ (out_no_key pid p.staged kp invalid)
     apply StatePrefixEnsures.bind (ambient _)
     intro missing
     split
@@ -69,7 +70,7 @@ theorem staging (pid : PeerId) : Observed (Driver.stagingObserved ExchangeDriver
               | (nonce_source_head ForIn.forIn
                  apply loop
                  intro x b
-                 change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _)
+                 change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _)
               | (nonce_source_head Bind.bind; apply StatePrefixEnsures.bind)
               | split
               | (with_reducible intro x; try dsimp only)

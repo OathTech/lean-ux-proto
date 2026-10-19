@@ -10,6 +10,7 @@ theorem crypt_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (cryptObserved g) (cryptObserved a) := by
   unfold cryptObserved
   repeat' first
+    | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head scheduleObserved; exact schedule_projects h _)
@@ -19,6 +20,7 @@ theorem sendWorkers_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (sendWorkersObserved g) (sendWorkersObserved a) := by
   unfold sendWorkersObserved
   repeat' first
+    | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head scheduleObserved; exact schedule_projects h _)
@@ -28,6 +30,7 @@ theorem afterXmit_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (afterXmitObserved g) (afterXmitObserved a) := by
   unfold afterXmitObserved
   repeat' first
+    | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head cryptObserved; exact crypt_projects h)
@@ -39,6 +42,7 @@ theorem timerSection_projects (ρ : E → Option F) (worker : Worker)
     ProjectsPrefix ρ id (timerSectionObserved worker body) (timerSectionObserved worker body') := by
   unfold timerSectionObserved runWorkerPrefix
   repeat' first
+    | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | exact hb
@@ -49,6 +53,7 @@ theorem timers_projects (h : HooksProjects ρ g a) (j : UInt64) :
   obtain ⟨scopeMap, enter, leave⟩ := h.timer
   unfold timersObserved
   repeat' first
+    | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head cryptObserved; exact crypt_projects h)
@@ -64,6 +69,7 @@ theorem placeholder_projects (h : HooksProjects ρ g a) (j : UInt64) :
   obtain ⟨scopeMap, enter, leave⟩ := h.timer
   unfold placeholderTimersObserved
   repeat' first
+    | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head cryptObserved; exact crypt_projects h)
@@ -80,6 +86,7 @@ theorem idleTimers_projects (h : HooksProjects ρ g a) :
   unfold idleTimersObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head timersObserved; exact timers_projects h _)
@@ -91,6 +98,7 @@ theorem afterAdvance_projects (h : HooksProjects ρ g a) :
   unfold afterAdvanceObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (maintenance_head Hooks.deliver; exact h.deliver)
     | (maintenance_head Hooks.prepare; exact h.prepare)
     | (maintenance_head sendWorkerObserved; exact sendWorker_projects h)
     | (maintenance_head timersObserved; exact timers_projects h _)

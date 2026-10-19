@@ -3,17 +3,18 @@ import Leanux.Proofs.WG.HandshakeSecurity.ExchangeSend
 
 /-! Queued and directly drained sends certify their actual exchange entries. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues TransmitSecurity
 
 private theorem saved_native (p : Peer) (action : WG.M α) (safe : Framing.Preserves Inv action) :
-    StatePrefixPreserves (fun h w _ => Saved.Saved p h w) Safe (liftWGPrefix action) := by
+    StatePrefixPreserves (fun h w _ => Saved.Saved p h w) (Safe (E := E)) (liftWGPrefix action) := by
   apply StatePrefixEnsures.lift _ (fun _ _ _ before => before.1.1)
   intro h w a x v b before run
   exact ⟨⟨before.1.1,(hoare_iff_run_ambient _ _ _).mp safe w a x v b before.1.2 run⟩,before.2⟩
 
-private theorem update_bind (pid : PeerId) (f : Peer → Peer) (next : Unit → WGPrefix Exchange.Event α)
-    (same : ∀ p, (f p).refcount = p.refcount) (tail : ∀ u, Observed (next u)) :
-    Observed (liftWGPrefix (getPeer pid) >>= fun p => liftWGPrefix (setPeer pid (f p)) >>= next) :=
+private theorem update_bind (pid : PeerId) (f : Peer → Peer) (next : Unit → WGPrefix E α)
+    (same : ∀ p, (f p).refcount = p.refcount) (tail : ∀ u, Observed (E := E) (next u)) :
+    Observed (E := E) (liftWGPrefix (getPeer pid) >>= fun p => liftWGPrefix (setPeer pid (f p)) >>= next) :=
   StatePrefixEnsures.bind (Saved.read_saved pid) (fun p =>
     StatePrefixEnsures.bind (Saved.write_saved pid p f same) tail)
 
@@ -34,21 +35,21 @@ macro "peer_reference_send_step" : tactic => `(tactic| first
   | split
   | (with_reducible intro x; try dsimp only))
 
-theorem send_observed (pid : PeerId) : Observed (SendExchange.sendWith ExchangeDriver.sendOps pid) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+theorem send_observed (pid : PeerId) : Observed (E := E) (SendExchange.sendWith EntrySource.sendOps pid) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold SendExchange.sendWith
-  simp only [ExchangeDriver.sendOps]
+  simp only [EntrySource.sendOps]
   repeat' first
-    | (nonce_source_head Exchange.createInitiation; exact create_initiation_observed _)
+    | (nonce_source_head EntrySource.createInitiation; exact create_initiation_observed _)
     | peer_reference_send_step
 
-theorem worker_observed (pid : PeerId) : Observed (SendExchange.workerWith ExchangeDriver.sendOps pid) := by
+theorem worker_observed (pid : PeerId) : Observed (E := E) (SendExchange.workerWith EntrySource.sendOps pid) := by
   unfold SendExchange.workerWith
   exact StatePrefixEnsures.bind (send_observed pid) (fun _ => lift _ (peer_put _))
 
 theorem after_take_observed (pid : PeerId) :
-    Observed (SendExchange.afterTakeWith (fun {_} action => liftWGPrefix action)
-      (SendExchange.workerWith ExchangeDriver.sendOps) pid) := by
+    Observed (E := E) (SendExchange.afterTakeWith (fun {_} action => liftWGPrefix action)
+      (SendExchange.workerWith EntrySource.sendOps) pid) := by
   unfold SendExchange.afterTakeWith
   apply StatePrefixEnsures.bind (Saved.read_saved pid)
   intro p
@@ -73,12 +74,12 @@ theorem after_take_observed (pid : PeerId) :
       | (nonce_source_head SendExchange.workerWith; exact worker_observed pid)
       | peer_reference_send_step
 
-theorem flushed_observed (pid : PeerId) : Observed (ExchangeDriver.flushed pid) := by
-  unfold ExchangeDriver.flushed SendExchange.flushedWith
+theorem flushed_observed (pid : PeerId) : Observed (E := E) (EntrySource.flushed pid) := by
+  unfold EntrySource.flushed SendExchange.flushedWith
   exact StatePrefixEnsures.bind (lift _ (modify_device _ (fun _ => rfl)))
     (fun _ => after_take_observed pid)
 
-theorem send_one : ProductPreserves (Driver.sendWorkerObserved ExchangeDriver.hooks) := by
+theorem send_one : ProductPreserves (E := E) (Driver.sendWorkerObserved EntrySource.hooks (E := E)) := by
   unfold Driver.sendWorkerObserved SendExchange.oneWith
   apply PrefixPreserves.bind
   · apply product_lift

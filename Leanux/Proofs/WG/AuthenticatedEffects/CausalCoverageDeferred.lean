@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryPreservation
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageWorkers
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCoverageTimers
@@ -10,12 +11,17 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity Lifetimes Queues
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
+theorem deliver : ProductAt frames hooks.deliver :=
+  DeliverySource.observed_preserves Event.delivery (fun _ _ ready => ready.1)
+    (fun _ _ _ ready => ready.emit rfl (fun impossible => impossible.elim)) (product_lift _)
+
 theorem crypt : ProductAt frames (Driver.cryptObserved hooks) :=
-  product_bind (schedule none) (fun _ => product_lift _)
+  product_bind (schedule none) (fun _ => deliver)
 
 theorem send_workers : ProductAt frames (Driver.sendWorkersObserved hooks) := by
   unfold Driver.sendWorkersObserved
   repeat' first
+    | (coverage_head Driver.Hooks.deliver; exact deliver)
     | (coverage_head Driver.sendWorkerObserved; exact send_worker)
     | (coverage_head Driver.scheduleObserved; exact schedule _)
     | coverage_product_step
@@ -23,6 +29,7 @@ theorem send_workers : ProductAt frames (Driver.sendWorkersObserved hooks) := by
 theorem after_xmit : ProductAt frames (Driver.afterXmitObserved hooks) := by
   unfold Driver.afterXmitObserved
   repeat' first
+    | (coverage_head Driver.Hooks.deliver; exact deliver)
     | (coverage_head Driver.cryptObserved; exact crypt)
     | (coverage_head Driver.sendWorkersObserved; exact send_workers)
     | coverage_product_step
@@ -66,6 +73,7 @@ theorem timer_enter_bind (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
   PrefixEnsures.bind (timer_enter_checked d j pid timer entry before) tail
 
 macro "coverage_timer_step" : tactic => `(tactic| first
+  | (coverage_head Driver.Hooks.deliver; exact deliver)
   | (coverage_first_head Driver.Hooks.timerSelected; apply timer_enter_bind)
   | (coverage_first_head Driver.Hooks.timerFinished; apply leave_bind)
   | (coverage_head Driver.cryptObserved; exact crypt)
@@ -87,6 +95,7 @@ theorem idle_timers : ProductAt frames (Driver.idleTimersObserved hooks) := by
   unfold Driver.idleTimersObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (coverage_head Driver.Hooks.deliver; exact deliver)
     | (coverage_head Driver.timersObserved; exact timers _)
     | (coverage_head Driver.placeholderTimersObserved; exact placeholder_timers _)
     | coverage_product_step
@@ -95,6 +104,7 @@ theorem after_advance : ProductAt frames (Driver.afterAdvanceObserved hooks) := 
   unfold Driver.afterAdvanceObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (coverage_head Driver.Hooks.deliver; exact deliver)
     | (coverage_head Driver.timersObserved; exact timers _)
     | (coverage_head Driver.placeholderTimersObserved; exact placeholder_timers _)
     | coverage_product_step

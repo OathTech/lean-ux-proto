@@ -143,7 +143,7 @@ theorem retained
 
 theorem observe :
     ProductSafe (observeObserved hooks) :=
-  product_bind idleTimers (fun _ => product_store_lift _ observeTail_sameKernel)
+  product_bind idleTimers (fun _ => DeliverySource.observe_preserves (fun _ _ _ => True.intro) product_store _ deliver)
 
 theorem dispatchObserve :
     ProductSafe (dispatchObserveObserved hooks) := by

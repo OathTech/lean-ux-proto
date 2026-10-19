@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.HandshakeSecurity.DriverDeliveryNeutral
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeDispatchFrames
 
 namespace Leanux.Proofs.WG.HandshakeSecurity.Exchange
@@ -21,8 +22,9 @@ theorem retained_dispatch (facts : H1DriverSourceFacts) (traffic : H1TrafficTagF
       exact product_lift _ (fun h => DispatchFrames.quiet_dispatch traffic call h retained up down)
 
 theorem observe (facts : H1DriverSourceFacts) :
-    ProductPreserves (Driver.observeObserved ExchangeDriver.hooks) :=
-  PrefixPreserves.bind (idle_timers facts) (fun _ => product_store _ observeTail_sameKernel)
+    ProductPreserves (Driver.observeObserved ExchangeDriver.hooks) := by
+  rw [DriverDelivery.observe _ rfl]
+  exact PrefixPreserves.bind (idle_timers facts) (fun _ => product_store _ observeTail_sameKernel)
 
 theorem dispatch_observe (facts : H1DriverSourceFacts) :
     ProductPreserves (Driver.dispatchObserveObserved ExchangeDriver.hooks) := by

@@ -10,6 +10,7 @@ theorem crypt_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (cryptObserved g) := by
   unfold cryptObserved
   repeat' first
+    | (driver_history_head Hooks.deliver; exact h.deliver)
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head scheduleObserved; exact schedule_history h _)
@@ -19,6 +20,7 @@ theorem sendWorkers_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (sendWorkersObserved g) := by
   unfold sendWorkersObserved
   repeat' first
+    | (driver_history_head Hooks.deliver; exact h.deliver)
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head scheduleObserved; exact schedule_history h _)
@@ -28,6 +30,7 @@ theorem afterXmit_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (afterXmitObserved g) := by
   unfold afterXmitObserved
   repeat' first
+    | (driver_history_head Hooks.deliver; exact h.deliver)
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head cryptObserved; exact crypt_history h)
@@ -46,6 +49,7 @@ theorem timers_history (h : ActorHistorySafe Safe g) (j : UInt64) :
     ProductHistorySafe Safe (timersObserved g j) := by
   unfold timersObserved
   repeat' first
+    | (driver_history_head Hooks.deliver; exact h.deliver)
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head cryptObserved; exact crypt_history h)
@@ -60,6 +64,7 @@ theorem placeholder_history (h : ActorHistorySafe Safe g) (j : UInt64) :
     ProductHistorySafe Safe (placeholderTimersObserved g j) := by
   unfold placeholderTimersObserved
   repeat' first
+    | (driver_history_head Hooks.deliver; exact h.deliver)
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head cryptObserved; exact crypt_history h)
@@ -76,6 +81,7 @@ theorem idleTimers_history (h : ActorHistorySafe Safe g) :
   unfold idleTimersObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (driver_history_head Hooks.deliver; exact h.deliver)
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head timersObserved; exact timers_history h _)
@@ -87,6 +93,7 @@ theorem afterAdvance_history (h : ActorHistorySafe Safe g) :
   unfold afterAdvanceObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (driver_history_head Hooks.deliver; exact h.deliver)
     | (driver_history_head Hooks.prepare; exact h.prepare)
     | (driver_history_head sendWorkerObserved; exact h.sendWorker)
     | (driver_history_head timersObserved; exact timers_history h _)

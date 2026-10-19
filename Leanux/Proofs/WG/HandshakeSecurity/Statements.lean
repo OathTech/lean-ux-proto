@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceCookieInitialized
+import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceResponseKeys
+import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceInitiationRefusal
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceDeviceConfig
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceRemovalObserved
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceWorker
@@ -1842,5 +1845,113 @@ This local caller contract introduces no H1 or lifetime assumption. -/
 theorem native_configuration_positive_peer_entries (attrs : DeviceAttrs) :
     PeerReference.Observed (TransmitSecurity.Driver.configDevice ExchangeDriver.hooks attrs) :=
   PeerReference.config_device attrs
+
+/-- Security: each completed handshake exchange in the initialized final source
+journal entered with positive resident peer references and records a valid
+native execution. Normal and stopped prefixes need no incoming liveness,
+funding, H1 or reachability assumption. -/
+theorem initialized_exchange_entries_have_positive_peer_references
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event) (event : Exchange.Event)
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.exchange event :: post) :
+    PeerReference.Inv event.before ∧ event.Valid :=
+  PeerReference.final_entry trace placeholders pre post event position
+
+/-- Security: an actual refused response preserves every resident peer record,
+including reference count and owner word. Initialized entry positivity rules
+out the failed-lookup zero-count mutation; successful lookup repayment is
+proved from the native acquired loan. No incoming state hypothesis remains. -/
+theorem initialized_refused_response_preserves_complete_peer_records
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event) (msg : Key)
+    (r : WGRunWitness (Option PeerId))
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.exchange (.consumeResponse msg r) :: post)
+    (refused : r.value = none) :
+    AuthenticatedEffects.ResponseLoan.residents r.after = AuthenticatedEffects.ResponseLoan.residents r.before :=
+  PeerReference.final_response_refusal trace placeholders pre post msg r position refused
+
+/-- Security: an initialized initiation consumer that refuses preserves every
+resident peer and keypair record. The full native refusal frame is applied to
+the actual same-run receipt, including occurrences before a later Stop. -/
+theorem initialized_refused_initiation_preserves_complete_peer_and_keypair_records
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event) (msg : Key)
+    (r : WGRunWitness (Option PeerId))
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.exchange (.consumeInitiation msg r) :: post)
+    (refused : r.value = none) :
+    AuthenticatedEffects.ResponseLoan.residents r.after =
+      AuthenticatedEffects.ResponseLoan.residents r.before ∧
+    AuthenticatedEffects.ResponseLoan.residentKeys r.after =
+      AuthenticatedEffects.ResponseLoan.residentKeys r.before :=
+  PeerReference.final_initiation_refusal_records trace placeholders pre post msg r position refused
+
+/-- Security: an initialized response consumer that refuses preserves every
+resident peer and keypair record, including references and owner words.
+Both frames use the same native receipt and its derived positive entry;
+no incoming liveness, funding or H1 assumption is required. -/
+theorem initialized_refused_response_preserves_complete_peer_and_keypair_records
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event) (msg : Key)
+    (r : WGRunWitness (Option PeerId))
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.exchange (.consumeResponse msg r) :: post)
+    (refused : r.value = none) :
+    AuthenticatedEffects.ResponseLoan.residents r.after =
+      AuthenticatedEffects.ResponseLoan.residents r.before ∧
+    AuthenticatedEffects.ResponseLoan.residentKeys r.after =
+      AuthenticatedEffects.ResponseLoan.residentKeys r.before :=
+  ⟨PeerReference.final_response_refusal trace placeholders pre post msg r position refused,
+    PeerReference.final_response_refusal_keys trace placeholders pre post msg r position refused⟩
+
+/-- Security: the actual cookie-consumer receipt in an initialized final run
+has positive resident peer references at entry and certifies that native call.
+The same ordered source projection covers receipts before a later Stop;
+no incoming reachability, funding or H1 assumption is required. -/
+theorem initialized_cookie_entries_have_positive_peer_references
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event)
+    (receipt : AuthenticatedEffects.CookieConsumption.Receipt)
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.cookieConsumed receipt :: post) :
+    PeerReference.Inv receipt.run.before ∧ receipt.Valid :=
+  PeerReference.final_cookie_entry trace placeholders pre post receipt position
+
+/-- Security: a cookie message that the native authentication observer does
+not accept preserves all resident peer records, including references and
+owner words. Entry positivity comes from the actual initialized source run,
+so the failed-index-lookup case needs no extra liveness premise. -/
+theorem initialized_refused_cookie_preserves_complete_peer_records
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event)
+    (receipt : AuthenticatedEffects.CookieConsumption.Receipt)
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.cookieConsumed receipt :: post)
+    (unaccepted : (runWGPrefix (AuthenticatedEffects.acceptedCookie receipt.input)
+      receipt.run.before receipt.run.ambientBefore []).2 = []) :
+    AuthenticatedEffects.ResponseLoan.residents receipt.run.after =
+      AuthenticatedEffects.ResponseLoan.residents receipt.run.before :=
+  PeerReference.final_cookie_refusal trace placeholders pre post receipt position unaccepted
+
+/-- Security: an unauthenticated cookie-consumer occurrence in the initialized
+final execution preserves every resident peer and keypair record, including
+references and owner words. The actual receipt supplies native execution and
+entry liveness; no key field is masked and later stopped prefixes are covered. -/
+theorem initialized_refused_cookie_preserves_complete_peer_and_keypair_records
+    (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List AuthenticatedEffects.CausalJournal.Event)
+    (receipt : AuthenticatedEffects.CookieConsumption.Receipt)
+    (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
+      pre ++ AuthenticatedEffects.CausalJournal.Event.cookieConsumed receipt :: post)
+    (unaccepted : (runWGPrefix (AuthenticatedEffects.acceptedCookie receipt.input)
+      receipt.run.before receipt.run.ambientBefore []).2 = []) :
+    AuthenticatedEffects.ResponseLoan.residents receipt.run.after =
+      AuthenticatedEffects.ResponseLoan.residents receipt.run.before ∧
+    AuthenticatedEffects.ResponseLoan.residentKeys receipt.run.after =
+      AuthenticatedEffects.ResponseLoan.residentKeys receipt.run.before :=
+  ⟨PeerReference.final_cookie_refusal trace placeholders pre post receipt position unaccepted,
+    PeerReference.final_cookie_refusal_keys trace placeholders pre post receipt position unaccepted⟩
 
 end Leanux.Proofs.WG.HandshakeSecurity

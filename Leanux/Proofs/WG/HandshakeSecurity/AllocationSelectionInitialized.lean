@@ -58,6 +58,7 @@ private theorem timer (d : Device) (j : UInt64) (pid : PeerId) (t : PeerTimer) (
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,ReservationHistory.allocation?,List.append_nil]
 
 theorem hooks_core : ActorCoreHistorySafe Safe Journal.hooks where
+  deliver := Driver.History.product_lift _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.History.state_lift _
   staging := staging
   fixtureEnter := fun _ => History.state_pure _

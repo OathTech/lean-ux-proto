@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryPreservation
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalDelayedDeferredFrames
 
 /-! The actual deferred and timer loops carry the same live timer/work occurrences
@@ -37,14 +38,19 @@ macro "causal_delayed_deferred_step" : tactic => `(tactic| first
   | (causal_delayed_head ForIn.forIn; first | apply product_range | apply product_forIn)
   | causal_delayed_product_step)
 
+theorem deliver : ProductSafe hooks.deliver :=
+  DeliverySource.observed_preserves Event.delivery (fun _ _ _ => True.intro)
+    (fun _ _ _ hi => hi.append _) (product_store_lift _ deliverSent_sameKernel)
+
 theorem crypt :
     ProductSafe (cryptObserved hooks) :=
-  product_bind (schedule none) (fun _ => product_store_lift _ deliverSent_sameKernel)
+  product_bind (schedule none) (fun _ => deliver)
 
 theorem sendWorkers :
     ProductSafe (sendWorkersObserved hooks) := by
   unfold sendWorkersObserved
   repeat' first
+    | (causal_delayed_head Hooks.deliver; exact deliver)
     | (causal_delayed_head sendWorkerObserved; exact send_worker)
     | (causal_delayed_head scheduleObserved; exact schedule _)
     | causal_delayed_deferred_step
@@ -53,6 +59,7 @@ theorem afterXmit :
     ProductSafe (afterXmitObserved hooks) := by
   unfold afterXmitObserved
   repeat' first
+    | (causal_delayed_head Hooks.deliver; exact deliver)
     | (causal_delayed_head cryptObserved; exact crypt)
     | (causal_delayed_head sendWorkersObserved; exact sendWorkers)
     | causal_delayed_deferred_step
@@ -72,6 +79,7 @@ theorem timers (j : UInt64) :
     ProductSafe (timersObserved hooks j) := by
   unfold timersObserved
   repeat' first
+    | (causal_delayed_head Hooks.deliver; exact deliver)
     | (causal_delayed_head sendWorkerObserved; exact send_worker)
     | (causal_delayed_head Hooks.timerSelected; exact timer_selected _ _ _ _ _)
     | (causal_delayed_head Hooks.timerFinished; exact timer_finished _)
@@ -85,6 +93,7 @@ theorem placeholderTimers (j : UInt64) :
     ProductSafe (placeholderTimersObserved hooks j) := by
   unfold placeholderTimersObserved
   repeat' first
+    | (causal_delayed_head Hooks.deliver; exact deliver)
     | (causal_delayed_head Hooks.timerSelected; exact timer_selected _ _ _ _ _)
     | (causal_delayed_head Hooks.timerFinished; exact timer_finished _)
     | (causal_delayed_head cryptObserved; exact crypt)
@@ -99,6 +108,7 @@ theorem idleTimers :
   unfold idleTimersObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (causal_delayed_head Hooks.deliver; exact deliver)
     | (causal_delayed_head timersObserved; exact timers _)
     | (causal_delayed_head placeholderTimersObserved; exact placeholderTimers _)
     | causal_delayed_deferred_step
@@ -108,6 +118,7 @@ theorem afterAdvance :
   unfold afterAdvanceObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (causal_delayed_head Hooks.deliver; exact deliver)
     | (causal_delayed_head timersObserved; exact timers _)
     | (causal_delayed_head placeholderTimersObserved; exact placeholderTimers _)
     | causal_delayed_deferred_step

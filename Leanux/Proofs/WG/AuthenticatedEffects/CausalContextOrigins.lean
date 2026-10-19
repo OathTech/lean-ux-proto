@@ -25,7 +25,8 @@ theorem current_entry (history : List Event) (token : CausalScope.Token Cause)
   | exchange value => cases decoded
   | keepalivePrepared pid run => cases decoded
   | protocolSocket receipt => cases decoded
-  | cookieSocket receipt => cases decoded
+  | cookieSocket receipt | cookieConsumed receipt => cases decoded
+  | delivery sent => cases decoded
 
 theorem current_stack (trace : Runner.Trace) (placeholders : Bool)
     (history suffix : List Event) (index : Nat) (entry : GroOccurrence.Entry)

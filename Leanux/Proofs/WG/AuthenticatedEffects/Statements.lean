@@ -1,6 +1,9 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryContracts
+import Leanux.Proofs.WG.AuthenticatedEffects.CookieConsumptionSource
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsSockets
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCookie
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionSend
+import Leanux.Proofs.WG.AuthenticatedEffects.CausalEmissionCompletion
 import Leanux.Proofs.WG.AuthenticatedEffects.ResponseLookupLoan
 import Leanux.Proofs.WG.AuthenticatedEffects.RefusalPositivePeers
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSocketReceipts
@@ -1511,5 +1514,44 @@ theorem handshake_send_worker_preserves_emission_occurrences :
     CausalJournal.Emissions.ProductSafe
       (TransmitSecurity.Driver.sendWorkerObserved CausalJournal.hooks) :=
   CausalJournal.Emissions.send_worker
+
+/-- Security: actual transport completion preserves the ordered native sent
+occurrences and their individual socket append receipts through later timer
+and disposal operations. This is a source-local entry-carrier contract;
+whole-driver initialization and pre-delivery coverage remain separate. -/
+theorem transport_completion_preserves_emission_occurrences (pid : PeerId) :
+    CausalJournal.Emissions.ProductSafe (CausalJournal.transmit pid) :=
+  CausalJournal.Emissions.transmit pid
+
+/-- Security: the delivery boundary records the entire ordered sent projection
+before native delivery can Stop or clear it. This local source equality preserves
+the actual native result; initialized occurrence coverage is a separate claim. -/
+theorem delivery_boundary_records_before_native_clear
+    (record : List SentDatagram → E) (w : World) (history : List E) :
+    runPrefix (DeliverySource.observed record) w history =
+      (Env.deliverSent.run w,history ++ [record w.wg.sent]) :=
+  DeliverySource.observed_run record w history
+
+/-- Security: the actual normally completed cookie consumer records its exact
+native entry and result before later handshake work can Stop. The local receipt
+does not assume authentication or initialize its peer-reference condition. -/
+theorem completed_cookie_consumer_records_native_entry
+    (record : CookieConsumption.Receipt → E) (msg : Key)
+    (w v : WGWorld) (a b : Ambient) (history : List E)
+    (run : ((cookieMessageConsume msg).run w).run a = .ok (((),v),b)) :
+    runWGPrefix (CookieConsumption.observed record msg) w a history =
+      (.ok (((),v),b),history ++ [record ⟨msg,⟨(),w,v,a,b⟩⟩]) :=
+  CookieConsumption.observed_completed record msg w v a b history run
+
+/-- Security: every cookie-consumer completion retained by the initialized
+final driver is an execution of the original native consumer at its recorded
+entry. This certifies the actual refusal cut; acceptance and peer restoration
+are established separately from that same occurrence. -/
+theorem initialized_cookie_consumption_is_native
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event) (receipt : CookieConsumption.Receipt)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      before ++ .cookieConsumed receipt :: after) : receipt.Valid :=
+  CausalJournal.Receipts.initialized_cookie_consumed trace placeholders before after receipt position
 
 end Leanux.Proofs.WG.AuthenticatedEffects

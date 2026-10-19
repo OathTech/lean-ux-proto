@@ -4,6 +4,7 @@ import Leanux.Proofs.WG.HandshakeSecurity.PeerReferencePeerConfig
 actors. Peer creation and deleting releases carry the concrete source carrier. -/
 set_option pp.structureInstances false
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues Origins TransmitSecurity Configuration
 
@@ -28,43 +29,43 @@ macro "peer_reference_driver_device_step " : tactic => `(tactic| first
   | peer_reference_driver_config_step )
 
 theorem config_peers (a : DeviceAttrs) :
-    Observed (Driver.configPeers ExchangeDriver.hooks a) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+    Observed (E := E) (Driver.configPeers EntrySource.hooks (E := E) a) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold Driver.configPeers devicePeersWith
   repeat' first
     | (nonce_source_head Driver.configPeer; exact config_peer _)
     | peer_reference_driver_device_step
 
 private theorem config_key_with (a : DeviceAttrs)
-    (next : WGPrefix Exchange.Event Int) (safe : Observed next) :
-    Observed (deviceKeyWith (fun {_} a => liftWGPrefix a)
+    (next : WGPrefix E Int) (safe : Observed (E := E) next) :
+    Observed (E := E) (deviceKeyWith (fun {_} a => liftWGPrefix a)
       (fun key => liftWGPrefix (pubkeyLookup key)) (fun peer => liftWGPrefix (peerPut peer))
-      (Driver.removeObserved ExchangeDriver.hooks) (fun pid => liftWGPrefix (precomputeStaticStatic pid))
-      (fun pid => liftWGPrefix (expireCurrentPeerKeypairs pid)) (Driver.stagingObserved ExchangeDriver.hooks) next a) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+      (Driver.removeObserved EntrySource.hooks (E := E)) (fun pid => liftWGPrefix (precomputeStaticStatic pid))
+      (fun pid => liftWGPrefix (expireCurrentPeerKeypairs pid)) (Driver.stagingObserved EntrySource.hooks (E := E)) next a) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold deviceKeyWith
   repeat' first
     | exact safe
     | peer_reference_driver_device_step
 
 theorem config_key (a : DeviceAttrs) :
-    Observed (Driver.configKey ExchangeDriver.hooks a) := by
+    Observed (E := E) (Driver.configKey EntrySource.hooks (E := E) a) := by
   unfold Driver.configKey
-  simp only [show Driver.fixtureOps ExchangeDriver.hooks = AuthenticatedEffects.FixtureEffects.neutral from rfl,
+  simp only [show Driver.fixtureOps EntrySource.hooks (E := E) = AuthenticatedEffects.FixtureEffects.neutral from rfl,
     AuthenticatedEffects.FixtureEffects.run_neutral]
   exact config_key_with a _ (config_peers a)
 
 theorem config_device_update (a : DeviceAttrs) (flags : UInt32) :
-    Observed (Driver.configDeviceUpdate ExchangeDriver.hooks a flags) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+    Observed (E := E) (Driver.configDeviceUpdate EntrySource.hooks (E := E) a flags) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold Driver.configDeviceUpdate deviceUpdateWith
   repeat' first
     | (nonce_source_head Driver.configKey; exact config_key _)
     | peer_reference_driver_device_step
 
 theorem config_device (a : DeviceAttrs) :
-    Observed (Driver.configDevice ExchangeDriver.hooks a) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+    Observed (E := E) (Driver.configDevice EntrySource.hooks (E := E) a) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold Driver.configDevice setDeviceWith
   repeat' first
     | (nonce_source_head Driver.configDeviceUpdate; exact config_device_update _ _)

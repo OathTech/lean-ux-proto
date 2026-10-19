@@ -48,6 +48,7 @@ theorem timer_finished (token : Nat) : ProductSafe (Journal.hooks.timerFinished 
   PrefixPreserves.pure (fun _ _ hi => hi.2) ()
 
 macro "occurrence_journal_deferred_step" : tactic => `(tactic| first
+  | (nonce_product_head Driver.Hooks.deliver; exact product_store _ deliverSent_sameKernel)
   | (nonce_product_head Driver.Hooks.timerFinished; exact timer_finished _)
   | (scheduler_preserve_at getWG; exact wg_read)
   | (scheduler_preserve_at getEnv; exact env_read)

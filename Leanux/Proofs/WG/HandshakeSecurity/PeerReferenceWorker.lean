@@ -4,17 +4,18 @@ import Leanux.Proofs.WG.HandshakeSecurity.TimestampArchiveWorker
 /-! Exact exchange callbacks receive positive-reference entry states. Cookie
 consumption is checked at its native callback without adding a new event. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues TransmitSecurity Origins.HandshakeSources
 
-private def nativeOps : Ops (WGPrefix Exchange.Event) :=
-  ExchangeDriver.receiveOps ExchangeDriver.hooks.session (Driver.keepaliveObserved ExchangeDriver.hooks)
+private def nativeOps : Ops (WGPrefix E) :=
+  EntrySource.receiveOps (EntrySource.hooks (E := E)).session (Driver.keepaliveObserved EntrySource.hooks (E := E))
 
-private theorem conditional (p : Prop) [Decidable p] (a b : WGPrefix Exchange.Event α)
-    (ha : Observed a) (hb : Observed b) : Observed (if p then a else b) := by
+private theorem conditional (p : Prop) [Decidable p] (a b : WGPrefix E α)
+    (ha : Observed (E := E) a) (hb : Observed (E := E) b) : Observed (E := E) (if p then a else b) := by
   by_cases hp : p <;> simp only [hp,↓reduceIte] <;> assumption
 
-private theorem logic (loaded : Bool) (mac : MacState) : Observed (liftWGPrefix
+private theorem logic (loaded : Bool) (mac : MacState) : Observed (E := E) (liftWGPrefix
     (WG.orM (WG.andM (branch .hsLoadedOperand loaded) (branch .hsLoadedCookieOk (mac == .withCookie)))
       (WG.andM (branch .hsNotLoaded (!loaded)) (branch .hsMacNoCookie (mac == .noCookie))))) := by
   apply lift
@@ -22,7 +23,7 @@ private theorem logic (loaded : Bool) (mac : MacState) : Observed (liftWGPrefix
   simp only [branch]
   repeat' peer_reference_timer_step
 
-private theorem needs (loaded : Bool) (mac : MacState) : Observed (liftWGPrefix
+private theorem needs (loaded : Bool) (mac : MacState) : Observed (E := E) (liftWGPrefix
     (WG.andM (branch .hsNeedsCookieLoaded loaded) (branch .hsNeedsCookieMac (mac == .noCookie)))) := by
   apply lift
   unfold WG.andM
@@ -31,8 +32,8 @@ private theorem needs (loaded : Bool) (mac : MacState) : Observed (liftWGPrefix
 
 macro "peer_reference_worker_step" : tactic => `(tactic| first
   | (nonce_source_head ite; apply conditional
-     all_goals change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _)
-  | (nonce_source_head Exchange.session; exact session_observed _)
+     all_goals change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _)
+  | (nonce_source_head EntrySource.session; exact session_observed _)
   | (nonce_source_head Driver.keepaliveObserved; exact keepalive _)
   | (nonce_source_head getPeer; exact lift _ (read_peer _))
   | (nonce_source_head getDev; exact lift _ (store getDev_sameWGStore))
@@ -40,7 +41,7 @@ macro "peer_reference_worker_step" : tactic => `(tactic| first
      apply lift
      apply modify_device
      intro d; rfl)
-  | (nonce_source_head Exchange.createResponse; exact create_response_observed _)
+  | (nonce_source_head EntrySource.createResponse; exact create_response_observed _)
   | (nonce_source_head addMacToPacket; exact lift _ (mac _ _))
   | (nonce_source_head sendBufferToPeer; exact lift _ (send_buffer _ _))
   | (nonce_source_head timersSessionDerived; exact lift _ (derived _))
@@ -50,9 +51,9 @@ macro "peer_reference_worker_step" : tactic => `(tactic| first
   | (nonce_source_head timersHandshakeComplete; exact lift _ (complete _ _))
   | (nonce_source_head sendHandshakeCookie
      exact lift _ (cookie_frame (Cookies.sendHandshakeCookie_frame _ _)))
-  | (nonce_source_head Exchange.consumeInitiation; exact initiation_observed _)
-  | (nonce_source_head Exchange.consumeResponse; exact response_observed _)
-  | (nonce_source_head cookieMessageConsume; exact lift _ (cookie_consume _))
+  | (nonce_source_head EntrySource.consumeInitiation; exact initiation_observed _)
+  | (nonce_source_head EntrySource.consumeResponse; exact response_observed _)
+  | (nonce_source_head EntrySource.cookie; exact cookie_observed _)
   | (nonce_source_head setPeerEndpointFromSkb; exact lift _ (endpoint_skb _ _))
   | (nonce_source_head WG.peerPut; exact lift _ (peer_put _))
   | (nonce_source_head Cookies.loadPhase; exact lift _ (store Cookies.loadPhase_sameStore))
@@ -73,34 +74,34 @@ macro "peer_reference_worker_step" : tactic => `(tactic| first
   | split
   | (with_reducible intro x; try dsimp only))
 
-private theorem handshake_response (pid : PeerId) : Observed (responseWith nativeOps pid) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+private theorem handshake_response (pid : PeerId) : Observed (E := E) (responseWith nativeOps pid) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold responseWith
-  simp only [nativeOps,ExchangeDriver.receiveOps,AuthenticatedEffects.HandshakeWorker.ops,ExchangeDriver.hooks]
+  simp only [nativeOps,EntrySource.receiveOps,AuthenticatedEffects.HandshakeWorker.ops,EntrySource.hooks]
   repeat' peer_reference_worker_step
 
 private theorem handshake_after_mac (msg : List UInt8) (src : SkbSource) (loaded : Bool) (mac : MacState) :
-    Observed (afterMacWith nativeOps msg src loaded mac) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+    Observed (E := E) (afterMacWith nativeOps msg src loaded mac) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold afterMacWith
-  simp only [nativeOps,ExchangeDriver.receiveOps,AuthenticatedEffects.HandshakeWorker.ops,ExchangeDriver.hooks]
+  simp only [nativeOps,EntrySource.receiveOps,AuthenticatedEffects.HandshakeWorker.ops,EntrySource.hooks]
   repeat' first
     | (nonce_source_head responseWith; exact handshake_response _)
     | peer_reference_worker_step
 
 private theorem handshake_receive (msg : List UInt8) (src : SkbSource) :
-    Observed (receptionWith nativeOps msg src) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+    Observed (E := E) (receptionWith nativeOps msg src) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold receptionWith
-  simp only [nativeOps,ExchangeDriver.receiveOps,AuthenticatedEffects.HandshakeWorker.ops,ExchangeDriver.hooks]
+  simp only [nativeOps,EntrySource.receiveOps,AuthenticatedEffects.HandshakeWorker.ops,EntrySource.hooks]
   repeat' first
     | (nonce_source_head afterMacWith; exact handshake_after_mac _ _ _ _)
     | peer_reference_worker_step
 
-theorem handshake_worker : Observed (Driver.handshakeObserved ExchangeDriver.hooks) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe (stepWith nativeOps)
+theorem handshake_worker : Observed (E := E) (Driver.handshakeObserved EntrySource.hooks (E := E)) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) (stepWith nativeOps)
   unfold stepWith
-  simp only [nativeOps,ExchangeDriver.receiveOps,AuthenticatedEffects.HandshakeWorker.ops,ExchangeDriver.hooks]
+  simp only [nativeOps,EntrySource.receiveOps,AuthenticatedEffects.HandshakeWorker.ops,EntrySource.hooks]
   repeat' first
     | (nonce_source_head receptionWith; exact handshake_receive _ _)
     | peer_reference_worker_step

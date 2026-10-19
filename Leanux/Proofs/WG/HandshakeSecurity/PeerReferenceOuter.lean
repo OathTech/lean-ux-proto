@@ -1,0 +1,102 @@
+import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceDumpFrames
+import Leanux.Proofs.WG.Lifetimes.SyscallPreservation
+
+namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference.Outer
+variable {E : Type} [EntryFormat E]
+open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.Logged Std.Do
+open Lifetimes Queues Configuration CurrentEnvironment
+
+private theorem safe (h : List E) (w : World) (hi : (ProductInv (E := E)) h w) :
+    (Safe (E := E)) h := hi.1
+
+theorem store (h : List E) (w v : World)
+    (same : wgStoreView v.wg = wgStoreView w.wg) (hi : (ProductInv (E := E)) h w) : (ProductInv (E := E)) h v :=
+  product_wg_stable h w v same hi
+
+theorem lift_spec (a : Leanux.M α)
+    (ha : ∀ h, Framing.Preserves ((ProductInv (E := E)) h) a) : ProductPreserves (E := E) (liftPrefix a) :=
+  (PrefixEnsures.lift a safe (fun h w x v hi hr => (hoare_iff_run _ _ _).mp (ha h) w x v hi hr)).preserves
+
+theorem lift_store (a : Leanux.M α) (ha : SameProductStore a) :
+    ProductPreserves (E := E) (liftPrefix a) := product_store a ha
+
+theorem lift_wgStore (a : Leanux.M α)
+    (ha : SameView (fun w : World => wgStoreView w.wg) a) :
+    ProductPreserves (E := E) (liftPrefix a) := by
+  apply lift_spec
+  intro h
+  apply (hoare_iff_run _ _ _).mpr
+  intro w x v hi hr
+  exact store h w v ((ProjectedAction.iff_run _ _ _).mp ha w x v hr) hi
+
+theorem lift_fs (a : FS.M α) : ProductPreserves (E := E) (liftPrefix (liftFS a)) :=
+  lift_spec _ (fun h => productFS_spec a ((ProductInv (E := E)) h) (fun w _ _ _ hi => store h w _ rfl hi))
+
+theorem lift_task (a : TaskM α) : ProductPreserves (E := E) (liftPrefix (liftTask a)) :=
+  lift_spec _ (fun h => productTask_spec a ((ProductInv (E := E)) h) (fun w _ _ hi => store h w _ rfl hi))
+
+theorem lift_ambient (a : AmbientM α) : ProductPreserves (E := E) (liftPrefix (liftAmbient a)) :=
+  lift_spec _ (fun h => productAmbient_spec a ((ProductInv (E := E)) h) (fun w _ hi => store h w _ rfl hi))
+
+theorem lift_seccomp (a : Seccomp.M α) : ProductPreserves (E := E) (liftPrefix (liftSeccomp a)) :=
+  lift_spec _ (fun h => productSeccomp_spec a ((ProductInv (E := E)) h) (fun w _ _ _ hi => store h w _ rfl hi))
+
+theorem lift_get : ProductPreserves (E := E) (liftPrefix (get : Leanux.M World)) :=
+  lift_spec _ (fun _ => hoare_consequence (hoare_get _) (fun _ hi => hi) (fun _ _ hi => hi.2))
+
+theorem lift_modify (f : World → World) (same : ∀ w, wgStoreView (f w).wg = wgStoreView w.wg) :
+    ProductPreserves (E := E) (liftPrefix (modify f)) :=
+  lift_spec _ (fun h => hoare_modify _ (fun w hi => store h w (f w) (same w) hi))
+
+macro "peer_reference_driver_outer_step" : tactic => `(tactic| first
+  | (change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _; current_env_at unsupported; exact lift_ambient (AmbientM.unsupported _))
+  | (change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _; current_env_at skipCut; exact lift_ambient (AmbientM.skipCut _))
+  | (change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _; current_env_at liftPrefix; first
+      | exact lift_fs _
+      | exact lift_task _
+      | exact lift_ambient _
+      | exact lift_seccomp _
+      | exact lift_get
+      | exact lift_modify _ (fun _ => rfl))
+  | (change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _; current_env_at Pure.pure; exact PrefixPreserves.pure safe _)
+  | (change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _; current_env_at Bind.bind; apply PrefixPreserves.bind)
+  | (change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _; current_env_at ite; apply PrefixPreserves.ite)
+  | (change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _; current_env_at dite; split)
+  | (maintenance_intro; try dsimp only)
+  | (change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _; current_env_match))
+
+/-- The callback is an arbitrary actual product observer, including its Stops.
+Descriptor failure returns before calling it, exactly as in the source. -/
+theorem socketCallOn (fd : Nat) (body : PrefixM E Int)
+    (hb : ProductPreserves (E := E) body) :
+    ProductPreserves (E := E) (socketCallOnWith (fun {_} a => liftPrefix a) fd body) := by
+  change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _
+  unfold socketCallOnWith
+  apply PrefixPreserves.bind (lift_fs (fdget fd))
+  intro f
+  apply PrefixPreserves.ite
+  · intro _; exact PrefixPreserves.pure safe _
+  · intro _
+    exact hb.bind (fun ret => (lift_fs (fdput f)).bind (fun _ => PrefixPreserves.pure safe ret))
+
+theorem netlinkRequest (body : PrefixM E Int) (hb : ProductPreserves (E := E) body) :
+    ProductPreserves (E := E) (netlinkRequestWith (fun {_} a => liftPrefix a) body) := by
+  unfold netlinkRequestWith
+  apply PrefixPreserves.bind
+    (socketCallOn _ _ ((lift_ambient (AmbientM.skipCut allocCuts)).bind
+      (fun _ => hb.bind (fun ret => (lift_ambient (AmbientM.skipCut allocCuts)).bind
+        (fun _ => PrefixPreserves.pure safe ret)))))
+  intro ret
+  exact (socketCallOn _ _ (PrefixPreserves.pure safe 0)).bind (fun _ => PrefixPreserves.pure safe ret)
+
+theorem rtnetlinkRequest (body : PrefixM E Int) (hb : ProductPreserves (E := E) body) :
+    ProductPreserves (E := E) (rtnetlinkRequestWith (fun {_} a => liftPrefix a) body) := by
+  change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _
+  unfold rtnetlinkRequestWith
+  repeat' first
+    | exact hb
+    | (change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _; current_env_at socketCallOnWith; apply socketCallOn)
+    | peer_reference_driver_outer_step
+
+
+end Leanux.Proofs.WG.HandshakeSecurity.PeerReference.Outer

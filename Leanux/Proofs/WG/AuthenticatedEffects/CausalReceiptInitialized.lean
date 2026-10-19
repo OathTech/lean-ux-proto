@@ -43,6 +43,11 @@ private theorem keepalive_prepare (pid : PeerId) :
     exact ⟨[.keepalivePrepared pid ⟨value,w,v,a,b⟩],rfl,safe,safe⟩
 
 theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
+  deliver := by
+    unfold hooks DeliverySource.observed
+    exact Driver.History.product_bind (Driver.History.product_lift _) (fun w =>
+      Driver.History.product_bind (product_emit (.delivery w.sent) True.intro) (fun _ =>
+        Driver.History.product_lift _))
   keepalivePrepare := keepalive_prepare
   fixtureEnter := fun trigger => state_enter (.fixture trigger)
   fixtureLeave := state_leave
@@ -72,6 +77,12 @@ theorem hooks_safe : Driver.HooksHistorySafe Safe hooks where
 theorem initialized (trace : Runner.Trace) (placeholders : Bool) :
     Safe (runPrefixOuter (execute trace placeholders) []).2 :=
   Driver.initialized_history hooks_safe Safe.empty trace placeholders
+
+theorem initialized_cookie_consumed (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Event) (receipt : CookieConsumption.Receipt)
+    (position : (runPrefixOuter (execute trace placeholders) []).2 =
+      pre ++ Event.cookieConsumed receipt :: post) : receipt.Valid :=
+  initialized trace placeholders pre (.cookieConsumed receipt) post position
 
 theorem initialized_keepalive (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List Event) (pid : PeerId) (receipt : WGRunWitness Bool)

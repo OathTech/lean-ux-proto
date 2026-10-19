@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryPreservation
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeWorkers
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeTimers
@@ -10,12 +11,20 @@ open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity Lifetimes Queues
 set_option maxHeartbeats 800000
 set_option maxRecDepth 4096
 
+theorem deliver : ProductSafe hooks.deliver := by
+  intro frames
+  apply DeliverySource.observed_preserves Event.delivery (fun _ _ ready => ⟨frames,ready⟩)
+  · intro h w sent ready
+    simpa only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,scope?,List.append_nil] using ready
+  · exact product_lift _ frames
+
 theorem crypt : ProductSafe (Driver.cryptObserved hooks) :=
-  product_bind (schedule none) (fun _ => product_lift _)
+  product_bind (schedule none) (fun _ => deliver)
 
 theorem send_workers : ProductSafe (Driver.sendWorkersObserved hooks) := by
   unfold Driver.sendWorkersObserved
   repeat' first
+    | (scope_balance_head Driver.Hooks.deliver; exact deliver)
     | (scope_balance_head Driver.sendWorkerObserved; exact send_worker)
     | (scope_balance_head Driver.scheduleObserved; exact schedule _)
     | scope_product_step
@@ -23,6 +32,7 @@ theorem send_workers : ProductSafe (Driver.sendWorkersObserved hooks) := by
 theorem after_xmit : ProductSafe (Driver.afterXmitObserved hooks) := by
   unfold Driver.afterXmitObserved
   repeat' first
+    | (scope_balance_head Driver.Hooks.deliver; exact deliver)
     | (scope_balance_head Driver.cryptObserved; exact crypt)
     | (scope_balance_head Driver.sendWorkersObserved; exact send_workers)
     | scope_product_step
@@ -67,6 +77,7 @@ theorem timer_enter_bind (d : Device) (j : UInt64) (pid : PeerId) (timer : PeerT
   PrefixEnsures.bind (timer_enter_checked d j pid timer entry before) tail
 
 macro "scope_timer_step" : tactic => `(tactic| first
+  | (scope_balance_head Driver.Hooks.deliver; exact deliver)
   | (scope_first_head Driver.Hooks.timerSelected; apply universal; intro frames; apply timer_enter_bind)
   | (scope_first_head Driver.Hooks.timerFinished; apply leave_bind)
   | (scope_balance_head Driver.cryptObserved; exact crypt)
@@ -88,6 +99,7 @@ theorem idle_timers : ProductSafe (Driver.idleTimersObserved hooks) := by
   unfold Driver.idleTimersObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (scope_balance_head Driver.Hooks.deliver; exact deliver)
     | (scope_balance_head Driver.timersObserved; exact timers _)
     | (scope_balance_head Driver.placeholderTimersObserved; exact placeholder_timers _)
     | scope_product_step
@@ -96,6 +108,7 @@ theorem after_advance : ProductSafe (Driver.afterAdvanceObserved hooks) := by
   unfold Driver.afterAdvanceObserved
   simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
   repeat' first
+    | (scope_balance_head Driver.Hooks.deliver; exact deliver)
     | (scope_balance_head Driver.timersObserved; exact timers _)
     | (scope_balance_head Driver.placeholderTimersObserved; exact placeholder_timers _)
     | scope_product_step

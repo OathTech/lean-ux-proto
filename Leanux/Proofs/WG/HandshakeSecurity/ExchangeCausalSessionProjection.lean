@@ -27,7 +27,9 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
     (hs : ∀ pid, StateProjectsPrefix cut? id (sg pid) (st pid))
     (hk : ∀ pid, StateProjectsPrefix cut? id (kg pid) (kt pid)) :
     StateProjectsPrefix cut? id (handshake sg kg) (Responder.DriverCuts.hooks.handshake st kt) := by
-  apply ExchangeJoint.worker_target cut? _ (HandshakeWorker.ops st kt) (fun _ => rfl) (fun _ => rfl)
+  apply ExchangeCookieJoint.worker_target cut? _ _ (HandshakeWorker.ops st kt) (fun _ => rfl)
+  · intro msg
+    exact CookieConsumption.observed_projects cut? Event.cookieConsumed (fun _ => rfl) msg
   intro mac
   apply HandshakeEffects.scopeOps_projects cut? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
   apply receive_projects
@@ -83,6 +85,7 @@ private theorem create_appends (pid : PeerId) (item : List SkbId) : StateAppends
     (NativeAdapter.world w a) h
 
 theorem hooks_projects : Driver.HooksProjects cut? hooks Responder.DriverCuts.hooks where
+  deliver := DeliverySource.observed_projects cut? Event.delivery (fun _ => rfl)
   keepalivePrepare := fun _ => Journal.state_receipt_projects cut? _ _ _
     (fun _ => rfl) (Driver.Projection.state_lift cut? _)
   fixture := ⟨(fun _ => 0),

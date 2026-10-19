@@ -62,6 +62,7 @@ theorem transmit (pid : PeerId) :
     (fun e => by cases e <;> rfl) (Completion.step_erases pid)
 
 theorem hooks : Driver.HooksProjects handshake? Journal.hooks HandshakeDriver.hooks where
+  deliver := projectsPrefix_lift handshake? _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.Projection.state_lift handshake? _
   fixture := ⟨id, (fun _ => Driver.Projection.state_pure handshake? 0),
     (fun _ => Driver.Projection.state_pure handshake? ())⟩

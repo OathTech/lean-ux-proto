@@ -157,8 +157,13 @@ theorem retained (call : Syscall)
       exact product_lift _ (ReadyCiphertext.Syscalls.dispatch_native call)
 
 theorem observe :
-    ProductSafe (observeObserved Journal.hooks) :=
-  product_bind (idle_timers) (fun _ => product_store _ observeTail_sameKernel)
+    ProductSafe (observeObserved Journal.hooks) := by
+  unfold observeObserved
+  apply product_bind idle_timers
+  intro _
+  change ProductSafe (AuthenticatedEffects.DeliverySource.observeWith (liftPrefix Env.deliverSent))
+  rw [AuthenticatedEffects.DeliverySource.observe_native]
+  exact product_store _ observeTail_sameKernel
 
 theorem dispatchObserve :
     ProductSafe (dispatchObserveObserved Journal.hooks) := by

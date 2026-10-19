@@ -44,7 +44,8 @@ theorem retained_history (h : ActorHistorySafe Safe g) (call : Syscall) :
 
 theorem observe_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (observeObserved g) :=
-  History.product_bind (idleTimers_history h) (fun _ => History.product_lift _)
+  History.product_bind (idleTimers_history h) (fun _ =>
+    AuthenticatedEffects.DeliverySource.observe_history Safe _ h.deliver)
 
 theorem dispatchObserve_history (h : ActorHistorySafe Safe g) :
     ProductHistorySafe Safe (dispatchObserveObserved g) := by

@@ -92,6 +92,7 @@ theorem session_projects (pid : PeerId) :
     (HandshakeSecurity.Responder.DriverCuts.session_erases pid wg)
 
 theorem hooks_projects : Driver.HooksProjects nonce? hooks Driver.nonceHooks where
+  deliver := projectsPrefix_lift nonce? _
   keepalivePrepare := fun _ => TransmitSecurity.Driver.Projection.state_lift nonce? _
   fixture := ⟨id, (fun _ => Driver.Projection.state_pure nonce? 0),
     (fun _ => Driver.Projection.state_pure nonce? ())⟩

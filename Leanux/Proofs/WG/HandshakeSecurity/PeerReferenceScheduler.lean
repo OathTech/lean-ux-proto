@@ -3,27 +3,28 @@ import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceTx
 /-! Actual scheduler commits retain positive-reference certificates; copied
 trials do not add committed exchange receipts. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues TransmitSecurity
 
-theorem product_stop (e : Stop) : ProductPreserves (liftPrefix (throw e : Leanux.M α)) := by
+theorem product_stop (e : Stop) : ProductPreserves (E := E) (liftPrefix (throw e : Leanux.M α)) := by
   apply product_lift
   apply (hoare_iff_run _ _ _).mpr
   intro w x v hi run
   cases run
 
-theorem product_work (f : List PeerId → List PeerId) : ProductPreserves
+theorem product_work (f : List PeerId → List PeerId) : ProductPreserves (E := E)
     (liftPrefix (liftWG (modifyDev fun d => {d with txWorkQueue := f d.txWorkQueue}))) :=
   product_native _ (modify_device (fun d => {d with txWorkQueue := f d.txWorkQueue}) (fun _ => rfl))
 
-theorem product_tx_read (id : SkbId) : ProductPreserves
+theorem product_tx_read (id : SkbId) : ProductPreserves (E := E)
     (liftPrefix (liftWG (getTxSkb id))) := by
   apply product_native
   exact skb (SkbStore.getTx id)
 
 theorem crypt_ahead (pid : PeerId) :
-    ProductPreserves (Driver.cryptAheadObserved ExchangeDriver.hooks pid) := by
-  change PrefixPreserves ProductInv Safe _
+    ProductPreserves (E := E) (Driver.cryptAheadObserved EntrySource.hooks (E := E) pid) := by
+  change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _
   unfold Driver.cryptAheadObserved
   repeat' first
     | (nonce_product_head Driver.encryptIterObserved; exact encrypt_iteration)
@@ -39,8 +40,8 @@ theorem crypt_ahead (pid : PeerId) :
     | (with_reducible intro x; try dsimp only)
 
 theorem iteration (a : Activation) :
-    ProductPreserves (Driver.iterationObserved ExchangeDriver.hooks a) := by
-  change PrefixPreserves ProductInv Safe _
+    ProductPreserves (E := E) (Driver.iterationObserved EntrySource.hooks (E := E) a) := by
+  change PrefixPreserves (ProductInv (E := E)) (Safe (E := E)) _
   unfold Driver.iterationObserved
   repeat' first
     | (nonce_product_head Driver.encryptIterObserved; exact encrypt_iteration)
@@ -54,7 +55,7 @@ theorem iteration (a : Activation) :
     | (with_reducible intro x; try dsimp only)
 
 theorem schedule (stack : Option Worker) :
-    ProductPreserves (Driver.scheduleObserved ExchangeDriver.hooks stack) :=
+    ProductPreserves (E := E) (Driver.scheduleObserved EntrySource.hooks (E := E) stack) :=
   SourceScheduler.schedule_preserves (fun _ _ hi => hi.1) product_stable
     (fun pid => product_work (fun q => q.erase pid)) _ _ (iteration) (softirq) stack
 

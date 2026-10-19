@@ -19,8 +19,8 @@ stops the work. Validation for the current source-contract checkpoint is recorde
 | Outcome | Status and remaining obligation |
 | --- | --- |
 | T1 nonce safety | Complete and validated. `initialized_nonce_safety` joins unique native reservations, actual key-allocation/nonce pairs, bounded serialized AEAD nonces and exact packet/header encoding, including stopped prefixes. Universal native rejection contracts prove invalidation, whole-batch restoration and unchanged drop count; the native rekey contracts expose the guarded helper request. No incoming invariant or campaign-2 premise remains. |
-| T2 transmit authorization and conservation | Open. R3 supplies initialized selection-time authorization; initialized encryption head/packet key agreement and socket/packet peer agreement are proved. Initialized nonempty socket-payload provenance is proved. Initialized socket readiness now discharges nonemptiness at every actual socket receipt, including Stop, and joins to the prior AEAD certificate. Exact ordered staged plaintexts reach allocation. An initialized completion entry now has a strict earlier allocation of its actual head. Native cuts establish exact TX disposal and admission-time key ownership. Each initialized encryption now has its allocation's own earlier selected-peer/current-key receipt, without an H1 premise. Each initialized routing receipt has its exact ordered staged splice; universal native overflow, purge and keepalive-preparation effects are proved. Every initialized resident TX cell now has exactly one authoritative peer-queue owner; the converse coverage holds at syscall entries and normal returned worlds. New actual creation-refusal receipts distinguish peer death from peer-queue exhaustion before cleanup, including Stop. The complete native transmit and keepalive paths now preserve a positional staged-origin carrier through selection, reservation, no-key restoration, allocation and publication, with explicit entry premises. Full initialized routing/keepalive linkage and complete dispositions remain open. Native TX work publication, admission, false-step and active-actor contracts are local obligations; they do not establish initialized drain completeness. |
-| T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts. Initialized exact timer-arm and queued-work occurrence provenance is proved; each held GRO packet now has its own earlier authenticated replay/AEAD occurrence. Each active handshake context now has its own latest valid native admission; each completion context has its actual earlier allocation parent. Initialized causal scope prefixes are well formed, including nested callbacks and Stop. Every initialized timer arm, work append, TX allocation, transport socket receipt and keepalive preparation now has a finite chain of exact earlier occurrences ending at a fixture or its own authenticated handshake/transport receive, including Stop. Candidate effects carry their own accepted replay and earlier AEAD. The same final driver now records native protocol and cookie socket returns. Each protocol-send receipt has its own initialized causal root and native endpoint/byte emission fact; cookie receipts are native-valid and qualified by actual under-load and MAC decisions on initiation/response input. Successful response lookup followed by refusal restores every peer record without a borrowing premise. Ordered emission accounting now distinguishes every socket append occurrence; actual protocol and cookie sends, handshake receive, queued/direct send workers and timer/work effects preserve it. Full failed-lookup refusal restores peers and sent data under an explicit resident-positive entry condition. Initialized emission coverage and actual lookup-entry positivity remain open. |
+| T2 transmit authorization and conservation | Open. `initialized_staged_selection_origins` derives ordered, distinct routing/keepalive positions through the whole native initialized runner, including Stop. `initialized_allocated_staged_occurrences` retains the selected peer allocation, exact plaintext sequence and those prior batch positions. `initialized_encrypted_plaintext_origin` and `initialized_socket_route_key_core_and_endpoint` join that history to each actual AEAD and transport socket receipt in the same final journal, with no incoming carrier or H1 premise. Socket bytes, endpoint, packet peer and historical current-slot sending core are bound. Historical key-owner equality is a separate open join; current-slot membership alone does not prove it. Native overflow/purge and creation-refusal arms expose their exact effects. Initialized TX ownership and native work service cover resident cells, scheduling, deferred calls and peer removal; destructor disposal retains its explicit idle-entry premise. Cross-allocation ticket consumption, complete pending/terminal conservation and converse coverage of every emission remain open. Batch-local distinctness and queue aliases do not discharge those obligations. |
+| T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts. Initialized exact timer-arm and queued-work occurrence provenance is proved; each held GRO packet now has its own earlier authenticated replay/AEAD occurrence. Each active handshake context now has its own latest valid native admission; each completion context has its actual earlier allocation parent. Initialized causal scope prefixes are well formed, including nested callbacks and Stop. Every initialized timer arm, work append, TX allocation, transport socket receipt and keepalive preparation now has a finite chain of exact earlier occurrences ending at a fixture or its own authenticated handshake/transport receive, including Stop. Candidate effects carry their own accepted replay and earlier AEAD. The same final driver now records native protocol and cookie socket returns. Each protocol-send receipt has its own initialized causal root and native endpoint/byte emission fact; cookie receipts are native-valid and qualified by actual under-load and MAC decisions on initiation/response input. Successful response lookup followed by refusal restores every peer record without a borrowing premise. Ordered emission accounting now distinguishes every socket append occurrence; actual protocol and cookie sends, handshake receive, queued/direct send workers and timer/work effects preserve it. Final initialized exchange-entry positivity now discharges the resident-positive premise for response-refusal, including later Stop. Initialized cookie-consumer entry positivity and native validity now discharge refusal premises; rejected cookie, response and initiation consumers restore complete peer and keypair records. Complete ordered emission coverage remains open. |
 | T4 handshake replay resistance | Complete and validated. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Actual initialized stale initiation receipts are refused, restore all peer records and preserve sent data. The factored native continuation returns without a response from the exact receipt endpoint; it requires no separate ambient-history join. The final-journal exports also establish response-consumption and session-installation uniqueness by exchange epoch, and exactly one allocation from the same successful session receipt. Named C2 source assumptions stay visible. |
 | T5 responder confirmation | Complete and validated. `initialized_responder_confirmation_discipline` joins promotion-label uniqueness, each confirmation's own accepted transport cause and actual responder AEAD after confirmation of the same allocation. Initialized transport covers inner promotion receipts even when the enclosing receive later stops. `PendingPromotion.H1DriverFrames` and `H1ResponderCurrentEdges` remain named local C2 operational assumptions; no incoming carrier, reachability, funding or callback premise remains. |
 | T6 key retirement | Complete and validated. `reference_aware_retirement_outcome` packages unconditional native TX/RX checks, invalidation, exact age comparison, initialized R2 access and holder accounting, the session-derived zero timer, selected-arm provenance, actual dispatch and worker unpublication, retained material and final removal. Actual clock/worker runs and residual-reference conditions remain explicit. Universal native RX final release includes authenticated cleanup. No worker-latency or physical-zeroization claim is made. |
@@ -161,15 +161,26 @@ transport now closes through the native runner, with the local facts collected
 in `PendingPromotion.H1DriverFrames`. No campaign-2 fact is silently discharged and no
 campaign-2 file is edited.
 
-The current validated checkpoint adopts T3 `4031d987`, T4 `e0a7ee22` and
-T6 `3a6375fe`. Ordered emission accounting now crosses actual handshake receive,
-queued and directly drained send workers, and timer/work effects. Native peer
-positivity crosses packet workers, scheduling, timers, traffic, removal drains
-and configuration; its initialized runner closure remains open. Native NAPI
-service and suspended-record frames remove the callback premises from encryption,
-crypt-ahead and decryption service contracts. Their incoming physical and service
-carriers remain explicit. Whole-run conservation and full emission coverage,
-including delivery-cleared prefixes, remain open.
+[AGENT 2026-10-19] The next tranche adds explicit delivery and completed-cookie
+observations to the shared proof source. Delivery is observed before the native
+operation, so its receipt survives an intermediate Stop; the native operation
+is executed once. Exact specialization, projection and history contracts compile.
+Outcome-specific adapters and initialized staged-origin linkage pass the
+aggregate trust checks. Initialized exchange and cookie entry
+positivity discharge complete peer/keypair restoration on refusal for all
+three consumers. The native TX scheduler and all deferred-call arms discharge
+worker and NAPI callback premises. Terminal conservation and converse emission
+coverage remain open.
+
+The validated checkpoint adopts T3 `09388dfa`, T4 `224a3beb` and
+T6 `a6412499`, matching every adopted preimage. Ordered emission accounting
+now crosses native TX completion; the actual delivery entry retains the
+pre-clear buffer through Stop. Initialized consumer entries discharge the
+positive-reference premises needed for full peer/keypair refusal restoration.
+Native TX service crosses all deferred-call arms, full peer removal and
+lifecycle endpoints. The destructor's exact before-reset disposal cut retains
+its explicit idle-entry premise. Whole-run conservation and full emission
+coverage, including delivery-cleared prefixes, remain open.
 
 [AGENT 2026-10-19] T2 retains queue order and duplicate positions at the native
 splice, overflow and purge boundaries. Keepalive preparation has its own exact
@@ -180,22 +191,26 @@ The staged-origin carrier uses positions in that same final journal, packet
 ordinals, device epochs and peer allocation stamps; equal payloads do not identify
 occurrences. Native routing and keepalive hooks introduce fresh positions, selection retains
 the saved sequence while clearing its queue, and restoration preserves that
-sequence. The complete staging source now preserves this carrier through reservation, restoration, allocation and publication; early restoration has a different intermediate postcondition from a still-held batch. The complete transmit and keepalive source contracts compile. Exact native frames now cover timer placement and metadata, cache/endpoint updates, IPv4/IPv6 socket sends and buffer sends; observed timer effects preserve the staged carrier. Their incoming carriers remain explicit; initialized outer transport and the final allocation-origin join remain open.
+sequence. The complete staging source now preserves this carrier through reservation, restoration, allocation and publication; early restoration has a different intermediate postcondition from a still-held batch. The complete transmit and keepalive source contracts compile. Exact native frames now cover timer placement and metadata, cache/endpoint updates, IPv4/IPv6 socket sends and buffer sends; observed timer effects preserve the staged carrier. Their incoming carriers remain explicit; the native configuration, peer-removal, lifecycle and dump transports now compile as well. The initialized outer transport and allocation/encryption/socket joins now pass scoped builds. Their final claims have no incoming carrier premise.
 
 The staged-origin carrier now crosses the complete handshake, receive
 completion, flushed send work and all five timer callbacks. Native peer writes
 retain the exact preceding getter; arbitrary setters are not frames. Actual stack replies, both receive-poll forms, replay checks, encryption,
 decryption, TX completion and the draining scheduler now preserve the same
-carrier. The source exports keep their incoming carrier explicit. Full initialized
-outer transport and the final routing join remain open.
+carrier. Local source exports retain their entry carriers; the initialized final exports
+discharge them through every typed runner operation. The
+[independent review](2026-10-19-review-campaign-3-staged-origin.md) identifies
+three remaining T2 connections: historical key ownership, cross-allocation
+conservation, and converse emission coverage. All are accepted and remain open;
+the current exports explicitly state these boundaries.
 
 ## Validation
 
-The current checkpoint passes 2633 proof jobs and the 1459-declaration gate
+This checkpoint passes 2707 proof jobs and the 1484-declaration gate
 across thirteen roots, with only `propext`, `Classical.choice` and `Quot.sound`;
 all twelve counterexample recipes and fresh root kernel replay pass. The model
 build passes 130 jobs and the unit suite passes 131 tests (one configured-kernel
-skip, 23.749 seconds). All 2577 frozen proof-source hashes matched; all 916
+skip, 23.411 seconds). All 2651 frozen proof-source hashes matched; all 916
 inherited proof modules, main at `783510e8` and mirror `77c9b555` were unchanged.
 The proof root retains its authorized campaign imports.
 
@@ -220,7 +235,10 @@ the 32 GiB and 64 GiB caps (exit 137), and `--help` unexpectedly selected the
 default module prefix and hit 32 GiB. The documented fresh-root command avoids
 that task-per-module expansion. Earlier tactic/inference failures and the
 earlier completion-source heartbeat exhaustion were repaired without changing
-a statement or the mirror. A new tactic's unchecked expression-array access
+a statement or the mirror. The current delivery/cookie integration and staged-origin
+transport had local missing-case, binder and projection errors, all repaired.
+An overly broad routing-frame tactic caused heartbeat exhaustion; a native
+head guard repaired it without increasing the limit. A new tactic's unchecked expression-array access
 produced Lean panic diagnostics during earlier completion-source work; all twelve worktrees
 were audited and all seven dirty trees preserved, including untracked files,
 under `refs/snapshots/all-dirty-after-tactic-panic-20261019-043500-*` before

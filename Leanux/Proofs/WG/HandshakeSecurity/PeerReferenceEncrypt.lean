@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceDecrypt
 
 /-! Native encryption and publication preserve positive resident peers. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 
 theorem encrypt_frame (kid : KeypairId) (pkt : DataPacket)  :
@@ -43,14 +44,14 @@ theorem encrypt_poll_frame  :
   exact preserves_pure _
 
 theorem encrypt_tail (item : Option (List SkbId)) :
-    ProductPreserves (TransmitSecurity.Driver.encryptTailObserved ExchangeDriver.hooks item) :=
+    ProductPreserves (E := E) (TransmitSecurity.Driver.encryptTailObserved EntrySource.hooks (E := E) item) :=
   workerIterPrefix_preserves _ _ (fun _ _ hi => hi.1)
     (product_lift _ (encrypt_tail_frame item)) (resched _ _)
 
 theorem encrypt_iteration :
-    ProductPreserves (TransmitSecurity.Driver.encryptIterObserved ExchangeDriver.hooks) := by
+    ProductPreserves (E := E) (TransmitSecurity.Driver.encryptIterObserved EntrySource.hooks (E := E)) := by
   unfold TransmitSecurity.Driver.encryptIterObserved
-  dsimp only [ExchangeDriver.hooks]
+  dsimp only [EntrySource.hooks]
   exact PrefixPreserves.bind (product_native _ encrypt_poll_frame) (fun _ =>
     PrefixPreserves.bind softirq (fun _ => encrypt_tail _))
 

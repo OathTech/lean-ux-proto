@@ -3,13 +3,14 @@ import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceKeepalive
 /-! The actual authenticated receive continuation preserves positivity through
 confirmation, pending-packet staging and source routing. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues TransmitSecurity
 
 theorem receive_tail (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
-    Observed (Driver.receiveTailObserved ExchangeDriver.hooks pid pkt confirmed) := by
-  change StatePrefixPreserves (fun h w _ => StateInv h w) Safe _
+    Observed (E := E) (Driver.receiveTailObserved EntrySource.hooks (E := E) pid pkt confirmed) := by
+  change StatePrefixPreserves (fun h w _ => StateInv (E := E) h w) (Safe (E := E)) _
   unfold Driver.receiveTailObserved
-  simp only [Driver.prepare_lift ExchangeDriver.hooks rfl]
+  simp only [Driver.prepare_lift EntrySource.hooks (E := E) rfl]
   repeat' first
     | (nonce_source_head Driver.stagingObserved; exact staging _)
     | (nonce_source_head timersHandshakeComplete; exact lift _ (complete _ _))
@@ -22,9 +23,9 @@ theorem receive_tail (pid : PeerId) (pkt : RxPacket) (confirmed : Bool) :
     | (with_reducible intro x; try dsimp only)
 
 theorem consume_data (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
-    Observed (Driver.consumeObserved ExchangeDriver.hooks pid pkt ep) := by
+    Observed (E := E) (Driver.consumeObserved EntrySource.hooks (E := E) pid pkt ep) := by
   unfold Driver.consumeObserved
-  dsimp only [ExchangeDriver.hooks]
+  dsimp only [EntrySource.hooks]
   apply StatePrefixEnsures.bind (lift _ (endpoint pid ep))
   intro _
   apply StatePrefixEnsures.bind (lift _ (confirm pid pkt.keypair))

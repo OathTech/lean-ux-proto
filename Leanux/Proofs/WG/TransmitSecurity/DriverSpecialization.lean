@@ -352,7 +352,8 @@ theorem nonce_retainedObserved_eq : retainedObserved nonceHooks = Nonce.retained
 theorem nonce_observeObserved_eq : observeObserved nonceHooks = Nonce.observeObserved := by
   unfold observeObserved Nonce.observeObserved
   simp only [nonce_idleTimersObserved_eq]
-  all_goals rfl
+  change (_ >>= fun _ => AuthenticatedEffects.DeliverySource.observeWith (liftPrefix Env.deliverSent)) = _
+  rw [AuthenticatedEffects.DeliverySource.observe_native]
 
 theorem nonce_dispatchObserveObserved_eq : dispatchObserveObserved nonceHooks = Nonce.dispatchObserveObserved := by
   unfold dispatchObserveObserved Nonce.dispatchObserveObserved

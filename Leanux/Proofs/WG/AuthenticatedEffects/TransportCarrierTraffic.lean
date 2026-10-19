@@ -1,5 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.TransportCarrierDeferred
-import Leanux.Proofs.WG.Lifetimes.TrafficPreservation
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryPreservation
 
 /-! Fixture ingress, flood, batch and transmit callers preserve the actual
 shared RX publication carrier, including interleaved inline NAPI callbacks. -/
@@ -49,8 +49,8 @@ theorem inject (h : DeferredSafe extra origin replay hooks) (family port : Nat)
 
 theorem afterBatch (h : DeferredSafe extra origin replay hooks) :
     ProductSafe extra origin replay (afterBatchObserved hooks) :=
-  TrafficSource.afterBatch_preserves safe product_store _ _ _ _ _ (crypt h) (sendWorkers h)
-    h.sendWorker (schedule h.toWorkerSafe) drain
+  DeliverySource.afterBatch_preserves safe product_store _ _ _ _ _ _ (crypt h) (sendWorkers h)
+    h.sendWorker (schedule h.toWorkerSafe) drain h.deliver
 
 theorem flood (h : DeferredSafe extra origin replay hooks) (count port family : Nat)
     (messages : List (List UInt8)) :

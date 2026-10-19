@@ -1,3 +1,11 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedSocketFinal
+import Leanux.Proofs.WG.TransmitSecurity.StagedConfiguration
+import Leanux.Proofs.WG.TransmitSecurity.StagedTraffic
+import Leanux.Proofs.WG.TransmitSecurity.StagedConfigurationFrames
+import Leanux.Proofs.WG.TransmitSecurity.StagedAllowedIpFrames
+import Leanux.Proofs.WG.TransmitSecurity.StagedDeferred
+import Leanux.Proofs.WG.TransmitSecurity.StagedIngressFrames
+import Leanux.Proofs.WG.TransmitSecurity.StagedPeerCreationFrames
 import Leanux.Proofs.WG.TransmitSecurity.StagedScheduler
 import Leanux.Proofs.WG.TransmitSecurity.StagedPoll
 import Leanux.Proofs.WG.TransmitSecurity.StagedFocusedProduct
@@ -1019,5 +1027,66 @@ source contract retains its incoming carrier until initialized outer closure. -/
 theorem native_scheduler_preserves_staged_origins (stack : Option Worker) :
     Staged.Origins.ProductSafe (Driver.scheduleObserved AuthenticatedEffects.CausalJournal.hooks stack) :=
   Staged.Origins.schedule stack
+
+
+open AuthenticatedEffects HandshakeSecurity Staged.Origins
+
+/-- Security: every initialized native staged selection retains ordered, distinct
+prior routing or keepalive occurrences for its own peer allocation, including
+before Stop. No incoming carrier is assumed. Cross-allocation consumption and
+pending/terminal conservation are separate obligations. -/
+theorem initialized_staged_selection_origins (trace : Runner.Trace) (placeholders : Bool) :
+    Safe (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 :=
+  Staged.Origins.initialized trace placeholders
+
+/-- Security: every initialized allocation preserves the exact ordered staged
+plaintexts and their prior routing or keepalive positions for the selected peer.
+Duplicate payloads retain distinct positions within the batch. This does not
+yet establish disjoint ticket consumption between separate allocations. -/
+theorem initialized_allocated_staged_occurrences (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (packets : List DataPacket)
+    (allocation : WGRunWitness (List SkbId))
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      pre ++ .old (.allocated packets allocation) :: post) :
+    allocation.Valid (packets.mapM newTxSkb) ∧
+      ∃ pid peer slot selection generation,
+        CausalJournal.Event.old (.responder (.selected pid selection)) ∈ pre ∧
+        selection.Valid (Responder.selectionPrefix pid) ∧
+        selection.value = some (peer,some slot) ∧
+        Packets.epoch selection.before = some generation ∧
+        Batch pre generation pid peer.internalId (packets.map DataPacket.plaintext) ∧
+        BatchPayload.Shape pid slot peer.staged packets :=
+  Staged.Origins.initialized_allocation trace placeholders pre post packets allocation position
+
+/-- Security: every initialized AEAD uses plaintext with an earlier native
+routing or keepalive occurrence for the same packet peer. The conclusion holds
+before later Stop without an incoming carrier; terminal conservation is separate. -/
+theorem initialized_encrypted_plaintext_origin (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (r : WorkerEncryption.Receipt)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      pre ++ .old (.encrypted r) :: post) :
+    r.Valid ∧ ∃ generation stamp ticket,
+      Born pre generation r.read.value.peer stamp ticket r.read.value.plaintext :=
+  Staged.Origins.initialized_encryption trace placeholders pre post r position
+
+/-- Security: every initialized transport socket receipt binds the actual
+endpoint and emitted bytes to an earlier AEAD and its own earlier staged
+plaintext origin. The selected current-slot allocation and sending core are
+bound historically. Historical key-owner equality, converse coverage of all
+emissions and exactly-once conservation remain separate obligations. -/
+theorem initialized_socket_route_key_core_and_endpoint (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List CausalJournal.Event) (r : Completion.SocketReceipt)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      pre ++ .old (.socket r) :: post) :
+    r.Valid ∧ r.packet.value.peer = r.pid ∧
+      SocketEmission r.endpoint r.packet.value.bytes r.packet.value.ds
+        r.socket.before.wg.sent r.socket.after.wg.sent ∧
+      ∃ cipher : WorkerEncryption.Receipt,
+        CausalJournal.Event.old (.encrypted cipher) ∈ pre ∧ cipher.Valid ∧
+        r.packet.value.bytes = cipher.cipher.ciphertext ∧
+        AllocationSelection.Earlier (pre.filterMap CausalJournal.old?) r.pid r.packet.value.keypair
+          (Responder.keyCore cipher.cipher.keyRead.value) ∧
+        ∃ generation stamp ticket, Born pre generation r.pid stamp ticket r.packet.value.plaintext :=
+  Staged.Origins.initialized_socket trace placeholders pre post r position
 
 end Leanux.Proofs.WG.TransmitSecurity

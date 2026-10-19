@@ -49,14 +49,15 @@ private theorem receive
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, Driver.StateHistorySafe Safe (session pid))
     (hk : ∀ pid, Driver.StateHistorySafe Safe (keepalive pid)) (msg : Key) (src : SkbSource) :
-    Driver.StateHistorySafe Safe (HandshakeWorker.receiveWith
+    Driver.StateHistorySafe Safe (CookieConsumption.receiveWith (CookieConsumption.observed Event.cookieConsumed)
       (fun mac => HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
             (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
-  unfold HandshakeWorker.receiveWith
+  unfold CookieConsumption.receiveWith CookieConsumption.observed
   repeat' first
+    | (driver_history_head receiptWGObserved; refine receipt_quiet _ ?_ _ (fun _ => True.intro))
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
     | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
     | (driver_history_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)
@@ -68,11 +69,11 @@ theorem handshake
     (hs : ∀ pid, Driver.StateHistorySafe Safe (session pid))
     (hk : ∀ pid, Driver.StateHistorySafe Safe (keepalive pid)) :
     Driver.StateHistorySafe Safe (CausalJournal.handshake session keepalive) := by
-  unfold CausalJournal.handshake HandshakeWorker.observedWith HandshakeWorker.workerWith
+  unfold CausalJournal.handshake CookieConsumption.workerWith HandshakeWorker.workerWith
   repeat' first
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
     | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
-    | (driver_history_head HandshakeWorker.receiveWith; exact receive session keepalive hs hk _ _)
+    | (driver_history_head CookieConsumption.receiveWith; exact receive session keepalive hs hk _ _)
     | driver_state_history_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Selections

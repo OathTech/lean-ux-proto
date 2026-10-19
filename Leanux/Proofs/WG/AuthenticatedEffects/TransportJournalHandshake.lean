@@ -140,6 +140,7 @@ theorem handshake : StateSafe (Driver.handshakeObserved Journal.hooks) :=
     (TransportCarrier.keepalive staging)
 
 theorem callbacks : DeferredSafe (fun _ => True) origin? replay? Journal.hooks where
+  deliver := product_storeLift _ Leanux.Proofs.Framing.deliverSent_sameKernel
   keepalivePrepare := keepalive_prepare
   fixtureEnter := fun _ => state_pure _
   fixtureLeave := fun _ => state_pure _

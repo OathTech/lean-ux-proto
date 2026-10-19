@@ -17,7 +17,8 @@ theorem retained_projects (h : HooksProjects ρ g a) (call : Syscall) :
 
 theorem observe_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (observeObserved g) (observeObserved a) :=
-  projectsPrefix_bind ρ id id (idleTimers_projects h) (fun _ => projectsPrefix_lift ρ _)
+  projectsPrefix_bind ρ id id (idleTimers_projects h) (fun _ =>
+    AuthenticatedEffects.DeliverySource.observe_projects ρ _ _ h.deliver)
 
 theorem dispatchObserve_projects (h : HooksProjects ρ g a) :
     ProjectsPrefix ρ id (dispatchObserveObserved g) (dispatchObserveObserved a) := by

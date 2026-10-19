@@ -7,6 +7,7 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CandidatePollSource
 import Leanux.Proofs.WG.HandshakeSecurity.SendExchangeLifecycleSource
 import Leanux.Proofs.WG.AuthenticatedEffects.PacketEffectsSource
 import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsSource
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliverySource
 
 /-! The nonce source driver parameterized at native TX boundaries. Its nonce
 specialization is proved equal to the initialized observer in the companion
@@ -19,6 +20,7 @@ open Leanux.Proofs.WG.Origins.HandshakeSources
 open HandshakeSecurity.Confirmation.Poll
 
 structure Hooks (E : Type) where
+  deliver : PrefixM E Unit := liftPrefix Env.deliverSent
   keepalivePrepare : PeerId → WGPrefix E Bool :=
     fun pid => liftWGPrefix (RetirementSecurity.OccurrenceHandshake.keepalivePrepare pid)
   fixtureEnter : AuthenticatedEffects.FixtureEffects.Trigger → WGPrefix E Nat := fun _ => pure 0
@@ -288,14 +290,14 @@ def scheduleObserved (hooks : Hooks E) (stack : Option Worker) : PrefixM E Unit 
 
 def cryptObserved (hooks : Hooks E) : PrefixM E Unit := do
   (scheduleObserved hooks) none
-  liftPrefix Env.deliverSent
+  hooks.deliver
 
 def sendWorkersObserved (hooks : Hooks E) : PrefixM E Unit := do
   if (← liftPrefix getWG).dev.isNone then return
   liftPrefix Env.requireNoCryptWork
   liftPrefix (modifyWG fun w => {w with queuedThisCall := []})
   for _ in [0:(← liftPrefix recordBudget)] do
-    if (← liftPrefix (liftWG getDev)).sendWorkQueue.isEmpty then liftPrefix Env.deliverSent; return
+    if (← liftPrefix (liftWG getDev)).sendWorkQueue.isEmpty then hooks.deliver; return
     (sendWorkerObserved hooks)
     (scheduleObserved hooks) none
   liftPrefix (budgetExhausted "the send work queue")
@@ -366,7 +368,7 @@ def timersObserved (hooks : Hooks E) (jPass : UInt64) : PrefixM E Bool := do
         if (← liftPrefix Env.peekNextSite) == some site then break
   if let some b := step then liftPrefix (Env.requireStepComplete b)
   if fired then
-    liftPrefix Env.deliverSent
+    hooks.deliver
     let d ← liftPrefix (liftWG getDev)
     if !d.sendWorkQueue.isEmpty || !d.clearWorkQueue.isEmpty || !d.encryptQueue.empty || !d.txWorkQueue.isEmpty then
       liftPrefix (unsupported "work a timer queued outlived the guest's wait")
@@ -434,8 +436,8 @@ def injectObserved (hooks : Hooks E) (family port : Nat) (msg : List UInt8) (tos
   TrafficSource.injectWith receiveEntryObserved (cryptObserved hooks) drainObserved family port msg tos ll dest
 
 def afterBatchObserved (hooks : Hooks E) : PrefixM E Unit :=
-  TrafficSource.afterBatchWith (cryptObserved hooks) (sendWorkersObserved hooks)
-    ((sendWorkerObserved hooks)) (fun stack => (scheduleObserved hooks) stack) drainObserved
+  AuthenticatedEffects.DeliverySource.afterBatchWith (cryptObserved hooks) (sendWorkersObserved hooks)
+    ((sendWorkerObserved hooks)) (fun stack => (scheduleObserved hooks) stack) drainObserved hooks.deliver
 
 def floodObserved (hooks : Hooks E) (count port family : Nat) (messages : List (List UInt8)) : PrefixM E Int :=
   TrafficSource.floodWith receiveEntryObserved (inlinePollObserved hooks) (afterBatchObserved hooks) drainObserved count port family messages
@@ -550,7 +552,7 @@ def retainedObserved (hooks : Hooks E) (call : Syscall) : PrefixM E Int :=
 
 def observeObserved (hooks : Hooks E) : PrefixM E (Int × Lean.Json) := do
   (idleTimersObserved hooks)
-  liftPrefix Environment.observeTail
+  AuthenticatedEffects.DeliverySource.observeWith hooks.deliver
 
 def dispatchObserveObserved (hooks : Hooks E) : PrefixM E Int := do
   let (ret, observed) ← (observeObserved hooks)

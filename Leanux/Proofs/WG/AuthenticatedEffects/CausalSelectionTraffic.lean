@@ -29,8 +29,8 @@ theorem inject (family port : Nat)
 
 theorem afterBatch :
     ProductSafe (afterBatchObserved hooks) :=
-  TrafficSource.afterBatch_preserves safe product_store _ _ _ _ _ crypt sendWorkers
-    Selections.send_worker schedule drain
+  DeliverySource.afterBatch_preserves safe product_store _ _ _ _ _ _ crypt sendWorkers
+    Selections.send_worker schedule drain deliver
 
 theorem flood (count port family : Nat)
     (messages : List (List UInt8)) :

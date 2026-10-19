@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeJointCookieWorker
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSenderOther
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalFrames
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeJointWorker
@@ -46,7 +47,9 @@ theorem handshake_projects (sg : PeerId → WGPrefix Event Bool)
     (hs : ∀ pid, StateProjectsPrefix exchange? id (sg pid) (st pid))
     (hk : ∀ pid, StateProjectsPrefix exchange? id (kg pid) (kt pid)) :
     StateProjectsPrefix exchange? id (handshake sg kg) (ExchangeDriver.worker st kt) := by
-  apply ExchangeJoint.worker_exchange
+  apply ExchangeCookieJoint.worker_target exchange? _ _ (ExchangeDriver.receiveOps st kt) (fun _ => rfl)
+  · intro msg
+    exact CookieConsumption.observed_projects exchange? Event.cookieConsumed (fun _ => rfl) msg
   intro mac
   apply HandshakeEffects.scopeOps_projects exchange? Event.scope CausalSources.Cause.handshake (fun _ => rfl)
   apply ExchangeJoint.receive_native exchange? Event.exchange (fun _ => rfl)
@@ -104,6 +107,7 @@ theorem timer_projects (d : Device) (bound : UInt64) (pid : PeerId) (timer : Pee
   simp only [List.filterMap_append,List.filterMap_cons,List.filterMap_nil,exchange?,List.append_nil]
 
 theorem hooks_projects : Driver.HooksProjects exchange? hooks ExchangeDriver.hooks where
+  deliver := DeliverySource.observed_projects exchange? Event.delivery (fun _ => rfl)
   keepalivePrepare := fun _ => Journal.state_receipt_projects exchange? _ _ _
     (fun _ => rfl) (Driver.Projection.state_lift exchange? _)
   fixture := ⟨(fun _ => 0),

@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceEncrypt
 
 /-! Native completion and final disposal preserve positive resident peers. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity.PeerReference
+variable {E : Type} [EntryFormat E]
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 
 theorem send_skb (pid : PeerId) (bytes : List UInt8) (ds : Nat)  :
@@ -80,7 +81,7 @@ theorem tx_step_frame (pid : PeerId)  :
   exact preserves_bind (update (fun p => {p with txQueue := queue}) (fun _ positive => positive)) (fun _ => body first)
 
 theorem tx_iteration (pid : PeerId) :
-    ProductPreserves (TransmitSecurity.Driver.txIterObserved ExchangeDriver.hooks pid) :=
+    ProductPreserves (E := E) (TransmitSecurity.Driver.txIterObserved EntrySource.hooks (E := E) pid) :=
   workerIterPrefix_preserves _ _ (fun _ _ hi => hi.1)
     (product_native _ (tx_step_frame pid)) (resched _ _)
 

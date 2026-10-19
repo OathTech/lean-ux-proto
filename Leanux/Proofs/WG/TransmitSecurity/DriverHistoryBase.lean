@@ -2,6 +2,7 @@ import Leanux.Proofs.WG.AuthenticatedEffects.GroOccurrenceFrames
 import Leanux.Proofs.WG.TransmitSecurity.DriverSource
 import Leanux.Proofs.Logged.PrefixOuter
 import Leanux.Proofs.WG.AuthenticatedEffects.FixtureEffectsContracts
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryContracts
 
 /-! History-only safety through the shared native driver. State-dependent
 ownership invariants remain separate; this interface cannot discharge them. -/
@@ -15,6 +16,7 @@ abbrev ProductHistorySafe (Safe : List E → Prop) (g : PrefixM E α) : Prop :=
   PrefixPreserves (fun h _ => Safe h) Safe g
 
 structure HooksHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop where
+  deliver : ProductHistorySafe Safe hooks.deliver
   keepalivePrepare : ∀ pid, StateHistorySafe Safe (hooks.keepalivePrepare pid)
   fixtureEnter : ∀ trigger, StateHistorySafe Safe (hooks.fixtureEnter trigger)
   fixtureLeave : ∀ token, StateHistorySafe Safe (hooks.fixtureLeave token)
@@ -50,6 +52,7 @@ allocated packets. Requiring arbitrary allocation arguments to preserve such a
 property would discard that source relationship. Other callback contracts stay
 explicit and the original native driver remains unchanged. -/
 structure ActorCoreHistorySafe (Safe : List E → Prop) (hooks : Hooks E) : Prop where
+  deliver : ProductHistorySafe Safe hooks.deliver
   keepalivePrepare : ∀ pid, StateHistorySafe Safe (hooks.keepalivePrepare pid)
   staging : ∀ pid, StateHistorySafe Safe (stagingObserved hooks pid)
   fixtureEnter : ∀ trigger, StateHistorySafe Safe (hooks.fixtureEnter trigger)

@@ -1,0 +1,126 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedDeferredFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.DeliveryPreservation
+
+/-! The actual deferred and timer loops carry the same staged-origin carrier
+through callbacks, clear work and scheduler trials. Selection validity is a
+separate positional obligation, not an assumption made by these state frames. -/
+namespace Leanux.Proofs.WG.TransmitSecurity.Staged.Origins
+open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Std.Do
+open Lifetimes Queues Driver AuthenticatedEffects AuthenticatedEffects.CausalJournal
+set_option maxHeartbeats 600000
+set_option maxRecDepth 4096
+set_option pp.structureInstances false
+theorem delivery : ProductSafe hooks.deliver :=
+  DeliverySource.observed_preserves Event.delivery (fun _ _ before => before.2)
+    (fun h _ sent before => ⟨before.1.append _,before.2.emit (checked_quiet (.delivery sent) True.intro h)⟩)
+    (product_store_lift _ deliverSent_sameKernel)
+
+macro "staged_deferred_native" : tactic => `(tactic| first
+  | (staged_origin_product_native getWG; exact wg_read)
+  | (staged_origin_product_native getEnv; exact env_read)
+  | (staged_origin_product_native modifyWG; apply wg_bookkeeping; intro w; rfl)
+  | (staged_origin_product_native liftWG
+     apply product_wg
+     apply state_lift
+     intro history
+     repeat' first
+       | (rx_retention_head delTimer; exact Native.delete_timer _ _)
+       | staged_origin_native)
+  | (staged_origin_product_native Env.runOneClearWorker; exact clear_one)
+  | (staged_origin_product_native Env.requireDrained; exact product_store_lift _ (TransmitSecurity.Nonce.Frames.drained _ _))
+  | (staged_origin_product_native Env.requireNoCryptWork; exact product_store_lift _ requireNoCryptWork_sameKernel)
+  | (staged_origin_product_head Hooks.deliver; exact delivery)
+  | (staged_origin_product_native Env.deliverSent; exact product_store_lift _ deliverSent_sameKernel)
+  | (staged_origin_product_native Env.peekNextSite; exact product_store_lift _ peekNextSite_sameKernel)
+  | (staged_origin_product_native Env.timerWorker; exact product_store_lift _ (timerWorker_sameKernel _))
+  | (staged_origin_product_native Env.requireStepComplete; exact product_store_lift _ (TransmitSecurity.Nonce.Frames.step_complete _))
+  | (staged_origin_product_native Env.requireNothingDue; exact product_store_lift _ (TransmitSecurity.Nonce.Frames.nothing_due _))
+  | (staged_origin_product_native throw; exact product_throw _)
+  | (first | staged_origin_product_native getAmbient | staged_origin_product_native modifyAmbient
+           | staged_origin_product_native recordBudget | staged_origin_product_native peekUnit
+           | staged_origin_product_native peekSiteU64 | staged_origin_product_native hiddenJiffies
+           | staged_origin_product_native invariant | staged_origin_product_native unsupported
+           | staged_origin_product_native budgetExhausted
+     exact product_ambient _))
+
+macro "staged_deferred_step" : tactic => `(tactic| first
+  | solve | staged_deferred_native
+  | (staged_origin_product_head ForIn.forIn; first | apply product_range | apply product_forIn)
+  | staged_origin_product_step)
+
+theorem crypt :
+    ProductSafe (cryptObserved hooks) :=
+  product_bind (schedule none) (fun _ => delivery)
+
+theorem sendWorkers :
+    ProductSafe (sendWorkersObserved hooks) := by
+  unfold sendWorkersObserved
+  repeat' first
+    | (staged_origin_product_head sendWorkerObserved; exact send_worker)
+    | (staged_origin_product_head scheduleObserved; exact schedule _)
+    | staged_deferred_step
+
+theorem afterXmit :
+    ProductSafe (afterXmitObserved hooks) := by
+  unfold afterXmitObserved
+  repeat' first
+    | (staged_origin_product_head cryptObserved; exact crypt)
+    | (staged_origin_product_head sendWorkersObserved; exact sendWorkers)
+    | staged_deferred_step
+
+theorem timerSection (worker : Worker) (body : PrefixM Event Unit)
+    (safe : ProductSafe body) :
+    ProductSafe (timerSectionObserved worker body) := by
+  unfold timerSectionObserved
+  dsimp only
+  split
+  · exact product_bind (product_ambient _) (fun _ => product_bind (product_ambient _) (fun _ =>
+      runWorkerPrefix_preserves (fun _ _ before => before.2) product_stable worker safe))
+  · exact product_bind (product_ambient _) (fun _ =>
+      runWorkerPrefix_preserves (fun _ _ before => before.2) product_stable worker safe)
+
+theorem timers (j : UInt64) :
+    ProductSafe (timersObserved hooks j) := by
+  unfold timersObserved
+  repeat' first
+    | (staged_origin_product_head sendWorkerObserved; exact send_worker)
+    | (staged_origin_product_head Hooks.timerSelected; exact timer_selected _ _ _ _ _)
+    | (staged_origin_product_head Hooks.timerFinished; exact timer_finished _)
+    | (staged_origin_product_head cryptObserved; exact crypt)
+    | (staged_origin_product_head timerSectionObserved
+       apply timerSection
+       exact product_state (timer _ keepalive_observed_source _ _))
+    | staged_deferred_step
+
+theorem placeholderTimers (j : UInt64) :
+    ProductSafe (placeholderTimersObserved hooks j) := by
+  unfold placeholderTimersObserved
+  repeat' first
+    | (staged_origin_product_head Hooks.timerSelected; exact timer_selected _ _ _ _ _)
+    | (staged_origin_product_head Hooks.timerFinished; exact timer_finished _)
+    | (staged_origin_product_head cryptObserved; exact crypt)
+    | (staged_origin_product_head sendWorkersObserved; exact sendWorkers)
+    | (staged_origin_product_head timerSectionObserved
+       apply timerSection
+       exact product_state (timer _ keepalive_observed_source _ _))
+    | staged_deferred_step
+
+theorem idleTimers :
+    ProductSafe (idleTimersObserved hooks) := by
+  unfold idleTimersObserved
+  simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
+  repeat' first
+    | (staged_origin_product_head timersObserved; exact timers _)
+    | (staged_origin_product_head placeholderTimersObserved; exact placeholderTimers _)
+    | staged_deferred_step
+
+theorem afterAdvance :
+    ProductSafe (afterAdvanceObserved hooks) := by
+  unfold afterAdvanceObserved
+  simp only [Functor.discard,map_const,Function.comp_apply,Function.const,map_eq_pure_bind]
+  repeat' first
+    | (staged_origin_product_head timersObserved; exact timers _)
+    | (staged_origin_product_head placeholderTimersObserved; exact placeholderTimers _)
+    | staged_deferred_step
+
+end Leanux.Proofs.WG.TransmitSecurity.Staged.Origins
