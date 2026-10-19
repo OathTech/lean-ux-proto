@@ -152,13 +152,19 @@ source finding.
 
 ## Dispositions
 
-[AGENT 2026-10-19] Both findings are accepted and remain open.
+[AGENT 2026-10-19] Both findings are accepted. Finding 1 is fixed at
+`eb4f48cc`; finding 2 remains open.
 
-1. The separate `StagedCompletePrefix` contracts retain all logical journal
-   prefixes and require explicit new-cut certificates from active sources.
-   Quiet-emitter adapters and active admission, selection, allocation and
-   disposal cuts are proved. Product and scheduler composition retain prior
-   certificates; whole initialized transport remains open. `CompleteRunner.reached` explicitly covers the returned journal.
+1. `CompletePrefix.Runner.reached` retains every logical journal prefix of
+   the original initialized execution, on normal completion and Stop. The
+   separate contracts retain the certificate through concrete admission,
+   staging, completion, receive, timers, workers, scheduler, traffic,
+   configuration, dump, administrative and guarded deletion sources. The
+   exported `initialized_every_journal_prefix_accounted` has no incoming
+   carrier or callback premise. Aggregate gate, 392 focused public axiom
+   queries, fresh root replay and all twelve witness recipes pass. This
+   closes the logical-prefix gap without treating a final ledger as the
+   ledger for earlier history.
 2. Selected stops retain the recorded take and native ownership. The accounted
    branch still needs its source-cut relationship preserved through completion
    and outer composition. Comments that described its existential snapshot as
@@ -166,6 +172,9 @@ source finding.
    does not close the proof obligation. `CompleteRunner.normal_cut` now
    establishes the actual initialized normal endpoint, while source-matched
    completion projections retain branch-specific frontiers. General stopped
-   provenance and native intervals between receipts remain open.
+   provenance and native intervals between receipts remain open. Source-63
+   also connects fixed actual worker selection/dequeue/disposal and queue
+   installation prefixes to their same-ledger cuts. These local bridges do
+   not yet discharge the initialized native-cut obligation.
 
 No mirror change or narrower T2 outcome is adopted.
