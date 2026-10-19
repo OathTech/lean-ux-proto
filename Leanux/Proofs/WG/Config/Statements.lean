@@ -1,3 +1,9 @@
+import Leanux.Proofs.WG.Config.ConfiguredDeviceClaims
+import Leanux.Proofs.WG.Config.OwnerRunnerNormalSource
+import Leanux.Proofs.WG.Config.QueuedReplacementReadbackClaims
+import Leanux.Proofs.WG.Config.ConfiguredOptionalSource
+import Leanux.Proofs.WG.Config.ConfiguredCommandClaims
+import Leanux.Proofs.WG.Config.GetterCleanupMacFrames
 import Leanux.Proofs.WG.Config.ConfiguredBoundaryClaims
 import Leanux.Proofs.WG.Config.ConfiguredTailClaims
 import Leanux.Proofs.WG.Config.ConfiguredRepresentationEffects
@@ -2564,5 +2570,81 @@ theorem original_configuration_boundary_owners (cs : Queues.RxCredits.Ledger)
     ConfiguredOwners d t4 t6 ∧ ResidentOwnerLists d t4 t6 :=
   OwnerConfiguration.projected_entry_resident cs loans s d t4 t6 entry device routing
 
+
+/-- The complete original peer command retains its actual account and
+configured routing ownership through lookup, creation, update-only, removal
+and normal refusals. Every exact final representation consequently has resident
+configured owners and their node-list membership; no final-state premise is used. -/
+theorem original_peer_command_configured_owners (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : PeerAttrs)
+    (shape : Configuration.PeerAddressShape attrs) :
+    Campaign2.Ensures (setPeerCmd attrs) (OwnerConfiguration.ProjectedEntry cs loans)
+      (fun _ s => OwnerConfiguration.ProjectedEntry cs loans s ∧
+        ∀ d t4 t6, s.wg.device = some d → AllowedIps.RoutingInvariant d t4 t6 →
+          ConfiguredOwners d t4 t6 ∧ ResidentOwnerLists d t4 t6) := by
+  intro g a result v b pre run
+  have after := OwnerConfiguration.original_command cs loans attrs shape
+    g a result v b pre run
+  exact ⟨after, fun d t4 t6 device routing =>
+    OwnerConfiguration.projected_entry_resident cs loans _ d t4 t6 after device routing⟩
+
+
+
+/-- The actual queued replacement and complete getter return the generation-
+adjusted empty-peer JSON. Initial funding and structural coherence supply the
+cleanup result; no empty-work or preselected successor is assumed. -/
+theorem original_queued_replace_peers_get_after_set
+    (cs : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations)
+    (tables : AllowedIps.FlatTable × AllowedIps.FlatTable) (d : Device) (sock : NlSock)
+    (room : devicePrefixSpace (requestGeneration d) + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (queue : sock.queue = []) :
+    Campaign2.Ensures (do
+      let ret ← wgSetDevice (replacePeersAttrs (byIndex d))
+      let value ← wgGetDevice (byIndex d)
+      pure (ret,value))
+      (fun s => s.wg.device=some d ∧ ClaimView.selectsDevice s d ∧
+        s.wg.nlSock7=sock ∧ ReplaceCompletion.View.Input cs loans tables s)
+      (fun result s => result=(0,.ok (emptyPeersJson (requestGeneration d))) ∧
+        ReplaceCompletion.View.Empty s ∧
+        s.wg.nlSock7=socketReadbackFinal sock (requestGeneration d)) :=
+  replacement_queued_get_after_set cs loans tables d sock room idle queue
+
+
+/-- The complete mixed device setter retains configured ownership and its
+actual reference account on every normal path, including ordered peer errors,
+private-key conflict cleanup, replacement and listen-port refusal. -/
+theorem original_device_command_configured_owners (cs : Queues.RxCredits.Ledger)
+    (loans : Queues.RxCredits.Reservations) (attrs : DeviceAttrs)
+    (shape : Configuration.DeviceAddressShape attrs) :
+    Campaign2.Ensures (wgSetDevice attrs) (OwnerConfiguration.ProjectedEntry cs loans)
+      (fun _ s => OwnerConfiguration.ProjectedEntry cs loans s ∧
+        ∀ d t4 t6, s.wg.device = some d → AllowedIps.RoutingInvariant d t4 t6 →
+          ConfiguredOwners d t4 t6 ∧ ResidentOwnerLists d t4 t6) := by
+  intro g a result v b pre run
+  have after := OwnerConfiguration.original_device cs loans attrs shape
+    g a result v b pre run
+  exact ⟨after, fun d t4 t6 device routing =>
+    OwnerConfiguration.projected_entry_resident cs loans _ d t4 t6 after device routing⟩
+
+/-- Every normal queued replacement establishes the actual successor state
+needed for empty-peer readback; completion of the combined program is not assumed. -/
+theorem original_queued_replace_peers_getter_ready
+    (cs : Queues.RxCredits.Ledger) (loans : Queues.RxCredits.Reservations)
+    (tables : AllowedIps.FlatTable × AllowedIps.FlatTable) (d : Device) (sock : NlSock) :
+    Campaign2.Ensures (wgSetDevice (replacePeersAttrs (byIndex d)))
+      (fun s => s.wg.device=some d ∧ ClaimView.selectsDevice s d ∧
+        s.wg.nlSock7=sock ∧ ReplaceCompletion.View.Input cs loans tables s)
+      (fun ret s => ret=0 ∧ ReplacementReadbackReady (requestGeneration d) sock s) :=
+  replacement_queued_getter_ready cs loans tables d sock
+
+/-- The derived replacement successor admits the actual complete getter under
+the initial static room and socket bounds, for every concrete state realization. -/
+theorem original_replacement_ready_getter_returns (d : Device) (sock : NlSock)
+    (room : devicePrefixSpace d + 20 ≤ NLMSG_GOODSIZE)
+    (idle : sock.cbRunning = false) (queue : sock.queue = []) :
+    Campaign2.Returns (wgGetDevice (byIndex d)) (ReplacementReadbackReady d sock)
+      (fun value s => value=.ok (emptyPeersJson d) ∧
+        ReplaceCompletion.View.Empty s ∧ s.wg.nlSock7=socketReadbackFinal sock d) :=
+  replacement_ready_getter_returns d sock room idle queue
 
 end Leanux.Proofs.WG.Config

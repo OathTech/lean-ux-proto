@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Index.ConfigurationKeyRulesSource
 import Leanux.Proofs.WG.Index.ConfigurationIndexFrames
 import Leanux.Proofs.WG.Index.ConfigurationLoanSource
 import Leanux.Proofs.WG.Index.ExpiryIndexClaims
@@ -51,60 +52,29 @@ theorem staged_entry (cs : Ledger) (loans : Reservations) (pid : PeerId) :
   join_entry cs loans _ (DeviceStages.staged pid)
     (CurrentSlots.sendStagedPackets_preserves pid) (StagingRich.staged_core pid)
 
-macro "configuration_index_step" : tactic => `(tactic| first
-  | (rx_retention_head getDev; exact read_entry _ _)
-  | (rx_retention_head setStaticIdentityPrivateKey;
-     exact configuration_entry _ _ (setStaticIdentityPrivateKey_sameConfiguration _))
-  | (rx_retention_head cookiePrecomputeDeviceKeys;
-     exact configuration_entry _ _ cookiePrecomputeDeviceKeys_sameConfiguration)
-  | (rx_retention_head precomputeStaticStatic; exact precompute_entry _ _ _)
-  | (rx_retention_head expireCurrentPeerKeypairs; exact expire_entry _ _ _)
-  | (rx_retention_head sendStagedPackets; exact staged_entry _ _ _)
-  | (rx_retention_head generatePublic; exact (generatePublic_sameWGWorld _).wp (Entry _ _))
-  | (allocation_release_lift_from AmbientM; exact hoare_liftAmbient _ _)
-  | (rx_retention_head ForIn.forIn
-     apply list_view_spec id (Entry _ _)
-     intro x b
-     change Preserves (Entry _ _) _)
-  | rx_retention_step)
+theorem keyContracts (cs : Ledger) (loans : Reservations) :
+    ConfigurationKeyRules.Contracts (Entry cs loans) where
+  read := read_entry cs loans
+  identity key := configuration_entry cs loans (setStaticIdentityPrivateKey_sameConfiguration key)
+  cookie := configuration_entry cs loans cookiePrecomputeDeviceKeys_sameConfiguration
+  precompute := precompute_entry cs loans
+  expire := expire_entry cs loans
+  staged := staged_entry cs loans
+  conflict key := (ensures_iff _ _ _).mp (keyConflict cs loans key)
 
 theorem keyFinish_entry (cs : Ledger) (loans : Reservations) (key : Key) :
     Preserves (Entry cs loans)
-      ((pinned_const _private.Leanux.Proofs.WG.Queues.DeviceStages.«0».Leanux.Proofs.WG.Queues.RxCredits.DeviceStages.keyFinish) key) := by
-  index_unfold _private.Leanux.Proofs.WG.Queues.DeviceStages.«0».Leanux.Proofs.WG.Queues.RxCredits.DeviceStages.keyFinish
-  unfold WG.andM
-  simp (config := {zeta := false}) only [branch]
-  repeat' configuration_index_step
+      ((pinned_const _private.Leanux.Proofs.WG.Queues.DeviceStages.«0».Leanux.Proofs.WG.Queues.RxCredits.DeviceStages.keyFinish) key) :=
+  ConfigurationKeyRules.keyFinish _ (keyContracts cs loans) key
 
 theorem keyChanged_entry (cs : Ledger) (loans : Reservations) (key : Key) :
     Preserves (Entry cs loans)
-      ((pinned_const _private.Leanux.Proofs.WG.Queues.DeviceStages.«0».Leanux.Proofs.WG.Queues.RxCredits.DeviceStages.keyChanged) key) := by
-  index_unfold _private.Leanux.Proofs.WG.Queues.DeviceStages.«0».Leanux.Proofs.WG.Queues.RxCredits.DeviceStages.keyChanged
-  apply preserves_bind ((generatePublic_sameWGWorld key).wp (Entry cs loans))
-  rintro ⟨pub,ok⟩
-  apply preserves_bind (hoare_liftAmbient (AmbientM.branch .setDevGenPublic ok) (Entry cs loans))
-  intro generated
-  cases generated with
-  | false => exact keyFinish_entry cs loans key
-  | true =>
-    cases pub with
-    | none =>
-      exact preserves_bind (hoare_liftAmbient
-        (AmbientM.invariant "a generated public key without a write") (Entry cs loans))
-        (fun _ => keyFinish_entry cs loans key)
-    | some pub =>
-      exact preserves_bind ((ensures_iff _ _ _).mp (keyConflict cs loans pub))
-        (fun _ => keyFinish_entry cs loans key)
+      ((pinned_const _private.Leanux.Proofs.WG.Queues.DeviceStages.«0».Leanux.Proofs.WG.Queues.RxCredits.DeviceStages.keyChanged) key) :=
+  ConfigurationKeyRules.keyChanged _ (keyContracts cs loans) key
 
 theorem key_entry (cs : Ledger) (loans : Reservations) (attrs : DeviceAttrs)
     (peers : Preserves (Entry cs loans) (devicePeersSource attrs)) :
-    Preserves (Entry cs loans) (deviceKeySource attrs) := by
-  rw [(pinned_const _private.Leanux.Proofs.WG.Queues.DeviceStages.«0».Leanux.Proofs.WG.Queues.RxCredits.DeviceStages.key_factor) attrs]
-  unfold WG.andM
-  simp (config := {zeta := false}) only [branch,invariant]
-  repeat' first
-    | exact peers
-    | configuration_index_step
-  all_goals exact keyChanged_entry _ _ _
+    Preserves (Entry cs loans) (deviceKeySource attrs) :=
+  ConfigurationKeyRules.key _ (keyContracts cs loans) attrs peers
 
 end Leanux.Proofs.WG.Index.ConfigurationIndex
