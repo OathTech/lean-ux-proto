@@ -18,23 +18,24 @@ private theorem old (body : WGPrefix HandshakeCausal.Event α) :
       (HandshakeWorker.old (Event.old ∘ Journal.Event.handshake) handshake? body) :=
   quiet_state (Event.old ∘ Journal.Event.handshake) handshake? (fun _ => True.intro) body
 
-private theorem after_mac
+private theorem other
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
     (hs : ∀ pid, Driver.StateHistorySafe Safe (session pid))
     (hk : ∀ pid, Driver.StateHistorySafe Safe (keepalive pid))
-    (mac : HandshakeMac) (msg : Key) (src : SkbSource) (loaded : Bool) (state : MacState) :
-    Driver.StateHistorySafe Safe (afterMacWith
+    (mac : HandshakeMac) :
+    CookieCaller.OtherSafe Safe
       (HandshakeEffects.scopeOps Event.scope CausalSources.Cause.handshake
         (ExchangeJoint.receiveOps Event.exchange
           (HandshakeEffects.withEffects
             (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
-            (Event.old ∘ Journal.Event.handshake) effects))) msg src loaded state) := by
-  unfold afterMacWith responseWith
-  simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
+            (Event.old ∘ Journal.Event.handshake) effects))) := by
+  constructor
+  · intro α action; rfl
+  all_goals intros
+  all_goals simp only [HandshakeEffects.scopeOps,ExchangeJoint.receiveOps,HandshakeEffects.withEffects,
     ProtocolSender.receiveOps,HandshakeWorker.observedOps]
-  repeat' first
+  all_goals repeat' first
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
-    | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
     | (driver_history_head CausalScope.scope; apply state_scope)
     | (driver_history_head receiptWGObserved; apply receipt_quiet)
     | (driver_history_head HandshakeWorker.callback; apply callback)
@@ -56,13 +57,11 @@ private theorem receive
           (HandshakeEffects.withEffects
             (ProtocolSender.receiveOps (Event.old ∘ Journal.Event.handshake) handshake? session keepalive mac Event.protocolSocket scope? Event.cookieSocket)
             (Event.old ∘ Journal.Event.handshake) effects))) msg src) := by
-  unfold HandshakeWorker.receiveWith
-  repeat' first
-    | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
-    | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
-    | (driver_history_head afterMacWith; exact after_mac session keepalive hs hk _ _ _ _ _)
-    | (driver_history_head captureWGRun; exact (Driver.History.state_lift _).captureWGObserved)
-    | driver_state_history_step
+  apply CookieCaller.receive
+  · intro mac _
+    exact other session keepalive hs hk mac
+  · intro mac native loaded state kind
+    exact cookie_send mac native loaded state kind
 
 theorem handshake
     (session : PeerId → WGPrefix Event Bool) (keepalive : PeerId → WGPrefix Event Unit)
@@ -72,7 +71,6 @@ theorem handshake
   unfold CausalJournal.handshake HandshakeWorker.observedWith HandshakeWorker.workerWith
   repeat' first
     | (driver_history_head ProtocolSocket.observed; exact protocol_send _ _)
-    | (driver_history_head CookieSocket.observed; exact cookie_send _ _ _)
     | (driver_history_head HandshakeWorker.receiveWith; exact receive session keepalive hs hk _ _)
     | driver_state_history_step
 

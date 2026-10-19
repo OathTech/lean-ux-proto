@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionFinal
+import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionDeferred
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionNapi
 import Leanux.Proofs.WG.HandshakeSecurity.HandshakeReplayOutcome
 import Leanux.Proofs.WG.HandshakeSecurity.PendingPromotionNativeFrames
@@ -1713,5 +1715,54 @@ theorem native_poll_pending_confirmation_distinct (edges : H1PendingPromotionEdg
     PendingPromotion.ProductPreserves
       (TransmitSecurity.Driver.nativePollObserved Responder.DriverCuts.hooks pid budget) :=
   PendingPromotion.native_poll edges quiet frames stackFrames pid budget
+
+
+/-- Security: the native scheduler preserves distinct consumed responder
+promotion tickets through every selected worker and receive poll, including
+receipts retained before Stop. The local pending carrier and cited operational
+C2 frame package remain explicit. -/
+theorem native_scheduler_pending_confirmation_distinct
+    (facts : PendingPromotion.H1WorkerFrames) (stack : Option Worker) :
+    PendingPromotion.ProductPreserves
+      (TransmitSecurity.Driver.scheduleObserved Responder.DriverCuts.hooks stack) :=
+  PendingPromotion.schedule facts stack
+
+/-- Security: timer dispatch and its send, clear and cryptographic workers
+preserve distinct consumed responder promotion tickets. This local source
+contract retains its entry carrier and native C2 frame package explicitly. -/
+theorem native_timers_pending_confirmation_distinct
+    (facts : PendingPromotion.H1DeferredFrames) (jPass : UInt64) :
+    PendingPromotion.ProductPreserves
+      (TransmitSecurity.Driver.timersObserved Responder.DriverCuts.hooks jPass) :=
+  PendingPromotion.timers facts jPass
+
+
+/-- Security: a responder allocation is promoted at most once in any initialized
+execution, even when its receive later stops. Two successful native promotion
+receipts identify distinct allocation stamps. The local C2 source frames are
+named; no entry history, reachability, funding or callback premise is assumed. -/
+theorem initialized_responder_allocation_promoted_once
+    (facts : PendingPromotion.H1DriverFrames) (trace : Runner.Trace) (placeholders : Bool)
+    (pre between post : List TransmitSecurity.Journal.Event)
+    (pid other : PeerId) (kid next : KeypairId) (r s : WGRunWitness Bool) (first second : Nat)
+    (position : PendingPromotion.finalHistory trace placeholders =
+      pre ++ TransmitSecurity.Journal.Event.responder (.confirmed pid kid r) ::
+      between ++ TransmitSecurity.Journal.Event.responder (.confirmed other next s) :: post)
+    (accepted₁ : r.value = true) (accepted₂ : s.value = true)
+    (resident₁ : Lifetimes.keypairResidents r.before kid = some first)
+    (resident₂ : Lifetimes.keypairResidents s.before next = some second) : first ≠ second :=
+  PendingPromotion.once facts trace placeholders pre between post pid other kid next r s first second
+    position accepted₁ accepted₂ resident₁ resident₂
+
+/-- Security: every actual responder encryption follows authenticated
+confirmation of the same allocation, every resident allocation's confirmation
+has its own accepted transport cause, and no allocation is promoted twice.
+The same initialized final journal covers normal and stopped prefixes. Only
+the visible local C2 operational frame and rotation packages remain assumptions. -/
+theorem initialized_responder_confirmation_discipline
+    (facts : PendingPromotion.H1DriverFrames) (rotation : H1ResponderCurrentEdges)
+    (trace : Runner.Trace) (placeholders : Bool) :
+    PendingPromotion.Discipline (PendingPromotion.finalHistory trace placeholders) :=
+  PendingPromotion.discipline facts rotation trace placeholders
 
 end Leanux.Proofs.WG.HandshakeSecurity

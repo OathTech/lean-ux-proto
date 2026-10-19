@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalRootsSockets
+import Leanux.Proofs.WG.AuthenticatedEffects.ResponseLookupLoan
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSocketReceipts
 import Leanux.Proofs.WG.AuthenticatedEffects.CookieSocketSource
 import Leanux.Proofs.WG.AuthenticatedEffects.ProtocolSenderOther
@@ -1424,5 +1425,33 @@ theorem initialized_protocol_socket_has_authorized_root
       SocketEmission receipt.args.endpoint receipt.args.bytes receipt.args.ds
         receipt.run.before.sent receipt.run.after.sent :=
   CausalJournal.Roots.protocol_socket trace placeholders before after receipt position
+
+/-- Security: each actual cookie emission in the initialized final journal is
+the permitted under-load reply to an initiation or response whose native MAC
+check returned noCookie. Its 64-byte datagram is bound to that input's source;
+the receipt remains present when a later continuation Stops. -/
+theorem initialized_cookie_socket_is_qualified_exception
+    (trace : Runner.Trace) (placeholders : Bool)
+    (before after : List CausalJournal.Event) (receipt : CookieSocket.Receipt)
+    (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
+      before ++ .cookieSocket receipt :: after) :
+    receipt.Valid ∧ receipt.Qualifying ∧
+      (messageType receipt.input = MESSAGE_HANDSHAKE_INITIATION ∨
+        messageType receipt.input = MESSAGE_HANDSHAKE_RESPONSE) :=
+  CausalJournal.Receipts.initialized_cookie_qualified trace placeholders before after receipt position
+
+/-- Security: a refused response after the original successful index lookup
+restores every peer record, including its reference count and nullable owner
+word. The actual lookup derives the loan; no initial liveness or repayment
+assumption is supplied. Failed index lookups are a separate caller obligation. -/
+theorem response_refusal_rebalances_actual_successful_lookup
+    (msg : Key) (w u v : WGWorld) (device : Device)
+    (owner pid : PeerId) (a b c : Ambient)
+    (present : w.dev = some device) (identity : device.staticIdentity.hasIdentity = true)
+    (lookup : ((indexLookup [.handshake] (u32le msg 8)).run w).run
+      (CounterWindow.record a .crespNoIdentity false) = .ok ((some (.handshake owner,pid),u),b))
+    (refused : ((consumeResponse msg).run w).run a = .ok ((none,v),c)) :
+    ResponseLoan.residents v = ResponseLoan.residents w :=
+  ResponseLoan.response_after_lookup msg w u v device owner pid a b c present identity lookup refused
 
 end Leanux.Proofs.WG.AuthenticatedEffects

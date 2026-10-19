@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalJournalSource
+import Leanux.Proofs.WG.AuthenticatedEffects.CookieCallerContracts
 import Leanux.Proofs.WG.TransmitSecurity.DriverEffectsHistory
 
 /-! Actual timer/work receipts are valid native executions and retain the
@@ -12,7 +13,9 @@ def Checked (pre : List Event) : Event → Prop
   | .armed receipt => receipt.Valid ∧ receipt.cause = CausalScope.current scope? pre
   | .queued receipt => receipt.Valid ∧ receipt.cause = CausalScope.current scope? pre
   | .protocolSocket receipt => receipt.Valid ∧ receipt.cause = CausalScope.current scope? pre
-  | .cookieSocket receipt => receipt.Valid
+  | .cookieSocket receipt => receipt.Valid ∧ receipt.Qualifying ∧
+      (messageType receipt.input = MESSAGE_HANDSHAKE_INITIATION ∨
+        messageType receipt.input = MESSAGE_HANDSHAKE_RESPONSE)
   | _ => True
 
 def Safe (history : List Event) : Prop :=
@@ -207,8 +210,13 @@ theorem protocol_send (pid : PeerId) (bytes : List UInt8) :
   ProtocolSocket.observed_history Safe Event.protocolSocket scope?
     (fun _ _ _ hi valid => hi.emit ⟨valid,rfl⟩) pid bytes
 
-theorem cookie_send (mac : HandshakeMac) (msg : List UInt8) (src : SkbSource) :
-    Driver.StateHistorySafe Safe (CookieSocket.observed Event.cookieSocket mac msg src) :=
-  CookieSocket.observed_history Safe Event.cookieSocket mac msg src (fun _ _ hi valid => hi.emit valid)
+theorem cookie_send (mac : HandshakeMac)
+    (native : mac.checked.Valid (cookieValidatePacket mac.input mac.source mac.loaded))
+    (loaded : mac.loaded = true) (state : mac.checked.value = .noCookie)
+    (kind : messageType mac.input = MESSAGE_HANDSHAKE_INITIATION ∨
+      messageType mac.input = MESSAGE_HANDSHAKE_RESPONSE) :
+    Driver.StateHistorySafe Safe (CookieSocket.observed Event.cookieSocket mac mac.input mac.source) :=
+  CookieCaller.observed_history Safe Event.cookieSocket mac native loaded state kind
+    (fun _ _ hi valid qualifying kind => hi.emit ⟨valid,qualifying,kind⟩)
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Receipts

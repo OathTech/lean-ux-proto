@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.RetirementSecurity.TxWorkActors
+import Leanux.Proofs.WG.RetirementSecurity.TxActorScheduler
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPoll
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkPublicationCoverage
 import Leanux.Proofs.WG.RetirementSecurity.TxWorkTransfers
@@ -2691,5 +2691,28 @@ theorem original_tx_resume_service
       .ok ((),v)) :
     TxWork.Obligations crypt ((TxWork.actor act).toList++TxWork.actors v.ambient.suspended) v.wg :=
   TxWork.resume before act run
+
+/-- A normal original activation retains TX service through the actual
+finite loop: native end discharges its actor, while yield moves that actor to
+Ambient.suspended. The per-iteration service contract is explicit; this local
+composition does not assert that all initialized callers already satisfy it. -/
+theorem original_activation_tx_service (iteration : TxWork.IterationContract P crypt)
+    (before : TxWork.At P crypt (TxWork.actor act).toList w)
+    (run : (Env.Activation.run act).run w=.ok ((),v)) : TxWork.At P crypt [] v :=
+  TxWork.activation_service iteration before run
+
+/-- The original scheduler retains each queued TX service obligation across
+real dispatch, suspension and copied-world consistency trials. Actual worker
+iteration and NAPI contracts remain visible premises until source caller
+closure; this endpoint theorem makes no progress or stopped-world claim. -/
+theorem original_scheduler_tx_service
+    (work : ∀pid,Leanux.Proofs.Framing.Preserves P
+      (modifyDev fun d=>{d with txWorkQueue:=d.txWorkQueue.erase pid}))
+    (iteration : TxWork.IterationContract P crypt)
+    (napi : Leanux.Proofs.Framing.Preserves (TxWork.At P crypt []) Env.napiSoftirq)
+    (stack : Option Worker) (before : TxWork.At P crypt [] w)
+    (run : (Env.schedule stack).run w=.ok ((),v)) : TxWork.At P crypt [] v :=
+  (Leanux.Proofs.Framing.hoare_iff_run _ _ _).mp
+    (TxWork.scheduler_service work iteration napi stack) w () v before run
 
 end Leanux.Proofs.WG.RetirementSecurity

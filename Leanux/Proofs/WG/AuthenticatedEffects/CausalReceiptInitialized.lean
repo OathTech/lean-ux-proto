@@ -101,6 +101,14 @@ theorem initialized_protocol_socket (trace : Runner.Trace) (placeholders : Bool)
 theorem initialized_cookie_socket (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List Event) (receipt : CookieSocket.Receipt)
     (position : (runPrefixOuter (execute trace placeholders) []).2 = pre ++ Event.cookieSocket receipt :: post) :
-    receipt.Valid := initialized trace placeholders pre (.cookieSocket receipt) post position
+    receipt.Valid := (initialized trace placeholders pre (.cookieSocket receipt) post position).1
+
+theorem initialized_cookie_qualified (trace : Runner.Trace) (placeholders : Bool)
+    (pre post : List Event) (receipt : CookieSocket.Receipt)
+    (position : (runPrefixOuter (execute trace placeholders) []).2 = pre ++ Event.cookieSocket receipt :: post) :
+    receipt.Valid ∧ receipt.Qualifying ∧
+      (messageType receipt.input = MESSAGE_HANDSHAKE_INITIATION ∨
+        messageType receipt.input = MESSAGE_HANDSHAKE_RESPONSE) :=
+  initialized trace placeholders pre (.cookieSocket receipt) post position
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Receipts

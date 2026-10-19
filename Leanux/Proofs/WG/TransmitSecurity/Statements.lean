@@ -1,4 +1,5 @@
-import Leanux.Proofs.WG.TransmitSecurity.StagedSourceOrigins
+import Leanux.Proofs.WG.TransmitSecurity.StagedEffectsOrigins
+import Leanux.Proofs.WG.TransmitSecurity.StagedSocketSendFrames
 import Leanux.Proofs.WG.TransmitSecurity.StagedAdmission
 import Leanux.Proofs.WG.TransmitSecurity.StagedTrim
 import Leanux.Proofs.WG.TransmitSecurity.StagedKeepaliveFinal
