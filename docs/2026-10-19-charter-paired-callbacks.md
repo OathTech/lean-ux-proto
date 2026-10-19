@@ -1,6 +1,8 @@
 # Shared callback proofs and first-return permissions
 
-Status: independently reviewed and revised; executing the bounded increment.
+Status: bounded increment complete locally at code checkpoint `86ea5488`;
+external export acceptance pending. Results, costs and review dispositions are
+in the [report](2026-10-19-paired-callbacks.md).
 Worktree `binary-pair-runner`, branch
 `task/binary-pair-runner`; starting checkpoint `d61a8027`.
 

@@ -131,3 +131,5 @@ artefacts of the first prototype. They are not current direction and do not
 authorise recreating what they describe.
 
 - [2026-10-18-charter-paired-index-insertion.md](2026-10-18-charter-paired-index-insertion.md): insertion, recorded draws and finite retained-heap composition; [execution report](2026-10-18-paired-index-insertion.md), [fresh checkpoint review](2026-10-18-review-paired-index-insertion.md). Both review findings are repaired and local validation passes; paused with external acceptance pending.
+
+- [2026-10-19-charter-paired-callbacks.md](2026-10-19-charter-paired-callbacks.md): bounded shared callback image proofs and first-return permissions; [report](2026-10-19-paired-callbacks.md), [charter review](2026-10-19-review-paired-callback-charter.md), [closing review](2026-10-19-review-paired-callbacks.md).

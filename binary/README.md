@@ -592,3 +592,38 @@ coupling contracts remain hypotheses. The
 records final validation and pause status. The original service-domain
 counterexample remains in the review and executable regression. Captures,
 exports and logs are ephemeral; regenerate them using the commands above.
+
+## Shared image callbacks and first-return clients
+
+The [bounded callback increment](../docs/2026-10-19-paired-callbacks.md) proves
+KCOV PC, cmp4, const-cmp4, const-cmp1 and the ready BH-enable path directly
+from the pinned decoded image. `PairCallbackSurface` imports their proofs and
+the revised clients. `lookup_first_return`, `remove_first_return` and
+`replace_first_return` retain the existing executable Pre/Post and export the
+actual history, its first outer ABI return boundary, and its permission audit.
+`Sequence.First.sequence_checked` retains that boundary for every call record.
+These use `FirstReturnCallPermissions` / `FirstReturnDomainPermissions`.
+Insertion's `insert_simulation_from_image` and mixed insertion sequences retain
+the explicitly broader returning-history permission premise, and the random
+service/input contracts. There is no concurrent-context claim.
+
+Run the service tests and claim-point checks from `binary/`:
+
+```sh
+capped lake build PairCallbackSurface binary-callbacks
+capped .lake/build/bin/binary-callbacks
+capped lake env leanchecker --fresh PairCallbackSurface
+capped lake env leanexport PairCallbackSurface > ../.tmp/binary-pair-callbacks.ndjson
+# User gate outside nono; require successful export exit first:
+capped lake check --from-export ../.tmp/binary-pair-callbacks.ndjson
+```
+
+The export contains the full imported declaration closure, including the older
+index/insertion surfaces and witnesses. The prepared export is from code commit
+`86ea5488e288998ea4aa0b26335c64428ffeaf04` and exited zero (1,331,952,229 bytes).
+External acceptance is pending; local check status is recorded in the increment
+report. `scripts/proof-gate
+--binary` prints and diffs the new statements and postcondition with the full
+TrustBase specification and requires the pinned clean Kraken tree. The service
+runner distinguishes generated cases from the recorded-prefix and captured
+workload checks in the report. Tests do not discharge a universal contract.
