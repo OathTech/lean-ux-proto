@@ -31,6 +31,17 @@ the locked SHA-256 hashes, and extract into `.tools/` and `.deps/`. They do not
 install system packages. Lean is pinned to 4.35.0 (`lean-toolchain`; a checkout on an older pin keeps its own staged toolchain, see `scripts/in-bundle`). Go, syzkaller, Firecracker
 and the Lean MCP helper are optional and not needed here.
 
+The optional [`binary/` refinement package](binary/README.md) also needs a
+host/system Python 3.12+ with **pyelftools** (`elftools`) installed for the
+interpreter that invokes `binary/run.py`, alongside the Lean toolchain named
+in `binary/lean-toolchain`. Its bootstrap runs outside `scripts/in-bundle`;
+pyelftools being available only inside the bundle is insufficient. Check the
+host interpreter before following the package's bootstrap instructions:
+
+```sh
+python3 -c 'import elftools; print(elftools.__version__)'
+```
+
 Create a worktree for builds and experiments:
 
 ```sh

@@ -582,3 +582,8 @@ The three unfinished files `AllowedipsAdequacyLog.lean.draft`,
 are removed from `binary/drafts/` on the landing branch. They remain tracked
 on the unchanged `task/binary-pair-runner` experiment branch. These drafts were
 outside the package's build and theorem closure; no compiled proof is removed.
+
+`REPRODUCING.md` now lists the binary package's host/system Python 3.12+ and
+pyelftools requirements beside the Lean toolchain setup, including an import
+check. The bootstrap runs outside the bundle, so the dependency must be
+available to the invoking host interpreter.
