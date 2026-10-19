@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Progress.RecordSuffixClaims
+import Leanux.Proofs.WG.Progress.CommittedRunClaims
+import Leanux.Proofs.WG.Progress.DecryptOccupancyClaims
 import Leanux.Proofs.WG.Progress.ActivationExitClaims
 import Leanux.Proofs.WG.Progress.PowEvaluationSource
 import Leanux.Proofs.WG.Progress.AllocationProgressClaims
@@ -772,5 +775,73 @@ theorem original_activation_exit (a : Activation) :
     Campaign2.Product.Returns (observedActivationExit a) (fun _ => True)
       (fun audit _ => ActivationExitFacts a audit) :=
   ⟨observedActivationExit_source a, observedActivationExit_facts a⟩
+
+
+/-- The original scheduler's two committed activation callback sites retain an
+ordered projected exit receipt, including a callback that stops. Copied
+consistency trials are excluded. Exit facts alone are not an arbitrary
+receipt's provenance certificate or a callback-termination theorem. -/
+theorem original_schedule_committed_runs (stack : Option Worker) :
+    (do let result ← CommittedRuns.observedSchedule stack; pure result.1) =
+      Campaign2.Product.inspect (Env.schedule stack) ∧
+    Campaign2.Product.Returns (CommittedRuns.observedSchedule stack) (fun _=>True)
+      (fun result _=>∀ receipt∈result.2,ActivationExitFacts receipt.activation receipt.exit) :=
+  CommittedRuns.original_schedule_journal stack
+
+/-- A concrete normal decrypt iteration consumes exactly the head of the
+represented live FIFO, or ends when that FIFO is empty. NAPI, IRQ and resched
+callbacks are the actual source calls, with their ring frames discharged. -/
+theorem original_decrypt_iteration_occupancy (a : Activation)
+    (worker : a.worker = .decryptWorker) (deviceIndex capacity batch : Nat)
+    (live : List SkbId) :
+    Campaign2.Product.Ensures (Activation.iter a)
+      (DecryptOccupancy.Rep deviceIndex capacity batch live)
+      (fun value after => (value = .ended ↔ live = []) ∧
+        DecryptOccupancy.Rep deviceIndex capacity batch live.tail after) :=
+  DecryptOccupancy.original_iteration a worker deviceIndex capacity batch live
+
+/-- Captured occupancy plus one is sufficient for a represented decrypt ring:
+the actual inspection cannot report its own exhaustion. Earlier iteration and
+section-stop failures remain possible. This is not callback evaluation totality
+or initialized reachability of the representation. -/
+theorem original_decrypt_activation_adequate (a : Activation)
+    (worker : a.worker = .decryptWorker) (deviceIndex capacity batch : Nat)
+    (live : List SkbId) :
+    Campaign2.Product.Returns (observedActivationExit a)
+      (DecryptOccupancy.Rep deviceIndex capacity batch live)
+      (fun audit _ => DecryptOccupancy.NoExhaustion audit ∧ ActivationExitFacts a audit) :=
+  DecryptOccupancy.original_activation a worker deviceIndex capacity batch live
+
+
+/-- A normal original recorded read consumes a strict suffix, including its
+passive prefix. The rest of Ambient retains its actual bookkeeping effects. -/
+theorem original_hidden_record_decrease (site : HiddenSite) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (hidden site : Leanux.M (List UInt8))
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.StrictTail records s.ambient.hidden) :=
+  RecordSuffix.hidden_record_suffix site records
+
+/-- Passive stripping retains an actual suffix in recorded mode. -/
+theorem original_passive_record_suffix (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (skipAmbient : Leanux.M Unit)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.skip_record_suffix records
+
+/-- Peeking can strip passive records but cannot extend recorded input. -/
+theorem original_peek_record_suffix (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (peekHiddenSite : Leanux.M (Option Nat))
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.peek_record_suffix records
+
+/-- Every original normal reschedule preserves a suffix; true consumes at least
+one record. Unsupported worker kinds and malformed records keep their Stops. -/
+theorem original_reschedule_record_decrease (worker : Worker) (records : List HiddenRecord) :
+    Campaign2.Product.Ensures (condResched worker)
+      (fun s=>s.ambient.hidden=some records)
+      (fun yielded s=>RecordSuffix.Tail records s.ambient.hidden ∧
+        (yielded=true→RecordSuffix.StrictTail records s.ambient.hidden)) :=
+  RecordSuffix.condResched_record_suffix worker records
 
 end Leanux.Proofs.WG.Progress
