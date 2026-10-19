@@ -3,8 +3,9 @@ import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteAllocatedCarrier
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeContracts
 
 /-! Product-state composition retains the complete packet ledger and its
-native allocation companion on the same observed execution. Stop safety names
-the accounted source cut and never fabricates a returned native world. -/
+native allocation companion at normal endpoints. Stop safety retains a
+logical journal account. Connecting its witness to an actual native source
+cut is a separate reached-path obligation; no error endpoint is fabricated. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.CompleteProduct
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open TransmitSecurity TransmitSecurity.Staged.Obligations RetirementSecurity CausalJournal

@@ -1,3 +1,23 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAfterXmitContext
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIterationInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedScheduledInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSchedulerFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSchedulerIteration
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSchedulerLoop
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSchedulerPaths
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSchedulerSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTransmitCaller
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTransmitInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTransmitInitializedReceipt
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTransmitReceipt
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTransmitSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTransmitStaging
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxActivationCases
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxActivationCuts
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxActivationEntry
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxActivationSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedXmitContext
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAfterXmitScheduler
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCleanupPrimitiveFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCleanupPrimitivePath
@@ -1870,5 +1890,41 @@ theorem initialized_routed_transmit_entry_accounted
       (AuthenticatedEffects.StagedEntry.Reached.Xmit.entryHistory
         caller.family caller.addr packets mtu history) ledger [] [] worldAt.wg :=
   caller.transmit_cut path
+
+/-- Security: a completed routed front retains complete packet accounting
+at its actual initialized native return, including its own admission or
+refusal receipts. The account and WG world come from the original front
+prefix; no incoming ledger is assumed. -/
+theorem initialized_routed_front_accounted
+    (caller : AuthenticatedEffects.StagedEntry.Reached.RoutedTransmit.Caller
+      trace placeholders operationIndex world history)
+    (front : AuthenticatedEffects.StagedEntry.Reached.Transmit.Path
+      caller.input caller.events caller.entered.wg caller.entered.ambient value v b prior) :
+    ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
+      (AuthenticatedEffects.StagedEntry.Reached.Transmit.resultHistory
+        caller.input value caller.entered.wg v caller.entered.ambient b prior)
+      ledger [] [] (caller.updated v b).wg := by
+  obtain ⟨ledger,accounted⟩ := caller.front_accounted front
+  exact ⟨ledger,AuthenticatedEffects.StagedEntry.CompleteConsequences.accounted accounted⟩
+
+/-- Security: an activation selected by the original post-transmit scheduler
+retains complete packet accounting at its actual initialized entry. The
+fixed path includes the recorded scheduler choice and original bounded run
+prefix; it carries no incoming ownership or callback assumption. -/
+theorem initialized_scheduled_activation_accounted
+    (cut : AuthenticatedEffects.StagedEntry.Reached.ScheduledRun.Iteration
+      trace placeholders operationIndex active world history) :
+    ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
+      history ledger [] [] world.wg := cut.accounted
+
+/-- Security: a TX worker reached through the initialized post-transmit
+scheduler retains complete packet accounting after its original crypt-ahead
+prefix, at the same native state used by its transmit operation. No separate
+entry invariant or assumed callback contract is required. -/
+theorem initialized_tx_worker_entry_accounted
+    (entry : AuthenticatedEffects.StagedEntry.Reached.ScheduledRun.TxEntry
+      trace placeholders operationIndex pid world history) :
+    ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
+      history ledger [] [] world.wg := entry.accounted
 
 end Leanux.Proofs.WG.TransmitSecurity
