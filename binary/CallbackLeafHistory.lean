@@ -30,7 +30,7 @@ theorem leaf_history {fetch address ready writes effect}
   exact ⟨returned,framed,effect,interior⟩
 
 theorem pc_leaf (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgreement fetch) :
-    LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc) := by
+    LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc) := by
   apply leaf_history agree
   rintro ⟨s,p⟩ ra pc ready frame
   change p=_ at pc
@@ -38,7 +38,7 @@ theorem pc_leaf (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgreem
   exact pc_run s ra ready frame
 
 theorem cmp4_leaf (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgreement fetch) :
-    LeafService fetch (.ofNat 0xffffffff810f3e80) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4) := by
+    LeafService fetch (.ofNat 0xffffffff810f4080) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4) := by
   apply leaf_history agree
   rintro ⟨s,p⟩ ra pc ready frame
   change p=_ at pc
@@ -46,7 +46,7 @@ theorem cmp4_leaf (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgre
   exact cmp4_run s ra ready frame
 
 theorem const_cmp4_leaf (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgreement fetch) :
-    LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4) := by
+    LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4) := by
   apply leaf_history agree
   rintro ⟨s,p⟩ ra pc ready frame
   change p=_ at pc
@@ -54,7 +54,7 @@ theorem const_cmp4_leaf (fetch : Int64 → Option Decoded) (agree : ServiceDecod
   exact const_cmp4_run s ra ready frame
 
 theorem const_cmp1_leaf (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgreement fetch) :
-    LeafService fetch (.ofNat 0xffffffff810f3ec0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1) := by
+    LeafService fetch (.ofNat 0xffffffff810f40c0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1) := by
   apply leaf_history agree
   rintro ⟨s,p⟩ ra pc ready frame
   change p=_ at pc

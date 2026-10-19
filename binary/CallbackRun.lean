@@ -6,12 +6,12 @@ open TrustBase Lean
 local instance : Labels := Image.linkedLabels
 
 def address : KcovKind → Nat
-  | .pc => 0xffffffff810f3100
-  | .cmp4 => 0xffffffff810f3e80
-  | .constCmp4 => 0xffffffff810f3f00
-  | .constCmp1 => 0xffffffff810f3ec0
-  | .cmp1 => 0xffffffff810f3e40
-  | .cmp8 => 0xffffffff810f3ea0
+  | .pc => 0xffffffff810f31f0
+  | .cmp4 => 0xffffffff810f4080
+  | .constCmp4 => 0xffffffff810f4100
+  | .constCmp1 => 0xffffffff810f40c0
+  | .cmp1 => 0xffffffff810f4040
+  | .cmp8 => 0xffffffff810f40a0
 
 /-- Every transition is the fetched instruction. Stopping checks the ABI
 return PC and stack together, and never substitutes a service summary. -/

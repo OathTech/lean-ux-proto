@@ -1,8 +1,10 @@
 # Binary experiment: prospective landing assessment
 
-Status: landing preparation in progress. The initial compatibility findings
-below are historical; the split-state port is described at the end. Final
-validation, the trust-surface diff and external kernel replay remain pending.
+Status: landing preparation on main `3f3879e0`, using the split mirror and an
+explicit s5 image pin. The full binary build and standalone proof gate pass.
+The earlier assessment and s4 checkpoint below are historical; current s5
+validation is at the end. Runtime validation and the external export gate
+are being completed separately.
 
 ## Scope and inputs
 
@@ -386,3 +388,53 @@ anchored bodies and the shared callbacks; their changed instructions so far
 are relocated branches and RIP-relative loads. The random-provider bodies
 also retain their byte extents. Regenerate literal terms, recheck the existing
 proofs and run fresh workloads before claiming this alternative works.
+
+## s5 carry of the same statements
+
+[AGENT 2026-10-19] Select the authorized s5 alternative. The mechanical carry
+began at approximately 20:56 UTC after the s4 workload failures; the full
+1,263-job build and separate gate passed at approximately 21:03 UTC. This is
+a relocation carry of existing proofs, not a measurement of new-function
+proof cost. The original experiment and its s4 claims are preserved on their
+branch. No kernel was rebuilt or modified.
+
+The target is now kernel identity
+`b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767`, ELF SHA256
+`06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e`, independently
+pinned in `binary/kernel-identity-s5.txt` and `TrustBase.lean`. The private
+Kraken pin remains `dc3824fd5ca36c28b11321b8e7f7e2389b6f6ec4`.
+
+Read-only symbol/instruction comparison checked the 31 extracted anchor,
+callback and random-provider bodies: byte extents and instruction lengths
+are unchanged; changed operands are direct branch addresses and RIP-relative
+displacements to their relocated static targets. All used DWARF record
+layouts agree. The image generators then independently regenerated the Lean
+terms and layouts from s5, rather than treating that comparison as a theorem.
+All five documented generator `--check` commands pass. Lean re-proved the
+existing physical and composed results over those new terms.
+
+The first build failed on six signed decimal address literals missed by the
+mechanical substitution. After correcting those literals, **all proof and
+executable targets build without warnings (1,263 jobs)**. The printed
+trust-surface diff contains only the image identities and relocated service
+or random-provider addresses; no hypothesis was added, removed or weakened.
+The reviewed baseline was updated explicitly. **The separate binary gate
+passes**, including all printed headline axioms and clean private Kraken pin.
+The 15 Python tests also pass at the s5 carry.
+
+All six fresh s5 differential recordings pass: the two index lookup traces,
+`b1_trie_routing`, removal and replacement profiles of
+`c_remove_after_handshake`, and insertion's `s2_index_collision`. Paired lookup
+passes 96 calls across the two recordings, each with 17 rejection controls;
+the corresponding actual-service instruction totals are 22,404 and 21,774.
+Allowed-IPs three-way comparisons pass for operations 5 and 8: 1,592 and 1,510
+instructions respectively. The callback suite passes 3,082 generated cases;
+the actual random-provider cache/refill/recording suite also passes.
+
+One paired IPv6 synthetic run failed its 10,000-instruction execution budget
+at depth 32. That is a failed run. The existing README explicitly specifies
+100,000 for this suite (the historical deep case already required 10,994);
+the input is regenerated with that documented budget. No theorem precondition,
+execution bound in a theorem, or machine behavior changes for this correction.
+Fresh exact witnesses, retained-heap tests, capture replays and external
+kernel acceptance are reported below when complete.

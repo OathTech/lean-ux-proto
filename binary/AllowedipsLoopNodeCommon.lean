@@ -34,7 +34,7 @@ theorem node_common (fetch : Int64 → Option Decoded) (agree : AllowedipsDecode
       ∃ delta, delta.map CommonBits.pointView = commonSignature rxSection bits query node ∧
         Trace base coverage rxSection history (events ++ delta) t)
       ⟨⟨s,AllowedipsImage.Lookup.entry+0xd5⟩,history⟩ := by
-  have first := call fetch (AllowedipsImage.Lookup.entry+0xd5) "L_ffffffff810f3100"
+  have first := call fetch (AllowedipsImage.Lookup.entry+0xd5) "L_ffffffff810f31f0"
     (agree _ _ (by rfl)) .pc contracts.pc base s coverage frame rxSection history events observed last
     (by unfold Quiet; decide) (by constructor <;> decide)
   apply eventually_trans (historyStep fetch) _ _ _ first

@@ -7,8 +7,8 @@ local instance : Labels := Image.linkedLabels
 variable {outer : UInt64}
 
 theorem dead_entry_history (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
-    (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (s : MachineData) (safe : StackSlots outer s.regs.rsp) (returnAddress : UInt64)
     (entry : EntryFrame ⟨s, Image.PeerGet.entry⟩ returnAddress) (nonnull : s.regs.rdi ≠ 0)
     (field : s.dmem.loadInt (s.regs.rdi.toBitVec+0x420) 4 = some 0)

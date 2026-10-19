@@ -117,7 +117,7 @@ theorem matched_type_exit (fetch : Int64 → Option Decoded) (agree : AnchoredDe
           boundary.pc = Image.Lookup.entry+0x9a ∧ ScanFrame base coverage preempt boundary.data)
       ⟨⟨s, Image.Lookup.entry+0x95⟩, history⟩ := by
   let kind := UInt32.ofBitVec (kindWord e.kind)
-  have call := scan_call_cursor fetch "L_ffffffff810f3100"
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0"
     ⟨⟨s, Image.Lookup.entry+0x95⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc base coverage preempt
     frame (frame).ready.pc_allowed
     rxSection events observed last (by
@@ -137,7 +137,7 @@ theorem matched_type_exit (fetch : Int64 → Option Decoded) (agree : AnchoredDe
   apply eventually_trans (historyStep fetch) _ _ _ args
   rintro t₂ ⟨af, machine₂, trace₂⟩
   have pc₂ : t₂.machine.pc = Image.Lookup.entry+0xa3 := congrArg MachineState.pc machine₂
-  have cmpCall := scan_call_cursor fetch "L_ffffffff810f3f00" t₂
+  have cmpCall := scan_call_cursor fetch "L_ffffffff810f4100" t₂
     (by rw [pc₂]; exact agree _ _ (by rfl)) .constCmp4 traceCmp (kindBase base kind) coverage preempt
     trace₂.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection events trace₂.observed trace₂.last (by

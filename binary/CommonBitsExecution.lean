@@ -69,7 +69,7 @@ theorem family32_arguments_execution (fetch : Int64 → Option Decoded)
       t.data.regs = {s.regs with
         rsi := .ofBitVec ((s.regs.get (.low .rbx .W32)).setWidth 64),
         rdi := 32, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x21 ∧ t.pc = .ofNat 0xffffffff810f3ec0)
+      t.data.dmem = callMemory s 0x21 ∧ t.pc = .ofNat 0xffffffff810f40c0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0x15⟩ := by
   exact region_eventually (r15_layout.agreement agree) s _
     (family32_arguments s stackWord stack)
@@ -81,7 +81,7 @@ theorem family128_arguments_execution (fetch : Int64 → Option Decoded)
       t.data.regs = {s.regs with
         rsi := .ofBitVec ((s.regs.get (.low .rbx .W32)).setWidth 64),
         rdi := 0xffffff80, rbp := 0, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x39 ∧ t.pc = .ofNat 0xffffffff810f3ec0)
+      t.data.dmem = callMemory s 0x39 ∧ t.pc = .ofNat 0xffffffff810f40c0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0x2b⟩ := by
   exact region_eventually (r2b_layout.agreement agree) s _
     (family128_arguments s stackWord stack)
@@ -91,7 +91,7 @@ theorem ipv6_result_seed_execution (fetch : Int64 → Option Decoded)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     Eventually (instructionStep fetch) (fun t =>
       t.data.regs = {s.regs with rbp := 0xffffff80, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0xb9 ∧ t.pc = .ofNat 0xffffffff810f3100)
+      t.data.dmem = callMemory s 0xb9 ∧ t.pc = .ofNat 0xffffffff810f31f0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0xaf⟩ := by
   exact region_eventually (raf_layout.agreement agree) s _
     (ipv6_result_seed s stackWord stack)
@@ -104,7 +104,7 @@ theorem high_arguments_execution (fetch : Int64 → Option Decoded)
     Eventually (instructionStep fetch) (fun t =>
       t.data.regs = {s.regs with
         rbx := stored, rbp := query, rdi := stored, rsi := query, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x8e ∧ t.pc = .ofNat 0xffffffff810f3ea0)
+      t.data.dmem = callMemory s 0x8e ∧ t.pc = .ofNat 0xffffffff810f40a0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0x7a⟩ := by
   exact region_eventually (r7a_layout.agreement agree) s _
     (high_arguments s stored query stackWord storedField queryField stack)
@@ -121,7 +121,7 @@ theorem ipv4_scan_execution (fetch : Int64 → Option Decoded)
         rdx := .ofBitVec (x.setWidth 64), rax := .ofBitVec (n.setWidth 64),
         rbp := .ofBitVec (((s.regs.get (.low .rbp .W32)) - n).setWidth 64),
         rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x6c ∧ t.pc = .ofNat 0xffffffff810f3100)
+      t.data.dmem = callMemory s 0x6c ∧ t.pc = .ofNat 0xffffffff810f31f0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0x51⟩ := by
   exact region_eventually (r51_layout.agreement agree) s _
     (ipv4_scan s stored query stackWord storedField queryField stack)
@@ -153,7 +153,7 @@ theorem prologue_execution (fetch : Int64 → Option Decoded)
         rbp := .ofBitVec ((s.regs.get (.low .rdx .W32)).setWidth 64),
         rbx := .ofBitVec ((s.regs.get (.low .rdx .W32)).setWidth 64),
         rsp := s.regs.rsp - 40} ∧
-      t.data.dmem = saveMemory s 5 ∧ t.pc = .ofNat 0xffffffff810f3100)
+      t.data.dmem = saveMemory s 5 ∧ t.pc = .ofNat 0xffffffff810f31f0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0x00⟩ := by
   exact region_eventually (r00_layout.agreement agree) s _
     (prologue s stack)
@@ -163,7 +163,7 @@ theorem trace_26_execution (fetch : Int64 → Option Decoded)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     Eventually (instructionStep fetch) (fun t =>
       t.data.regs = {s.regs with rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s (0x26 + 5) ∧ t.pc = .ofNat 0xffffffff810f3100)
+      t.data.dmem = callMemory s (0x26 + 5) ∧ t.pc = .ofNat 0xffffffff810f31f0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0x26⟩ := by
   apply region_eventually (r26_layout.agreement agree) s _
   simpa [run, AllowedipsImage.CommonBits.entry, AllowedipsImage.CommonBits.r26, AllowedipsImage.CommonBits.r26] using
@@ -174,7 +174,7 @@ theorem trace_3e_execution (fetch : Int64 → Option Decoded)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     Eventually (instructionStep fetch) (fun t =>
       t.data.regs = {s.regs with rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s (0x3e + 5) ∧ t.pc = .ofNat 0xffffffff810f3100)
+      t.data.dmem = callMemory s (0x3e + 5) ∧ t.pc = .ofNat 0xffffffff810f31f0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0x3e⟩ := by
   apply region_eventually (r3e_layout.agreement agree) s _
   simpa [run, AllowedipsImage.CommonBits.entry, AllowedipsImage.CommonBits.r3e, AllowedipsImage.CommonBits.r26] using
@@ -185,7 +185,7 @@ theorem trace_4c_execution (fetch : Int64 → Option Decoded)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     Eventually (instructionStep fetch) (fun t =>
       t.data.regs = {s.regs with rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s (0x4c + 5) ∧ t.pc = .ofNat 0xffffffff810f3100)
+      t.data.dmem = callMemory s (0x4c + 5) ∧ t.pc = .ofNat 0xffffffff810f31f0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0x4c⟩ := by
   apply region_eventually (r4c_layout.agreement agree) s _
   simpa [run, AllowedipsImage.CommonBits.entry, AllowedipsImage.CommonBits.r4c, AllowedipsImage.CommonBits.r26] using
@@ -196,7 +196,7 @@ theorem trace_75_execution (fetch : Int64 → Option Decoded)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     Eventually (instructionStep fetch) (fun t =>
       t.data.regs = {s.regs with rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s (0x75 + 5) ∧ t.pc = .ofNat 0xffffffff810f3100)
+      t.data.dmem = callMemory s (0x75 + 5) ∧ t.pc = .ofNat 0xffffffff810f31f0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0x75⟩ := by
   apply region_eventually (r75_layout.agreement agree) s _
   simpa [run, AllowedipsImage.CommonBits.entry, AllowedipsImage.CommonBits.r75, AllowedipsImage.CommonBits.r26] using
@@ -207,7 +207,7 @@ theorem trace_93_execution (fetch : Int64 → Option Decoded)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     Eventually (instructionStep fetch) (fun t =>
       t.data.regs = {s.regs with rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s (0x93 + 5) ∧ t.pc = .ofNat 0xffffffff810f3100)
+      t.data.dmem = callMemory s (0x93 + 5) ∧ t.pc = .ofNat 0xffffffff810f31f0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0x93⟩ := by
   apply region_eventually (r93_layout.agreement agree) s _
   simpa [run, AllowedipsImage.CommonBits.entry, AllowedipsImage.CommonBits.r93, AllowedipsImage.CommonBits.r26] using
@@ -218,7 +218,7 @@ theorem trace_aa_execution (fetch : Int64 → Option Decoded)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     Eventually (instructionStep fetch) (fun t =>
       t.data.regs = {s.regs with rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s (0xaa + 5) ∧ t.pc = .ofNat 0xffffffff810f3100)
+      t.data.dmem = callMemory s (0xaa + 5) ∧ t.pc = .ofNat 0xffffffff810f31f0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0xaa⟩ := by
   apply region_eventually (raa_layout.agreement agree) s _
   simpa [run, AllowedipsImage.CommonBits.entry, AllowedipsImage.CommonBits.raa, AllowedipsImage.CommonBits.r26] using
@@ -229,7 +229,7 @@ theorem trace_c4_execution (fetch : Int64 → Option Decoded)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     Eventually (instructionStep fetch) (fun t =>
       t.data.regs = {s.regs with rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s (0xc4 + 5) ∧ t.pc = .ofNat 0xffffffff810f3100)
+      t.data.dmem = callMemory s (0xc4 + 5) ∧ t.pc = .ofNat 0xffffffff810f31f0)
       ⟨s, AllowedipsImage.CommonBits.entry + 0xc4⟩ := by
   apply region_eventually (rc4_layout.agreement agree) s _
   simpa [run, AllowedipsImage.CommonBits.entry, AllowedipsImage.CommonBits.rc4, AllowedipsImage.CommonBits.r26] using

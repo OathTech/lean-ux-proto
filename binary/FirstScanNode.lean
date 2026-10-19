@@ -117,7 +117,7 @@ theorem scan_index_arguments (fetch : Int64 → Option Decoded) (agree : Anchore
     This composes four actual calls and all intervening instructions, with
     the physical invariant at every appended anchored cut. -/
 theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3e80) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4080) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4))
     (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (safe : CallStackSafe outer base.regs.rsp)
     (frame : ScanFrame base coverage preempt s)
@@ -136,7 +136,7 @@ theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
       BucketShape t.machine.data.dmem (a+8) ((a,e)::rest) ∧
       StableTrace base coverage preempt rxSection history events t)
       ⟨⟨s, Image.Lookup.entry+0x34⟩, history⟩ := by
-  have first := scan_call_cursor fetch "L_ffffffff810f3100"
+  have first := scan_call_cursor fetch "L_ffffffff810f31f0"
     ⟨⟨s, Image.Lookup.entry+0x34⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc base coverage preempt
     safe frame (frame).ready.pc_allowed
     rxSection events observed last (by
@@ -156,7 +156,7 @@ theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
     rw [machine₂, (container_sub_shape t₁.machine.data).2, bx₁]
     change s.regs.rbx.toBitVec-8 = a
     rw [node, BitVec.add_sub_cancel]
-  have second := scan_call_cursor fetch "L_ffffffff810f3100" t₂
+  have second := scan_call_cursor fetch "L_ffffffff810f31f0" t₂
     (by rw [pc₂]; exact agree _ _ (by rfl)) .pc tracePc base coverage preempt safe trace₂.frame (trace₂.frame).ready.pc_allowed
     rxSection events trace₂.observed trace₂.last (by
       simp [LookupObservation.edge, pc₂, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
@@ -179,7 +179,7 @@ theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
     rw [machine₄]
     change t₃.machine.data.regs.rbx.toBitVec = a
     rw [bx₃, bx₂]
-  have third := scan_call_cursor fetch "L_ffffffff810f3100" t₄
+  have third := scan_call_cursor fetch "L_ffffffff810f31f0" t₄
     (by rw [pc₄]; exact agree _ _ (by rfl)) .pc tracePc base coverage preempt safe trace₄.frame (trace₄.frame).ready.pc_allowed
     rxSection events trace₄.observed trace₄.last (by
       simp [LookupObservation.edge, pc₄, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
@@ -203,7 +203,7 @@ theorem node_to_compare (fetch : Int64 → Option Decoded) (agree : AnchoredDeco
   apply eventually_trans (guardedHistoryStep fetch (StackGuard outer)) _ _ _ args
   rintro t₆ ⟨machine₆, trace₆⟩
   have pc₆ : t₆.machine.pc = Image.Lookup.entry+0x54 := congrArg MachineState.pc machine₆
-  have fourth := scan_call_cursor fetch "L_ffffffff810f3e80" t₆
+  have fourth := scan_call_cursor fetch "L_ffffffff810f4080" t₆
     (by rw [pc₆]; exact agree _ _ (by rfl)) .cmp4 traceCmp base coverage preempt safe trace₆.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection events trace₆.observed trace₆.last (by
       simp [LookupObservation.edge, pc₆, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

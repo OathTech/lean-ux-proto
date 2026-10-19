@@ -29,7 +29,7 @@ theorem live_zero_call_history (fetch : Int64 → Option Decoded)
   apply eventually_trans (historyStep fetch) _ _ _ guard
   rintro guarded ⟨af, machine, trace⟩
   have pc : guarded.machine.pc = Image.PeerGet.entry+0x3f := congrArg MachineState.pc machine
-  have call := scan_call_cursor fetch "L_ffffffff810f3100" guarded
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0" guarded
     (by rw [pc]; exact agree _ _ (by rfl)) .pc tracePc body coverage preempt trace.frame (trace.frame).ready.pc_allowed
     rxSection _ trace.observed trace.last (by
       simp [LookupObservation.edge, pc, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

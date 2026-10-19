@@ -7,7 +7,7 @@ local instance : Labels := Image.linkedLabels
 variable {outer : UInt64}
 
 theorem start_history (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (s : MachineData) (safe : StackSlots outer s.regs.rsp) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (state : LookupCoverage.Context.At coverage preempt s.dmem)
     (phase : preempt = coverage.entryPreempt ∨ preempt = 512+coverage.entryPreempt)
@@ -73,7 +73,7 @@ theorem start_history (fetch : Int64 → Option Decoded)
       ((history ++ prologueStates s) ++ [prologueCalled s]) = .ok events := by
     rw [List.append_assoc, ← restored, List.append_assoc]
     simpa only [List.singleton_append, List.append_nil] using seen
-  have call := LookupCoverage.First.observed_callback fetch (.ofNat 0xffffffff810f3100) .pc contract
+  have call := LookupCoverage.First.observed_callback fetch (.ofNat 0xffffffff810f31f0) .pc contract
     coverage preempt (prologueCalled s) (Image.PeerGet.entry+0x12).toUInt64 outer (by
       change (s.regs.rsp-48)-8≠outer+8
       slots_guard safe) rfl entry calleeState (.inl ⟨rfl, phase⟩)

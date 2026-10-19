@@ -79,7 +79,7 @@ theorem low_scan (s : MachineData) (stored query : BitVec 64)
       t.data.regs = {s.regs with
         rax := .ofBitVec x, rbx := .ofBitVec (((scan64 x).setWidth 32 + 1).setWidth 64)} ∧
       t.data.dmem = s.dmem ∧ t.pc = AllowedipsImage.CommonBits.entry + 0xaa) := by
-  have target : label "L_ffffffff813a07fa" = (-2126903302 : Int64) := by decide
+  have target : label "L_ffffffff813a09fa" = (-2126902790 : Int64) := by decide
   have width8 : (Width.W64 == Width.W8) = false := rfl
   have width32 : (Width.W64 == Width.W32) = false := rfl
   simp [run, AllowedipsImage.CommonBits.rc9, Directives.interp, Directive.interp,
@@ -104,7 +104,7 @@ theorem trace_call (offset : Nat) (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run AllowedipsImage.CommonBits.r26 offset s).All (fun t =>
       t.data.regs = {s.regs with rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s (offset + 5) ∧ t.pc = .ofNat 0xffffffff810f3100) := by
+      t.data.dmem = callMemory s (offset + 5) ∧ t.pc = .ofNat 0xffffffff810f31f0) := by
   simp [run, AllowedipsImage.CommonBits.r26, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, MachineData.store,
     Reg64s.get64, Reg64s.set64, RelRegOrMem.interp, ConstExpr.interp,
@@ -119,8 +119,8 @@ theorem trace_call (offset : Nat) (s : MachineData) (stackWord : Int)
       exact BitVec.sub_add_cancel _ _
     simpa only [Int64.add_assoc] using
       (cancel (AllowedipsImage.CommonBits.entry + Int64.ofNat offset + 5)
-        (label "L_ffffffff810f3100")).trans (show label "L_ffffffff810f3100" =
-          (-2129710848 : Int64) from by decide)
+        (label "L_ffffffff810f31f0")).trans (show label "L_ffffffff810f31f0" =
+          (-2129710608 : Int64) from by decide)
 
 theorem trace_region_terms :
     AllowedipsImage.CommonBits.r3e = AllowedipsImage.CommonBits.r26 ∧
@@ -139,7 +139,7 @@ theorem family32_arguments (s : MachineData) (stackWord : Int)
       t.data.regs = {s.regs with
         rsi := .ofBitVec ((s.regs.get (.low .rbx .W32)).setWidth 64),
         rdi := 32, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x21 ∧ t.pc = .ofNat 0xffffffff810f3ec0) := by
+      t.data.dmem = callMemory s 0x21 ∧ t.pc = .ofNat 0xffffffff810f40c0) := by
   simp [run, AllowedipsImage.CommonBits.r15, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.set,
@@ -156,7 +156,7 @@ theorem family128_arguments (s : MachineData) (stackWord : Int)
       t.data.regs = {s.regs with
         rsi := .ofBitVec ((s.regs.get (.low .rbx .W32)).setWidth 64),
         rdi := 0xffffff80, rbp := 0, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x39 ∧ t.pc = .ofNat 0xffffffff810f3ec0) := by
+      t.data.dmem = callMemory s 0x39 ∧ t.pc = .ofNat 0xffffffff810f40c0) := by
   simp [run, AllowedipsImage.CommonBits.r2b, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.set,
@@ -171,7 +171,7 @@ theorem ipv6_result_seed (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run AllowedipsImage.CommonBits.raf 0xaf s).All (fun t =>
       t.data.regs = {s.regs with rbp := 0xffffff80, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0xb9 ∧ t.pc = .ofNat 0xffffffff810f3100) := by
+      t.data.dmem = callMemory s 0xb9 ∧ t.pc = .ofNat 0xffffffff810f31f0) := by
   simp [run, AllowedipsImage.CommonBits.raf, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp,  Operand.interp,
     RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.set,
@@ -189,7 +189,7 @@ theorem high_arguments (s : MachineData) (stored query : UInt64) (stackWord : In
     (run AllowedipsImage.CommonBits.r7a 0x7a s).All (fun t =>
       t.data.regs = {s.regs with
         rbx := stored, rbp := query, rdi := stored, rsi := query, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x8e ∧ t.pc = .ofNat 0xffffffff810f3ea0) := by
+      t.data.dmem = callMemory s 0x8e ∧ t.pc = .ofNat 0xffffffff810f40a0) := by
   simp [run, AllowedipsImage.CommonBits.r7a, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.load,
@@ -225,10 +225,10 @@ theorem ipv4_scan (s : MachineData) (stored query : UInt32) (stackWord : Int)
         rdx := .ofBitVec (x.setWidth 64), rax := .ofBitVec (n.setWidth 64),
         rbp := .ofBitVec (((s.regs.get (.low .rbp .W32)) - n).setWidth 64),
         rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x6c ∧ t.pc = .ofNat 0xffffffff810f3100) := by
+      t.data.dmem = callMemory s 0x6c ∧ t.pc = .ofNat 0xffffffff810f31f0) := by
   have width8 : (Width.W32 == Width.W8) = false := rfl
   have width32 : (Width.W32 == Width.W32) = true := rfl
-  have target : label "L_ffffffff810f3100" = (-2129710848 : Int64) := by decide
+  have target : label "L_ffffffff810f31f0" = (-2129710608 : Int64) := by decide
   simp [run, AllowedipsImage.CommonBits.r51, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     RelRegOrMem.interp, ConstExpr.interp, MachineData.store, MachineData.load,
@@ -334,7 +334,7 @@ theorem prologue (s : MachineData)
         rbp := .ofBitVec ((s.regs.get (.low .rdx .W32)).setWidth 64),
         rbx := .ofBitVec ((s.regs.get (.low .rdx .W32)).setWidth 64),
         rsp := s.regs.rsp - 40} ∧
-      t.data.dmem = saveMemory s 5 ∧ t.pc = .ofNat 0xffffffff810f3100) := by
+      t.data.dmem = saveMemory s 5 ∧ t.pc = .ofNat 0xffffffff810f31f0) := by
   have mapped (n : Nat) (hn : n < 5) :=
     saves_preserve_mapped s n _ (stack n hn)
   have h0 := mapped 0 (by decide)

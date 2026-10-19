@@ -14,7 +14,7 @@ theorem root_guard_history (fetch : Int64 → Option Decoded)
       (if s.regs.get (.low .rbx .W64) == 0 then AllowedipsImage.Lookup.entry+0x184
        else AllowedipsImage.Lookup.entry+0x87) history)
       ⟨⟨s, AllowedipsImage.Lookup.entry+0x7e⟩, history⟩ := by
-  exact test_self fetch _ _ _ "L_ffffffff813a09b4" 3 6 (by decide) (by decide)
+  exact test_self fetch _ _ _ "L_ffffffff813a0bb4" 3 6 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 #print axioms root_guard_history
@@ -27,7 +27,7 @@ theorem next_guard_history (fetch : Int64 → Option Decoded)
       (if s.regs.get (.low .rbx .W64) == 0 then AllowedipsImage.Lookup.entry+0x101
        else AllowedipsImage.Lookup.entry+0xd5) history)
       ⟨⟨s, AllowedipsImage.Lookup.entry+0xd0⟩, history⟩ := by
-  exact test_self fetch _ _ _ "L_ffffffff813a0931" 3 2 (by decide) (by decide)
+  exact test_self fetch _ _ _ "L_ffffffff813a0b31" 3 2 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 #print axioms next_guard_history
@@ -40,7 +40,7 @@ theorem found_guard_history (fetch : Int64 → Option Decoded)
       (if s.regs.get (.low .rbp .W64) == 0 then AllowedipsImage.Lookup.entry+0x184
        else AllowedipsImage.Lookup.entry+0x10b) history)
       ⟨⟨s, AllowedipsImage.Lookup.entry+0x106⟩, history⟩ := by
-  exact test_self fetch _ _ _ "L_ffffffff813a09b4" 3 2 (by decide) (by decide)
+  exact test_self fetch _ _ _ "L_ffffffff813a0bb4" 3 2 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 #print axioms found_guard_history
@@ -53,7 +53,7 @@ theorem peer_guard_history (fetch : Int64 → Option Decoded)
       (if s.regs.get (.low .rax .W64) == 0 then AllowedipsImage.Lookup.entry+0x74
        else AllowedipsImage.Lookup.entry+0x122) history)
       ⟨⟨s, AllowedipsImage.Lookup.entry+0x119⟩, history⟩ := by
-  exact test_self fetch _ _ _ "L_ffffffff813a08a4" 3 6 (by decide) (by decide)
+  exact test_self fetch _ _ _ "L_ffffffff813a0aa4" 3 6 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 #print axioms peer_guard_history

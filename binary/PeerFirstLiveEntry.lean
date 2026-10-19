@@ -10,8 +10,8 @@ variable {outer : UInt64}
     actual decisions and separate physical frames before/after the increment.
     This is not yet the helper all-cut R theorem. -/
 theorem live_entry_history (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
-    (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4)) (traceByte : LeafService fetch (.ofNat 0xffffffff810f3ec0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1))
+    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4)) (traceByte : LeafService fetch (.ofNat 0xffffffff810f40c0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1))
     (s : MachineData) (safe : StackSlots outer s.regs.rsp) (returnAddress : UInt64)
     (entry : EntryFrame ⟨s, Image.PeerGet.entry⟩ returnAddress) (nonnull : s.regs.rdi ≠ 0)
     (count : UInt32) (nonzero : count ≠ 0) (bound : count.toNat+1 < 2^31)

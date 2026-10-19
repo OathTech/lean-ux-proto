@@ -1,6 +1,6 @@
 # Binary adequacy and concrete probe
 
-This is a standalone refinement experiment against the pinned **s4** Linux
+This is a standalone refinement experiment against the pinned **s5** Linux
 image under explicitly unrealistic sequential/environment assumptions. It now
 uses the split mirror through its actual adapters. The landing branch is
 `task/binary-pair-landing`, rebased onto main `3f3879e0`; the original experiment
@@ -26,23 +26,47 @@ A network fetch, if needed inside Nono, must be run outside Nono. Neither setup
 nor the gate modifies machine-global configuration or requires the oracle ELF
 for Lean compilation. The separate binary gate does not build `LeanuxProofs`.
 
-Concrete tests and image comparison require the read-only s4 build. Set
+Concrete tests and image comparison require the read-only s5 build. Set
 `LEANUX_BINARY_KERNEL_DIR` to its directory; the default is
-`.artifacts/kernel-net-choice-s4` in the common checkout. `binary/target.py`
-verifies the exact ELF hash and selects `binary/kernel-identity-s4.txt` for
-boots/captures. Main's s5 identity is not used by these binary experiments.
-The target has not been retargeted to s5.
+`.artifacts/kernel-net-choice-s5` in the common checkout. `binary/target.py`
+verifies the exact ELF hash and selects `binary/kernel-identity-s5.txt` for
+boots/captures. This is an explicit binary-package pin; it does not follow
+future changes to the mirror campaign's oracle automatically.
 
-The current split mirror's recorded-prefix tests against s4 fail because s4
-lacks the timer-wheel records the mirror now consumes. See the landing report;
-the build and proof gate do not resolve that runtime compatibility failure.
-Exact image generation is checked separately from the proof gate:
+The landing port moves from s4 because the current mirror requires B3
+timer-wheel inputs absent from s4. Existing historical s4 results below
+remain historical. The landing report records fresh s5 validation separately.
+Image terms and DWARF offsets are regenerated from the new ELF; proof checking
+then reestablishes the same claims at the relocated addresses. Compare the
+committed generated files with the pinned image:
 
 ```sh
 cap python3 -B binary/generate.py --check
 cap python3 -B binary/generate_allowedips.py --check
 cap python3 -B binary/generate_index_mutators.py --check
+cap python3 -B binary/generate_random_service.py --check
+cap python3 -B binary/generate_random_layout.py --check
 ```
+
+The landing's combined export covers the original M1 transport and witnesses,
+both-family physical Pre witnesses, the paired trie call, and the callback,
+index and insertion headline closure. After the separate gate, from `binary/`:
+
+```sh
+cap lake env leanexport LookupSnapshotTransport LookupWitness LookupHitWitness \
+  AllowedipsWitnessPre PairCallbackSurface PairCallWitness > ../.tmp/binary-pair-landing.ndjson
+```
+
+Require successful export generation. The external gate, run by the user
+outside Nono from the same directory, is:
+
+```sh
+cap lake check --from-export ../.tmp/binary-pair-landing.ndjson
+```
+
+The exported closure avoids the checker's sandboxed build of parent path
+dependencies. Fresh `leanchecker --fresh MODULE` replays and inside-Nono
+checks are reported separately; neither replaces this external gate.
 
 `LookupAdequacy.lookup_simulation` proves entry-to-original-return execution
 of `wg_index_hashtable_lookup`, including the complete bucket loop and the

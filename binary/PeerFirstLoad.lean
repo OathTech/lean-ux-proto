@@ -86,7 +86,7 @@ theorem old_arguments_trace (fetch : Int64 → Option Decoded)
     retaining every instruction and the count in EBP at the zero guard. -/
 theorem load_body_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (body : MachineData) (safe : CallStackSafe outer body.regs.rsp) (count : UInt32)
     (field : body.dmem.loadInt (body.regs.rbx.toBitVec+0x420) 4 = some count.toNat)
     (coverage : LookupCoverage.Context) (preempt : BitVec 32) (ready : LookupCoverage.CallsReady coverage preempt body)
@@ -105,7 +105,7 @@ theorem load_body_history (fetch : Int64 → Option Decoded)
   apply eventually_trans (guardedHistoryStep fetch (StackGuard outer)) _ _ _ load
   rintro loadedState ⟨machine₁, trace₁⟩
   have pc₁ : loadedState.machine.pc = Image.PeerGet.entry+0x2d := congrArg MachineState.pc machine₁
-  have call := scan_call_cursor fetch "L_ffffffff810f3100" loadedState
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0" loadedState
     (by rw [pc₁]; exact agree _ _ (by rfl)) .pc tracePc (loaded body count) coverage preempt safe trace₁.frame (trace₁.frame).ready.pc_allowed
     rxSection events trace₁.observed trace₁.last (by
       simp [LookupObservation.edge, pc₁, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
@@ -119,7 +119,7 @@ theorem load_body_history (fetch : Int64 → Option Decoded)
   apply eventually_trans (guardedHistoryStep fetch (StackGuard outer)) _ _ _ setup
   rintro afterSetup ⟨af, machine₃, trace₃⟩
   have pc₃ : afterSetup.machine.pc = Image.PeerGet.entry+0x36 := congrArg MachineState.pc machine₃
-  have call := scan_call_cursor fetch "L_ffffffff810f3f00" afterSetup
+  have call := scan_call_cursor fetch "L_ffffffff810f4100" afterSetup
     (by rw [pc₃]; exact agree _ _ (by rfl)) .constCmp4 traceCmp (loaded body count) coverage preempt safe trace₃.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection events trace₃.observed trace₃.last (by
       simp [LookupObservation.edge, pc₃, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

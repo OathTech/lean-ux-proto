@@ -10,8 +10,8 @@ variable {outer : UInt64}
     account for the actual AND overwrite; no accepted kind mask is removed.
     Whole-World R and source World matching remain separate obligations. -/
 theorem bucket_loop (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3e80) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4))
-    (traceConstCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4080) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4))
+    (traceConstCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (query rxSection : Nat) (kinds : List Leanux.WG.IndexKind)
     (queryReg : (base.regs.get (.low .r12 .W32)).toNat = query)

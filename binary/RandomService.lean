@@ -29,7 +29,7 @@ theorem return_recorded (fetch : Int64 → Option Decoded) {config inputAt cover
     (physical : RandomReturnContract fetch config)
     (coupling : RandomInputCoupling fetch config coverage preempt ra inputAt)
     {s records value rest}
-    (entry : s.pc=.ofNat 0xffffffff81375000)
+    (entry : s.pc=.ofNat 0xffffffff81375200)
     (ready : RandomReady config coverage preempt s) (stack : EntryFrame s ra)
     (input : inputAt s.data.dmem records) (draw : Pair.Insert.draw records=.ok (value,rest)) :
     Eventually (instructionStep fetch) (Post config coverage preempt inputAt s ra value rest) s := by

@@ -19,7 +19,7 @@ def main():
             print(f'{path.name}: checked')
         else:
             path.write_text(text)
-    if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774":
+    if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != "06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e":
         raise ValueError("wrong oracle image")
     functions = extract(ORACLE)
     text = ["import Image", "open Kraken.X64.Parser", "namespace Binary.AllowedipsImage",

@@ -29,7 +29,7 @@ theorem increment_call (fetch : Int64 → Option Decoded)
     Kcov.state_frame coverage preempt _ _ ready.state _
       (storeInt_frame s.dmem s.regs.r13.toBitVec 4 (s.regs.get (.low .rbp .W32)+1).toInt)
       countSeparate
-  exact after_call fetch (.ofNat 0xffffffff810f3ec0) .constCmp1 traceCmp
+  exact after_call fetch (.ofNat 0xffffffff810f40c0) .constCmp1 traceCmp
     (incremented s) callee 0x60
     (by simpa only [incremented, incrementRegisters] using regs)
     memory pc coverage preempt state ready.aligned ready.pushSeparate ready.returnSeparate

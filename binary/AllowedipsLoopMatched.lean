@@ -35,7 +35,7 @@ theorem matched_to_full (fetch : Int64 → Option Decoded) (agree : AllowedipsDe
         Trace base coverage rxSection history
           (events ++ [decision rxSection .findNodeHasPeer node.peer.isSome peerPoint]) t)
       ⟨⟨s,AllowedipsImage.Lookup.entry+0x90⟩,history⟩ := by
-  have first := call fetch (AllowedipsImage.Lookup.entry+0x90) "L_ffffffff810f3100"
+  have first := call fetch (AllowedipsImage.Lookup.entry+0x90) "L_ffffffff810f31f0"
     (agree _ _ (by rfl)) .pc tracePc base s coverage frame rxSection history events observed last
     (by unfold Quiet; decide) (by constructor <;> decide)
   apply eventually_trans (historyStep fetch) _ _ _ first
@@ -66,7 +66,7 @@ theorem matched_to_full (fetch : Int64 → Option Decoded) (agree : AllowedipsDe
   have bp2 : t2.machine.data.regs.rbp = (if node.peer.isSome then s.regs.rbx else s.regs.rbp) := by
     rw [regs2]; exact selected
   have r15_2 : t2.machine.data.regs.r15 = s.regs.r15 := by rw [regs2]; exact r15_1
-  have third := call fetch (AllowedipsImage.Lookup.entry+0x9f) "L_ffffffff810f3100"
+  have third := call fetch (AllowedipsImage.Lookup.entry+0x9f) "L_ffffffff810f31f0"
     (agree _ _ (by rfl)) .pc tracePc base t2.machine.data coverage trace2'.frame rxSection
     t2.history nextEvents trace2'.observed (by rw [←pc2]; exact trace2'.last)
     (by unfold Quiet; decide) (by constructor <;> decide)
@@ -79,7 +79,7 @@ theorem matched_to_full (fetch : Int64 → Option Decoded) (agree : AllowedipsDe
   rw [cursor_eq t3 _ pc3] at fourth
   apply eventually_trans (historyStep fetch) _ _ _ fourth
   rintro t4 ⟨⟨pc4,regs4⟩,trace4⟩
-  have fifth := call fetch (AllowedipsImage.Lookup.entry+0xaa) "L_ffffffff810f3e40"
+  have fifth := call fetch (AllowedipsImage.Lookup.entry+0xaa) "L_ffffffff810f4040"
     (agree _ _ (by rfl)) .cmp1 traceCmp base t4.machine.data coverage trace4.frame rxSection
     t4.history nextEvents trace4.observed (by rw [←pc4]; exact trace4.last)
     (by unfold Quiet; decide) (by constructor <;> decide)

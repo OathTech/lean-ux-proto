@@ -16,7 +16,7 @@ theorem trace_step_history (fetch : Int64 → Option Decoded)
       Local (i.Writes c) ⟨s,AllowedipsImage.CommonBits.entry+.ofNat offset⟩ rxSection [] t)
       ⟨⟨s,AllowedipsImage.CommonBits.entry+.ofNat offset⟩,[⟨s,AllowedipsImage.CommonBits.entry+.ofNat offset⟩]⟩ := by
   have here : fetch (AllowedipsImage.CommonBits.entry+.ofNat offset) =
-      some ⟨Instrumentation.callInstruction "L_ffffffff810f3100",5⟩ := by
+      some ⟨Instrumentation.callInstruction "L_ffffffff810f31f0",5⟩ := by
     apply agree
     simp only [pcOffsets,List.mem_cons,List.not_mem_nil,or_false] at member
     rcases member with h | h | h | h | h | h | h
@@ -32,7 +32,7 @@ theorem trace_step_history (fetch : Int64 → Option Decoded)
     simp only [pcOffsets,List.mem_cons,List.not_mem_nil,or_false] at member
     rcases member with h | h | h | h | h | h | h
     all_goals subst offset; decide
-  have executed := callback_body_trace fetch _ "L_ffffffff810f3100" here .pc contracts.pc
+  have executed := callback_body_trace fetch _ "L_ffffffff810f31f0" here .pc contracts.pc
     i c apart s state rxSection silent ordinary
   simpa only [Int64.ofNat_add,Int64.add_assoc,show Int64.ofNat 5 = 5 from rfl] using executed
 
@@ -44,10 +44,10 @@ theorem trace_step_history (fetch : Int64 → Option Decoded)
       Local (i.Writes c) ⟨s,AllowedipsImage.CommonBits.entry+0x15⟩ rxSection [] t)
       ⟨⟨s,AllowedipsImage.CommonBits.entry+0x15⟩,[⟨s,AllowedipsImage.CommonBits.entry+0x15⟩]⟩ := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+0x1c) =
-      some ⟨Instrumentation.callInstruction "L_ffffffff810f3ec0",5⟩ from rfl)
+      some ⟨Instrumentation.callInstruction "L_ffffffff810f40c0",5⟩ from rfl)
   have executed := prefix_callback_history fetch i c apart s state
     (AllowedipsImage.CommonBits.entry+0x15) (AllowedipsImage.CommonBits.entry+0x1c)
-    {s.regs with rsi := .ofBitVec ((s.regs.get (.low .rbx .W32)).setWidth 64), rdi := 32} rxSection "L_ffffffff810f3ec0" .constCmp1 contracts.constCmp1 here
+    {s.regs with rsi := .ofBitVec ((s.regs.get (.low .rbx .W32)).setWidth 64), rdi := 32} rxSection "L_ffffffff810f40c0" .constCmp1 contracts.constCmp1 here
     rfl rfl rfl rfl rfl (by intros; rfl) (by decide) (args32_trace fetch agree s (i.Writes c) rxSection)
   simpa only [show AllowedipsImage.CommonBits.entry+0x1c+5 = AllowedipsImage.CommonBits.entry+0x21 from rfl] using executed
 
@@ -59,10 +59,10 @@ theorem trace_step_history (fetch : Int64 → Option Decoded)
       Local (i.Writes c) ⟨s,AllowedipsImage.CommonBits.entry+0x2b⟩ rxSection [] t)
       ⟨⟨s,AllowedipsImage.CommonBits.entry+0x2b⟩,[⟨s,AllowedipsImage.CommonBits.entry+0x2b⟩]⟩ := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+0x34) =
-      some ⟨Instrumentation.callInstruction "L_ffffffff810f3ec0",5⟩ from rfl)
+      some ⟨Instrumentation.callInstruction "L_ffffffff810f40c0",5⟩ from rfl)
   have executed := prefix_callback_history fetch i c apart s state
     (AllowedipsImage.CommonBits.entry+0x2b) (AllowedipsImage.CommonBits.entry+0x34)
-    {s.regs with rsi := .ofBitVec ((s.regs.get (.low .rbx .W32)).setWidth 64), rdi := 0xffffff80, rbp := 0} rxSection "L_ffffffff810f3ec0" .constCmp1 contracts.constCmp1 here
+    {s.regs with rsi := .ofBitVec ((s.regs.get (.low .rbx .W32)).setWidth 64), rdi := 0xffffff80, rbp := 0} rxSection "L_ffffffff810f40c0" .constCmp1 contracts.constCmp1 here
     rfl rfl rfl rfl rfl (by intros; rfl) (by decide) (args128_trace fetch agree s (i.Writes c) rxSection)
   simpa only [show AllowedipsImage.CommonBits.entry+0x34+5 = AllowedipsImage.CommonBits.entry+0x39 from rfl] using executed
 
@@ -75,10 +75,10 @@ theorem trace_step_history (fetch : Int64 → Option Decoded)
       ⟨⟨s,AllowedipsImage.CommonBits.entry+0x7a⟩,[⟨s,AllowedipsImage.CommonBits.entry+0x7a⟩]⟩ := by
   obtain ⟨stored,query⟩ := state.wordsHigh family
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+0x89) =
-      some ⟨Instrumentation.callInstruction "L_ffffffff810f3ea0",5⟩ from rfl)
+      some ⟨Instrumentation.callInstruction "L_ffffffff810f40a0",5⟩ from rfl)
   have executed := prefix_callback_history fetch i c apart s state
     (AllowedipsImage.CommonBits.entry+0x7a) (AllowedipsImage.CommonBits.entry+0x89)
-    {s.regs with rbx := i.storedHigh, rbp := i.queryHigh, rdi := i.storedHigh, rsi := i.queryHigh} rxSection "L_ffffffff810f3ea0" .cmp8 contracts.cmp8 here
+    {s.regs with rbx := i.storedHigh, rbp := i.queryHigh, rdi := i.storedHigh, rsi := i.queryHigh} rxSection "L_ffffffff810f40a0" .cmp8 contracts.cmp8 here
     rfl rfl rfl rfl rfl (by intros; rfl) (by decide) (high_args_trace fetch agree s i.storedHigh i.queryHigh stored query (i.Writes c) rxSection)
   simpa only [show AllowedipsImage.CommonBits.entry+0x89+5 = AllowedipsImage.CommonBits.entry+0x8e from rfl] using executed
 
@@ -93,10 +93,10 @@ theorem trace_step_history (fetch : Int64 → Option Decoded)
       ⟨⟨s,AllowedipsImage.CommonBits.entry+0x51⟩,[⟨s,AllowedipsImage.CommonBits.entry+0x51⟩]⟩ := by
   obtain ⟨stored,query⟩ := state.words32 family
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+0x67) =
-      some ⟨Instrumentation.callInstruction "L_ffffffff810f3100",5⟩ from rfl)
+      some ⟨Instrumentation.callInstruction "L_ffffffff810f31f0",5⟩ from rfl)
   have executed := prefix_callback_history fetch i c apart s state
     (AllowedipsImage.CommonBits.entry+0x51) (AllowedipsImage.CommonBits.entry+0x67)
-    {s.regs with rdx := .ofBitVec ((i.stored32.toBitVec ^^^ i.query32.toBitVec).setWidth 64), rax := .ofBitVec ((scan32 (i.stored32.toBitVec ^^^ i.query32.toBitVec)+1).setWidth 64), rbp := .ofBitVec (((s.regs.get (.low .rbp .W32))-(scan32 (i.stored32.toBitVec ^^^ i.query32.toBitVec)+1)).setWidth 64)} rxSection "L_ffffffff810f3100" .pc contracts.pc here
+    {s.regs with rdx := .ofBitVec ((i.stored32.toBitVec ^^^ i.query32.toBitVec).setWidth 64), rax := .ofBitVec ((scan32 (i.stored32.toBitVec ^^^ i.query32.toBitVec)+1).setWidth 64), rbp := .ofBitVec (((s.regs.get (.low .rbp .W32))-(scan32 (i.stored32.toBitVec ^^^ i.query32.toBitVec)+1)).setWidth 64)} rxSection "L_ffffffff810f31f0" .pc contracts.pc here
     rfl rfl rfl rfl rfl (by intros; rfl) (by decide) (ipv4_trace fetch agree s i.stored32 i.query32 stored query (i.Writes c) rxSection)
   simpa only [show AllowedipsImage.CommonBits.entry+0x67+5 = AllowedipsImage.CommonBits.entry+0x6c from rfl] using executed
 
@@ -108,10 +108,10 @@ theorem trace_step_history (fetch : Int64 → Option Decoded)
       Local (i.Writes c) ⟨s,AllowedipsImage.CommonBits.entry+0xaf⟩ rxSection [] t)
       ⟨⟨s,AllowedipsImage.CommonBits.entry+0xaf⟩,[⟨s,AllowedipsImage.CommonBits.entry+0xaf⟩]⟩ := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+0xb4) =
-      some ⟨Instrumentation.callInstruction "L_ffffffff810f3100",5⟩ from rfl)
+      some ⟨Instrumentation.callInstruction "L_ffffffff810f31f0",5⟩ from rfl)
   have executed := prefix_callback_history fetch i c apart s state
     (AllowedipsImage.CommonBits.entry+0xaf) (AllowedipsImage.CommonBits.entry+0xb4)
-    {s.regs with rbp := 0xffffff80} rxSection "L_ffffffff810f3100" .pc contracts.pc here
+    {s.regs with rbp := 0xffffff80} rxSection "L_ffffffff810f31f0" .pc contracts.pc here
     rfl rfl rfl rfl rfl (by intros; rfl) (by decide) (seed128_trace fetch agree s (i.Writes c) rxSection)
   simpa only [show AllowedipsImage.CommonBits.entry+0xb4+5 = AllowedipsImage.CommonBits.entry+0xb9 from rfl] using executed
 

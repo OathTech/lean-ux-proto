@@ -7,7 +7,7 @@ namespace Binary.Pair.Insert
 open Lean Leanux Leanux.WG
 
 def entry : Nat := IndexInsertImage.Insert.entry.toBitVec.toNat
-def randomEntry : Nat := 0xffffffff81375000
+def randomEntry : Nat := 0xffffffff81375200
 
 /-- Present-state readiness; nested BH-disable requires a third coverage
 phase. The random provider's private state is not fabricated by this check. -/

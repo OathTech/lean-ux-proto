@@ -122,8 +122,8 @@ def main():
     if Path(command[command.index('-kernel')+1]).resolve() != ORACLE.parent / 'arch/x86/boot/bzImage':
         raise ValueError('recorded QEMU command names another kernel')
     entry = probe['instructions'][0]['pc']
-    expected = {'remove': 0xffffffff813a0400, 'replace': 0xffffffff813a0350,
-                'insert': 0xffffffff813a01a0}[args.anchor]
+    expected = {'remove': 0xffffffff813a0600, 'replace': 0xffffffff813a0550,
+                'insert': 0xffffffff813a03a0}[args.anchor]
     if entry != expected:
         raise ValueError('input anchor mismatch')
     endpoint, boot = out / 'gdb.sock', out / 'boot.log'
@@ -179,7 +179,7 @@ def main():
                 return [dict(address=b['address'], bytes=list(remote.read(b['address'], len(b['bytes']))))
                         for b in initial['blocks']]
             for _ in range(args.instruction_budget):
-                if args.anchor == 'insert' and returned['rip'] == 0xffffffff81375000:
+                if args.anchor == 'insert' and returned['rip'] == 0xffffffff81375200:
                     if random_entry is not None:
                         raise ValueError('nested random service')
                     random_entry = dict(registers=returned, blocks=read_blocks())

@@ -62,8 +62,8 @@ theorem after_saves_history (fetch : Int64 → Option Decoded)
       ⟨⟨prologueData s 8,AllowedipsImage.CommonBits.entry+0x10⟩,
        [⟨prologueData s 8,AllowedipsImage.CommonBits.entry+0x10⟩]⟩ := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+0x10) =
-    some ⟨Instrumentation.callInstruction "L_ffffffff810f3100",5⟩ from rfl)
-  have call := callback_body_trace fetch _ "L_ffffffff810f3100" here .pc contracts.pc
+    some ⟨Instrumentation.callInstruction "L_ffffffff810f31f0",5⟩ from rfl)
+  have call := callback_body_trace fetch _ "L_ffffffff810f31f0" here .pc contracts.pc
     i c entry.bodySeparate (prologueData s 8) entry.body rxSection (by intros; rfl) (by decide)
   have called : Eventually (historyStep fetch) (fun t =>
       BodyStep i c (prologueData s 8) (AllowedipsImage.CommonBits.entry+0x15)

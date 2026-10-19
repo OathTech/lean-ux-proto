@@ -26,7 +26,7 @@ theorem retry_entry (fetch : Int64 → Option Decoded) (decoder : IndexInsertDec
   have data : RetryData n o unlinked.data.dmem
       {d with indexTable := d.indexTable.filter (fun e => !(e.owner==owner))} owner base :=
     ⟨related,owned,resident,clear⟩
-  have callback := core.callback fetch (codeEntry+0x4f) "L_ffffffff810f3100" trace
+  have callback := core.callback fetch (codeEntry+0x4f) "L_ffffffff810f31f0" trace
     (decoder _ _ (by rfl)) facts
   apply eventually_trans (instructionStep fetch) _ _ _ (at_pc pc callback)
   rintro called ⟨pc,core,_⟩

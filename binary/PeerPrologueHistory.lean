@@ -196,7 +196,7 @@ theorem saves_observed (rxSection : Nat) (s : MachineData) :
 /-- Actual instrumentation entry after its return-address push. -/
 def prologueCalled (s : MachineData) : MachineState :=
   Instrumentation.calledState (copiedData s) (Image.PeerGet.entry+0x12)
-    (.ofNat 0xffffffff810f3100)
+    (.ofNat 0xffffffff810f31f0)
 
 theorem prologue_called_memory (s : MachineData) :
     (prologueCalled s).data.dmem = saveMemory s 7 := by
@@ -225,7 +225,7 @@ theorem prologue_history (fetch : Int64 → Option Decoded)
     simp only [copiedData, pushedData, UInt64.toBitVec_sub, BitVec.sub_sub]
     exact preserved
   have call := Instrumentation.call_instruction fetch (Image.PeerGet.entry+13)
-    "L_ffffffff810f3100" (agree _ _ (by rfl)) (copiedData s)
+    "L_ffffffff810f31f0" (agree _ _ (by rfl)) (copiedData s)
     (history ++ prologueStates s) stack
   apply historySteps_mono fetch 1 _ _ _ _ call
   rintro final ⟨machine, recorded⟩

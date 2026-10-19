@@ -19,7 +19,7 @@ theorem callback (fetch : Int64 → Option Decoded)
       t.machine.data.regs.rbx = current.machine.data.regs.rbx ∧
       t.machine.data.regs.rbp = current.machine.data.regs.rbp ∧
       ScanFrame current.machine.data coverage preempt t.machine.data) current := by
-  have run := LookupInstrumentation.observed_call fetch current.machine.pc "L_ffffffff810f3100"
+  have run := LookupInstrumentation.observed_call fetch current.machine.pc "L_ffffffff810f31f0"
     (by rw [pc]; rcases site with rfl | rfl | rfl <;> exact agree _ _ (by rfl))
     .pc tracePc current.machine.data coverage preempt ready ready.pc_allowed
     0 [] [] [] rfl (by

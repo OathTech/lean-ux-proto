@@ -56,8 +56,8 @@ theorem pc_callback (fetch : Int64 → Option Decoded) (agree : AllowedipsDecode
       Local (Writes initial coverage old) ⟨s,AllowedipsImage.Lookup.entry+0x126⟩ rx [] t)
       ⟨⟨s,AllowedipsImage.Lookup.entry+0x126⟩,[⟨s,AllowedipsImage.Lookup.entry+0x126⟩]⟩ := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.Lookup.entry+0x126)=
-    some ⟨callInstruction "L_ffffffff810f3100",5⟩ from rfl)
-  have run := callback_trace fetch _ "L_ffffffff810f3100" here .pc contract ⟨coverage,old+512⟩
+    some ⟨callInstruction "L_ffffffff810f31f0",5⟩ from rfl)
+  have run := callback_trace fetch _ "L_ffffffff810f31f0" here .pc contract ⟨coverage,old+512⟩
     s stored.ready.calls rx (by intro after; rfl) (by decide)
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
   rintro t ⟨⟨returned,calls⟩,trace⟩

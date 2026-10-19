@@ -4,7 +4,7 @@ import PairRemove
 namespace Binary.Pair.Replace
 open Lean Leanux Leanux.WG
 
-def entry : Nat := 0xffffffff813a0350
+def entry : Nat := 0xffffffff813a0550
 
 /-- The caller supplies two existing embedded entries. Only successful
 replacement requires the new entry to be unlinked, writable and a keypair.

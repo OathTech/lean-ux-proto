@@ -34,7 +34,7 @@ theorem guarded_service {fetch address ready writes effect}
   · exact guarded_agreement agree (run s ra pc ready frame)
 
 theorem pc_guarded (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgreement fetch)
-    (outer : UInt64) : GuardedService fetch outer (.ofNat 0xffffffff810f3100)
+    (outer : UInt64) : GuardedService fetch outer (.ofNat 0xffffffff810f31f0)
       (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc) := by
   apply guarded_service agree
   rintro ⟨s,p⟩ ra pc ready frame
@@ -43,7 +43,7 @@ theorem pc_guarded (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgr
   exact pc_run s ra ready frame
 
 theorem cmp4_guarded (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgreement fetch)
-    (outer : UInt64) : GuardedService fetch outer (.ofNat 0xffffffff810f3e80)
+    (outer : UInt64) : GuardedService fetch outer (.ofNat 0xffffffff810f4080)
       (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4) := by
   apply guarded_service agree
   rintro ⟨s,p⟩ ra pc ready frame
@@ -52,7 +52,7 @@ theorem cmp4_guarded (fetch : Int64 → Option Decoded) (agree : ServiceDecoderA
   exact cmp4_run s ra ready frame
 
 theorem const_cmp4_guarded (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgreement fetch)
-    (outer : UInt64) : GuardedService fetch outer (.ofNat 0xffffffff810f3f00)
+    (outer : UInt64) : GuardedService fetch outer (.ofNat 0xffffffff810f4100)
       (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4) := by
   apply guarded_service agree
   rintro ⟨s,p⟩ ra pc ready frame
@@ -61,7 +61,7 @@ theorem const_cmp4_guarded (fetch : Int64 → Option Decoded) (agree : ServiceDe
   exact const_cmp4_run s ra ready frame
 
 theorem const_cmp1_guarded (fetch : Int64 → Option Decoded) (agree : ServiceDecoderAgreement fetch)
-    (outer : UInt64) : GuardedService fetch outer (.ofNat 0xffffffff810f3ec0)
+    (outer : UInt64) : GuardedService fetch outer (.ofNat 0xffffffff810f40c0)
       (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1) := by
   apply guarded_service agree
   rintro ⟨s,p⟩ ra pc ready frame

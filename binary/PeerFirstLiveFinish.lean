@@ -9,7 +9,7 @@ variable {outer : UInt64}
 /-- Accepted live suffix from the successful retry guard through the
     actual RET, retaining the pointer result and all four decisions. -/
 theorem live_finish_history (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (initial : MachineState) (safe : StackSlots outer initial.data.regs.rsp) (body : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame initial returnAddress) (sp : body.regs.rsp = initial.data.regs.rsp-48)
     (coverage : LookupCoverage.Context) (preempt : BitVec 32)

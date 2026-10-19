@@ -10,7 +10,7 @@ variable {outer : UInt64}
     cut. All scratch separation/readiness premises come from LookupEntry.
     The retained callback cursor supplies the helper's stack/read frames. -/
 theorem helper_call_from_bucket (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (c : Config) (coverage : KcovLayout) (preempt : BitVec 32) (returnAddress : UInt64)
     (s : MachineData) (world : World) (v : View)
     (entry : LookupEntry c coverage preempt returnAddress ⟨s, Image.Lookup.entry⟩ world v)

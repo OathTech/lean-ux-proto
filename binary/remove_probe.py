@@ -35,17 +35,17 @@ def prepare(check, out, name='wg_index_hashtable_remove', operation=4,
     functions = extract(ORACLE, service_bodies)
     [anchor] = [f for f in functions if f['name'] == name]
     if name == 'wg_index_hashtable_remove':
-        if anchor['entry'] != 0xffffffff813a0400:
+        if anchor['entry'] != 0xffffffff813a0600:
             raise ValueError('removal entry differs from the pinned Lean definition')
         stores = [i for i in anchor['instructions'] if i['pc'] - anchor['entry'] in (0x24, 0x28, 0x40)]
         if [(i['pc'] - anchor['entry'], bytes.fromhex(i['bytes']).hex()) for i in stores] != [
                 (0x24, '4c8b6308'), (0x28, '4c896500'), (0x40, '48c7431000000000')]:
             raise ValueError('fresh symbolic removal regions differ from image bytes')
     elif name == 'wg_index_hashtable_replace':
-        if anchor['entry'] != 0xffffffff813a0350 or len(anchor['instructions']) != 41:
+        if anchor['entry'] != 0xffffffff813a0550 or len(anchor['instructions']) != 41:
             raise ValueError('replacement anchor differs from the pinned image')
     elif name == 'wg_index_hashtable_insert':
-        if anchor['entry'] != 0xffffffff813a01a0 or len(anchor['instructions']) != 109:
+        if anchor['entry'] != 0xffffffff813a03a0 or len(anchor['instructions']) != 109:
             raise ValueError('insertion anchor differs from the pinned image')
     else:
         raise ValueError('unknown mutator anchor')

@@ -53,7 +53,7 @@ theorem nonnull_guard_history (fetch : Int64 → Option Decoded)
     EBP; no positivity premise excludes dead peers. -/
 theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (body : MachineData) (safe : CallStackSafe outer body.regs.rsp) (nonnull : body.regs.rbx ≠ 0) (count : UInt32)
     (field : body.dmem.loadInt (body.regs.rbx.toBitVec+0x420) 4 = some count.toNat)
     (coverage : LookupCoverage.Context) (preempt : BitVec 32) (ready : LookupCoverage.CallsReady coverage preempt body)
@@ -85,7 +85,7 @@ theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
   rintro guarded ⟨af, machine₁, trace₁⟩
   have pc₁ : guarded.machine.pc = Image.PeerGet.entry+0x1b := congrArg MachineState.pc machine₁
   let event := LookupObservation.decision rxSection .peerGetMaybeZeroNull false guarded.machine
-  have call := scan_call_cursor fetch "L_ffffffff810f3100" guarded
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0" guarded
     (by rw [pc₁]; exact agree _ _ (by rfl)) .pc tracePc body coverage preempt safe trace₁.frame (trace₁.frame).ready.pc_allowed
     rxSection (events ++ [event]) trace₁.observed trace₁.last (by
       simp [LookupObservation.edge, pc₁, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

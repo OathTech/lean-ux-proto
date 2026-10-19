@@ -41,7 +41,7 @@ theorem trace_call (offset : Nat) (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.PeerGet.r1b offset s).All (fun t =>
       t.data.regs = {s.regs with rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s (offset + 5) ∧ t.pc = .ofNat 0xffffffff810f3100) := by
+      t.data.dmem = callMemory s (offset + 5) ∧ t.pc = .ofNat 0xffffffff810f31f0) := by
   simp [run, Image.PeerGet.r1b, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, MachineData.store,
     Reg64s.get64, Reg64s.set64, RelRegOrMem.interp, ConstExpr.interp,
@@ -56,8 +56,8 @@ theorem trace_call (offset : Nat) (s : MachineData) (stackWord : Int)
       exact BitVec.sub_add_cancel _ _
     simpa only [Int64.add_assoc] using
       (cancel (Image.PeerGet.entry + Int64.ofNat offset + 5)
-        (label "L_ffffffff810f3100")).trans (show label "L_ffffffff810f3100" =
-          (-2129710848 : Int64) from by decide)
+        (label "L_ffffffff810f31f0")).trans (show label "L_ffffffff810f31f0" =
+          (-2129710608 : Int64) from by decide)
 
 theorem trace_region_terms :
     Image.PeerGet.r2d = Image.PeerGet.r1b ∧ Image.PeerGet.r3f = Image.PeerGet.r1b ∧
@@ -107,7 +107,7 @@ theorem increment (s : MachineData) (stackWord : Int)
       t.data.regs = incrementRegisters s ∧
       t.data.dmem = (incrementMemory s).storeInt (s.regs.rsp.toBitVec - 8) 8
         (Image.PeerGet.entry + 0x60).toBitVec.toInt ∧
-      t.pc = .ofNat 0xffffffff810f3ec0) := by
+      t.pc = .ofNat 0xffffffff810f40c0) := by
   simp [run, Image.PeerGet.r44, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,
@@ -192,7 +192,7 @@ theorem compare_old (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.PeerGet.r32 0x32 s).All (fun t =>
       t.data.regs = {s.regs with rdi := 0, rsi := .ofBitVec ((s.regs.get (.low .rbp .W32)).setWidth 64), rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x3b ∧ t.pc = .ofNat 0xffffffff810f3f00) := by
+      t.data.dmem = callMemory s 0x3b ∧ t.pc = .ofNat 0xffffffff810f4100) := by
   simp [run, Image.PeerGet.r32, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,
@@ -208,7 +208,7 @@ theorem compare_negative (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.PeerGet.r6e 0x6e s).All (fun t =>
       t.data.regs = {s.regs with rdi := 0, rsi := .ofBitVec ((s.regs.get (.low .rbp .W32)).setWidth 64), rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x77 ∧ t.pc = .ofNat 0xffffffff810f3f00) := by
+      t.data.dmem = callMemory s 0x77 ∧ t.pc = .ofNat 0xffffffff810f4100) := by
   simp [run, Image.PeerGet.r6e, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,
@@ -224,7 +224,7 @@ theorem compare_increment (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.PeerGet.r80 0x80 s).All (fun t =>
       t.data.regs = {s.regs with rdi := 0, rsi := .ofBitVec ((s.regs.get (.low .r12 .W32)).setWidth 64), rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x8a ∧ t.pc = .ofNat 0xffffffff810f3f00) := by
+      t.data.dmem = callMemory s 0x8a ∧ t.pc = .ofNat 0xffffffff810f4100) := by
   simp [run, Image.PeerGet.r80, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,
@@ -240,7 +240,7 @@ theorem compare_result (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.PeerGet.r94 0x94 s).All (fun t =>
       t.data.regs = {s.regs with rdi := 0, rsi := .ofBitVec ((s.regs.get (.low .rbp .W32)).setWidth 64), rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x9d ∧ t.pc = .ofNat 0xffffffff810f3f00) := by
+      t.data.dmem = callMemory s 0x9d ∧ t.pc = .ofNat 0xffffffff810f4100) := by
   simp [run, Image.PeerGet.r94, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,
@@ -256,7 +256,7 @@ theorem compare_zero (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.PeerGet.rb5 0xb5 s).All (fun t =>
       t.data.regs = {s.regs with rdi := 0, rsi := 0, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0xbe ∧ t.pc = .ofNat 0xffffffff810f3f00) := by
+      t.data.dmem = callMemory s 0xbe ∧ t.pc = .ofNat 0xffffffff810f4100) := by
   simp [run, Image.PeerGet.rb5, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,
@@ -272,7 +272,7 @@ theorem compare_dead (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.PeerGet.rd4 0xd4 s).All (fun t =>
       t.data.regs = {s.regs with rdi := 0, rsi := 0, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0xdd ∧ t.pc = .ofNat 0xffffffff810f3f00) := by
+      t.data.dmem = callMemory s 0xdd ∧ t.pc = .ofNat 0xffffffff810f4100) := by
   simp [run, Image.PeerGet.rd4, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,
@@ -288,7 +288,7 @@ theorem compare_one (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.PeerGet.rc3 0xc3 s).All (fun t =>
       t.data.regs = {s.regs with rdi := 0, rsi := 1, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0xcf ∧ t.pc = .ofNat 0xffffffff810f3f00) := by
+      t.data.dmem = callMemory s 0xcf ∧ t.pc = .ofNat 0xffffffff810f4100) := by
   simp [run, Image.PeerGet.rc3, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,
@@ -304,7 +304,7 @@ theorem warn_arguments (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.PeerGet.re6 0xe6 s).All (fun t =>
       t.data.regs = {s.regs with rdi := s.regs.r13, rsi := 0, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0xf0 ∧ t.pc = .ofNat 0xffffffff812da4d0) := by
+      t.data.dmem = callMemory s 0xf0 ∧ t.pc = .ofNat 0xffffffff812da6d0) := by
   simp [run, Image.PeerGet.re6, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,

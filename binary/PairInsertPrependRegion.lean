@@ -89,11 +89,11 @@ theorem prepend_root (s : MachineData) (old : Int)
 theorem prepend_test (s : MachineData) :
     (run prependTest 0x14d s).All (fun t => t.data.regs=s.regs ∧ t.data.dmem=s.dmem ∧
       t.pc=(if s.regs.rbx.toBitVec=0 then codeEntry+0x15b else codeEntry+0x152)) := by
-  change (Directives.interp (testCode "L_ffffffff813a02fb") s (codeEntry+0x14d)
+  change (Directives.interp (testCode "L_ffffffff813a04fb") s (codeEntry+0x14d)
     (fun pc data => .done ⟨data,pc⟩)).All _
-  have target : label "L_ffffffff813a02fb"=codeEntry+0x15b := by decide +kernel
+  have target : label "L_ffffffff813a04fb"=codeEntry+0x15b := by decide +kernel
   simpa only [target,Int64.add_assoc,show (0x14d : Int64)+5=0x152 by decide +kernel]
-    using guard_generic "L_ffffffff813a02fb" (codeEntry+0x14d) s
+    using guard_generic "L_ffffffff813a04fb" (codeEntry+0x14d) s
 
 #print axioms prepend_setup
 #print axioms pointer_store

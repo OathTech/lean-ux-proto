@@ -43,10 +43,10 @@ theorem pc_call (fetch : Int64 → Option Decoded) (agree : AllowedipsDecoderAgr
       Local (Writes initial coverage old) ⟨s,AllowedipsImage.Lookup.entry+.ofNat offset⟩ rxSection [] t)
       ⟨⟨s,AllowedipsImage.Lookup.entry+.ofNat offset⟩,[⟨s,AllowedipsImage.Lookup.entry+.ofNat offset⟩]⟩ := by
   have decoded : AllowedipsImage.fetch (AllowedipsImage.Lookup.entry+.ofNat offset) =
-      some ⟨callInstruction "L_ffffffff810f3100",5⟩ := by
+      some ⟨callInstruction "L_ffffffff810f31f0",5⟩ := by
     simp only [List.mem_cons,List.not_mem_nil,or_false] at site
     rcases site with rfl | rfl | rfl | rfl | rfl <;> rfl
-  have run := callback fetch _ "L_ffffffff810f3100" (agree _ _ decoded) .pc contract pre s state rxSection
+  have run := callback fetch _ "L_ffffffff810f31f0" (agree _ _ decoded) .pc contract pre s state rxSection
     (by
       intro after
       simp only [List.mem_cons,List.not_mem_nil,or_false] at site
@@ -69,8 +69,8 @@ theorem cmp_call (fetch : Int64 → Option Decoded) (agree : AllowedipsDecoderAg
       Local (Writes initial coverage old) ⟨s,AllowedipsImage.Lookup.entry+.ofNat offset⟩ rxSection [] t)
       ⟨⟨s,AllowedipsImage.Lookup.entry+.ofNat offset⟩,[⟨s,AllowedipsImage.Lookup.entry+.ofNat offset⟩]⟩ := by
   have decoded : AllowedipsImage.fetch (AllowedipsImage.Lookup.entry+.ofNat offset) =
-      some ⟨callInstruction "L_ffffffff810f3ec0",5⟩ := by rcases site with rfl | rfl <;> rfl
-  have run := callback fetch _ "L_ffffffff810f3ec0" (agree _ _ decoded) .constCmp1 contract pre s state rxSection
+      some ⟨callInstruction "L_ffffffff810f40c0",5⟩ := by rcases site with rfl | rfl <;> rfl
+  have run := callback fetch _ "L_ffffffff810f40c0" (agree _ _ decoded) .constCmp1 contract pre s state rxSection
     (by intro after; rcases site with rfl | rfl <;> rfl)
     (by rcases site with rfl | rfl <;> decide)
   apply eventually_weaken (historyStep fetch) _ _ _ _ run

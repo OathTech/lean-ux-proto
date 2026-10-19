@@ -13,7 +13,7 @@ local instance : Labels := Image.linkedLabels
     successor and every appended-cut memory frame. Callback readiness at
     the body is derived from the pushed word and physical service frame. -/
 theorem start_history (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (state : LookupCoverage.Context.At coverage preempt s.dmem)
     (phase : preempt = coverage.entryPreempt ∨ preempt = 512+coverage.entryPreempt)
@@ -73,7 +73,7 @@ theorem start_history (fetch : Int64 → Option Decoded)
       ((history ++ prologueStates s) ++ [prologueCalled s]) = .ok events := by
     rw [List.append_assoc, ← restored, List.append_assoc]
     simpa only [List.singleton_append, List.append_nil] using seen
-  have call := LookupCoverage.First.observed_callback fetch (.ofNat 0xffffffff810f3100) .pc contract
+  have call := LookupCoverage.First.observed_callback fetch (.ofNat 0xffffffff810f31f0) .pc contract
     coverage preempt (prologueCalled s) (Image.Lookup.entry+0x19).toUInt64 s.regs.rsp (by
       change (s.regs.rsp-40)-8 ≠ s.regs.rsp+8
       stack_not_return) rfl entry calleeState (.inl ⟨rfl, phase⟩)

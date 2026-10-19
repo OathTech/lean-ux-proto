@@ -13,7 +13,7 @@ theorem clear_callback (fetch : Int64 → Option Decoded) (agree : IndexRemoveDe
     Eventually (guardedStep fetch (StackGuard initial.data.regs.rsp)) (fun t => t.pc=codeEntry+0x48 ∧
       Core c initial ra true (write64 shadow (f.removed+o.pprev) 0) t.data)
       ⟨s,codeEntry+0x3b⟩ := by
-  have run := core_callback fetch (codeEntry+0x3b) "L_ffffffff810f3100" trace (agree _ _ (by rfl)) facts core
+  have run := core_callback fetch (codeEntry+0x3b) "L_ffffffff810f31f0" trace (agree _ _ (by rfl)) facts core
   apply eventually_trans (guardedStep fetch (StackGuard initial.data.regs.rsp)) _ _ _ run
   rintro t ⟨pc,core,_,_⟩
   apply Callback.at_pc pc
@@ -38,7 +38,7 @@ theorem body (fetch : Int64 → Option Decoded) (agree : IndexRemoveDecoderAgree
     rfl
   have mappedFirst : ((write64 original f.previous f.next).loadInt (.ofNat 64 (f.removed+o.pprev)) 8).isSome=true :=
     storeInt_defined _ _ _ _ _ _ mappedOriginal
-  have first := core_callback fetch (codeEntry+0x1f) "L_ffffffff810f3100" trace (agree _ _ (by rfl)) facts core
+  have first := core_callback fetch (codeEntry+0x1f) "L_ffffffff810f31f0" trace (agree _ _ (by rfl)) facts core
   apply eventually_trans (guardedStep fetch (StackGuard initial.data.regs.rsp)) _ _ _ first
   rintro called ⟨pc,core,bp0,_⟩
   have splice := predecessor fetch agree facts core layout f (by rw [core.owner]; exact cursor)
@@ -50,7 +50,7 @@ theorem body (fetch : Int64 → Option Decoded) (agree : IndexRemoveDecoderAgree
     have tail := clear_callback fetch agree trace facts core layout f clearCursor mappedFirst
     simpa only [unlinkMemory,zero,↓reduceIte] using Callback.at_pc pc tail
   · rw [ite_eq_right zero] at pc
-    have callback := core_callback fetch (codeEntry+0x31) "L_ffffffff810f3100" trace (agree _ _ (by rfl)) facts core
+    have callback := core_callback fetch (codeEntry+0x31) "L_ffffffff810f31f0" trace (agree _ _ (by rfl)) facts core
     apply eventually_trans (guardedStep fetch (StackGuard initial.data.regs.rsp)) _ _ _ (Callback.at_pc pc callback)
     rintro called ⟨pc,core,bp',next'⟩
     obtain ⟨entry,tail,fields⟩ := f.nextFields zero

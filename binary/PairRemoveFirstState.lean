@@ -59,7 +59,7 @@ theorem start (fetch : Int64 → Option Decoded) (agree : IndexRemoveDecoderAgre
     intro a written inside
     rw [sp] at inside
     exact facts.geometry.bufferLive a ⟨.inl written.1,written.2⟩ (Stack.inside _ 4 4 (by decide) a inside)
-  have service := GuardedServices.service_endpoint fetch initial.data.regs.rsp (.ofNat 0xffffffff810f3100) .pc (trace _) c entered
+  have service := GuardedServices.service_endpoint fetch initial.data.regs.rsp (.ofNat 0xffffffff810f31f0) .pc (trace _) c entered
     (codeEntry+12).toUInt64 entryPc entryFrame (by rw [registers]; stack_not_return) state stackSeparate
     (fun a written metadata => facts.geometry.bufferMetadata a ⟨.inl written.1,written.2⟩
       (phase_metadata c false a metadata))

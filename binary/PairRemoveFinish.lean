@@ -84,7 +84,7 @@ theorem finish (fetch : Int64 → Option Decoded) (agree : IndexRemoveDecoderAgr
     Eventually (instructionStep fetch) (fun t => Returned initial t ra ∧
       MemoryReady c initial ra 4 (savedWords initial.data) false t.data.dmem ∧
       EqualOutside (External c initial 4) shadow t.data.dmem) ⟨s,codeEntry+0x48⟩ := by
-  have call := core.callback fetch (codeEntry+0x48) "L_ffffffff810f3100" trace
+  have call := core.callback fetch (codeEntry+0x48) "L_ffffffff810f31f0" trace
     (agree _ _ (by rfl)) facts
   apply eventually_trans (instructionStep fetch) _ _ _ call
   rintro t ⟨pc,core,_,_⟩

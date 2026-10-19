@@ -87,7 +87,7 @@ theorem clear_trace (fetch : Int64 → Option Decoded)
     The emitted null decision is tied to its actual successor, and the
     returned event to the final state; no expected World is supplied. -/
 theorem null_suffix_history (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (initial : MachineState) (safe : StackSlots outer initial.data.regs.rsp) (body : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame initial returnAddress) (sp : body.regs.rsp = initial.data.regs.rsp-48)
     (null : body.regs.rbx = 0) (coverage : LookupCoverage.Context) (preempt : BitVec 32)

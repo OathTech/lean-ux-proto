@@ -32,7 +32,7 @@ theorem prologue (s : MachineData)
         r12 := .ofBitVec ((s.regs.get (.low .rsi .W32)).setWidth 64),
         rbx := .ofBitVec ((s.regs.get (.low .rsi .W32)).setWidth 64),
         rbp := s.regs.rdx, rsp := s.regs.rsp-88} ∧
-      t.data.dmem = entryMemory s 8 ∧ t.pc = .ofNat 0xffffffff810f3100) := by
+      t.data.dmem = entryMemory s 8 ∧ t.pc = .ofNat 0xffffffff810f31f0) := by
   have mapped (n : Nat) (hn : n<8) := entryMemory_mapped s n _ (stack n hn)
   have h0 := mapped 0 (by decide)
   have h1 := mapped 1 (by decide)

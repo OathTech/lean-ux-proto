@@ -27,7 +27,7 @@ theorem prologue (s : MachineData)
     (run Image.PeerGet.r00 0 s).All (fun t =>
       t.data.regs = {s.regs with
         rbx := s.regs.rdi, rsp := s.regs.rsp - 56} ∧
-      t.data.dmem = saveMemory s 7 ∧ t.pc = .ofNat 0xffffffff810f3100) := by
+      t.data.dmem = saveMemory s 7 ∧ t.pc = .ofNat 0xffffffff810f31f0) := by
   have mapped (n : Nat) (hn : n < 7) :=
     saves_preserve_mapped s n _ (stack n hn)
   have h0 := mapped 0 (by decide)

@@ -8,9 +8,9 @@ namespace Binary.Sequential.First
 open Leanux Leanux.WG TrustBase LookupRelation LookupHistory LookupObservation Callback
 local instance : Labels := Image.linkedLabels
 theorem selected_execution (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
-    (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3e80) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4)) (traceConstCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
-    (traceByte : LeafService fetch (.ofNat 0xffffffff810f3ec0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1)) (bh : LeafService fetch (.ofNat 0xffffffff810732c0) BhEnableReady (fun _ => InRange preemptCountAddress 4) (fun before after => ∀ old : BitVec 32, before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) → after.data.dmem.loadInt preemptCountAddress 4 = some ((old-before.data.regs.get (.low .rsi .W32)).toNat : Int)))
+    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4080) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4)) (traceConstCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (traceByte : LeafService fetch (.ofNat 0xffffffff810f40c0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1)) (bh : LeafService fetch (.ofNat 0xffffffff810732c0) BhEnableReady (fun _ => InRange preemptCountAddress 4) (fun before after => ∀ old : BitVec 32, before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) → after.data.dmem.loadInt preemptCountAddress 4 = some ((old-before.data.regs.get (.low .rsi .W32)).toNat : Int)))
     (c : Config) (coverage : KcovLayout) (preempt : BitVec 32) (returnAddress : UInt64)
     (s : MachineData) (world : World)
     (pre : Pre_lookup c coverage preempt returnAddress ⟨s, Image.Lookup.entry⟩ world)
@@ -78,8 +78,8 @@ theorem selected_execution (fetch : Int64 → Option Decoded)
       simpa only [OwnerWord.pointer, UInt64.toNat_toBitVec] using congrArg (fun n : Nat => some (n : Int)) h
 
 theorem miss_execution (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
-    (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3e80) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4)) (traceConstCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4080) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4)) (traceConstCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (bh : LeafService fetch (.ofNat 0xffffffff810732c0) BhEnableReady (fun _ => InRange preemptCountAddress 4) (fun before after => ∀ old : BitVec 32, before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) → after.data.dmem.loadInt preemptCountAddress 4 = some ((old-before.data.regs.get (.low .rsi .W32)).toNat : Int)))
     (c : Config) (coverage : KcovLayout) (preempt : BitVec 32) (ra : UInt64)
     (s : MachineData) (world : World)
@@ -164,8 +164,8 @@ This deliberately omits internal correspondence and the M1 permission audit;
 it makes no claim of concurrent contextual refinement. -/
 theorem lookup_simulation (fetch : Int64 → Option Decoded)
     (decoder : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp4 : LeafService fetch (.ofNat 0xffffffff810f3e80) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4))
-    (traceConstCmp4 : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4)) (traceConstCmp1 : LeafService fetch (.ofNat 0xffffffff810f3ec0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp4 : LeafService fetch (.ofNat 0xffffffff810f4080) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4))
+    (traceConstCmp4 : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4)) (traceConstCmp1 : LeafService fetch (.ofNat 0xffffffff810f40c0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1))
     (bhEnable : LeafService fetch (.ofNat 0xffffffff810732c0) BhEnableReady (fun _ => InRange preemptCountAddress 4) (fun before after => ∀ old : BitVec 32, before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) → after.data.dmem.loadInt preemptCountAddress 4 = some ((old-before.data.regs.get (.low .rsi .W32)).toNat : Int)))
     (c : Config) (coverage : KcovLayout) (preempt : BitVec 32) (returnAddress : UInt64)
     (initial : MachineState) (world : World)

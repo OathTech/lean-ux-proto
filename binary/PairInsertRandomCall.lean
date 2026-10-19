@@ -24,7 +24,7 @@ theorem Core.random_call (fetch : Int64 → Option Decoded) (decoder : IndexInse
       Index.StorageFrame n o s.dmem t.data.dmem ∧
       EqualOutside (ProviderWrites config c initial) s.dmem t.data.dmem) ⟨s,codeEntry+0x74⟩ := by
   let ret := codeEntry+0x79
-  let target := label "L_ffffffff81375000"
+  let target := label "L_ffffffff81375200"
   let entered := calledState s ret target
   have pushFrame : EqualOutside (InRange (Stack.slot initial.data.regs.rsp.toBitVec 7) 8) s.dmem entered.data.dmem := by
     simpa only [entered,calledState,core.call_slot] using
@@ -38,7 +38,7 @@ theorem Core.random_call (fetch : Int64 → Option Decoded) (decoder : IndexInse
   have old : MemoryReady c initial ra (savedWords initial.data) .outer entered.data.dmem := by
     simpa only [entered,calledState,core.call_slot] using core.memory.call_store facts ret.toBitVec
   have calls := core.calls facts
-  have physicalCall := call_instruction fetch (codeEntry+0x74) "L_ffffffff81375000"
+  have physicalCall := call_instruction fetch (codeEntry+0x74) "L_ffffffff81375200"
     (decoder _ _ (by rfl)) s [] calls.mapped
   have callRun := Sequential.forget (Q := fun t => t=calledState s (codeEntry+0x74+5) target)
     (historySteps_eventually fetch 1 _ _ physicalCall) (fun _ h => h.1)

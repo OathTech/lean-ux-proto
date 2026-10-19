@@ -29,7 +29,7 @@ theorem peer_negative_guard (fetch : Int64 → Option Decoded)
       (if (s.regs.get (.low .rbp .W32)).msb then Image.PeerGet.entry+0xe1
        else Image.PeerGet.entry+0x7b) history)
       ⟨⟨s, Image.PeerGet.entry+0x77⟩, history⟩ := by
-  exact test_self_sign fetch _ _ _ "L_ffffffff813996f1" 2 2 (by decide) (by decide)
+  exact test_self_sign fetch _ _ _ "L_ffffffff813998f1" 2 2 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 theorem peer_wrap_guard (fetch : Int64 → Option Decoded)
@@ -39,7 +39,7 @@ theorem peer_wrap_guard (fetch : Int64 → Option Decoded)
       (if (s.regs.get (.low .r12 .W32)).msb then Image.PeerGet.entry+0xe1
        else Image.PeerGet.entry+0x8f) history)
       ⟨⟨s, Image.PeerGet.entry+0x8a⟩, history⟩ := by
-  exact test_self_sign fetch _ _ _ "L_ffffffff813996f1" 3 2 (by decide) (by decide)
+  exact test_self_sign fetch _ _ _ "L_ffffffff813998f1" 3 2 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 #print axioms test_self_sign

@@ -34,8 +34,8 @@ import PairInsertInput
 namespace Binary.TrustBase
 
 def krakenCommit : String := "dc3824fd5ca36c28b11321b8e7f7e2389b6f6ec4"
-def kernelIdentity : String := "6b2018b99f086345ce9fa316a89c76d27b40b536d5feb4402510e5fb62a5ae24"
-def elfSha256 : String := "16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774"
+def kernelIdentity : String := "b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767"
+def elfSha256 : String := "06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"
 
 local instance : Labels := Image.linkedLabels
@@ -327,20 +327,20 @@ def KcovEffect (kind : KcovKind) (before after : MachineState) : Prop :=
 
 /-- KCOV PC callback: only its physically planned stores may occur. -/
 def TracePcContract (fetch : Int64 → Option Decoded) : Prop :=
-  ServiceReturns fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)
+  ServiceReturns fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)
 
 /-- KCOV variable/variable 32-bit comparison callback. -/
 def TraceCmp4Contract (fetch : Int64 → Option Decoded) : Prop :=
-  ServiceReturns fetch (.ofNat 0xffffffff810f3e80) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4)
+  ServiceReturns fetch (.ofNat 0xffffffff810f4080) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4)
 
 /-- KCOV constant/variable 32-bit comparison callback. -/
 def TraceConstCmp4Contract (fetch : Int64 → Option Decoded) : Prop :=
-  ServiceReturns fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4)
+  ServiceReturns fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4)
     (KcovWrites .constCmp4) (KcovEffect .constCmp4)
 
 /-- KCOV constant/variable 8-bit comparison callback used by peer-get. -/
 def TraceConstCmp1Contract (fetch : Int64 → Option Decoded) : Prop :=
-  ServiceReturns fetch (.ofNat 0xffffffff810f3ec0) (KcovReady .constCmp1)
+  ServiceReturns fetch (.ofNat 0xffffffff810f40c0) (KcovReady .constCmp1)
     (KcovWrites .constCmp1) (KcovEffect .constCmp1)
 
 /-- The actual no-work BH-enable path, including nested disable counts.
@@ -386,23 +386,23 @@ def AllowedipsServiceReturns (fetch : Int64 → Option Decoded) (address : Int64
       ⟨s, [s]⟩
 
 def AllowedipsTracePcContract (fetch : Int64 → Option Decoded) : Prop :=
-  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f3100)
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f31f0)
     (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)
 
 def AllowedipsTraceCmp1Contract (fetch : Int64 → Option Decoded) : Prop :=
-  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f3e40)
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f4040)
     (KcovReady .cmp1) (KcovWrites .cmp1) (KcovEffect .cmp1)
 
 def AllowedipsTraceCmp8Contract (fetch : Int64 → Option Decoded) : Prop :=
-  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f3ea0)
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f40a0)
     (KcovReady .cmp8) (KcovWrites .cmp8) (KcovEffect .cmp8)
 
 def AllowedipsTraceConstCmp1Contract (fetch : Int64 → Option Decoded) : Prop :=
-  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f3ec0)
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f40c0)
     (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1)
 
 def AllowedipsTraceConstCmp4Contract (fetch : Int64 → Option Decoded) : Prop :=
-  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f3f00)
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f4100)
     (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4)
 
 /-- As in M1, this contract covers the no-pending-work BH-enable path.
@@ -705,7 +705,7 @@ It promises no particular random value. Agreement with a recorded input tape
 is a separate safety hypothesis; this declaration cannot produce arbitrary
 requested draws from one fixed machine state. -/
 def RandomReturnContract (fetch : Int64 → Option Decoded) (privateState : RandomProvider.Config) : Prop :=
-  ∀ coverage preempt s returnAddress, s.pc=.ofNat 0xffffffff81375000 →
+  ∀ coverage preempt s returnAddress, s.pc=.ofNat 0xffffffff81375200 →
     RandomReady privateState coverage preempt s → EntryFrame s returnAddress →
     Eventually (historyStep fetch) (fun t =>
       Returned s t.machine returnAddress ∧
@@ -733,7 +733,7 @@ structure RandomInputCoupling (fetch : Int64 → Option Decoded) (privateState :
     (∀ a, RandomProvider.PrivateBytes privateState a → before.get? a=after.get? a) →
     inputAt before records → inputAt after records
   returned : ∀ s t history records value rest,
-    s.pc=.ofNat 0xffffffff81375000 → RandomReady privateState coverage preempt s →
+    s.pc=.ofNat 0xffffffff81375200 → RandomReady privateState coverage preempt s →
     EntryFrame s returnAddress → inputAt s.data.dmem records →
     Pair.Insert.draw records=.ok (value,rest) →
     ActualHistory fetch s history → history.getLast?=some t →

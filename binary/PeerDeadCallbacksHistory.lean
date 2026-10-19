@@ -20,7 +20,7 @@ theorem dead_negative_stage (fetch : Int64 → Option Decoded)
       StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzNegative false point]) t)
       ⟨⟨body, Image.PeerGet.entry+0xb0⟩, history⟩ := by
-  have first := scan_call_cursor fetch "L_ffffffff810f3100"
+  have first := scan_call_cursor fetch "L_ffffffff810f31f0"
     ⟨⟨body, Image.PeerGet.entry+0xb0⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc
     base coverage preempt frame (frame).ready.pc_allowed
     rxSection events observed last (by
@@ -38,7 +38,7 @@ theorem dead_negative_stage (fetch : Int64 → Option Decoded)
   rintro afterSetup ⟨af₁, af₂, machine₂, trace₂⟩
   let point : MachineState := ⟨zeroed afterPc.machine.data (.low .rsi .W32) af₁, Image.PeerGet.entry+0xb7⟩
   have pc₂ : afterSetup.machine.pc = Image.PeerGet.entry+0xb9 := congrArg MachineState.pc machine₂
-  have final := scan_call_cursor fetch "L_ffffffff810f3f00" afterSetup
+  have final := scan_call_cursor fetch "L_ffffffff810f4100" afterSetup
     (by rw [pc₂]; exact agree _ _ (by rfl)) .constCmp4 traceCmp base coverage preempt trace₂.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection (events ++ [LookupObservation.decision rxSection .refcountAddNzNegative false point])
     trace₂.observed trace₂.last (by
@@ -67,7 +67,7 @@ theorem dead_wrap_stage (fetch : Int64 → Option Decoded)
       StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .refcountAddNzWraps false point]) t)
       ⟨⟨body, Image.PeerGet.entry+0xbe⟩, history⟩ := by
-  have first := scan_call_cursor fetch "L_ffffffff810f3100"
+  have first := scan_call_cursor fetch "L_ffffffff810f31f0"
     ⟨⟨body, Image.PeerGet.entry+0xbe⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc
     base coverage preempt frame (frame).ready.pc_allowed
     rxSection events observed last (by
@@ -85,7 +85,7 @@ theorem dead_wrap_stage (fetch : Int64 → Option Decoded)
   rintro afterSetup ⟨af, machine₂, trace₂⟩
   let point : MachineState := ⟨oneArgument afterPc.machine.data, Image.PeerGet.entry+0xc8⟩
   have pc₂ : afterSetup.machine.pc = Image.PeerGet.entry+0xca := congrArg MachineState.pc machine₂
-  have final := scan_call_cursor fetch "L_ffffffff810f3f00" afterSetup
+  have final := scan_call_cursor fetch "L_ffffffff810f4100" afterSetup
     (by rw [pc₂]; exact agree _ _ (by rfl)) .constCmp4 traceCmp base coverage preempt trace₂.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection (events ++ [LookupObservation.decision rxSection .refcountAddNzWraps false point])
     trace₂.observed trace₂.last (by
@@ -114,7 +114,7 @@ theorem dead_result_stage (fetch : Int64 → Option Decoded)
       StableTrace base coverage preempt rxSection history
         (events ++ [LookupObservation.decision rxSection .peerGetMaybeZeroDead true point]) t)
       ⟨⟨body, Image.PeerGet.entry+0xcf⟩, history⟩ := by
-  have first := scan_call_cursor fetch "L_ffffffff810f3100"
+  have first := scan_call_cursor fetch "L_ffffffff810f31f0"
     ⟨⟨body, Image.PeerGet.entry+0xcf⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc
     base coverage preempt frame (frame).ready.pc_allowed
     rxSection events observed last (by
@@ -132,7 +132,7 @@ theorem dead_result_stage (fetch : Int64 → Option Decoded)
   rintro afterSetup ⟨af₁, af₂, machine₂, trace₂⟩
   let point : MachineState := ⟨zeroed afterPc.machine.data (.low .rsi .W32) af₁, Image.PeerGet.entry+0xd6⟩
   have pc₂ : afterSetup.machine.pc = Image.PeerGet.entry+0xd8 := congrArg MachineState.pc machine₂
-  have final := scan_call_cursor fetch "L_ffffffff810f3f00" afterSetup
+  have final := scan_call_cursor fetch "L_ffffffff810f4100" afterSetup
     (by rw [pc₂]; exact agree _ _ (by rfl)) .constCmp4 traceCmp base coverage preempt trace₂.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection (events ++ [LookupObservation.decision rxSection .peerGetMaybeZeroDead true point])
     trace₂.observed trace₂.last (by

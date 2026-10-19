@@ -26,7 +26,7 @@ theorem clear_callback (fetch : Int64 → Option Decoded) (agree : IndexReplaceD
       Core c initial ra true
         (write64 (write64 (write64 shadow (f.removed+o.next) 0) (f.removed+o.pprev) 0xdead000000000122)
           (f.removed+o.pprev) 0) result t.data) ⟨s,codeEntry+0x5e⟩ := by
-  have call := core.callback fetch (codeEntry+0x5e) "L_ffffffff810f3100" trace (agree _ _ (by rfl)) facts
+  have call := core.callback fetch (codeEntry+0x5e) "L_ffffffff810f31f0" trace (agree _ _ (by rfl)) facts
   apply eventually_trans (instructionStep fetch) _ _ _ call
   rintro t ⟨pc,core,_,_⟩
   exact at_pc pc (clear fetch agree facts core layout f
@@ -70,7 +70,7 @@ theorem body (fetch : Int64 → Option Decoded) (agree : IndexReplaceDecoderAgre
     apply prefix_mapped
     rw [word_loadInt _ _ _ _ _ f.old.fields.back]
     rfl
-  have call := core.callback fetch (codeEntry+0x26) "L_ffffffff810f3100" trace (agree _ _ (by rfl)) facts
+  have call := core.callback fetch (codeEntry+0x26) "L_ffffffff810f31f0" trace (agree _ _ (by rfl)) facts
   apply eventually_trans (instructionStep fetch) _ _ _ call
   rintro called ⟨pc,core,_,_⟩
   have spliceRun := splice fetch agree facts core layout storage f
@@ -82,7 +82,7 @@ theorem body (fetch : Int64 → Option Decoded) (agree : IndexReplaceDecoderAgre
     have tail := clear_callback fetch agree trace facts core layout f.old nextAddress backAddress oldNext oldBack
     simpa only [ReplaceFocus.after,replaceMemory_split,zero,↓reduceIte] using at_pc pc tail
   · rw [ite_eq_right zero] at pc
-    have callback := core.callback fetch (codeEntry+0x51) "L_ffffffff810f3100" trace (agree _ _ (by rfl)) facts
+    have callback := core.callback fetch (codeEntry+0x51) "L_ffffffff810f31f0" trace (agree _ _ (by rfl)) facts
     apply eventually_trans (instructionStep fetch) _ _ _ (at_pc pc callback)
     rintro called ⟨pc,core,_,linkKept⟩
     obtain ⟨entry,next,fields⟩ := f.old.nextFields zero

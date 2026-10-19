@@ -68,7 +68,7 @@ theorem increment_call_history (fetch : Int64 → Option Decoded)
   apply eventually_trans (historyStep fetch) _ _ _ increment
   rintro atCall ⟨af, machine, recorded, trace⟩
   have pc : atCall.machine.pc = Image.PeerGet.entry+0x5b := congrArg MachineState.pc machine
-  have call := scan_call_cursor fetch "L_ffffffff810f3ec0" atCall
+  have call := scan_call_cursor fetch "L_ffffffff810f40c0" atCall
     (by rw [pc]; exact agree _ _ (by rfl)) .constCmp1 traceByte (incFinal body af) coverage preempt trace.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection events trace.observed trace.last (by
       simp [LookupObservation.edge, pc, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

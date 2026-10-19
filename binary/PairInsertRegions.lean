@@ -20,7 +20,7 @@ theorem prologue (s : MachineData)
     (stack : ∀ n<7, (s.dmem.loadInt (s.regs.rsp.toBitVec-.ofNat 64 ((n+1)*8)) 8).isSome=true) :
     (run IndexInsertImage.Insert.r00 0 s).All (fun t =>
       t.data.regs={s.regs with r12 := s.regs.rdi,rbp := s.regs.rsi,rsp := s.regs.rsp-56} ∧
-      t.data.dmem=saveMemory s 7 ∧ t.pc=.ofNat 0xffffffff810f3100) := by
+      t.data.dmem=saveMemory s 7 ∧ t.pc=.ofNat 0xffffffff810f31f0) := by
   have mapped (n : Nat) (bound : n<7) :=
     Stack.mapped s.dmem s.regs.rsp.toBitVec (savedWords s) n _ 8 (stack n bound)
   obtain ⟨v0,h0⟩ := Option.isSome_iff_exists.mp (mapped 0 (by decide))

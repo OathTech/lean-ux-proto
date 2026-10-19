@@ -15,7 +15,7 @@ theorem endian32 (s : MachineData) (network : BitVec 32) (old : Int)
       t.data.regs = {s.regs with rax := .ofBitVec ((swap32 network).setWidth 64)} ∧
       t.data.dmem = s.dmem.storeInt (s.regs.rsp.toBitVec+16) 4 (swap32 network).toInt ∧
       t.pc = AllowedipsImage.Lookup.entry+0x61) := by
-  have target : label "L_ffffffff813a0891" = AllowedipsImage.Lookup.entry+0x61 := by decide
+  have target : label "L_ffffffff813a0a91" = AllowedipsImage.Lookup.entry+0x61 := by decide
   simp [run, AllowedipsImage.Lookup.r176, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     RelRegOrMem.interp, MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,
@@ -54,7 +54,7 @@ theorem endian128 (s : MachineData) (high low : BitVec 64) (oldHigh oldLow : Int
       t.data.regs = {s.regs with rax := .ofBitVec (swap64 low)} ∧
       t.data.dmem = (highStored s high).storeInt (s.regs.rsp.toBitVec+24) 8 (swap64 low).toInt ∧
       t.pc = AllowedipsImage.Lookup.entry+0x61) := by
-  have target : label "L_ffffffff813a0891" = AllowedipsImage.Lookup.entry+0x61 := by decide
+  have target : label "L_ffffffff813a0a91" = AllowedipsImage.Lookup.entry+0x61 := by decide
   simp [run, AllowedipsImage.Lookup.r154, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     RelRegOrMem.interp, MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,

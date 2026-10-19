@@ -6,7 +6,7 @@ local instance : Labels := Image.linkedLabels
 variable {outer : UInt64}
 
 theorem scan_search (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3e80) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4080) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4))
     (base : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (query rxSection : Nat)
     (queryReg : (base.regs.get (.low .r12 .W32)).toNat = query)

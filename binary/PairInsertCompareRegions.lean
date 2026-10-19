@@ -26,22 +26,22 @@ theorem first_compare (s : MachineData) :
       t.data.regs=s.regs ∧ t.data.dmem=s.dmem ∧
       t.pc=(if (s.regs.get (.low .r13 .W32)).toNat==(s.regs.get (.low .r14 .W32)).toNat
         then codeEntry+0x6f else codeEntry+0xb9)) := by
-  change (Directives.interp (compareCode .r14 "L_ffffffff813a020f") s (codeEntry+0xb4)
+  change (Directives.interp (compareCode .r14 "L_ffffffff813a040f") s (codeEntry+0xb4)
     (fun pc data => .done ⟨data,pc⟩)).All _
-  have target : label "L_ffffffff813a020f"=codeEntry+0x6f := by decide +kernel
+  have target : label "L_ffffffff813a040f"=codeEntry+0x6f := by decide +kernel
   simpa only [target,Int64.add_assoc,show (0xb4 : Int64)+5=0xb9 by decide +kernel]
-    using compare_generic .r14 "L_ffffffff813a020f" (codeEntry+0xb4) s
+    using compare_generic .r14 "L_ffffffff813a040f" (codeEntry+0xb4) s
 
 theorem second_compare (s : MachineData) :
     (run IndexInsertImage.Insert.r119 0x119 s).All (fun t =>
       t.data.regs=s.regs ∧ t.data.dmem=s.dmem ∧
       t.pc=(if (s.regs.get (.low .r13 .W32)).toNat==(s.regs.get (.low .r15 .W32)).toNat
         then codeEntry+0x18f else codeEntry+0x11e)) := by
-  change (Directives.interp (compareCode .r15 "L_ffffffff813a032f") s (codeEntry+0x119)
+  change (Directives.interp (compareCode .r15 "L_ffffffff813a052f") s (codeEntry+0x119)
     (fun pc data => .done ⟨data,pc⟩)).All _
-  have target : label "L_ffffffff813a032f"=codeEntry+0x18f := by decide +kernel
+  have target : label "L_ffffffff813a052f"=codeEntry+0x18f := by decide +kernel
   simpa only [target,Int64.add_assoc,show (0x119 : Int64)+5=0x11e by decide +kernel]
-    using compare_generic .r15 "L_ffffffff813a032f" (codeEntry+0x119) s
+    using compare_generic .r15 "L_ffffffff813a052f" (codeEntry+0x119) s
 
 #print axioms first_compare
 #print axioms second_compare

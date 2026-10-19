@@ -121,7 +121,7 @@ theorem scan_next (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgr
     chain is established in the fixed incoming memory as well as in the
     current memory, so the induction does not assume a fresh bucket. -/
 theorem scan_miss (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (base s : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (safe : CallStackSafe outer base.regs.rsp)
     (frame : ScanFrame base coverage preempt s)
@@ -138,7 +138,7 @@ theorem scan_miss (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgr
       (fun seen t => seen = events ∧ ∃ next : UInt64,
         t.machine.pc = Image.Lookup.entry+0x67 ∧ t.machine.data.regs.rbx = next ∧
         BucketShape base.dmem next.toBitVec rest ∧ BucketShape t.machine.data.dmem next.toBitVec rest) := by
-  have call := scan_call_cursor fetch "L_ffffffff810f3100"
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0"
     ⟨⟨s, Image.Lookup.entry+0x5e⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc base coverage preempt
     safe frame frame.ready.pc_allowed rxSection events observed last (by
       simp [LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

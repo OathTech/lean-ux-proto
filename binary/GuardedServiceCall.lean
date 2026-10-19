@@ -129,7 +129,7 @@ namespace Binary.Callback
 open TrustBase
 local instance : Labels := Image.linkedLabels
 abbrev GuardedPc (fetch : Int64 → Option Decoded) := ∀ outer,
-  GuardedService fetch outer (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)
+  GuardedService fetch outer (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)
 abbrev GuardedBh (fetch : Int64 → Option Decoded) := ∀ outer,
   GuardedService fetch outer (.ofNat 0xffffffff810732c0) BhEnableReady
     (fun _ => InRange preemptCountAddress 4)

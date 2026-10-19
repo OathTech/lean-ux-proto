@@ -19,7 +19,7 @@ theorem prologue (s : MachineData)
     (stack : ∀ n<5, (s.dmem.loadInt (s.regs.rsp.toBitVec-.ofNat 64 ((n+1)*8)) 8).isSome=true) :
     (run IndexMutatorImage.Replace.r00 0 s).All (fun t =>
       t.data.regs={s.regs with rbx := s.regs.rsi,rbp := s.regs.rdx,rsp := s.regs.rsp-40} ∧
-      t.data.dmem=saveMemory s 5 ∧ t.pc=.ofNat 0xffffffff810f3100) := by
+      t.data.dmem=saveMemory s 5 ∧ t.pc=.ofNat 0xffffffff810f31f0) := by
   have mapped (n : Nat) (bound : n<5) :=
     Stack.mapped s.dmem s.regs.rsp.toBitVec (savedWords s) n _ 8 (stack n bound)
   obtain ⟨v0,h0⟩ := Option.isSome_iff_exists.mp (mapped 0 (by decide))

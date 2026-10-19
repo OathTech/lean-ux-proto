@@ -28,7 +28,7 @@ theorem wrapper_body {rsp : UInt64} (kind : KcovKind) (notPc : kind≠.pc)
     Eventually (guardedStep ServiceImage.fetch (leafGuard rsp))
       (fun t => Returned ⟨s,pc⟩ t ra ∧ EqualOutside (KcovWrites kind ⟨s,pc⟩) s.dmem t.data.dmem ∧
         KcovEffect kind ⟨s,pc⟩ t)
-      ⟨wrapperState kind s returnPC,.ofNat 0xffffffff810f3db0⟩ := by
+      ⟨wrapperState kind s returnPC,.ofNat 0xffffffff810f3fb0⟩ := by
   obtain ⟨writes,plan,ready⟩ := ready
   refine eventually_weaken _ _ _ _ ?_ (cmp_run _ ra writes ?_ ?_ ?_ (by exact stack))
   · intro t result
@@ -41,13 +41,13 @@ theorem wrapper_body {rsp : UInt64} (kind : KcovKind) (notPc : kind≠.pc)
 
 
 theorem cmp4_run (s : MachineData) (ra : UInt64)
-    (ready : KcovReady .cmp4 ⟨s,.ofNat 0xffffffff810f3e80⟩)
-    (frame : EntryFrame ⟨s,.ofNat 0xffffffff810f3e80⟩ ra) :
+    (ready : KcovReady .cmp4 ⟨s,.ofNat 0xffffffff810f4080⟩)
+    (frame : EntryFrame ⟨s,.ofNat 0xffffffff810f4080⟩ ra) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard s.regs.rsp))
-      (fun t => Returned ⟨s,.ofNat 0xffffffff810f3e80⟩ t ra ∧
-        EqualOutside (KcovWrites .cmp4 ⟨s,.ofNat 0xffffffff810f3e80⟩) s.dmem t.data.dmem ∧
-        KcovEffect .cmp4 ⟨s,.ofNat 0xffffffff810f3e80⟩ t)
-      ⟨s,.ofNat 0xffffffff810f3e80⟩ := by
+      (fun t => Returned ⟨s,.ofNat 0xffffffff810f4080⟩ t ra ∧
+        EqualOutside (KcovWrites .cmp4 ⟨s,.ofNat 0xffffffff810f4080⟩) s.dmem t.data.dmem ∧
+        KcovEffect .cmp4 ⟨s,.ofNat 0xffffffff810f4080⟩ t)
+      ⟨s,.ofNat 0xffffffff810f4080⟩ := by
   have returnRead : load64 s.dmem s.regs.rsp.toBitVec=some ra.toBitVec := by
     simp [load64,frame.2]
   callback_step
@@ -57,21 +57,21 @@ theorem cmp4_run (s : MachineData) (ra : UInt64)
   callback_step
   callback_step
   simp [RelRegOrMem.interp,ConstExpr.interp,Effects.All]
-  have destination : label "L_ffffffff810f3db0"=.ofNat 0xffffffff810f3db0 := by decide +kernel
+  have destination : label "L_ffffffff810f3fb0"=.ofNat 0xffffffff810f3fb0 := by decide +kernel
   rw [destination]
   simpa [wrapperState,KcovArgument,KcovRecordTag,Reg64s.get,Reg64s.get64,
     Reg.base,Reg.offset,BitVec.drop,BitVec.take] using
-    wrapper_body .cmp4 (by decide) s (.ofNat 0xffffffff810f3e80) ra ra.toBitVec
+    wrapper_body .cmp4 (by decide) s (.ofNat 0xffffffff810f4080) ra ra.toBitVec
       returnRead ready frame rfl
 
 theorem const_cmp4_run (s : MachineData) (ra : UInt64)
-    (ready : KcovReady .constCmp4 ⟨s,.ofNat 0xffffffff810f3f00⟩)
-    (frame : EntryFrame ⟨s,.ofNat 0xffffffff810f3f00⟩ ra) :
+    (ready : KcovReady .constCmp4 ⟨s,.ofNat 0xffffffff810f4100⟩)
+    (frame : EntryFrame ⟨s,.ofNat 0xffffffff810f4100⟩ ra) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard s.regs.rsp))
-      (fun t => Returned ⟨s,.ofNat 0xffffffff810f3f00⟩ t ra ∧
-        EqualOutside (KcovWrites .constCmp4 ⟨s,.ofNat 0xffffffff810f3f00⟩) s.dmem t.data.dmem ∧
-        KcovEffect .constCmp4 ⟨s,.ofNat 0xffffffff810f3f00⟩ t)
-      ⟨s,.ofNat 0xffffffff810f3f00⟩ := by
+      (fun t => Returned ⟨s,.ofNat 0xffffffff810f4100⟩ t ra ∧
+        EqualOutside (KcovWrites .constCmp4 ⟨s,.ofNat 0xffffffff810f4100⟩) s.dmem t.data.dmem ∧
+        KcovEffect .constCmp4 ⟨s,.ofNat 0xffffffff810f4100⟩ t)
+      ⟨s,.ofNat 0xffffffff810f4100⟩ := by
   have returnRead : load64 s.dmem s.regs.rsp.toBitVec=some ra.toBitVec := by
     simp [load64,frame.2]
   callback_step
@@ -81,21 +81,21 @@ theorem const_cmp4_run (s : MachineData) (ra : UInt64)
   callback_step
   callback_step
   simp [RelRegOrMem.interp,ConstExpr.interp,Effects.All]
-  have destination : label "L_ffffffff810f3db0"=.ofNat 0xffffffff810f3db0 := by decide +kernel
+  have destination : label "L_ffffffff810f3fb0"=.ofNat 0xffffffff810f3fb0 := by decide +kernel
   rw [destination]
   simpa [wrapperState,KcovArgument,KcovRecordTag,Reg64s.get,Reg64s.get64,
     Reg.base,Reg.offset,BitVec.drop,BitVec.take] using
-    wrapper_body .constCmp4 (by decide) s (.ofNat 0xffffffff810f3f00) ra ra.toBitVec
+    wrapper_body .constCmp4 (by decide) s (.ofNat 0xffffffff810f4100) ra ra.toBitVec
       returnRead ready frame rfl
 
 theorem const_cmp1_run (s : MachineData) (ra : UInt64)
-    (ready : KcovReady .constCmp1 ⟨s,.ofNat 0xffffffff810f3ec0⟩)
-    (frame : EntryFrame ⟨s,.ofNat 0xffffffff810f3ec0⟩ ra) :
+    (ready : KcovReady .constCmp1 ⟨s,.ofNat 0xffffffff810f40c0⟩)
+    (frame : EntryFrame ⟨s,.ofNat 0xffffffff810f40c0⟩ ra) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard s.regs.rsp))
-      (fun t => Returned ⟨s,.ofNat 0xffffffff810f3ec0⟩ t ra ∧
-        EqualOutside (KcovWrites .constCmp1 ⟨s,.ofNat 0xffffffff810f3ec0⟩) s.dmem t.data.dmem ∧
-        KcovEffect .constCmp1 ⟨s,.ofNat 0xffffffff810f3ec0⟩ t)
-      ⟨s,.ofNat 0xffffffff810f3ec0⟩ := by
+      (fun t => Returned ⟨s,.ofNat 0xffffffff810f40c0⟩ t ra ∧
+        EqualOutside (KcovWrites .constCmp1 ⟨s,.ofNat 0xffffffff810f40c0⟩) s.dmem t.data.dmem ∧
+        KcovEffect .constCmp1 ⟨s,.ofNat 0xffffffff810f40c0⟩ t)
+      ⟨s,.ofNat 0xffffffff810f40c0⟩ := by
   have returnRead : load64 s.dmem s.regs.rsp.toBitVec=some ra.toBitVec := by
     simp [load64,frame.2]
   callback_step
@@ -105,11 +105,11 @@ theorem const_cmp1_run (s : MachineData) (ra : UInt64)
   callback_step
   callback_step
   simp [RelRegOrMem.interp,ConstExpr.interp,Effects.All]
-  have destination : label "L_ffffffff810f3db0"=.ofNat 0xffffffff810f3db0 := by decide +kernel
+  have destination : label "L_ffffffff810f3fb0"=.ofNat 0xffffffff810f3fb0 := by decide +kernel
   rw [destination]
   simpa [wrapperState,KcovArgument,KcovRecordTag,Reg64s.get,Reg64s.get64,
     Reg.base,Reg.offset,BitVec.drop,BitVec.take] using
-    wrapper_body .constCmp1 (by decide) s (.ofNat 0xffffffff810f3ec0) ra ra.toBitVec
+    wrapper_body .constCmp1 (by decide) s (.ofNat 0xffffffff810f40c0) ra ra.toBitVec
       returnRead ready frame rfl
 
 theorem cmp4_image_contract : TraceCmp4Contract ServiceImage.fetch := by

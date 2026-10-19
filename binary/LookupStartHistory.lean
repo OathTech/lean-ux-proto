@@ -73,7 +73,7 @@ theorem start_history (fetch : Int64 → Option Decoded)
       ((history ++ prologueStates s) ++ [prologueCalled s]) = .ok events := by
     rw [List.append_assoc, ← restored, List.append_assoc]
     simpa only [List.singleton_append, List.append_nil] using seen
-  have call := LookupCoverage.observed_callback fetch (.ofNat 0xffffffff810f3100) .pc contract
+  have call := LookupCoverage.observed_callback fetch (.ofNat 0xffffffff810f31f0) .pc contract
     coverage preempt (prologueCalled s) (Image.Lookup.entry+0x19).toUInt64 rfl entry calleeState (.inl ⟨rfl, phase⟩)
     (by simpa only [stack] using returnSeparate) metadataSeparate preemptSeparate rxSection
     (history ++ prologueStates s) events calleeObserved

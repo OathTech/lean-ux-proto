@@ -38,7 +38,7 @@ theorem finish_9d_history (fetch : Int64 → Option Decoded)
         ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
           EqualOutside (scanWrites body coverage) body.dmem q.data.dmem)
       ⟨⟨body, Image.PeerGet.entry+0x9d⟩, history⟩ := by
-  have call := scan_call_cursor fetch "L_ffffffff810f3100"
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0"
     ⟨⟨body, Image.PeerGet.entry+0x9d⟩, history⟩ (agree _ _ (by rfl)) .pc contract
     body coverage preempt (ScanFrame.initial body coverage preempt ready) ((ScanFrame.initial body coverage preempt ready)).ready.pc_allowed
     rxSection events observed last (by

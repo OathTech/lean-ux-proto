@@ -78,7 +78,7 @@ theorem nonnull_prefix_history (fetch : Int64 → Option Decoded)
   rintro guarded ⟨af, machine₁, trace₁⟩
   have pc₁ : guarded.machine.pc = Image.PeerGet.entry+0x1b := congrArg MachineState.pc machine₁
   let event := LookupObservation.decision rxSection .peerGetMaybeZeroNull false guarded.machine
-  have call := scan_call_cursor fetch "L_ffffffff810f3100" guarded
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0" guarded
     (by rw [pc₁]; exact agree _ _ (by rfl)) .pc tracePc body coverage preempt trace₁.frame (trace₁.frame).ready.pc_allowed
     rxSection (events ++ [event]) trace₁.observed trace₁.last (by
       simp [AllowedipsPeerObservation.edge, LookupObservation.edge, pc₁, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

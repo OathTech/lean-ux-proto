@@ -12,7 +12,7 @@ theorem first_arguments (s : MachineData) (index : UInt32) (old : Int)
         rdi := .ofNat (s.regs.get (.low .r13 .W32)).toNat,
         rsi := .ofNat index.toNat,rsp := s.regs.rsp-8} ∧
       t.data.dmem=s.dmem.storeInt (s.regs.rsp.toBitVec-8) 8 (codeEntry+0xb4).toBitVec.toInt ∧
-      t.pc=.ofNat 0xffffffff810f3e80) := by
+      t.pc=.ofNat 0xffffffff810f4080) := by
   simp [run,IndexInsertImage.Insert.ra5,Directives.interp,Directive.interp,
     Instr.interp,Operation.interp,RegOrMem.interp,Operand.interp,
     MachineData.load,MachineData.store,MachineData.set,MachineData.setReg,
@@ -40,7 +40,7 @@ theorem second_arguments (s : MachineData) (index : UInt32) (old : Int)
         rdi := .ofNat (s.regs.get (.low .r13 .W32)).toNat,
         rsi := .ofNat index.toNat,rsp := s.regs.rsp-8} ∧
       t.data.dmem=s.dmem.storeInt (s.regs.rsp.toBitVec-8) 8 (codeEntry+0x119).toBitVec.toInt ∧
-      t.pc=.ofNat 0xffffffff810f3e80) := by
+      t.pc=.ofNat 0xffffffff810f4080) := by
   simp [run,IndexInsertImage.Insert.r10a,Directives.interp,Directive.interp,
     Instr.interp,Operation.interp,RegOrMem.interp,Operand.interp,
     MachineData.load,MachineData.store,MachineData.set,MachineData.setReg,

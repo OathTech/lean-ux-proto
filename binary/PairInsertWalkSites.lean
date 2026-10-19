@@ -17,7 +17,7 @@ def WalkTrace.offset : WalkTrace → Nat
 
 theorem walk_trace_fetch (locked : Bool) (site : WalkTrace) :
     IndexInsertImage.Insert.fetch (walkPC locked site.offset)=
-      some ⟨Instrumentation.callInstruction "L_ffffffff810f3100",5⟩ := by
+      some ⟨Instrumentation.callInstruction "L_ffffffff810f31f0",5⟩ := by
   cases locked <;> cases site <;> rfl
 
 theorem Core.same {n o c initial ra p shadow s t}
@@ -34,7 +34,7 @@ theorem walk_cursor (fetch : Int64 → Option Decoded) (decoder : IndexInsertDec
       t.data.regs.rbx=s.regs.rbx-8 ∧ t.data.regs.r13=s.regs.r13 ∧
       t.data.regs.r14=s.regs.r14 ∧ t.data.regs.r15=s.regs.r15) ⟨s,walkPC locked 0x92⟩ := by
   obtain ⟨old,mapped⟩ := Option.isSome_iff_exists.mp (core.calls facts).mapped
-  apply core.region_callback fetch (.ofNat 0xffffffff810f3100) (walkPC locked 0x9b) .pc trace facts
+  apply core.region_callback fetch (.ofNat 0xffffffff810f31f0) (walkPC locked 0x9b) .pc trace facts
     (walkPC locked 0x92) {s.regs with rbx := s.regs.rbx-8} rfl rfl
   cases locked with
   | false =>
@@ -78,7 +78,7 @@ theorem walk_arguments (fetch : Int64 → Option Decoded) (decoder : IndexInsert
   have prepare : Eventually (instructionStep fetch) (fun t =>
       t.data.regs={argumentRegisters locked s index with rsp := s.regs.rsp-8} ∧
       t.data.dmem=s.dmem.storeInt (s.regs.rsp.toBitVec-8) 8 (walkPC locked 0xb4).toBitVec.toInt ∧
-      t.pc=.ofNat 0xffffffff810f3e80) ⟨s,walkPC locked 0xa5⟩ := by
+      t.pc=.ofNat 0xffffffff810f4080) ⟨s,walkPC locked 0xa5⟩ := by
     cases locked with
     | false =>
       exact region_eventually (IndexInsertImage.Insert_ra5_layout.agreement decoder) s _
@@ -86,7 +86,7 @@ theorem walk_arguments (fetch : Int64 → Option Decoded) (decoder : IndexInsert
     | true =>
       exact region_eventually (IndexInsertImage.Insert_r10a_layout.agreement decoder) s _
         (second_arguments s index old read mapped)
-  have run := core.region_callback fetch (.ofNat 0xffffffff810f3e80) (walkPC locked 0xb4) .cmp4 cmp facts
+  have run := core.region_callback fetch (.ofNat 0xffffffff810f4080) (walkPC locked 0xb4) .cmp4 cmp facts
     (walkPC locked 0xa5) (argumentRegisters locked s index)
     (by cases locked <;> rfl) (by cases locked <;> rfl) prepare
   apply eventually_weaken (instructionStep fetch) _ _ _ _ run

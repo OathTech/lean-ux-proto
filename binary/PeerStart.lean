@@ -46,7 +46,7 @@ theorem prologue_and_return (fetch : Int64 → Option Decoded)
     · rw [calleeSP, memory]
       have saved := saveMemory_read s 7 6 (by decide) (by decide)
       simpa [slot, savedWords] using saved
-  have returned := Kcov.callback_endpoint fetch (.ofNat 0xffffffff810f3100) .pc contract
+  have returned := Kcov.callback_endpoint fetch (.ofNat 0xffffffff810f31f0) .pc contract
     coverage preempt callee (Image.PeerGet.entry+0x12).toUInt64 pc entry calleeState
     (by simpa only [calleeSP] using returnSeparate) metadataSeparate preemptSeparate
   apply eventually_weaken (instructionStep fetch) _ _ _ _ returned

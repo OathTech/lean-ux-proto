@@ -7,7 +7,7 @@ variable {outer : UInt64}
 /-- The selected bucket exit first executes its real PC callback. The
     helper's owner-word load starts only at the resulting +b2 cursor. -/
 theorem selected_callback (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (c : Config) (world : World) (s : Executed)
     (pc : s.machine.pc = Image.Lookup.entry+0xad)
     (coverage : LookupCoverage.Context) (preempt : BitVec 32)
@@ -31,7 +31,7 @@ theorem selected_callback (fetch : Int64 → Option Decoded)
       MatchesPoints (ExecutedCorrespondence.AtPoint (R c) c.rxSection t.history) seen source ∧
       ExecutedCorrespondence.CutsAligned (R c) c.rxSection t.history source ∧
       R c t.history seen t.machine world) s := by
-  have run := scan_call_cursor fetch "L_ffffffff810f3100" s (by
+  have run := scan_call_cursor fetch "L_ffffffff810f31f0" s (by
       rw [pc]
       exact agree _ _ (by rfl)) .pc tracePc s.machine.data coverage preempt
     safe (ScanFrame.initial _ _ _ ready) ready.pc_allowed c.rxSection raw rawObserved related.1

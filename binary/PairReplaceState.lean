@@ -86,7 +86,7 @@ theorem start (fetch : Int64 → Option Decoded) (agree : IndexReplaceDecoderAgr
     intro a written inside
     rw [sp] at inside
     exact facts.geometry.bufferLive a ⟨.inl written.1,written.2⟩ (Stack.inside _ 5 5 (by decide) a inside)
-  have service := Services.service_endpoint fetch (.ofNat 0xffffffff810f3100) .pc trace c entered
+  have service := Services.service_endpoint fetch (.ofNat 0xffffffff810f31f0) .pc trace c entered
     (codeEntry+17).toUInt64 entryPc entryFrame state stackSeparate
     (fun a written metadata => facts.geometry.bufferMetadata a ⟨.inl written.1,written.2⟩
       (phase_metadata c false a metadata))

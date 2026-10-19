@@ -108,7 +108,7 @@ theorem scan_miss (fetch : Int64 → Option Decoded) (agree : AnchoredDecoderAgr
       (fun seen t => seen = events ∧ ∃ next : UInt64,
         t.machine.pc = Image.Lookup.entry+0x67 ∧ t.machine.data.regs.rbx = next ∧
         BucketShape base.dmem next.toBitVec rest ∧ BucketShape t.machine.data.dmem next.toBitVec rest) := by
-  have call := scan_call_cursor fetch "L_ffffffff810f3100"
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0"
     ⟨⟨s, Image.Lookup.entry+0x5e⟩, history⟩ (agree _ _ (by rfl)) .pc tracePc base coverage preempt
     frame frame.ready.pc_allowed rxSection events observed last (by
       simp [LookupObservation.edge, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

@@ -57,7 +57,7 @@ theorem prepend (fetch : Int64 → Option Decoded) (decoder : IndexInsertDecoder
       Eventually (instructionStep fetch) (fun t => t.pc=codeEntry+0x160 ∧
         Core n o c initial ra .inner focus.after t.data) t := by
     intro t pc core
-    have call := core.callback fetch (codeEntry+0x15b) "L_ffffffff810f3100" trace (decoder _ _ (by rfl)) facts
+    have call := core.callback fetch (codeEntry+0x15b) "L_ffffffff810f31f0" trace (decoder _ _ (by rfl)) facts
     apply eventually_weaken (instructionStep fetch) _ _ _ _ (at_pc pc call)
     rintro final ⟨pc,core,_,_,_,_⟩
     exact ⟨pc,core⟩
@@ -72,7 +72,7 @@ theorem prepend (fetch : Int64 → Option Decoded) (decoder : IndexInsertDecoder
       change Index.head focus.nodes%2^64=0 at equal
       simpa only [Nat.mod_eq_of_lt (word_bound focus.headRead)] using equal
     have atVisit : stored.pc=codeEntry+0x152 := by simpa only [ite_eq_right notZero] using pc
-    have call := core.callback fetch (codeEntry+0x152) "L_ffffffff810f3100" trace (decoder _ _ (by rfl)) facts
+    have call := core.callback fetch (codeEntry+0x152) "L_ffffffff810f31f0" trace (decoder _ _ (by rfl)) facts
     apply eventually_trans (instructionStep fetch) _ _ _ (at_pc atVisit call)
     rintro called ⟨pc,core,bx,r13,_,_⟩
     have repair := prepend_repair fetch decoder facts layout focus zero core

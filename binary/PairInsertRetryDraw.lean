@@ -41,7 +41,7 @@ theorem retry_draw (fetch : Int64 → Option Decoded) (decoder : IndexInsertDeco
       inputAt t.data.dmem rest ∧ (drawWord t.data).toNat=value ∧
       EqualOutside (Writes n o config c initial) s.dmem t.data.dmem ∧
       KindFrame n o s.dmem t.data.dmem) ⟨s,codeEntry+0x6f⟩ := by
-  have callback := core.callback fetch (codeEntry+0x6f) "L_ffffffff810f3100" trace
+  have callback := core.callback fetch (codeEntry+0x6f) "L_ffffffff810f31f0" trace
     (decoder _ _ (by rfl)) facts
   have prepared := (state.at_pc (codeEntry+0x6f)).follow fetch callback (by
     intro t post a privateByte

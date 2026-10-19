@@ -30,7 +30,7 @@ theorem prologue (s : MachineData)
     (stack : ∀ n<4, (s.dmem.loadInt (s.regs.rsp.toBitVec-.ofNat 64 ((n+1)*8)) 8).isSome=true) :
     (run IndexMutatorImage.Remove.r00 0 s).All (fun t =>
       t.data.regs={s.regs with rbx := s.regs.rsi,rsp := s.regs.rsp-32} ∧
-      t.data.dmem=saveMemory s 4 ∧ t.pc=.ofNat 0xffffffff810f3100) := by
+      t.data.dmem=saveMemory s 4 ∧ t.pc=.ofNat 0xffffffff810f31f0) := by
   have mapped (n : Nat) (bound : n<4) := saves_mapped s n _ (stack n bound)
   obtain ⟨v0,h0⟩ := Option.isSome_iff_exists.mp (mapped 0 (by decide))
   obtain ⟨v1,h1⟩ := Option.isSome_iff_exists.mp (mapped 1 (by decide))

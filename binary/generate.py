@@ -26,7 +26,7 @@ def main():
             print(f'{path.name}: checked')
         else:
             path.write_text(text)
-    expected = '16c346209885db6c610d4aa126c6eb30f5d3c02f0498d95e606473945f648774'
+    expected = '06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e'
     if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
         raise ValueError('wrong ELF')
     names = {'wg_index_hashtable_lookup': 'Lookup', 'wg_peer_get_maybe_zero': 'PeerGet'}

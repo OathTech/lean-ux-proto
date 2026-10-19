@@ -28,7 +28,7 @@ theorem selected_branch (fetch : Int64 → Option Decoded) (agree : AllowedipsDe
     exact ⟨by rw [regs],pc.trans (ite_eq_left zero),guard.machine,by simpa only [zero] using trace⟩
   | false =>
     have pc10b : guard.machine.pc=AllowedipsImage.Lookup.entry+0x10b := pc.trans (ite_eq_right (by rw [zero]; decide))
-    have called := AllowedipsLoop.call fetch (AllowedipsImage.Lookup.entry+0x10b) "L_ffffffff810f3100"
+    have called := AllowedipsLoop.call fetch (AllowedipsImage.Lookup.entry+0x10b) "L_ffffffff810f31f0"
       (agree _ _ (by rfl)) .pc contract base guard.machine.data coverage trace.frame rxSection
       guard.history _ trace.observed (by simpa only [←pc10b] using trace.last)
       (by unfold Quiet; decide) (by decide)
@@ -52,7 +52,7 @@ theorem selected_start (fetch : Int64 → Option Decoded) (agree : AllowedipsDec
       ∃ guard, Trace base coverage rxSection history
         (events ++ [decision rxSection .lookupFound (!(s.regs.get (.low .rbp .W64) == 0)) guard]) t)
       ⟨⟨s,AllowedipsImage.Lookup.entry+0x101⟩,history⟩ := by
-  have called := AllowedipsLoop.call fetch (AllowedipsImage.Lookup.entry+0x101) "L_ffffffff810f3100"
+  have called := AllowedipsLoop.call fetch (AllowedipsImage.Lookup.entry+0x101) "L_ffffffff810f31f0"
     (agree _ _ (by rfl)) .pc contract base s coverage frame rxSection history events observed last
     (by unfold Quiet; decide) (by decide)
   apply eventually_trans (historyStep fetch) _ _ _ called

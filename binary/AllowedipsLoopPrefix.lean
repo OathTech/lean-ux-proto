@@ -44,7 +44,7 @@ theorem after_common_prefix (fetch : Int64 → Option Decoded) (agree : Allowedi
   have first := prefix_arguments fetch agree base s coverage (.ofNat 8 node.cidr) field frame rxSection history events observed last
   apply eventually_trans (historyStep fetch) _ _ _ first
   rintro t1 ⟨⟨pc1,regs1⟩,trace1⟩
-  have second := call fetch (AllowedipsImage.Lookup.entry+0xf7) "L_ffffffff810f3e40"
+  have second := call fetch (AllowedipsImage.Lookup.entry+0xf7) "L_ffffffff810f4040"
     (agree _ _ (by rfl)) .cmp1 traceCmp base t1.machine.data coverage trace1.frame rxSection
     t1.history events trace1.observed (by rw [←pc1]; exact trace1.last)
     (by unfold Quiet; decide) (by constructor <;> decide)

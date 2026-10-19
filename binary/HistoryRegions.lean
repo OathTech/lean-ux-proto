@@ -29,7 +29,7 @@ private theorem fetch_cmp : Image.fetch (Image.Lookup.entry + 0x59) = some ⟨fi
   rfl
 
 private theorem fetch_je : Image.fetch (Image.Lookup.entry + 0x5c) =
-    some ⟨.regular .W64 .W64 (.jcc .z "L_ffffffff813a0505"), 2⟩ := by
+    some ⟨.regular .W64 .W64 (.jcc .z "L_ffffffff813a0705"), 2⟩ := by
   rfl
 
 private theorem compare_nat (a b : BitVec 32) :
@@ -107,7 +107,7 @@ theorem first_bucket_guard (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (TestHistory (.low .rbx .W64) s (Image.Lookup.entry + 0x32)
       (if s.regs.get (.low .rbx .W64) == 0 then Image.Lookup.entry + 0x6c else Image.Lookup.entry + 0x34) history)
       ⟨⟨s, Image.Lookup.entry + 0x2f⟩, history⟩ := by
-  exact test_self fetch _ _ _ "L_ffffffff813a04dc" 3 2 (by decide) (by decide)
+  exact test_self fetch _ _ _ "L_ffffffff813a06dc" 3 2 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 theorem next_bucket_guard (fetch : Int64 → Option Decoded)
@@ -116,7 +116,7 @@ theorem next_bucket_guard (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (TestHistory (.low .rbx .W64) s (Image.Lookup.entry + 0x6a)
       (if s.regs.get (.low .rbx .W64) == 0 then Image.Lookup.entry + 0x6c else Image.Lookup.entry + 0x34) history)
       ⟨⟨s, Image.Lookup.entry + 0x67⟩, history⟩ := by
-  exact test_self_nz fetch _ _ _ "L_ffffffff813a04a4" 3 2 (by decide) (by decide)
+  exact test_self_nz fetch _ _ _ "L_ffffffff813a06a4" 3 2 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 #print axioms first_bucket_guard
@@ -128,7 +128,7 @@ theorem entry_guard (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (TestHistory (.low .rbx .W64) s (Image.Lookup.entry + 0x45)
       (if s.regs.get (.low .rbx .W64) == 0 then Image.Lookup.entry + 0x71 else Image.Lookup.entry + 0x47) history)
       ⟨⟨s, Image.Lookup.entry + 0x42⟩, history⟩ := by
-  exact test_self fetch _ _ _ "L_ffffffff813a04e1" 3 2 (by decide) (by decide)
+  exact test_self fetch _ _ _ "L_ffffffff813a06e1" 3 2 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 theorem type_guard (fetch : Int64 → Option Decoded)
@@ -137,7 +137,7 @@ theorem type_guard (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (TestHistory (.low .r14 .W32) s (Image.Lookup.entry + 0xab)
       (if s.regs.get (.low .r14 .W32) == 0 then Image.Lookup.entry + 0x71 else Image.Lookup.entry + 0xad) history)
       ⟨⟨s, Image.Lookup.entry + 0xa8⟩, history⟩ := by
-  exact test_self fetch _ _ _ "L_ffffffff813a04e1" 3 2 (by decide) (by decide)
+  exact test_self fetch _ _ _ "L_ffffffff813a06e1" 3 2 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 theorem peer_null_guard (fetch : Int64 → Option Decoded)
@@ -146,7 +146,7 @@ theorem peer_null_guard (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (TestHistory (.low .rbx .W64) s (Image.PeerGet.entry + 0x15)
       (if s.regs.get (.low .rbx .W64) == 0 then Image.PeerGet.entry + 0xdd else Image.PeerGet.entry + 0x1b) history)
       ⟨⟨s, Image.PeerGet.entry + 0x12⟩, history⟩ := by
-  exact test_self fetch _ _ _ "L_ffffffff813996ed" 3 6 (by decide) (by decide)
+  exact test_self fetch _ _ _ "L_ffffffff813998ed" 3 6 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 theorem peer_zero_guard (fetch : Int64 → Option Decoded)
@@ -155,7 +155,7 @@ theorem peer_zero_guard (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (TestHistory (.low .rbp .W32) s (Image.PeerGet.entry + 0x3d)
       (if s.regs.get (.low .rbp .W32) == 0 then Image.PeerGet.entry + 0xb0 else Image.PeerGet.entry + 0x3f) history)
       ⟨⟨s, Image.PeerGet.entry + 0x3b⟩, history⟩ := by
-  exact test_self fetch _ _ _ "L_ffffffff813996c0" 2 2 (by decide) (by decide)
+  exact test_self fetch _ _ _ "L_ffffffff813998c0" 2 2 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 theorem peer_retry_guard (fetch : Int64 → Option Decoded)
@@ -164,7 +164,7 @@ theorem peer_retry_guard (fetch : Int64 → Option Decoded)
     historySteps fetch 2 (TestHistory (.low .r15 .W8) s (Image.PeerGet.entry + 0x63)
       (if s.regs.get (.low .r15 .W8) == 0 then Image.PeerGet.entry + 0xf2 else Image.PeerGet.entry + 0x69) history)
       ⟨⟨s, Image.PeerGet.entry + 0x60⟩, history⟩ := by
-  exact test_self fetch _ _ _ "L_ffffffff81399702" 3 6 (by decide) (by decide)
+  exact test_self fetch _ _ _ "L_ffffffff81399902" 3 6 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) s history
 
 #print axioms test_self

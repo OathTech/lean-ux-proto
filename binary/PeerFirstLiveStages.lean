@@ -9,7 +9,7 @@ variable {outer : UInt64}
 /-- Guard, PC callback, argument setup and actual comparison callback. -/
 theorem live_retry_stage (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (base body : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (safe : CallStackSafe outer base.regs.rsp)
     (frame : ScanFrame base coverage preempt body) (accepted : body.regs.get (.low .r15 .W8) ≠ 0)
@@ -29,7 +29,7 @@ theorem live_retry_stage (fetch : Int64 → Option Decoded)
   rintro guarded ⟨af, guardMachine, guardTrace⟩
   have pc₁ : guarded.machine.pc = Image.PeerGet.entry+0x69 := congrArg MachineState.pc guardMachine
   let event := LookupObservation.decision rxSection .refcountAddNzRetry false guarded.machine
-  have call := scan_call_cursor fetch "L_ffffffff810f3100" guarded
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0" guarded
     (by rw [pc₁]; exact agree _ _ (by rfl)) .pc tracePc base coverage preempt safe guardTrace.frame (guardTrace.frame).ready.pc_allowed
     rxSection (events ++ [event]) guardTrace.observed guardTrace.last (by
       simp [LookupObservation.edge, pc₁, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
@@ -43,7 +43,7 @@ theorem live_retry_stage (fetch : Int64 → Option Decoded)
   apply eventually_trans (guardedHistoryStep fetch (StackGuard outer)) _ _ _ setup
   rintro afterSetup ⟨af₂, machine₃, trace₃⟩
   have pc₃ : afterSetup.machine.pc = Image.PeerGet.entry+0x72 := congrArg MachineState.pc machine₃
-  have call := scan_call_cursor fetch "L_ffffffff810f3f00" afterSetup
+  have call := scan_call_cursor fetch "L_ffffffff810f4100" afterSetup
     (by rw [pc₃]; exact agree _ _ (by rfl)) .constCmp4 traceCmp base coverage preempt safe trace₃.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection (events ++ [event]) trace₃.observed trace₃.last (by
       simp [LookupObservation.edge, pc₃, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
@@ -61,7 +61,7 @@ theorem live_retry_stage (fetch : Int64 → Option Decoded)
 /-- Guard, PC callback, argument setup and actual comparison callback. -/
 theorem live_negative_stage (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (base body : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (safe : CallStackSafe outer base.regs.rsp)
     (frame : ScanFrame base coverage preempt body) (accepted : (body.regs.get (.low .rbp .W32)).msb = false)
@@ -81,7 +81,7 @@ theorem live_negative_stage (fetch : Int64 → Option Decoded)
   rintro guarded ⟨af, guardMachine, guardTrace⟩
   have pc₁ : guarded.machine.pc = Image.PeerGet.entry+0x7b := congrArg MachineState.pc guardMachine
   let event := LookupObservation.decision rxSection .refcountAddNzNegative false guarded.machine
-  have call := scan_call_cursor fetch "L_ffffffff810f3100" guarded
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0" guarded
     (by rw [pc₁]; exact agree _ _ (by rfl)) .pc tracePc base coverage preempt safe guardTrace.frame (guardTrace.frame).ready.pc_allowed
     rxSection (events ++ [event]) guardTrace.observed guardTrace.last (by
       simp [LookupObservation.edge, pc₁, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
@@ -95,7 +95,7 @@ theorem live_negative_stage (fetch : Int64 → Option Decoded)
   apply eventually_trans (guardedHistoryStep fetch (StackGuard outer)) _ _ _ setup
   rintro afterSetup ⟨af₂, machine₃, trace₃⟩
   have pc₃ : afterSetup.machine.pc = Image.PeerGet.entry+0x85 := congrArg MachineState.pc machine₃
-  have call := scan_call_cursor fetch "L_ffffffff810f3f00" afterSetup
+  have call := scan_call_cursor fetch "L_ffffffff810f4100" afterSetup
     (by rw [pc₃]; exact agree _ _ (by rfl)) .constCmp4 traceCmp base coverage preempt safe trace₃.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection (events ++ [event]) trace₃.observed trace₃.last (by
       simp [LookupObservation.edge, pc₃, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
@@ -113,7 +113,7 @@ theorem live_negative_stage (fetch : Int64 → Option Decoded)
 /-- The final sign guard and folded live-result decision before return. -/
 theorem live_wrap_stage (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (base body : MachineData) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (safe : CallStackSafe outer base.regs.rsp)
     (frame : ScanFrame base coverage preempt body)
@@ -137,7 +137,7 @@ theorem live_wrap_stage (fetch : Int64 → Option Decoded)
   rintro guarded ⟨af, guardMachine, guardTrace⟩
   have pc₁ : guarded.machine.pc = Image.PeerGet.entry+0x8f := congrArg MachineState.pc guardMachine
   let event := LookupObservation.decision rxSection .refcountAddNzWraps false guarded.machine
-  have call := scan_call_cursor fetch "L_ffffffff810f3100" guarded
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0" guarded
     (by rw [pc₁]; exact agree _ _ (by rfl)) .pc tracePc base coverage preempt safe guardTrace.frame (guardTrace.frame).ready.pc_allowed
     rxSection (events ++ [event]) guardTrace.observed guardTrace.last (by
       simp [LookupObservation.edge, pc₁, Image.Lookup.entry, Image.PeerGet.entry]; rfl)
@@ -156,7 +156,7 @@ theorem live_wrap_stage (fetch : Int64 → Option Decoded)
     (afterPc.machine.data.regs.get (.low .rbp .W32)), Image.PeerGet.entry+0x96⟩
   let resultEvent := LookupObservation.decision rxSection .peerGetMaybeZeroDead false dead
   have pc₃ : afterSetup.machine.pc = Image.PeerGet.entry+0x98 := congrArg MachineState.pc machine₃
-  have call := scan_call_cursor fetch "L_ffffffff810f3f00" afterSetup
+  have call := scan_call_cursor fetch "L_ffffffff810f4100" afterSetup
     (by rw [pc₃]; exact agree _ _ (by rfl)) .constCmp4 traceCmp base coverage preempt safe trace₃.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection ((events ++ [event]) ++ [resultEvent]) trace₃.observed trace₃.last (by
       simp [LookupObservation.edge, pc₃, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

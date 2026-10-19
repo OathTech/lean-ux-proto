@@ -74,7 +74,7 @@ theorem finish (fetch : Int64 → Option Decoded) (agree : IndexReplaceDecoderAg
       MemoryReady c initial ra 5 (savedWords initial.data) false t.data.dmem ∧
       EqualOutside (External c initial 5) shadow t.data.dmem ∧
       t.data.regs.rax.toBitVec.setWidth 8=result.toBitVec.setWidth 8) ⟨s,codeEntry+0x81⟩ := by
-  have callback := core.callback fetch (codeEntry+0x81) "L_ffffffff810f3100" trace (agree _ _ (by rfl)) facts
+  have callback := core.callback fetch (codeEntry+0x81) "L_ffffffff810f31f0" trace (agree _ _ (by rfl)) facts
   apply eventually_trans (instructionStep fetch) _ _ _ callback
   rintro called ⟨pc,core,_,_⟩
   apply eventually_trans (instructionStep fetch) _ _ _ (at_pc pc (enable fetch agree bh facts core))

@@ -1,4 +1,4 @@
-"""The binary experiment's s4 target; never infer it from the main oracle."""
+"""The binary experiment's s5 target; never infer it from the main oracle."""
 import hashlib
 import os
 from pathlib import Path
@@ -9,8 +9,8 @@ _COMMON = Path(subprocess.check_output(
     ['git', '-C', str(ROOT), 'rev-parse', '--path-format=absolute', '--git-common-dir'],
     text=True).strip()).parent
 ORACLE = Path(os.environ.get('LEANUX_BINARY_KERNEL_DIR',
-                            _COMMON / '.artifacts/kernel-net-choice-s4')).resolve() / 'vmlinux'
-IDENTITY_FILE = ROOT / 'binary/kernel-identity-s4.txt'
+                            _COMMON / '.artifacts/kernel-net-choice-s5')).resolve() / 'vmlinux'
+IDENTITY_FILE = ROOT / 'binary/kernel-identity-s5.txt'
 
 
 def pins():

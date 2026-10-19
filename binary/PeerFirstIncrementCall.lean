@@ -47,7 +47,7 @@ theorem increment_trace (fetch : Int64 → Option Decoded)
 /-- Execute the real byte-comparison callback after the physical increment.
     The callback's own history and all its actual anchored cuts are retained. -/
 theorem increment_call_history (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (traceByte : LeafService fetch (.ofNat 0xffffffff810f3ec0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1))
+    (agree : AnchoredDecoderAgreement fetch) (traceByte : LeafService fetch (.ofNat 0xffffffff810f40c0) (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1))
     (body : MachineData) (safe : CallStackSafe outer body.regs.rsp) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (ready : LookupCoverage.CallsReady coverage preempt body)
     (count : body.dmem.loadInt body.regs.r13.toBitVec 4 = some (body.regs.get (.low .rbp .W32)).toNat)
@@ -67,7 +67,7 @@ theorem increment_call_history (fetch : Int64 → Option Decoded)
   apply eventually_trans (guardedHistoryStep fetch (StackGuard outer)) _ _ _ increment
   rintro atCall ⟨af, machine, recorded, trace⟩
   have pc : atCall.machine.pc = Image.PeerGet.entry+0x5b := congrArg MachineState.pc machine
-  have call := scan_call_cursor fetch "L_ffffffff810f3ec0" atCall
+  have call := scan_call_cursor fetch "L_ffffffff810f40c0" atCall
     (by rw [pc]; exact agree _ _ (by rfl)) .constCmp1 traceByte (incFinal body af) coverage preempt safe trace.frame (LookupCoverage.compare_allowed comparison (by decide))
     rxSection events trace.observed trace.last (by
       simp [LookupObservation.edge, pc, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

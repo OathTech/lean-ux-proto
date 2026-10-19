@@ -250,7 +250,7 @@ theorem saves_observed (rxSection : Nat) (s : MachineData) :
 
 def prologueCalled (s : MachineData) : MachineState :=
   Instrumentation.calledState (prologueData s 9) (Image.Lookup.entry+0x19)
-    (.ofNat 0xffffffff810f3100)
+    (.ofNat 0xffffffff810f31f0)
 
 theorem prologue_called_memory (s : MachineData) :
     (prologueCalled s).data.dmem = saveMemory s 6 := by
@@ -282,7 +282,7 @@ theorem prologue_history (fetch : Int64 → Option Decoded)
     simp only [prologueData, savedCount, UInt64.toBitVec_sub, BitVec.sub_sub]
     exact preserved
   have call := Instrumentation.call_instruction fetch (Image.Lookup.entry+20)
-    "L_ffffffff810f3100" (agree _ _ (by rfl)) (prologueData s 9)
+    "L_ffffffff810f31f0" (agree _ _ (by rfl)) (prologueData s 9)
     (history ++ prologueStates s) stack
   apply historySteps_mono fetch 1 _ _ _ _ call
   rintro final ⟨machine, recorded⟩

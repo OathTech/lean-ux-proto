@@ -142,7 +142,7 @@ theorem comparison_region (fetch : Int64 → Option Decoded)
     (contract : TraceConstCmp4Contract fetch) (s : MachineData) (arg1 arg2 : UInt64)
     (physicalRun : (run code offset s).All (fun t =>
       t.data.regs = {s.regs with rdi := arg1, rsi := arg2, rsp := s.regs.rsp-8} ∧
-      t.data.dmem = callMemory s returnOffset ∧ t.pc = .ofNat 0xffffffff810f3f00))
+      t.data.dmem = callMemory s returnOffset ∧ t.pc = .ofNat 0xffffffff810f4100))
     (coverage : KcovLayout) (preempt : BitVec 32)
     (state : KcovState coverage preempt s.dmem)
     (aligned : s.regs.rsp.toNat % 8 = 0)
@@ -156,7 +156,7 @@ theorem comparison_region (fetch : Int64 → Option Decoded)
   apply eventually_trans (instructionStep fetch) _ _ _ executed
   rintro callee ⟨regs, memory, pc⟩
   let arguments : MachineData := {s with regs := {s.regs with rdi := arg1, rsi := arg2}}
-  have returned := after_call fetch (.ofNat 0xffffffff810f3f00) .constCmp4 contract
+  have returned := after_call fetch (.ofNat 0xffffffff810f4100) .constCmp4 contract
     arguments callee returnOffset (by simpa only [arguments] using regs)
     memory pc coverage preempt state aligned pushSeparate returnSeparate metadataSeparate preemptSeparate
   apply eventually_weaken (instructionStep fetch) _ _ _ _ returned
@@ -181,7 +181,7 @@ theorem pc_region (fetch : Int64 → Option Decoded) (offset : Nat)
   have executed := region_eventually layout s _ (trace_call offset s word wordRead)
   apply eventually_trans (instructionStep fetch) _ _ _ executed
   rintro callee ⟨regs, memory, pc⟩
-  exact after_call fetch (.ofNat 0xffffffff810f3100) .pc contract s callee (offset+5)
+  exact after_call fetch (.ofNat 0xffffffff810f31f0) .pc contract s callee (offset+5)
     regs memory pc coverage preempt state aligned pushSeparate returnSeparate
     metadataSeparate preemptSeparate
 

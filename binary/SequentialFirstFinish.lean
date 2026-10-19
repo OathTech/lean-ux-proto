@@ -7,7 +7,7 @@ local instance : Labels := Image.linkedLabels
 variable {outer : UInt64}
 /-- A real CALL/service/RET segment, forgetting its internal trace. -/
 theorem callback (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (current : Executed) (offset : Nat)
     (site : offset = 0x6c ∨ offset = 0x73 ∨ offset = 0xc5)
     (pc : current.machine.pc = Image.Lookup.entry + .ofNat offset)
@@ -19,7 +19,7 @@ theorem callback (fetch : Int64 → Option Decoded)
       t.machine.data.regs.rbx = current.machine.data.regs.rbx ∧
       t.machine.data.regs.rbp = current.machine.data.regs.rbp ∧
       ScanFrame current.machine.data coverage preempt t.machine.data) current := by
-  have run := LookupInstrumentation.First.observed_call fetch current.machine.pc "L_ffffffff810f3100"
+  have run := LookupInstrumentation.First.observed_call fetch current.machine.pc "L_ffffffff810f31f0"
     (by rw [pc]; rcases site with rfl | rfl | rfl <;> exact agree _ _ (by rfl))
     .pc tracePc current.machine.data outer safe.1 safe.2 coverage preempt ready ready.pc_allowed
     0 [] [] [] rfl (by
@@ -78,7 +78,7 @@ theorem return_from_saved (fetch : Int64 → Option Decoded) (agree : AnchoredDe
   rw [show (48 : BitVec 64) = 40+8 from rfl, ← BitVec.add_assoc, BitVec.sub_add_cancel]
 
 theorem common_finish (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (bh : LeafService fetch (.ofNat 0xffffffff810732c0) BhEnableReady (fun _ => InRange preemptCountAddress 4) (fun before after => ∀ old : BitVec 32, before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) → after.data.dmem.loadInt preemptCountAddress 4 = some ((old-before.data.regs.get (.low .rsi .W32)).toNat : Int)))
+    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (bh : LeafService fetch (.ofNat 0xffffffff810732c0) BhEnableReady (fun _ => InRange preemptCountAddress 4) (fun before after => ∀ old : BitVec 32, before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) → after.data.dmem.loadInt preemptCountAddress 4 = some ((old-before.data.regs.get (.low .rsi .W32)).toNat : Int)))
     (c : Config) (coverage : KcovLayout) (preempt : BitVec 32) (ra : UInt64)
     (s : MachineData) (world : World) (v : View)
     (entry : LookupEntry c coverage preempt ra ⟨s, Image.Lookup.entry⟩ world v)

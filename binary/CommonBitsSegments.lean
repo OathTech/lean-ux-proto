@@ -89,7 +89,7 @@ theorem ipv4_scan_prefix (s : MachineData) (stored query : UInt32)
       t.data.dmem = s.dmem ∧ t.pc = AllowedipsImage.CommonBits.entry+0x67) := by
   have width8 : (Width.W32 == Width.W8) = false := rfl
   have width32 : (Width.W32 == Width.W32) = true := rfl
-  have target : label "L_ffffffff810f3100" = (-2129710848 : Int64) := by decide
+  have target : label "L_ffffffff810f31f0" = (-2129710608 : Int64) := by decide
   simp [run, AllowedipsImage.CommonBits.r51, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
      ConstExpr.interp,  MachineData.load,

@@ -16,8 +16,8 @@ theorem converted_callback (fetch : Int64 → Option Decoded) (agree : Allowedip
       Local (TotalWrites initial coverage old) ⟨s,AllowedipsImage.Lookup.entry+0x61⟩ rxSection [] t)
       ⟨⟨s,AllowedipsImage.Lookup.entry+0x61⟩,[⟨s,AllowedipsImage.Lookup.entry+0x61⟩]⟩ := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.Lookup.entry+0x61)=
-    some ⟨callInstruction "L_ffffffff810f3100",5⟩ from rfl)
-  have run := callback fetch _ "L_ffffffff810f3100" here .pc contract pre s state rxSection
+    some ⟨callInstruction "L_ffffffff810f31f0",5⟩ from rfl)
+  have run := callback fetch _ "L_ffffffff810f31f0" here .pc contract pre s state rxSection
     (by intro after; rfl) (by decide)
   apply eventually_weaken (historyStep fetch) _ _ _ _ run
   rintro t ⟨⟨pc,next,frame⟩,trace⟩

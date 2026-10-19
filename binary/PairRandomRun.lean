@@ -103,7 +103,7 @@ def cachedState (interrupts : Bool) : MachineState := Id.run do
     dmem := m
     system := {bits := (if interrupts then 512 else 0),cpl := 0}
     regs := {rsp := .ofNat stackAddr,rbx := 17,rbp := 34,r12 := 51,r13 := 68,r14 := 85,r15 := 102}},
-    .ofNat 0xffffffff81375000⟩
+    .ofNat 0xffffffff81375200⟩
 
 def recordingState (remote : Bool) : MachineState × RandomProvider.Config := Id.run do
   let initial := cachedState true
@@ -156,7 +156,7 @@ def suite : Except String Json := do
           ("seed",toJson seed.toNat),("ordinal",toJson ordinal),
           ("instructions",toJson after.pcs.size),("value",toJson after.state.data.regs.rax.toNat)])
         initial := ⟨{after.state.data with regs := {after.state.data.regs with rsp := .ofNat stackAddr}},
-          .ofNat 0xffffffff81375000⟩
+          .ofNat 0xffffffff81375200⟩
   let mut refills := #[]
   for generation in [1,2] do
     let start := cachedState true
@@ -187,7 +187,7 @@ def suite : Except String Json := do
         ("ordinal",toJson ordinal),("instructions",toJson after.pcs.size),
         ("value",toJson after.state.data.regs.rax.toNat)])
       initial := ⟨{after.state.data with regs := {after.state.data.regs with rsp := .ofNat stackAddr}},
-        .ofNat 0xffffffff81375000⟩
+        .ofNat 0xffffffff81375200⟩
   let mut steered := #[]
   for remote in [false,true] do
     let (start,config) := recordingState remote
@@ -212,7 +212,7 @@ def suite : Except String Json := do
       steered := steered.push (Json.mkObj [("remote",toJson remote),("ordinal",toJson ordinal),
         ("instructions",toJson after.pcs.size),("value",toJson expected)])
       initial := ⟨{after.state.data with regs := {after.state.data.regs with rsp := .ofNat stackAddr}},
-        .ofNat 0xffffffff81375000⟩
+        .ofNat 0xffffffff81375200⟩
   -- A saturated choice record updates the per-task dropped counter. This
   -- resource was discovered by the retained-heap mixed-call tests.
   let (saturationStart,saturationConfig) := recordingState false

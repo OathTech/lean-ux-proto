@@ -9,7 +9,7 @@ variable {outer : UInt64}
     is explicit because the folded dead decision reads the unchanged EBP. -/
 theorem live_callbacks_history (fetch : Int64 → Option Decoded)
     (agree : AnchoredDecoderAgreement fetch)
-    (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)) (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (body : MachineData) (safe : CallStackSafe outer body.regs.rsp) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (ready : LookupCoverage.CallsReady coverage preempt body)
     (success : body.regs.get (.low .r15 .W8) ≠ 0)

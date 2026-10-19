@@ -127,14 +127,14 @@ def deadPeerCounterexample (input : ProbeInput) (keypairCase : Bool := false) : 
   unless (← readNat initial peerField 8) == peerAddress &&
       (← readNat r1.state peerField 8) == 0 && (← readNat r2.state peerField 8) == 0 do
     throw "expected kernel to clear the index entry peer pointer"
-  -- The helper's TEST/JZ is at 0xffffffff81399622/25. Its two
+  -- The helper's TEST/JZ is at 0xffffffff81399822/25. Its two
   -- successors identify null/non-null without using the mirror's answer.
-  let nullBranch := 0xffffffff81399625
+  let nullBranch := 0xffffffff81399825
   let outcome (r : Run) : Except String Bool := do
     let some i := r.pcs.toList.idxOf? nullBranch | throw "helper null check missing"
     let some successor := r.pcs[i+1]? | throw "helper successor missing"
-    if successor == 0xffffffff813996ed then return true
-    if successor == 0xffffffff8139962b then return false
+    if successor == 0xffffffff813998ed then return true
+    if successor == 0xffffffff8139982b then return false
     throw "unexpected helper null-check successor"
   let firstNull ← outcome r1
   let secondNull ← outcome r2
@@ -226,9 +226,9 @@ def bh (count : Nat) : Except String Nat := do
 
 def tests : Except String Nat := do
   let mut total := 0
-  for (kind, address) in [(KcovKind.pc, 0xffffffff810f3100),
-      (.cmp4, 0xffffffff810f3e80), (.constCmp4, 0xffffffff810f3f00),
-      (.constCmp1, 0xffffffff810f3ec0)] do
+  for (kind, address) in [(KcovKind.pc, 0xffffffff810f31f0),
+      (.cmp4, 0xffffffff810f4080), (.constCmp4, 0xffffffff810f4100),
+      (.constCmp1, 0xffffffff810f40c0)] do
     let mode := if kind == .pc then 2 else 3
     total := total + (← callback kind address mode 0 1024 0)
     total := total + (← callback kind address mode 1024 1024 0)

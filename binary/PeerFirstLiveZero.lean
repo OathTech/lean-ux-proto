@@ -10,7 +10,7 @@ variable {outer : UInt64}
     enclosing caller must separate the count word from those writes.
     Comparison operands are actual EBP. -/
 theorem live_zero_call_history (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (body : MachineData) (safe : CallStackSafe outer body.regs.rsp) (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (ready : LookupCoverage.CallsReady coverage preempt body) (nonzero : body.regs.get (.low .rbp .W32) ≠ 0)
     (rxSection : Nat) (history : List MachineState) (events : List LookupObservation.Point)
@@ -29,7 +29,7 @@ theorem live_zero_call_history (fetch : Int64 → Option Decoded)
   apply eventually_trans (guardedHistoryStep fetch (StackGuard outer)) _ _ _ guard
   rintro guarded ⟨af, machine, trace⟩
   have pc : guarded.machine.pc = Image.PeerGet.entry+0x3f := congrArg MachineState.pc machine
-  have call := scan_call_cursor fetch "L_ffffffff810f3100" guarded
+  have call := scan_call_cursor fetch "L_ffffffff810f31f0" guarded
     (by rw [pc]; exact agree _ _ (by rfl)) .pc tracePc body coverage preempt safe trace.frame (trace.frame).ready.pc_allowed
     rxSection _ trace.observed trace.last (by
       simp [LookupObservation.edge, pc, Image.Lookup.entry, Image.PeerGet.entry]; rfl)

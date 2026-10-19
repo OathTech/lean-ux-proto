@@ -40,7 +40,7 @@ theorem walk_node (fetch : Int64 → Option Decoded) (decoder : IndexInsertDecod
       Core n o c initial ra p shadow t.data ∧ WalkRegisters locked query t.data ∧
       t.data.regs.rbx.toBitVec=BitVec.ofNat 64 (link-o.hash)) ⟨s,walkPC locked 0x8d⟩ := by
   have layout := (validate_basic validated).1
-  have first := core.callback fetch (walkPC locked WalkTrace.entry.offset) "L_ffffffff810f3100"
+  have first := core.callback fetch (walkPC locked WalkTrace.entry.offset) "L_ffffffff810f31f0"
     trace (decoder _ _ (walk_trace_fetch locked .entry)) facts
   apply eventually_trans (instructionStep fetch) _ _ _ first
   rintro called ⟨pc,core,bx,r13,r14,_⟩
@@ -69,7 +69,7 @@ theorem walk_node (fetch : Int64 → Option Decoded) (decoder : IndexInsertDecod
   rintro guarded ⟨pc,core,regs⟩
   have registers := registers.same regs
   have cursor : guarded.data.regs.rbx.toBitVec=BitVec.ofNat 64 (link-o.hash) := by rw [regs]; exact cursor
-  have visit := core.callback fetch (walkPC locked WalkTrace.present.offset) "L_ffffffff810f3100"
+  have visit := core.callback fetch (walkPC locked WalkTrace.present.offset) "L_ffffffff810f31f0"
     trace (decoder _ _ (walk_trace_fetch locked .present)) facts
   apply eventually_trans (instructionStep fetch) _ _ _ (at_pc pc visit)
   rintro visited ⟨pc,core,bx,r13,r14,_⟩

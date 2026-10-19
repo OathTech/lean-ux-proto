@@ -61,7 +61,7 @@ theorem result_history (fetch : Int64 → Option Decoded)
     cases t; simp_all [List.append_assoc]
   rw [cursor]
   have guard := test_self fetch (Image.Lookup.entry+0xc0) .W64 (.low .rax .W64)
-    "L_ffffffff813a04e1" 3 2 (by decide) (by decide)
+    "L_ffffffff813a06e1" 3 2 (by decide) (by decide)
     (agree _ _ (by rfl)) (agree _ _ (by rfl)) (resultSaved s)
     (history ++ [⟨OwnerWord.stored s, Image.Lookup.entry+0xbd⟩,
       ⟨resultSaved s, Image.Lookup.entry+0xc0⟩])
@@ -72,7 +72,7 @@ theorem result_history (fetch : Int64 → Option Decoded)
       Reg64s.set64, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.drop, BitVec.take]
   have zero : s.regs.rax.toBitVec = 0#64 ↔ s.regs.rax = 0 := UInt64.toBitVec_inj
   have branch : (if (resultSaved s).regs.get (.low .rax .W64) == 0 then
-      label "L_ffffffff813a04e1" else Image.Lookup.entry+0xc0+Int64.ofNat 3+Int64.ofNat 2) =
+      label "L_ffffffff813a06e1" else Image.Lookup.entry+0xc0+Int64.ofNat 3+Int64.ofNat 2) =
       (if s.regs.rax = 0 then Image.Lookup.entry+0x71 else Image.Lookup.entry+0xc5) := by
     rw [reg]
     change (if s.regs.rax.toBitVec == 0#64 then _ else _) = _

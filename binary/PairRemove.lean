@@ -6,7 +6,7 @@ import PairIndexCallCheck
 namespace Binary.Pair.Remove
 open Lean Leanux Leanux.WG
 
-def entry : Nat := 0xffffffff813a0400
+def entry : Nat := 0xffffffff813a0600
 
 /-- Removal reads pprev even for an owner absent from every bucket. This
 additional projection is computed from memory, independently of the source. -/

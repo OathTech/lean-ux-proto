@@ -33,7 +33,7 @@ def prologueStates (s : MachineData) : List MachineState :=
    ⟨prologueData s 6, AllowedipsImage.CommonBits.entry+13⟩,
    ⟨prologueData s 7, AllowedipsImage.CommonBits.entry+14⟩,
    ⟨prologueData s 8, AllowedipsImage.CommonBits.entry+16⟩,
-   ⟨prologueData s 9, .ofNat 0xffffffff810f3100⟩]
+   ⟨prologueData s 9, .ofNat 0xffffffff810f31f0⟩]
 
 private theorem history_cons (fetch : Int64 → Option Decoded) (s next : MachineState)
     (history : List MachineState) (n : Nat) (P : Executed → Prop)
@@ -194,7 +194,7 @@ private theorem instruction8 (fetch : Int64 → Option Decoded)
     (agree : ∀ p i, AllowedipsImage.fetch p = some i → fetch p = some i) (s : MachineData)
     (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
     instructionStep fetch ⟨prologueData s 8, AllowedipsImage.CommonBits.entry+16⟩
-      (fun t => t = ⟨prologueData s 9, .ofNat 0xffffffff810f3100⟩) := by
+      (fun t => t = ⟨prologueData s 9, .ofNat 0xffffffff810f31f0⟩) := by
   have here := agree _ _ (show AllowedipsImage.fetch (AllowedipsImage.CommonBits.entry+16) = some _ from rfl)
   have defined := saves_preserve_mapped s 4 _ (mapped 4 (by decide))
   obtain ⟨word, loaded⟩ := Option.isSome_iff_exists.mp defined
@@ -216,7 +216,7 @@ theorem prologue_history (fetch : Int64 → Option Decoded)
     (s : MachineData) (history : List MachineState)
     (mapped : ∀ n < 5, (s.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true) :
     historySteps fetch 9 (fun t =>
-      t.machine = ⟨prologueData s 9, .ofNat 0xffffffff810f3100⟩ ∧
+      t.machine = ⟨prologueData s 9, .ofNat 0xffffffff810f31f0⟩ ∧
       t.history = history ++ prologueStates s) ⟨⟨s, AllowedipsImage.CommonBits.entry⟩, history⟩ := by
   have initial : (⟨⟨prologueData s 0, AllowedipsImage.CommonBits.entry+0⟩, history⟩ : Executed) =
       ⟨⟨s, AllowedipsImage.CommonBits.entry⟩, history⟩ := by

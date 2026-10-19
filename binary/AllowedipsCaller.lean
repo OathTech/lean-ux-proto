@@ -54,7 +54,7 @@ theorem peer_call_history (fetch : Int64 → Option Decoded)
       ((peerArgument s peer).regs.rsp.toBitVec-8) 8).isSome = true := by
     simpa [peerArgument, MachineData.setReg, Reg64s.set, Reg64s.set64] using mapped
   have call := Instrumentation.call_instruction fetch (AllowedipsImage.Lookup.entry+0x114)
-    "L_ffffffff81399610" (agree _ _ (by rfl)) (peerArgument s peer)
+    "L_ffffffff81399810" (agree _ _ (by rfl)) (peerArgument s peer)
     (history ++ [⟨peerArgument s peer, AllowedipsImage.Lookup.entry+0x114⟩]) mapped'
   apply historySteps_mono fetch 1 _ _ _ _ call
   rintro t ⟨machine, recorded⟩

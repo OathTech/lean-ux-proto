@@ -6,7 +6,7 @@ open Leanux TrustBase LookupHistory Callback
 local instance : Labels := Image.linkedLabels
 
 theorem start_from_entry (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (c : Config) (coverage : KcovLayout) (preempt : BitVec 32) (returnAddress : UInt64)
     (s : MachineData) (world : World) (v : View)
     (entry : LookupEntry c coverage preempt returnAddress ⟨s, Image.Lookup.entry⟩ world v) :
@@ -97,8 +97,8 @@ theorem header_from_started (fetch : Int64 → Option Decoded)
   rw [recorded]
   exact old.append_after endpoint frames (fun _ => Or.inr)
 theorem bucket_from_head (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
-    (traceCmp : LeafService fetch (.ofNat 0xffffffff810f3e80) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4)) (traceConstCmp : LeafService fetch (.ofNat 0xffffffff810f3f00) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
+    (agree : AnchoredDecoderAgreement fetch) (tracePc : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (traceCmp : LeafService fetch (.ofNat 0xffffffff810f4080) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4)) (traceConstCmp : LeafService fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4))
     (c : Config) (coverage : KcovLayout) (preempt : BitVec 32) (returnAddress : UInt64)
     (s : MachineData) (world : World) (v : View)
     (entry : LookupEntry c coverage preempt returnAddress ⟨s, Image.Lookup.entry⟩ world v)

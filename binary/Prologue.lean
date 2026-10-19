@@ -30,7 +30,7 @@ theorem prologue (s : MachineData)
         r13 := s.regs.rcx,
         r12 := .ofNat (s.regs.get (.low .rdx .W32)).toNat,
         rbx := s.regs.rdi, rsp := s.regs.rsp - 48} ∧
-      t.data.dmem = saveMemory s 6 ∧ t.pc = .ofNat 0xffffffff810f3100) := by
+      t.data.dmem = saveMemory s 6 ∧ t.pc = .ofNat 0xffffffff810f31f0) := by
   have mapped (n : Nat) (hn : n < 6) :=
     saves_preserve_mapped s n _ (stack n hn)
   have h0 := mapped 0 (by decide)

@@ -11,7 +11,7 @@ theorem cursor_call (offset : Nat) (s : MachineData) (old : Int)
     (run IndexInsertImage.Insert.r92 offset s).All (fun t =>
       t.data.regs={s.regs with rbx := s.regs.rbx-8,rsp := s.regs.rsp-8} ∧
       t.data.dmem=s.dmem.storeInt (s.regs.rsp.toBitVec-8) 8 (codeEntry+.ofNat offset+9).toBitVec.toInt ∧
-      t.pc=.ofNat 0xffffffff810f3100) := by
+      t.pc=.ofNat 0xffffffff810f31f0) := by
   simp [run,IndexInsertImage.Insert.r92,Directives.interp,Directive.interp,
     Instr.interp,Operation.interp,RegOrMem.interp,Operand.interp,
     MachineData.store,MachineData.set,MachineData.setReg,
@@ -43,17 +43,17 @@ theorem first_node_guard (s : MachineData) :
     (run IndexInsertImage.Insert.r9b 0x9b s).All (fun t =>
       t.data.regs=s.regs ∧ t.data.dmem=s.dmem ∧
       t.pc=(if s.regs.rbx.toBitVec=0 then codeEntry+0xcc else codeEntry+0xa0)) := by
-  change (Directives.interp (testCode "L_ffffffff813a026c") s (codeEntry+0x9b) (fun pc data => .done ⟨data,pc⟩)).All _
-  have target : label "L_ffffffff813a026c"=codeEntry+0xcc := by decide +kernel
-  simpa only [target,Int64.add_assoc,show (0x9b : Int64)+5=0xa0 by decide +kernel] using guard_generic "L_ffffffff813a026c" (codeEntry+0x9b) s
+  change (Directives.interp (testCode "L_ffffffff813a046c") s (codeEntry+0x9b) (fun pc data => .done ⟨data,pc⟩)).All _
+  have target : label "L_ffffffff813a046c"=codeEntry+0xcc := by decide +kernel
+  simpa only [target,Int64.add_assoc,show (0x9b : Int64)+5=0xa0 by decide +kernel] using guard_generic "L_ffffffff813a046c" (codeEntry+0x9b) s
 
 theorem second_node_guard (s : MachineData) :
     (run IndexInsertImage.Insert.r100 0x100 s).All (fun t =>
       t.data.regs=s.regs ∧ t.data.dmem=s.dmem ∧
       t.pc=(if s.regs.rbx.toBitVec=0 then codeEntry+0x131 else codeEntry+0x105)) := by
-  change (Directives.interp (testCode "L_ffffffff813a02d1") s (codeEntry+0x100) (fun pc data => .done ⟨data,pc⟩)).All _
-  have target : label "L_ffffffff813a02d1"=codeEntry+0x131 := by decide +kernel
-  simpa only [target,Int64.add_assoc,show (0x100 : Int64)+5=0x105 by decide +kernel] using guard_generic "L_ffffffff813a02d1" (codeEntry+0x100) s
+  change (Directives.interp (testCode "L_ffffffff813a04d1") s (codeEntry+0x100) (fun pc data => .done ⟨data,pc⟩)).All _
+  have target : label "L_ffffffff813a04d1"=codeEntry+0x131 := by decide +kernel
+  simpa only [target,Int64.add_assoc,show (0x100 : Int64)+5=0x105 by decide +kernel] using guard_generic "L_ffffffff813a04d1" (codeEntry+0x100) s
 
 def advanceCode (target : Label) : List (Kraken.Sized Directive) :=
   IndexInsertImage.Insert.rbe.take 2 ++ [⟨.instr (.regular .W64 .W64 (.jcc .nz target)),2⟩]
@@ -79,18 +79,18 @@ theorem first_advance (s : MachineData) (next : BitVec 64)
     (run IndexInsertImage.Insert.rbe 0xbe s).All (fun t =>
       t.data.regs={s.regs with rbx := .ofBitVec next} ∧ t.data.dmem=s.dmem ∧
       t.pc=(if next=0 then codeEntry+0xc7 else codeEntry+0x8d)) := by
-  change (Directives.interp (advanceCode "L_ffffffff813a022d") s (codeEntry+0xbe) (fun pc data => .done ⟨data,pc⟩)).All _
-  have target : label "L_ffffffff813a022d"=codeEntry+0x8d := by decide +kernel
-  simpa only [target,Int64.add_assoc,show (0xbe : Int64)+9=0xc7 by decide +kernel] using advance_generic "L_ffffffff813a022d" (codeEntry+0xbe) s next read
+  change (Directives.interp (advanceCode "L_ffffffff813a042d") s (codeEntry+0xbe) (fun pc data => .done ⟨data,pc⟩)).All _
+  have target : label "L_ffffffff813a042d"=codeEntry+0x8d := by decide +kernel
+  simpa only [target,Int64.add_assoc,show (0xbe : Int64)+9=0xc7 by decide +kernel] using advance_generic "L_ffffffff813a042d" (codeEntry+0xbe) s next read
 
 theorem second_advance (s : MachineData) (next : BitVec 64)
     (read : s.dmem.loadInt (s.regs.rbx.toBitVec+8) 8=some next.toNat) :
     (run IndexInsertImage.Insert.r123 0x123 s).All (fun t =>
       t.data.regs={s.regs with rbx := .ofBitVec next} ∧ t.data.dmem=s.dmem ∧
       t.pc=(if next=0 then codeEntry+0x12c else codeEntry+0xf2)) := by
-  change (Directives.interp (advanceCode "L_ffffffff813a0292") s (codeEntry+0x123) (fun pc data => .done ⟨data,pc⟩)).All _
-  have target : label "L_ffffffff813a0292"=codeEntry+0xf2 := by decide +kernel
-  simpa only [target,Int64.add_assoc,show (0x123 : Int64)+9=0x12c by decide +kernel] using advance_generic "L_ffffffff813a0292" (codeEntry+0x123) s next read
+  change (Directives.interp (advanceCode "L_ffffffff813a0492") s (codeEntry+0x123) (fun pc data => .done ⟨data,pc⟩)).All _
+  have target : label "L_ffffffff813a0492"=codeEntry+0xf2 := by decide +kernel
+  simpa only [target,Int64.add_assoc,show (0x123 : Int64)+9=0x12c by decide +kernel] using advance_generic "L_ffffffff813a0492" (codeEntry+0x123) s next read
 
 #print axioms cursor_call
 #print axioms first_node_guard

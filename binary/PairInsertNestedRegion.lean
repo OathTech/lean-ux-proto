@@ -102,11 +102,11 @@ theorem nested_test_region (s : MachineData) :
     (run nestedTest 0xed s).All (fun t =>
       t.data.regs=s.regs ∧ t.data.dmem=s.dmem ∧
       t.pc=(if s.regs.rbx.toBitVec=0 then codeEntry+0x12c else codeEntry+0xf2)) := by
-  change (Directives.interp (testCode "L_ffffffff813a02cc") s (codeEntry+0xed)
+  change (Directives.interp (testCode "L_ffffffff813a04cc") s (codeEntry+0xed)
     (fun pc data => .done ⟨data,pc⟩)).All _
-  have target : label "L_ffffffff813a02cc"=codeEntry+0x12c := by decide +kernel
+  have target : label "L_ffffffff813a04cc"=codeEntry+0x12c := by decide +kernel
   simpa only [target,Int64.add_assoc,show (0xed : Int64)+5=0xf2 by decide +kernel]
-    using guard_generic "L_ffffffff813a02cc" (codeEntry+0xed) s
+    using guard_generic "L_ffffffff813a04cc" (codeEntry+0xed) s
 
 #print axioms nested_disable_region
 #print axioms nested_index_region

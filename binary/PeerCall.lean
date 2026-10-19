@@ -52,7 +52,7 @@ theorem trace_and_return (fetch : Int64 → Option Decoded)
       have stored := load64_store s.dmem (s.regs.rsp.toBitVec-8)
         (Image.PeerGet.entry + .ofNat (offset+5)).toBitVec
       exact stored
-  have returned := Kcov.callback_endpoint fetch (.ofNat 0xffffffff810f3100) .pc contract
+  have returned := Kcov.callback_endpoint fetch (.ofNat 0xffffffff810f31f0) .pc contract
     coverage preempt callee (Image.PeerGet.entry + .ofNat (offset+5)).toUInt64 pc entry calleeState
     (by simpa only [calleeSP] using returnSeparate) metadataSeparate preemptSeparate
   apply eventually_weaken (instructionStep fetch) _ _ _ _ returned

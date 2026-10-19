@@ -15,7 +15,7 @@ theorem pc_store {rsp : UInt64} (s : MachineData) (ra : UInt64)
     (ready : WritesReady s.dmem s.regs.rsp (pcStores s))
     (stack : s.regs.rsp=rsp) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard rsp))
-      (StoresPost s ra (pcStores s)) ⟨s,.ofNat 0xffffffff810f3153⟩ := by
+      (StoresPost s ra (pcStores s)) ⟨s,.ofNat 0xffffffff810f3243⟩ := by
   subst rsp
   have first := (ready ⟨s.regs.rcx.toBitVec,s.regs.rax.toBitVec⟩ (by simp [pcStores])).1
   have second := (ready ⟨s.regs.rcx.toBitVec+s.regs.rax.toBitVec*8#64,s.regs.rsi.toBitVec⟩
@@ -45,7 +45,7 @@ theorem pc_count {rsp : UInt64} (s : MachineData) (ra : UInt64) (count : BitVec 
     (ready : WritesReady s.dmem s.regs.rsp (pcCountStores s count))
     (stack : s.regs.rsp=rsp) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard rsp))
-      (StoresPost s ra (pcCountStores s count)) ⟨s,.ofNat 0xffffffff810f3147⟩ := by
+      (StoresPost s ra (pcCountStores s count)) ⟨s,.ofNat 0xffffffff810f3237⟩ := by
   subst rsp
   callback_step
   simp [BitVec.signed,read,Effects.All]
@@ -56,7 +56,7 @@ theorem pc_count {rsp : UInt64} (s : MachineData) (ra : UInt64) (count : BitVec 
     BitVec.add_comm (1#64) count,-BitVec.toNat_add]
   by_cases full : s.regs.rdx.toNat≤(count+1#64).toNat
   · simp only [full,ite_true,Effects.All]
-    have destination : label "L_ffffffff810f3124"=.ofNat 0xffffffff810f3124 := by decide +kernel
+    have destination : label "L_ffffffff810f3214"=.ofNat 0xffffffff810f3214 := by decide +kernel
     rw [destination]
     apply leaf_return _ 1 _ ra (by rfl) (by decide) (by rfl) (by rfl) (by exact ret)
     simp [StoresPost,Returned,pcCountStores,full,Kcov.storesMemory,-BitVec.toNat_add]
@@ -79,7 +79,7 @@ theorem pc_active {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : List 
     (ret : s.dmem.loadInt s.regs.rsp.toBitVec 8=some (ra.toNat : Int))
     (ready : WritesReady s.dmem s.regs.rsp writes) (stack : s.regs.rsp=rsp) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard rsp))
-      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f313a⟩ := by
+      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f322a⟩ := by
   subst rsp
   unfold pcActivePlan at plan
   obtain ⟨area,areaRead,plan⟩ := Option.bind_eq_some_iff.mp plan
@@ -118,7 +118,7 @@ theorem pc_mode {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : List Wo
     (ret : s.dmem.loadInt s.regs.rsp.toBitVec 8=some (ra.toNat : Int))
     (ready : WritesReady s.dmem s.regs.rsp writes) (stack : s.regs.rsp=rsp) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard rsp))
-      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f312f⟩ := by
+      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f321f⟩ := by
   subst rsp
   unfold pcModePlan at plan
   obtain ⟨mode,modeRead,plan⟩ := Option.bind_eq_some_iff.mp plan
@@ -140,7 +140,7 @@ theorem pc_mode {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : List Wo
     · exact ret
     · exact ready
   · simp [active,Effects.All]
-    have destination : label "L_ffffffff810f3124"=.ofNat 0xffffffff810f3124 := by decide +kernel
+    have destination : label "L_ffffffff810f3214"=.ofNat 0xffffffff810f3214 := by decide +kernel
     rw [destination]
     apply leaf_return _ 1 _ ra (by rfl) (by decide) (by rfl) (by rfl) (by exact ret)
     have empty : writes=[] := by simpa [active] using plan.symm
@@ -156,7 +156,7 @@ theorem pc_soft {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : List Wo
     (ret : s.dmem.loadInt s.regs.rsp.toBitVec 8=some (ra.toNat : Int))
     (ready : WritesReady s.dmem s.regs.rsp writes) (stack : s.regs.rsp=rsp) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard rsp))
-      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f3125⟩ := by
+      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f3215⟩ := by
   subst rsp
   unfold pcSoftPlan at plan
   obtain ⟨enabled,enabledRead,plan⟩ := Option.bind_eq_some_iff.mp plan
@@ -171,7 +171,7 @@ theorem pc_soft {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : List Wo
   simp [StatusFlags.from_result,CondCode.interp,BitVec.extractLsb'_setWidth_of_le]
   by_cases disabled : enabled=0#32
   · simp [disabled,Effects.All]
-    have destination : label "L_ffffffff810f3124"=.ofNat 0xffffffff810f3124 := by decide +kernel
+    have destination : label "L_ffffffff810f3214"=.ofNat 0xffffffff810f3214 := by decide +kernel
     rw [destination]
     apply leaf_return _ 1 _ ra (by rfl) (by decide) (by rfl) (by rfl) (by exact ret)
     have empty : writes=[] := by simpa [disabled] using plan.symm
@@ -193,7 +193,7 @@ theorem pc_hardirq {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : List
     (ret : s.dmem.loadInt s.regs.rsp.toBitVec 8=some (ra.toNat : Int))
     (ready : WritesReady s.dmem s.regs.rsp writes) (stack : s.regs.rsp=rsp) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard rsp))
-      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f311d⟩ := by
+      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f320d⟩ := by
   subst rsp
   callback_step
   intro af
@@ -201,7 +201,7 @@ theorem pc_hardirq {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : List
   simp [StatusFlags.from_result,CondCode.interp]
   by_cases clear : s.regs.rax.toBitVec.extractLsb' 0 32 &&& 0xff0000#32=0#32
   · simp [clear,Effects.All]
-    have destination : label "L_ffffffff810f3125"=.ofNat 0xffffffff810f3125 := by decide +kernel
+    have destination : label "L_ffffffff810f3215"=.ofNat 0xffffffff810f3215 := by decide +kernel
     rw [destination]
     refine eventually_weaken _ _ _ _ ?_ (pc_soft _ ra writes ?_ ?_ ?_ (by rfl))
     · intro t result
@@ -223,7 +223,7 @@ theorem pc_interrupt {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : Li
     (ret : s.dmem.loadInt s.regs.rsp.toBitVec 8=some (ra.toNat : Int))
     (ready : WritesReady s.dmem s.regs.rsp writes) (stack : s.regs.rsp=rsp) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard rsp))
-      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f3118⟩ := by
+      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f3208⟩ := by
   subst rsp
   callback_step
   intro af
@@ -231,7 +231,7 @@ theorem pc_interrupt {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : Li
   simp [StatusFlags.from_result,CondCode.interp,ah_mask]
   by_cases clear : s.regs.rax.toBitVec.extractLsb' 0 32 &&& 0x100#32=0#32
   · simp [clear,Effects.All]
-    have destination : label "L_ffffffff810f3124"=.ofNat 0xffffffff810f3124 := by decide +kernel
+    have destination : label "L_ffffffff810f3214"=.ofNat 0xffffffff810f3214 := by decide +kernel
     rw [destination]
     apply leaf_return _ 1 _ ra (by rfl) (by decide) (by rfl) (by rfl) (by exact ret)
     have empty : writes=[] := by simpa [pcInterruptPlan,clear] using plan.symm
@@ -253,7 +253,7 @@ theorem pc_gate {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : List Wo
     (ret : s.dmem.loadInt s.regs.rsp.toBitVec 8=some (ra.toNat : Int))
     (ready : WritesReady s.dmem s.regs.rsp writes) (stack : s.regs.rsp=rsp) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard rsp))
-      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f3111⟩ := by
+      (StoresPost s ra writes) ⟨s,.ofNat 0xffffffff810f3201⟩ := by
   subst rsp
   callback_step
   intro af
@@ -261,7 +261,7 @@ theorem pc_gate {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : List Wo
   simp [StatusFlags.from_result,CondCode.interp]
   by_cases clear : s.regs.rax.toBitVec.extractLsb' 0 32 &&& 0xff0100#32=0#32
   · simp [clear,Effects.All]
-    have destination : label "L_ffffffff810f312f"=.ofNat 0xffffffff810f312f := by decide +kernel
+    have destination : label "L_ffffffff810f321f"=.ofNat 0xffffffff810f321f := by decide +kernel
     rw [destination]
     refine eventually_weaken _ _ _ _ ?_ (pc_mode _ ra writes ?_ ?_ ?_ (by rfl))
     · intro t result
@@ -278,13 +278,13 @@ theorem pc_gate {rsp : UInt64} (s : MachineData) (ra : UInt64) (writes : List Wo
     · exact ready
 
 theorem pc_run (s : MachineData) (ra : UInt64)
-    (ready : KcovReady .pc ⟨s,.ofNat 0xffffffff810f3100⟩)
-    (frame : EntryFrame ⟨s,.ofNat 0xffffffff810f3100⟩ ra) :
+    (ready : KcovReady .pc ⟨s,.ofNat 0xffffffff810f31f0⟩)
+    (frame : EntryFrame ⟨s,.ofNat 0xffffffff810f31f0⟩ ra) :
     Eventually (guardedStep ServiceImage.fetch (leafGuard s.regs.rsp))
-      (fun t => Returned ⟨s,.ofNat 0xffffffff810f3100⟩ t ra ∧
-        EqualOutside (KcovWrites .pc ⟨s,.ofNat 0xffffffff810f3100⟩) s.dmem t.data.dmem ∧
-        KcovEffect .pc ⟨s,.ofNat 0xffffffff810f3100⟩ t)
-      ⟨s,.ofNat 0xffffffff810f3100⟩ := by
+      (fun t => Returned ⟨s,.ofNat 0xffffffff810f31f0⟩ t ra ∧
+        EqualOutside (KcovWrites .pc ⟨s,.ofNat 0xffffffff810f31f0⟩) s.dmem t.data.dmem ∧
+        KcovEffect .pc ⟨s,.ofNat 0xffffffff810f31f0⟩ t)
+      ⟨s,.ofNat 0xffffffff810f31f0⟩ := by
   obtain ⟨writes,wholePlan,ready⟩ := ready
   have plan := wholePlan
   unfold KcovPlan at plan

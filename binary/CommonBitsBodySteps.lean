@@ -53,7 +53,7 @@ theorem trace_step (fetch : Int64 → Option Decoded)
       (BodyStep i c s (AllowedipsImage.CommonBits.entry+.ofNat (offset+5)) s.regs.rbx s.regs.rbp)
       ⟨s, AllowedipsImage.CommonBits.entry+.ofNat offset⟩ := by
   obtain ⟨word, mapped⟩ := Option.isSome_iff_exists.mp state.ready.mapped
-  apply callback_step fetch (.ofNat 0xffffffff810f3100) _ .pc contracts.pc i c apart _ s state s.regs
+  apply callback_step fetch (.ofNat 0xffffffff810f31f0) _ .pc contracts.pc i c apart _ s state s.regs
     rfl rfl rfl rfl
   exact region_eventually (layout.agreement agree) s _ (trace_call offset s word mapped)
 
@@ -65,7 +65,7 @@ theorem args32_step (fetch : Int64 → Option Decoded)
       (BodyStep i c s (AllowedipsImage.CommonBits.entry+0x21) s.regs.rbx s.regs.rbp)
       ⟨s, AllowedipsImage.CommonBits.entry+0x15⟩ := by
   obtain ⟨word, mapped⟩ := Option.isSome_iff_exists.mp state.ready.mapped
-  apply callback_step fetch (.ofNat 0xffffffff810f3ec0) _ .constCmp1 contracts.constCmp1 i c apart _ s state
+  apply callback_step fetch (.ofNat 0xffffffff810f40c0) _ .constCmp1 contracts.constCmp1 i c apart _ s state
     {s.regs with rsi := .ofBitVec ((s.regs.get (.low .rbx .W32)).setWidth 64), rdi := 32}
     rfl rfl rfl rfl
   exact family32_arguments_execution fetch agree s word mapped
@@ -78,7 +78,7 @@ theorem args128_step (fetch : Int64 → Option Decoded)
       (BodyStep i c s (AllowedipsImage.CommonBits.entry+0x39) s.regs.rbx 0)
       ⟨s, AllowedipsImage.CommonBits.entry+0x2b⟩ := by
   obtain ⟨word, mapped⟩ := Option.isSome_iff_exists.mp state.ready.mapped
-  apply callback_step fetch (.ofNat 0xffffffff810f3ec0) _ .constCmp1 contracts.constCmp1 i c apart _ s state
+  apply callback_step fetch (.ofNat 0xffffffff810f40c0) _ .constCmp1 contracts.constCmp1 i c apart _ s state
     {s.regs with rsi := .ofBitVec ((s.regs.get (.low .rbx .W32)).setWidth 64), rdi := 0xffffff80, rbp := 0}
     rfl rfl rfl rfl
   exact family128_arguments_execution fetch agree s word mapped
@@ -92,7 +92,7 @@ theorem high_args_step (fetch : Int64 → Option Decoded)
       ⟨s, AllowedipsImage.CommonBits.entry+0x7a⟩ := by
   obtain ⟨word, mapped⟩ := Option.isSome_iff_exists.mp state.ready.mapped
   obtain ⟨stored, query⟩ := state.wordsHigh family
-  apply callback_step fetch (.ofNat 0xffffffff810f3ea0) _ .cmp8 contracts.cmp8 i c apart _ s state
+  apply callback_step fetch (.ofNat 0xffffffff810f40a0) _ .cmp8 contracts.cmp8 i c apart _ s state
     {s.regs with rbx := i.storedHigh, rbp := i.queryHigh, rdi := i.storedHigh, rsi := i.queryHigh}
     rfl rfl rfl rfl
   exact high_arguments_execution fetch agree s i.storedHigh i.queryHigh word stored query mapped
@@ -110,7 +110,7 @@ theorem ipv4_step (fetch : Int64 → Option Decoded)
   obtain ⟨stored, query⟩ := state.words32 family
   let x := i.stored32.toBitVec ^^^ i.query32.toBitVec
   let n := scan32 x+1
-  apply callback_step fetch (.ofNat 0xffffffff810f3100) _ .pc contracts.pc i c apart _ s state
+  apply callback_step fetch (.ofNat 0xffffffff810f31f0) _ .pc contracts.pc i c apart _ s state
     {s.regs with
       rdx := .ofBitVec (x.setWidth 64), rax := .ofBitVec (n.setWidth 64),
       rbp := .ofBitVec (((s.regs.get (.low .rbp .W32))-n).setWidth 64)}
@@ -125,7 +125,7 @@ theorem seed128_step (fetch : Int64 → Option Decoded)
       (BodyStep i c s (AllowedipsImage.CommonBits.entry+0xb9) s.regs.rbx 0xffffff80)
       ⟨s, AllowedipsImage.CommonBits.entry+0xaf⟩ := by
   obtain ⟨word, mapped⟩ := Option.isSome_iff_exists.mp state.ready.mapped
-  apply callback_step fetch (.ofNat 0xffffffff810f3100) _ .pc contracts.pc i c apart _ s state
+  apply callback_step fetch (.ofNat 0xffffffff810f31f0) _ .pc contracts.pc i c apart _ s state
     {s.regs with rbp := 0xffffff80} rfl rfl rfl rfl
   exact ipv6_result_seed_execution fetch agree s word mapped
 

@@ -25,7 +25,7 @@ theorem walk_chain (fetch : Int64 → Option Decoded) (decoder : IndexInsertDeco
       ⟨s,walkStart locked nodes⟩ := by
   induction shape generalizing s with
   | nil previous =>
-    have call := core.callback fetch (walkPC locked WalkTrace.empty.offset) "L_ffffffff810f3100"
+    have call := core.callback fetch (walkPC locked WalkTrace.empty.offset) "L_ffffffff810f31f0"
       trace (decoder _ _ (walk_trace_fetch locked .empty)) facts
     apply eventually_weaken (instructionStep fetch) _ _ _ _ call
     rintro t ⟨pc,core,_,r13,r14,_⟩
@@ -42,7 +42,7 @@ theorem walk_chain (fetch : Int64 → Option Decoded) (decoder : IndexInsertDeco
       refine ⟨?_,core,registers⟩
       simpa only [walkEnd,List.any_cons,hit,Bool.true_or,↓reduceIte] using pc
     · have pc' : compared.pc=walkPC locked 0xb9 := by simpa only [hit,Bool.false_eq_true,↓reduceIte] using pc
-      have call := core.callback fetch (walkPC locked WalkTrace.mismatch.offset) "L_ffffffff810f3100"
+      have call := core.callback fetch (walkPC locked WalkTrace.mismatch.offset) "L_ffffffff810f31f0"
         trace (decoder _ _ (walk_trace_fetch locked .mismatch)) facts
       apply eventually_trans (instructionStep fetch) _ _ _ (at_pc pc' call)
       rintro called ⟨pc,core,bx,r13,r14,_⟩

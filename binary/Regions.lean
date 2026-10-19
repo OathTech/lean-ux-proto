@@ -28,7 +28,7 @@ theorem trace_call (offset : Nat) (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.Lookup.r34 offset s).All (fun t =>
       t.data.regs = {s.regs with rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s (offset + 5) ∧ t.pc = .ofNat 0xffffffff810f3100) := by
+      t.data.dmem = callMemory s (offset + 5) ∧ t.pc = .ofNat 0xffffffff810f31f0) := by
   simp [run, Image.Lookup.r34, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, MachineData.store,
     Reg64s.get64, Reg64s.set64, RelRegOrMem.interp, ConstExpr.interp,
@@ -43,8 +43,8 @@ theorem trace_call (offset : Nat) (s : MachineData) (stackWord : Int)
       exact BitVec.sub_add_cancel _ _
     simpa only [Int64.add_assoc] using
       (cancel (Image.Lookup.entry + Int64.ofNat offset + 5)
-        (label "L_ffffffff810f3100")).trans (show label "L_ffffffff810f3100" =
-          (-2129710848 : Int64) from by decide)
+        (label "L_ffffffff810f31f0")).trans (show label "L_ffffffff810f31f0" =
+          (-2129710608 : Int64) from by decide)
 
 theorem trace_region_terms :
     Image.Lookup.r47 = Image.Lookup.r34 ∧ Image.Lookup.r5e = Image.Lookup.r34 ∧
@@ -59,7 +59,7 @@ theorem container_entry (s : MachineData) (stackWord : Int)
     (stack : s.dmem.loadInt (s.regs.rsp.toBitVec - 8) 8 = some stackWord) :
     (run Image.Lookup.r39 0x39 s).All (fun t =>
       t.data.regs = {s.regs with rbx := s.regs.rbx - 8, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x42 ∧ t.pc = .ofNat 0xffffffff810f3100) := by
+      t.data.dmem = callMemory s 0x42 ∧ t.pc = .ofNat 0xffffffff810f31f0) := by
   simp [run, Image.Lookup.r39, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.store, MachineData.set, MachineData.setReg,
@@ -76,7 +76,7 @@ theorem index_load (s : MachineData) (index : UInt32) (stackWord : Int)
       t.data.regs = {s.regs with
         rbp := .ofNat index.toNat, rdi := .ofNat index.toNat,
         rsi := .ofNat ((s.regs.get (.low .r12 .W32)).toNat), rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0x59 ∧ t.pc = .ofNat 0xffffffff810f3e80) := by
+      t.data.dmem = callMemory s 0x59 ∧ t.pc = .ofNat 0xffffffff810f4080) := by
   simp [run, Image.Lookup.r4c, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,
@@ -116,7 +116,7 @@ theorem type_mask (s : MachineData) (kind : UInt32) (stackWord : Int)
       t.data.regs = {s.regs with
         r14 := .ofNat masked.toNat, rsi := .ofNat masked.toNat,
         rdi := 0, rsp := s.regs.rsp - 8} ∧
-      t.data.dmem = callMemory s 0xa8 ∧ t.pc = .ofNat 0xffffffff810f3f00) := by
+      t.data.dmem = callMemory s 0xa8 ∧ t.pc = .ofNat 0xffffffff810f4100) := by
   simp [run, Image.Lookup.r9a, Directives.interp, Directive.interp,
     Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
     MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,

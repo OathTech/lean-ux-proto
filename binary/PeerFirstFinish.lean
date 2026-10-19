@@ -6,7 +6,7 @@ local instance : Labels := Image.linkedLabels
 variable {outer : UInt64}
 
 theorem finish_9d_history (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (initial : MachineState) (safe : StackSlots outer initial.data.regs.rsp) (body : MachineData) (returnAddress : UInt64)
     (entry : EntryFrame initial returnAddress)
     (sp : body.regs.rsp = initial.data.regs.rsp - 48)
@@ -33,7 +33,7 @@ theorem finish_9d_history (fetch : Int64 → Option Decoded)
         ∀ q ∈ tail, q.pc ∈ Image.cutPoints →
           EqualOutside (scanWrites body coverage) body.dmem q.data.dmem)
       ⟨⟨body, Image.PeerGet.entry+0x9d⟩, history⟩ := by
-  have call := LookupHistory.First.scan_call_cursor fetch "L_ffffffff810f3100"
+  have call := LookupHistory.First.scan_call_cursor fetch "L_ffffffff810f31f0"
     ⟨⟨body, Image.PeerGet.entry+0x9d⟩, history⟩ (agree _ _ (by rfl)) .pc contract
     body coverage preempt (safe.call sp) (ScanFrame.initial body coverage preempt ready) ((ScanFrame.initial body coverage preempt ready)).ready.pc_allowed
     rxSection events observed last (by

@@ -6,7 +6,7 @@ local instance : Labels := Image.linkedLabels
 variable {outer : UInt64}
 
 theorem start_simulation (fetch : Int64 → Option Decoded)
-    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f3100) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
+    (agree : AnchoredDecoderAgreement fetch) (contract : LeafService fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc))
     (c : Config) (world : World) (s : MachineData)
     (coverage : LookupCoverage.Context) (preempt : BitVec 32)
     (related : R c [⟨s, Image.Lookup.entry⟩] [entryPoint s] ⟨s, Image.Lookup.entry⟩ world)

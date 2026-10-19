@@ -31,7 +31,7 @@ theorem recheck_miss (fetch : Int64 → Option Decoded) (decoder : IndexInsertDe
     Eventually (instructionStep fetch) (fun t => t.pc=codeEntry+0x136 ∧
       Core n o c initial ra .inner shadow t.data ∧ WalkRegisters true focus.index t.data)
       ⟨s,walkPC false 0xcc⟩ := by
-  have call := core.callback fetch (walkPC false WalkTrace.finish.offset) "L_ffffffff810f3100"
+  have call := core.callback fetch (walkPC false WalkTrace.finish.offset) "L_ffffffff810f31f0"
     trace (decoder _ _ (walk_trace_fetch false .finish)) facts
   apply eventually_trans (instructionStep fetch) _ _ _ call
   rintro called ⟨pc,core,_,_,_,_⟩
@@ -44,7 +44,7 @@ theorem recheck_miss (fetch : Int64 → Option Decoded) (decoder : IndexInsertDe
   apply eventually_trans (instructionStep fetch) _ _ _ (at_pc pc walk)
   rintro walked ⟨pc,core,registers⟩
   have pc' : walked.pc=walkPC true 0xcc := by simpa only [walkEnd,miss,Bool.false_eq_true,↓reduceIte] using pc
-  have call := core.callback fetch (walkPC true WalkTrace.finish.offset) "L_ffffffff810f3100"
+  have call := core.callback fetch (walkPC true WalkTrace.finish.offset) "L_ffffffff810f31f0"
     trace (decoder _ _ (walk_trace_fetch true .finish)) facts
   apply eventually_weaken (instructionStep fetch) _ _ _ _ (at_pc pc' call)
   rintro final ⟨pc,core,_,r13,r14,_⟩
