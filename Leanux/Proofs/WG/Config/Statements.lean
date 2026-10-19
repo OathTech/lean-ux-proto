@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Config.InitializedOwnerClaims
+import Leanux.Proofs.WG.Config.RequestReceiptClaims
+import Leanux.Proofs.WG.Config.GetterStagingSource
 import Leanux.Proofs.WG.Config.QueuedRemoveClaims
 import Leanux.Proofs.WG.Config.RequestOrderClaims
 import Leanux.Proofs.WG.Config.InitializedOwnerAccountClaims
@@ -2707,5 +2710,100 @@ theorem original_mixed_device_generation_entry (attrs : DeviceAttrs)
     (nonempty : result.receipts ≠ []) :
     ∃ r rest, result.receipts = r :: rest ∧ RequestOrder.EntryReceipt attrs entry.wg r :=
   RequestOrder.certificate_entry attrs entry result facts nonempty
+
+
+/-- Parsed initialized executions derive represented, configured, resident route
+owners at their actual final snapshot in both placeholder modes. -/
+theorem parsed_initialized_configuration_ownership (input : Lean.Json) (trace : Runner.Trace)
+    (parsed : Runner.parseTrace input=.ok trace) (placeholders : Bool) (json : Lean.Json)
+    (run : Runner.executeTrace trace placeholders=.ok json) :
+    ∃ final, (InitializedRouting.inspection trace placeholders).outcome=.ok (json,final) ∧
+      InitializedOwner.OwnershipAt final :=
+  InitializedOwner.parsed_accepted input trace parsed placeholders json run
+
+/-- The ownership endpoint is the same projected snapshot retained by the actual
+initialized routing/account inspection, without a supplied invariant. -/
+theorem original_initialized_configuration_ownership (trace : Runner.Trace)
+    (shape : Configuration.TraceAddressShape trace) (placeholders : Bool)
+    (json : Lean.Json) (final : Campaign2.Product.Snapshot)
+    (run : (InitializedRouting.inspection trace placeholders).outcome=.ok (json,final)) :
+    InitializedOwner.OwnershipAt final :=
+  InitializedOwner.normal trace shape placeholders json final run
+
+/-- Arbitrary mixed requests expose their actual completed-stage certificate and
+the whole normal endpoint relation for any completed nonzero port result. -/
+theorem original_mixed_device_refusal_certificate (attrs : DeviceAttrs) :
+    Campaign2.Observes (wgSetDevice attrs) (fun _ => True)
+      (fun entry outcome => ∃ result : RequestOrder.Inspection,
+        result.outcome = outcome ∧ RequestOrder.Certificate attrs entry result ∧
+        RequestOrder.RefusalFacts result) :=
+  RequestOrder.original_request_refusal_certificate attrs
+
+/-- A same-request nonzero port receipt determines the exact normal return and
+entire final WG projection. Ambient is not asserted equal. -/
+theorem original_mixed_device_port_refusal (attrs : DeviceAttrs) (entry : Campaign2.Snapshot)
+    (result : RequestOrder.Inspection) (facts : RequestOrder.Certificate attrs entry result)
+    (ret : Int) (final : Campaign2.Snapshot) (normal : result.outcome=.ok (ret,final))
+    (r : RequestOrder.Receipt) (member : r ∈ result.receipts) (port : Nat)
+    (kind : r.kind=.port port) (nonzero : r.result ≠ 0) :
+    ret=r.result ∧ final.wg=r.after.wg :=
+  RequestOrder.certificate_port_refusal attrs entry result facts ret final normal
+    r member port kind nonzero
+
+/-- Source clearing changes just the selected peer's source/cache fields at the
+actual completed cut, even if the enclosing request later stops. -/
+theorem original_mixed_device_clear_source (attrs : DeviceAttrs) (initial : Campaign2.Snapshot)
+    (result : RequestOrder.Inspection) (facts : RequestOrder.Certificate attrs initial result)
+    (r : RequestOrder.Receipt) (member : r ∈ result.receipts) (pid : PeerId)
+    (kind : r.kind=.clearSource pid) (d : Device) (p : Peer)
+    (resident : d.peers[pid]?=some p) (entry : r.before.wg.device=some d) :
+    r.result=0 ∧ ∃ d' reset, r.after.wg.device=some d' ∧
+      d'={d with peers:=d'.peers} ∧
+      d'.peers[pid]?=some (clearedSource p reset) ∧
+      ∀ q, q ≠ pid → d'.peers[q]?=d.peers[q]? :=
+  RequestOrder.certificate_clear_source attrs initial result facts r member pid kind
+    d p resident entry
+
+/-- A completed nonzero-port call retains its exact unchanged-port or socket
+outcome, relative to that call's actual entry inside the mixed request. -/
+theorem original_mixed_device_nonzero_port_effects (attrs : DeviceAttrs)
+    (initial : Campaign2.Snapshot) (result : RequestOrder.Inspection)
+    (facts : RequestOrder.Certificate attrs initial result)
+    (r : RequestOrder.Receipt) (member : r ∈ result.receipts) (port : Nat)
+    (kind : r.kind=.port port) (d : Device) (nonzero : port ≠ 0)
+    (entry : r.before.wg.device=some d) :
+    if d.incomingPort=port then r.result=0 ∧ r.after.wg.device=some d
+    else r.result=(portOutcome d port r.before.wg.portBound).1 ∧
+      r.after.wg.device.map withoutPeers=
+        some (withoutPeers (portOutcome d port r.before.wg.portBound).2) ∧
+      ClaimView.clearedPeers d r.after.wg.toCore d.peerList :=
+  RequestOrder.certificate_nonzero_port_effects attrs initial result facts r member
+    port kind d nonzero entry
+
+/-- A completed zero-port call retains the exact unchanged/stopped/allocation
+cases. Creating-namespace membership remains the concrete entry condition. -/
+theorem original_mixed_device_zero_port_effects (attrs : DeviceAttrs)
+    (initial : Campaign2.Snapshot) (result : RequestOrder.Inspection)
+    (facts : RequestOrder.Certificate attrs initial result)
+    (r : RequestOrder.Receipt) (member : r ∈ result.receipts) (kind : r.kind=.port 0)
+    (d : Device) (net : d.creatingNet=true) (entry : r.before.wg.device=some d) :
+    r.result=0 ∧ ClaimView.zeroPortEffects d r.after :=
+  RequestOrder.certificate_zero_port_effects attrs initial result facts r member kind d net entry
+
+/-- A refused nonzero port is the final normal device effect, including exact
+socket code, non-peer device fields and source clearing. -/
+theorem original_mixed_device_nonzero_port_refusal (attrs : DeviceAttrs)
+    (initial : Campaign2.Snapshot) (result : RequestOrder.Inspection)
+    (facts : RequestOrder.Certificate attrs initial result)
+    (ret : Int) (final : Campaign2.Snapshot) (normal : result.outcome=.ok (ret,final))
+    (r : RequestOrder.Receipt) (member : r ∈ result.receipts) (port : Nat)
+    (kind : r.kind=.port port) (d : Device) (nonzero : port ≠ 0)
+    (entry : r.before.wg.device=some d) (refused : r.result ≠ 0) :
+    ret=(portOutcome d port r.before.wg.portBound).1 ∧
+      final.wg.device.map withoutPeers=
+        some (withoutPeers (portOutcome d port r.before.wg.portBound).2) ∧
+      ClaimView.clearedPeers d final.wg.toCore d.peerList :=
+  RequestOrder.certificate_nonzero_port_refusal attrs initial result facts ret final normal
+    r member port kind d nonzero entry refused
 
 end Leanux.Proofs.WG.Config
