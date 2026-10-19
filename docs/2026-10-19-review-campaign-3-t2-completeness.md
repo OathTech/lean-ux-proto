@@ -136,11 +136,23 @@ needed to show that the journal misses no native emission.
 
 ## Dispositions during implementation
 
-[AGENT 2026-10-19] All four gaps are accepted as proof obligations. Item 1
-is being addressed with fixed-ticket native partitions and an observed trim
-callback. Item 2 requires named first terminal outcomes, with later release
-as cleanup. Item 3 requires source-phase frontiers retained before Stop.
-Item 4 requires the invocation-level error counter and successful splice
-boundary to stay explicit. The initialized available-birth bank closes only
-cross-allocation uniqueness; none of these four items is marked complete by
-that result. No mirror edit or claim weakening is used.
+[AGENT 2026-10-19] All four gaps are accepted as proof obligations.
+
+1. Local fixed-ticket purge/final-release transitions now preserve every
+   ledger identity, settle the same incoming queue list and expose the native
+   counter delta. The final journal records staged disposal. Complete nested
+   release coverage and initialized ledger transport remain open.
+2. The ledger retains the first terminal result and admits no terminal
+   replacement. Outer send-result receipts cover the missing failure arm.
+   Their join to each actual socket/free occurrence remains open.
+3. Native take/restore factors and completion/free frontiers retain source
+   locals through Stop. Selected/allocated tickets still need complete native
+   backing and initialized transport; ledger membership alone is insufficient.
+4. The actual original transmit refusal theorem now gives the named errno and
+   one `txErrors` increment per invocation, independent of GSO length. Successful
+   splice remains the ticket-birth boundary. The final conservation package
+   must include that separate invocation-level result.
+
+The current local disposal and T3 emission-coverage claims pass the aggregate
+gate and fresh kernel replay. None of those results closes T2’s complete
+forward partition. No mirror edit or claim weakening is used.

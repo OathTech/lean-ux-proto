@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.SecurityOutcome
 import Leanux.Proofs.WG.AuthenticatedEffects.RawAppendAuthorization
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalCookieAmplification
 import Leanux.Proofs.WG.AuthenticatedEffects.ReplayEntryFinal
@@ -110,20 +111,28 @@ import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeReceive
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeSend
 import Leanux.Proofs.WG.AuthenticatedEffects.CausalScopeTimers
 
-/-! T3 local cookie exception tranche. These claims establish the original
-cookie-only dispatch, bounded construction/reply attempts and session frame.
-Normal native receives have an actual emitted-datagram bound, source/bytes binding
-and exact length 64. An erasing suffix observer retains actual append receipts
-through a later Stop. Invalid MAC1 rejects with only under-load bookkeeping effects.
-Native Noise refusals cannot emit or reach the receive timer/session suffix;
-pre-lookup initiation refusals preserve the entire WG world, and all normal
-initiation refusals restore complete peer records pointwise. Cookie acceptance
-is observed before its first state write and through a later Stop. Native response
-and cookie refusals preserve complete peer protocol records, masking just the two
-reference-accounting fields and deriving safe repayment from the original lookup.
-Full reference restoration remains conditional; whole-run causal closure is open. -/
+/-! T3 authenticated effects and silence. The initialized component package
+combines occurrence-specific authorization for every original append, inherited
+timer/work causes, pre-effect handshake callbacks, certified replay and buffered
+GRO provenance. Qualifying cookie replies have one actual-input append bound,
+fixed native format/source binding, initialized input-size bounds and session
+isolation. Rejected native consumers retain the full WG projection modulo map
+representation; MAC and decrypt checks expose precisely named maintenance
+exceptions. Source contracts, completed-consumer cuts and retained Stop-prefix
+observations remain distinct in the statement types. -/
+
 namespace Leanux.Proofs.WG.AuthenticatedEffects
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.WG.Cookies
+
+/-- Security: every initialized native transmission occurrence and protected
+protocol effect has its own accepted-input or fixture cause, including inherited
+delayed work. The qualifying cookie exception has at most one 64-byte reply to
+its actual source per invocation and is smaller than its initialized input.
+Handshake/replay/GRO acceptance and full refusal projections are named separately
+in `SecurityOutcome`; later Stop does not erase recorded effects. -/
+theorem initialized_silence_security_outcome (trace : Runner.Trace) (placeholders : Bool) :
+    SecurityOutcome trace placeholders := initialized_authenticated_effects trace placeholders
+
 
 /-- Security: qualifying invalid-MAC2 initiations and responses execute only the
 original cookie-reply suffix. The continuous `FailedMac2` witness supplies the

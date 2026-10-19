@@ -12,14 +12,14 @@ claims, premises and mirror pins.
 
 The [campaign-3 report](2026-10-18-proof-campaign-3.md) tracks
 `proofs/campaign-3` over `783510e8`, with mirror `77c9b555` unchanged.
-T1, T4, T5 and amended T6 are complete and validated; T2 and T3 remain open. Existing campaign-1 results remain current. Campaign-2 source
+T1, T3, T4, T5 and amended T6 are complete and validated; T2 remains open. Existing campaign-1 results remain current. Campaign-2 source
 facts are named hypotheses, not silently discharged dependencies.
 
 | Outcome | Result, assumptions and remaining boundary |
 | --- | --- |
 | T1 nonce safety | Complete. `TransmitSecurity.initialized_nonce_safety` joins initialized native reservation uniqueness, actual key-allocation/AEAD nonce uniqueness, bounded counters and exact header/wire encoding, including stopped prefixes. No incoming invariant or H1 premise remains. `HandshakeSecurity.native_nonce_rejection_invalidates_and_restores` and the rejection observer expose the actual invalidation/restoration and unchanged drop count; `TransmitSecurity.original_rekey_count_request` and `original_rekey_age_request` expose the guarded native helper call. |
 | T2 transmit authorization and conservation | Open. `initialized_staged_selection_origins` derives ordered, distinct routing/keepalive positions through the whole native initialized runner, including Stop. `initialized_allocated_staged_occurrences` retains the selected peer allocation, exact plaintext sequence and those prior batch positions. `initialized_encrypted_plaintext_origin` and `initialized_socket_route_key_core_and_endpoint` join that history to each actual AEAD and transport socket receipt in the same final journal, with no incoming carrier or H1 premise. Socket bytes, endpoint, packet peer and historical current-slot sending core are bound. The current tranche also derives historical key-owner equality at the actual allocation entry and joins it to the socket peer through the same AEAD material; that strengthening passes the aggregate gate and fresh replay. Native overflow/purge and creation-refusal arms expose their exact effects. Initialized TX ownership and native work service cover resident cells, scheduling, deferred calls and peer removal; destructor disposal retains its explicit idle-entry premise. `initialized_available_birth_bank` and `initialized_available_birth_unique` now derive live birth credits and cross-allocation uniqueness through the actual initialized Runner, including Stop, without an incoming carrier or C2 premise; scoped validation passes. Complete fixed-ticket pending/terminal conservation remains open. T3 supplies converse native emission coverage separately. Batch-local distinctness and queue aliases do not discharge those obligations. |
-| T3 authenticated effects and silence | Open. `AuthenticatedEffects.initialized_stack_input_has_own_authenticated_receive` connects each buffered GRO occurrence to its own successful replay and earlier AEAD publication in the same final journal. Initialized timer selections identify their exact earlier arm; send-work selections identify the first matching enqueue. Active handshake contexts have their own latest valid native admission. Each initialized completion context has a strict earlier head allocation. All initialized scope prefixes are well formed, including nested callbacks and Stop. Receipt integrity, scope metadata and source projections are established. Initialized timer arms, work appends, TX allocations, actual transport socket receipts and keepalive preparation have finite exact-occurrence chains to fixture or their own authenticated roots, including Stop. The same final driver now records native protocol and cookie socket returns. Each protocol-send receipt has its own initialized causal root and native endpoint/byte emission fact; cookie receipts are native-valid and qualified by actual under-load and MAC decisions on initiation/response input. Successful response lookup followed by refusal restores every peer record without a borrowing premise. Ordered emission accounting now distinguishes every socket append occurrence; actual protocol and cookie sends, handshake receive, send workers and timer/work effects preserve it. Final initialized exchange-entry positivity now discharges the resident-positive premise for response-refusal, including later Stop. Initialized cookie-consumer entry positivity and native validity now discharge refusal premises; rejected cookie, response and initiation consumers restore complete peer and keypair records. Exact initialized pre-delivery positions now join strictly earlier authorized native appends, and every retained append ordinal has its own root or qualifying cookie exception. Initialized rejected replay now preserves the complete protocol projection and all resident keypair fields, with native entry coherence derived at that occurrence and no successful-run premise. `initialized_original_append_has_its_own_authorized_cause` now maps every independent native append to its own final-journal receipt and causal evidence, including Stop. Initialized cookie width and qualification imply a strict payload decrease without an incoming shape premise. Per-input reply cardinality and the complete rejected-effect boundary remain under final audit; no reply-rate bound is claimed. |
+| T3 authenticated effects and silence | Complete and validated. `AuthenticatedEffects.initialized_silence_security_outcome` combines every native append’s own authorization, rooted timer/work effects, latest own handshake admission, authenticated replay and packet-specific GRO delivery. The cookie exception uses actual load/MAC guards: at most one source-bound 64-byte reply per invocation, strictly smaller than its initialized input, without session effects. Refused initialized consumers preserve every WG field modulo map representation; MAC refusal masks only load/cookie-secret/rate-limit bookkeeping, and decryption names the exact pre-AEAD invalidation alternative. Consumer equality is at completed native cuts, retained through later outer Stop; internally stopped effects use prefix observations. No incoming invariant, funding, coherence or H1 premise remains. No global reply-rate, CPU, timing or cryptographic-unforgeability claim is made. |
 | T4 handshake replay resistance | Complete and validated. `HandshakeSecurity` derives initialized retained-peer timestamp and exchange histories, one allocation per successful session, handshake clearing and refusal-state preservation. The final session entry supplies role-slot residency. Actual initialized stale initiations are refused with restored peer records and no sent-data change; the exact native continuation produces no response without an independent ambient-history premise. Final-journal exports prove response-consumption and session-installation uniqueness by exchange epoch, and exactly one native allocation for the same successful session receipt. Visible assumptions include `H1ResponseEdges`, `H1SessionEffects` and operational C2 tag/frame packages at read-only `5177bd9c`; no C2 file is edited. |
 | T5 responder confirmation | Complete and validated. `initialized_responder_confirmation_discipline` joins promotion-label uniqueness, each confirmation's own accepted transport cause and actual responder AEAD after confirmation of the same allocation. Initialized transport covers inner promotion receipts even when the enclosing receive later stops. `PendingPromotion.H1DriverFrames` and `H1ResponderCurrentEdges` remain named local C2 operational assumptions; no incoming carrier, reachability, funding or callback premise remains. |
 | T6 retirement / C3-F1 | Complete. `RetirementSecurity.reference_aware_retirement_outcome` composes unconditional TX/RX check-site safety and invalidation, initialized R2 access/holder accounting, session-derived zero-arm and selected-arm provenance, actual timer/worker unpublication, retained material and final release. Native final RX cleanup covers authenticated packets too. The holder census is at normal Runner endpoints. Clock/worker runs and residual-reference conditions remain explicit; no bounded latency or physical zeroization is claimed. Both R5 witnesses remain permitted retained work. |
@@ -27,26 +27,27 @@ facts are named hypotheses, not silently discharged dependencies.
 The [staged-origin review](2026-10-19-review-campaign-3-staged-origin.md)
 and [forward-conservation review](2026-10-19-review-campaign-3-t2-completeness.md)
 remain the T2 disposition record. Historical key ownership and initialized
-available-credit injectivity are proved. Fixed-ticket disposal, stopped caller
+available-credit injectivity are proved. Local fixed-ticket disposal is proved; native transport of stopped caller
 locals and the complete pending/terminal partition remain open. Original early
 transmit refusals now have their exact invocation-level error charge; a GSO
 packet list does not multiply that charge.
 
-The current tranche records actual input, disposal and outer send results in
-the same final journal. Its exact old-journal projection and all initialized
-causal/staged-origin adapters compile. The independent native append observer
-now has its complete initialized authorization join; actual cookie occurrences
-have their initialized input-size bound. The aggregate build and axiom gate
-pass, together with fresh root kernel replay and all twelve counterexamples.
-T2 conservation and the final T3 outcome audit remain open.
+The T3 package and native fixed-ledger purge/final-release transitions pass
+the 3039-job aggregate build and 1523-declaration axiom gate across thirteen
+roots, using only the three standard axioms. Fresh root kernel replay, all
+twelve counterexample recipes, the 130-job model build and 131 unit tests pass
+(one configured-kernel skip, 22.483 seconds). All 2993 frozen proof-source
+hashes match; all 916 inherited proof modules, mirror `77c9b555` and main
+`783510e8` are unchanged. The previous validated checkpoint is `ccbd8eba`.
+The inherited warning and repaired development failures are recorded in the
+report.
 
-This checkpoint passes 2958 proof jobs and the 1520-declaration axiom gate
-across thirteen roots, with only the three standard axioms. All twelve witnesses,
-fresh root kernel replay, the 130-job model build and 131 unit tests pass
-(one configured-kernel skip, 22.552 seconds). All 2925 frozen proof-source hashes
-match; all 916 inherited proof modules, mirror `77c9b555` and main `783510e8`
-are unchanged. The inherited warning and repaired development failures are
-recorded in the report.
+Fixed-ticket purge and final release now preserve the complete ledger and
+settle the same incoming queue tickets with the actual counter charge. New
+local take/restore, publication and nested-release source factors are checked.
+T2 still needs native backing for held/allocated tickets, first-terminal
+classification and full initialized conservation through stopped prefixes.
+The shared final driver’s new source-cut integration remains in progress.
 
 ## Current register
 

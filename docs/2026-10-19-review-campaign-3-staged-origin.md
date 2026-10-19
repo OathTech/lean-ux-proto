@@ -129,6 +129,13 @@ the socket peer. The owner may later be cleared; the historical evidence
 and immutable core are retained. The 1970-job scoped statement build passes;
 the aggregate gate and fresh root replay pass for this strengthening.
 
-Findings 2 and 3 remain open campaign obligations. Cross-allocation
-conservation and converse emission coverage are not discharged by the present
-provenance theorems. T2 remains open. No mirror change is proposed.
+[AGENT 2026-10-19] Finding 3 is repaired: the independent native raw-append
+observer has an exact final-journal projection, and
+`initialized_original_append_has_its_own_authorized_cause` maps every append
+ordinal to its own receipt and authorization, including Stop and later buffer
+clearing. The T3 package passes the aggregate gate and fresh root replay.
+
+Finding 2 remains open. Initialized available-credit injectivity and local
+fixed-ticket disposal are proved, but the full pending/terminal partition
+still requires held/allocated backing and first-terminal transport through
+the native Runner. T2 remains open. No mirror change is proposed.

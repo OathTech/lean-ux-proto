@@ -1,3 +1,20 @@
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationDisposalReceipts
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationQueueFramesNative
+import Leanux.Proofs.WG.TransmitSecurity.StagedObligationQueueFramesTimers
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationTakeFacts
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationAllocationTotal
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationRestoreProjection
+import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationTrimTotal
+import Leanux.Proofs.WG.HandshakeSecurity.StagedDisposalEncryptionFocus
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseReceiveContracts
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseAdmissionProjection
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseWorkerNeutral
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseWorkerFrames
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleasePollFrames
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseDumpContracts
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseDumpDispatchContracts
+import Leanux.Proofs.WG.RetirementSecurity.NestedPeerReleaseDumpDispatchProjection
+
 import Leanux.Proofs.WG.HandshakeSecurity.StagedConservationXmitErrors
 import Leanux.Proofs.WG.TransmitSecurity.HeaderLength
 import Leanux.Proofs.WG.TransmitSecurity.CompletionAppendCut
@@ -1227,5 +1244,46 @@ theorem original_transmit_refusal_charged_once (family addr : Nat) (packets : Li
     ((Packets.txFront family addr packets mtu).run r.before).run r.ambientBefore =
       .ok ((.error r.value,r.after),r.ambientAfter) :=
   HandshakeSecurity.StagedConservation.Front.xmit_refusal family addr packets mtu r run refused
+
+section
+open Staged.Obligations Staged.Origins
+
+/-- Security: the actual full staged purge settles every incoming queue ticket
+at its own counted purge receipt, retains every ledger identity and prior
+terminal, and charges exactly the removed ticket count. The incoming fixed
+ledger and native queue invariant remain explicit; initialized closure is open. -/
+theorem native_purge_preserves_fixed_obligations (pid : PeerId) (r : WGRunWitness Unit)
+    (run : r.Valid (purgeStagedPackets pid))
+    (valid : Valid births ledger) (before : QueueInv history ledger r.before)
+    (epoch : Packets.epoch r.before = some generation) :
+    ∃ stamp after,
+      Staged.Obligations.Step ledger after ∧ Valid births after ∧
+      QueueInv (history ++ [.stagedDisposal (.purge pid r)]) after r.after ∧
+      (∀ ticket ∈ pendingAt (.staged generation pid stamp) ledger,
+        (ticket,Status.terminal (.counted history.length .purge)) ∈ after) ∧
+      (∃ count, Staged.dropped r.before = some count ∧ Staged.dropped r.after =
+        some (count+(pendingAt (.staged generation pid stamp) ledger).length)) :=
+  Staged.Obligations.purge_receipt pid r run valid before epoch
+
+/-- Security: final peer release settles every staged obligation at the actual
+counted erase receipt, without losing it when the peer disappears. Its later
+native cleanup may stop. This local contract exposes its incoming ledger,
+queue invariant and native completed cut; it is not whole-run conservation. -/
+theorem native_final_release_preserves_fixed_obligations (peer : Option PeerId)
+    (r : WGRunWitness (Option (PeerId × Peer)))
+    (run : r.Valid (HandshakeSecurity.StagedDisposal.releaseCut peer))
+    (released : r.value = some (pid,p))
+    (valid : Valid births ledger) (before : QueueInv history ledger r.before)
+    (epoch : Packets.epoch r.before = some generation) :
+    ∃ after,
+      Staged.Obligations.Step ledger after ∧ Valid births after ∧
+      QueueInv (history ++ [.stagedDisposal (.release peer r)]) after r.after ∧
+      (∀ ticket ∈ pendingAt (.staged generation pid p.internalId) ledger,
+        (ticket,Status.terminal (.counted history.length .finalRelease)) ∈ after) ∧
+      (∃ count, Staged.dropped r.before = some count ∧ Staged.dropped r.after =
+        some (count+(pendingAt (.staged generation pid p.internalId) ledger).length)) :=
+  Staged.Obligations.release_receipt peer r run released valid before epoch
+
+end
 
 end Leanux.Proofs.WG.TransmitSecurity

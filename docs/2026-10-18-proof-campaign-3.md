@@ -6,7 +6,7 @@
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
 proof tree includes campaign 1's GRO carry. No mirror definition or landed
 proof has been changed. The source contracts now cover staged nonce allocation, encryption receipts,
-cookie egress, native handshake histories and session reference payments. T1, T4, T5 and the amended T6 are complete and validated; T2 and T3 remain open.
+cookie egress, native handshake histories and session reference payments. T1, T3, T4, T5 and the amended T6 are complete and validated; T2 remains open.
 
 **C3-F1 is dispositioned as a statement artefact.** The original T6 wording
 excluded behavior already represented by R5's coherent initialized replays.
@@ -20,7 +20,7 @@ stops the work. The last validated checkpoint and the current integration status
 | --- | --- |
 | T1 nonce safety | Complete and validated. `initialized_nonce_safety` joins unique native reservations, actual key-allocation/nonce pairs, bounded serialized AEAD nonces and exact packet/header encoding, including stopped prefixes. Universal native rejection contracts prove invalidation, whole-batch restoration and unchanged drop count; the native rekey contracts expose the guarded helper request. No incoming invariant or campaign-2 premise remains. |
 | T2 transmit authorization and conservation | Open. `initialized_staged_selection_origins` derives ordered, distinct routing/keepalive positions through the whole native initialized runner, including Stop. `initialized_allocated_staged_occurrences` retains the selected peer allocation, exact plaintext sequence and those prior batch positions. `initialized_encrypted_plaintext_origin` and `initialized_socket_route_key_core_and_endpoint` join that history to each actual AEAD and transport socket receipt in the same final journal, with no incoming carrier or H1 premise. Socket bytes, endpoint, packet peer and historical current-slot sending core are bound. The current tranche also derives historical key-owner equality at the actual allocation entry and joins it to the socket peer through the same AEAD material; that strengthening passes the aggregate gate and fresh replay. Native overflow/purge and creation-refusal arms expose their exact effects. Initialized TX ownership and native work service cover resident cells, scheduling, deferred calls and peer removal; destructor disposal retains its explicit idle-entry premise. `staged_available_ticket_unique` proves allocation-position injectivity under the explicitly named `Staged.Availability.BankValid` premise; the strengthened carrier has native allocation and ordered-birth transfer support. The native initialized Runner now derives the bank and cross-allocation uniqueness without an incoming invariant; scoped validation passes. Complete fixed-ticket pending/terminal conservation remains open. T3 supplies converse native emission coverage separately. Batch-local distinctness and queue aliases do not discharge those obligations. |
-| T3 authenticated effects and silence | Open. R6 supplies the cookie gate's local contracts. Initialized exact timer-arm and queued-work occurrence provenance is proved; each held GRO packet now has its own earlier authenticated replay/AEAD occurrence. Each active handshake context now has its own latest valid native admission; each completion context has its actual earlier allocation parent. Initialized causal scope prefixes are well formed, including nested callbacks and Stop. Every initialized timer arm, work append, TX allocation, transport socket receipt and keepalive preparation now has a finite chain of exact earlier occurrences ending at a fixture or its own authenticated handshake/transport receive, including Stop. Candidate effects carry their own accepted replay and earlier AEAD. The same final driver now records native protocol and cookie socket returns. Each protocol-send receipt has its own initialized causal root and native endpoint/byte emission fact; cookie receipts are native-valid and qualified by actual under-load and MAC decisions on initiation/response input. Successful response lookup followed by refusal restores every peer record without a borrowing premise. Ordered emission accounting now distinguishes every socket append occurrence; actual protocol and cookie sends, handshake receive, queued/direct send workers and timer/work effects preserve it. Final initialized exchange-entry positivity now discharges the resident-positive premise for response-refusal, including later Stop. Initialized cookie-consumer entry positivity and native validity now discharge refusal premises; rejected cookie, response and initiation consumers restore complete peer and keypair records. Exact initialized pre-delivery positions now join strictly earlier authorized native appends, and every retained append ordinal has its own root or qualifying cookie exception. Initialized rejected-replay state preservation is proved. The independent raw-append observer now proves complete native append coverage and each append’s own authorization, including Stop. Initialized cookie width and qualification prove a strict payload decrease. Per-input cardinality and the full rejected-effect boundary remain under final audit; T2 conservation is separate. |
+| T3 authenticated effects and silence | Complete and validated. `AuthenticatedEffects.initialized_silence_security_outcome` combines every native append’s own authorization, rooted timer/work effects, latest own handshake admission, authenticated replay and packet-specific GRO delivery. The cookie exception uses actual load/MAC guards: at most one source-bound 64-byte reply per invocation, strictly smaller than its initialized input, without session effects. Refused initialized consumers preserve every WG field modulo map representation; MAC refusal masks only load/cookie-secret/rate-limit bookkeeping, and decryption names the exact pre-AEAD invalidation alternative. Consumer equality is at completed native cuts, retained through later outer Stop; internally stopped effects use prefix observations. No incoming invariant, funding, coherence or H1 premise remains. No global reply-rate, CPU, timing or cryptographic-unforgeability claim is made. |
 | T4 handshake replay resistance | Complete and validated. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Actual initialized stale initiation receipts are refused, restore all peer records and preserve sent data. The factored native continuation returns without a response from the exact receipt endpoint; it requires no separate ambient-history join. The final-journal exports also establish response-consumption and session-installation uniqueness by exchange epoch, and exactly one allocation from the same successful session receipt. Named C2 source assumptions stay visible. |
 | T5 responder confirmation | Complete and validated. `initialized_responder_confirmation_discipline` joins promotion-label uniqueness, each confirmation's own accepted transport cause and actual responder AEAD after confirmation of the same allocation. Initialized transport covers inner promotion receipts even when the enclosing receive later stops. `PendingPromotion.H1DriverFrames` and `H1ResponderCurrentEdges` remain named local C2 operational assumptions; no incoming carrier, reachability, funding or callback premise remains. |
 | T6 key retirement | Complete and validated. `reference_aware_retirement_outcome` packages unconditional native TX/RX checks, invalidation, exact age comparison, initialized R2 access and holder accounting, the session-derived zero timer, selected-arm provenance, actual dispatch and worker unpublication, retained material and final removal. Actual clock/worker runs and residual-reference conditions remain explicit. Universal native RX final release includes authenticated cleanup. No worker-latency or physical-zeroization claim is made. |
@@ -178,9 +178,8 @@ cross-allocation injectivity. These facts do not establish forward conservation.
 
 The [staged-origin review](2026-10-19-review-campaign-3-staged-origin.md) and
 [conservation review](2026-10-19-review-campaign-3-t2-completeness.md) remain the
-T2 disposition record. Historical ownership is repaired. Fixed-ticket disposal,
-first terminal outcomes separated from later cleanup, and stopped caller-local
-frontiers remain open. Native scheduler/deferred-call proofs supply TX service;
+T2 disposition record. Historical ownership is repaired. Local fixed-ticket disposal is proved. First terminal outcomes separated
+from later cleanup and initialized stopped caller-local frontiers remain open. Native scheduler/deferred-call proofs supply TX service;
 the destructor's disposal cut retains its explicit idle-entry premise.
 
 [AGENT 2026-10-19] Staged disposal uses callback-parametric source cuts for purge
@@ -190,50 +189,53 @@ observations extend the final journal, so every positional invariant is paid
 against the resulting history. Exact old-journal projection remains required;
 token positions across different event vocabularies are not equated.
 
-Initialized refusal proofs preserve complete peer/keypair records for the
-three handshake consumers. Rejected replay preserves complete keypair records
-and the protocol-state projection; entry coherence is derived through the
-actual Runner, including Stop. Native delivery certificates retain each
-pre-clear position and its earlier authorized append. The independent raw
-observer now instruments the actual socket append, and its exact final-journal
-projection maps every raw position to its own receipt, including stopped
-prefixes. The final position-to-authorization join now compiles locally: each raw append
-retains its own exact final-journal position and authorization evidence. The
-remaining T3 audit checks per-input cookie cardinality and the complete rejected
-effect boundary before packaging the outcome.
+The original transmit front distinguishes completed invocation refusal from
+successful splice admission. `-EPROTONOSUPPORT`, `-ENOKEY`,
+`-EDESTADDRREQ` and `-ENOMEM` charge the optional device error projection
+once; GSO list length does not multiply the charge. A stopped prefix is not
+a completed rejection. The independent raw observer records the actual
+socket append, and its exact final-journal projection maps every raw position
+to its own authorization receipt, including stopped prefixes.
 
-The current rich-journal tranche adopts exact source deltas through T3
-`df0faf15`, T4 `f334cb2f` and T6 `98f97c1d`. Scoped native front proofs
-separate rejected original invocations from successful splice admission:
-`-EPROTONOSUPPORT`, `-ENOKEY`, `-EDESTADDRREQ` and `-ENOMEM` each charge the
-optional device error projection once; GSO list length does not multiply the
-charge. A stopped prefix is not classified as a completed rejection.
-The initialized cookie width comes from the actual UDP header check and worker
-ring pop. Its own native qualification receipt then proves a strict
-WireGuard-byte decrease, with no supplied shape or successful-return premise.
-All causal and staged-origin adapters compile through the initialized Runner.
-The aggregate build and axiom gate pass, as do all inherited counterexamples.
-Fresh replay also passes; T2 and T3 remain open.
+[AGENT 2026-10-19] Conservation uses one fixed ordered ledger of birth
+tickets. A ticket has one pending location or one first terminal result;
+terminal results persist through later cleanup. Admission appends only fresh
+source-position/ordinal tickets. Native counted purge and final peer release
+now settle the exact incoming queue tickets, preserve the ledger and all other
+queues, and expose the same native counter increment. The release receipt
+precedes the suffix that can stop. Exact frames quantify over missing queues,
+so deletion cannot hide an obligation by falsifying a residency premise.
+
+The local ledger and new source factors are included in the current aggregate
+build. The factors expose staging take/restore, TX publication and nested
+consumer/RX/dump repayments. Allocation is total from a resident device;
+there is no fictitious partial-allocation event. The shared final driver still
+uses the preceding source version pending the coordinated new-cut integration.
+T2 remains open: selected and allocated tickets need native backing, terminal
+classification and stopped-frontier transport through the initialized Runner.
+The algebra alone is not a conservation claim.
+
+T3's package at `f7370e9d` closes the local per-input cookie cardinality and
+complementary refusal-state proof gaps. `RefusalOutside.full` retains every
+WG field and complete pointwise peer/keypair records, abstracting only the
+maps’ balanced-tree representation. `MacWorld.view` masks only the under-load
+timestamp, cookie secret/birthdate and rate-limit tables. Endpoint and session
+authorization use the actual pre-effect handshake and replay guards, separately
+from the protected timer/work-event predicate. The package assumes no entry
+funding, replay coherence, causal well-formedness or C2 hypothesis. The aggregate
+gate and fresh kernel replay pass; T3 is complete with the stated boundaries.
 
 ## Validation
 
-The current tranche records actual input, staged disposal and outer send results
-in the same final journal. Its old-journal projection and all affected
-initialized transports pass the aggregate build. The independent append
-observer supplies complete native emission coverage and its own authorization
-for every position, including Stop. The original invocation error count and
-initialized cookie payload decrease also compile. The aggregate axiom gate and
-all twelve counterexample recipes and fresh kernel replay pass.
-The T3 outcome audit remains open.
-
-This checkpoint passes the 2958-job aggregate build and the 1520-declaration
-gate across thirteen roots, with only `propext`, `Classical.choice` and
-`Quot.sound`. All twelve counterexample recipes and fresh root kernel replay
-pass. The model build passes 130 jobs and the unit suite passes 131 tests
-(one configured-kernel skip, 22.552 seconds). All 2925 frozen proof-source
-hashes match; all 916 inherited proof modules, main at `783510e8` and mirror
-`77c9b555` are unchanged. The preceding validated checkpoint is `659b8f1f`;
-its smaller declaration set does not substitute for this run.
+The current T3 outcome and local fixed-ledger disposal tranche passes the
+3039-job aggregate build and 1523-declaration gate across thirteen roots, with
+only `propext`, `Classical.choice` and `Quot.sound`. All twelve counterexample
+recipes and fresh root kernel replay pass. The model build passes 130 jobs;
+the unit suite passes 131 tests (one configured-kernel skip, 22.483 seconds).
+All 2993 frozen proof-source hashes match; all 916 inherited proof modules,
+main at `783510e8` and mirror `77c9b555` are unchanged. The preceding validated
+checkpoint is `ccbd8eba`; its smaller declaration set does not replace this run.
+Owned source pins are T3 `f7370e9d`, T4 `a5888523` and T6 `dcd4acf2`.
 
 Reproduce the proof and model checks from the campaign worktree:
 
@@ -251,40 +253,19 @@ lookup reports that `capped` is absent inside the bundle PATH; the outer
 wrapper contains the gate and its children. No differential guest run is
 claimed for this proof-only work.
 
-Failed development checks remain failures: earlier non-fresh checker runs hit
-the 32 GiB and 64 GiB caps (exit 137), and `--help` unexpectedly selected the
-default module prefix and hit 32 GiB. The documented fresh-root command avoids
-that task-per-module expansion. Earlier tactic/inference failures and the
-earlier completion-source heartbeat exhaustion were repaired without changing
-a statement or the mirror. The current delivery/cookie integration and staged-origin
-transport had local missing-case, binder and projection errors, all repaired.
-An overly broad routing-frame tactic caused heartbeat exhaustion; a native
-head guard repaired it without increasing the limit. A new tactic's unchecked expression-array access
-produced Lean panic diagnostics during earlier completion-source work; all twelve worktrees
-were audited and all seven dirty trees preserved, including untracked files,
-under `refs/snapshots/all-dirty-after-tactic-panic-20261019-043500-*` before
-repairing it. Checked optional access now rejects nonmatching goals normally.
-The subsequent source build and complete trust checks pass. Earlier routing-splice heartbeat exhaustion was repaired with a compact
-projection and reducible application. Shared-hook integration initially failed
-on an import cycle and missing proof/interface cases; the native preparation
-leaf and explicit frames repair those failures. The staged carrier's initial
-name, induction, projection and source-composition errors are also fixed. No mirror change or weakened claim
-was used. Protocol-socket integration initially failed in two older exchange
-projections; compact projection adapters repair those failures without raising
-their heartbeat limits. The full gate and fresh replay then pass. The historical-owner and direct-emission tranche repaired local binder, namespace, frame and induction errors; the initialized live-credit bank now discharges its incoming premise. The availability transport repaired one copied tactic-head mismatch; no native statement or mirror behavior changed.
+Failed development checks remain failures. Earlier non-fresh checker runs
+exceeded their caps; the fresh-root command above passes. Ordinary local
+elaboration, frame and projection failures were repaired without changing the
+mirror or weakening statements. In this tranche, the first gate stopped on a
+nested terminal namespace; flattening the exports and resolving their names
+repairs it, and the complete gate passes. New source files have no warnings.
 
-A child configuration-frame check exited 135 (SIGBUS) after dependency
-artifacts were copied while Lean was running. All dirty worktrees, including
-untracked source files, were preserved under
-`refs/snapshots/c3-crash-20261019T084423Z/` before further edits or builds.
-Replacing a memory-mapped artifact is the diagnosed infrastructure cause;
-future dependency synchronization is kept outside active builds. The single
-infrastructure rerun completed with ordinary elaboration failures, subsequently
-repaired on the child branch. That later child tranche is not included here.
-The parent's neutral-callback integration initially failed on missing concrete
-callback premises and configuration frames; explicit native proofs repair those
-failures. The final source build passes 2907 jobs including the separate local
-disposal targets; the aggregate gate builds its 2900-job root closure.
+The earlier unchecked tactic-array panic and later SIGBUS were preserved in
+snapshot refs before repair. The SIGBUS followed replacement of a dependency
+artifact while Lean had it mapped; all dependency synchronization now occurs
+outside active builds. These were infrastructure/development failures, not
+counterexamples to the security statements. Their diagnoses and validation
+are retained in the branch history.
 
 The branch is preserved without merging or pushing. Completed checkpoint
 history and its individual validation counts remain in the branch commits.
