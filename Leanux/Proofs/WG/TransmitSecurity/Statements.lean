@@ -1,3 +1,27 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAllocationCarrier
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAllocationFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAllocationReceipt
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAllocationSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeadCleanup
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeadRepayment
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeadSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeadWorker
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDispatchEntry
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDispatchSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPublicationFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPublicationHistoryFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPublicationPath
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPublicationRecord
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPublicationSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPublicationStops
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRunnerFactor
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRunnerSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingAccounting
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingPending
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingSocket
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSendingSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSyscallFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSyscallSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompletePrefixAdministrativeSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompletePrefixClearWorker
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompletePrefixCompletionCapture
@@ -1765,5 +1789,17 @@ theorem initialized_every_journal_prefix_accounted (trace : Leanux.Runner.Trace)
       AuthenticatedEffects.StagedEntry.CompleteProduct.Safe
       (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 :=
   AuthenticatedEffects.StagedEntry.CompletePrefix.Runner.reached trace placeholders
+
+/-- Security: the source-selected dispatch entry carries complete packet
+accounting at its actual initialized native world. The fixed path includes
+the original operation position, preparation and syscall guards; no incoming
+ledger or ownership invariant is assumed. Internal callback cuts remain a
+separate source-composition obligation. -/
+theorem initialized_dispatch_entry_accounted
+    (path : AuthenticatedEffects.StagedEntry.Reached.RunnerSource.DispatchPath
+      trace placeholders count op state world history) :
+    ∃ ledger, AuthenticatedEffects.StagedEntry.CompleteConsequences.Cut
+      history ledger [] [] world.wg :=
+  path.cut
 
 end Leanux.Proofs.WG.TransmitSecurity
