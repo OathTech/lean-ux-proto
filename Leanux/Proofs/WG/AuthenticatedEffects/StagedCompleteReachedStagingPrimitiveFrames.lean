@@ -33,6 +33,10 @@ theorem selected_append
 
 theorem KeyAtom.frame (token : KeyAtom α) : SameView StagedEntry.view token.action := by
   cases token with
+  | world=>
+      intro initial
+      exact hoare_consequence (hoare_get _) (fun _ h=>h) (fun _ _ h=>h.2)
+  | table entries=>exact ReceiveFrames.device _ (fun _=>rfl) (fun _=>rfl) (fun _=>rfl) (fun _=>rfl) (fun _=>rfl)
   | branch site flag=>exact fun initial=>hoare_liftAmbient (AmbientM.branch site flag) (fun w=>StagedEntry.view w=initial)
   | compare site flag left right=>exact fun initial=>hoare_liftAmbient (AmbientM.branchCmp site flag left right) (fun w=>StagedEntry.view w=initial)
   | read kid=>exact ReceiveFrames.key_read kid

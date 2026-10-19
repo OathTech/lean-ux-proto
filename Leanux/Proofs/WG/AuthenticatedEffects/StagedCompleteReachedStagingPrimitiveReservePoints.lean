@@ -1,8 +1,9 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingPrimitiveReserveSource
 
-/-! Reservation points are the fixed read, write and two existing receipt
-boundaries. Pending points keep the actual incremented cell and saved native
-entry; every remainder is the literal remainder of that reservation. -/
+/-! Reservation points include the original key getter's internal guards,
+the fixed write and two existing receipt boundaries. Pending points keep the
+actual incremented cell and saved native entry; every remainder is the literal
+remainder of that reservation, including its saved capture before-state. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.StagingPrimitive
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
 open Staged.Obligations Staging.Points
@@ -28,6 +29,12 @@ def afterNonce (kid : KeypairId) (w v : WGWorld) (a b : Ambient) (key : Keypair)
 inductive ReservePoint (kid : KeypairId) (w : WGWorld) (a : Ambient) (h : List Event) :
     WGWorld → Ambient → List Event → WGPrefix Event Nat → Type 1 where
   | entry : ReservePoint kid w a h w a h (state (Journal.reserve kid))
+  | reading {β : Type} {leaf : WG.M β} {rest : WG.M Keypair}
+      (point : KeyPoint (readShape kid) w a leaf v b rest) :
+      ReservePoint kid w a h v b h
+        (savedReceipt (fun run=>.old (.reserved kid run)) w a (do
+          let key←liftWGPrefix rest
+          afterRead kid key))
   | read (run : ((getKeypair kid).run w).run a=.ok ((key,u),b)) :
       ReservePoint kid w a h u b h
         (savedReceipt (fun run=>.old (.reserved kid run)) w a (afterRead kid key))
@@ -46,6 +53,11 @@ theorem ReservePoint.residual (point : ReservePoint kid w a h v b middle rest) :
     runWGPrefix (state (Journal.reserve kid)) w a h=runWGPrefix rest v b middle := by
   cases point with
   | entry=>rfl
+  | reading point=>
+    rw [reserve_factor]
+    simp only [reserveObserved,reserveBody,savedReceipt,afterRead,runWGPrefix_receiptWGObserved,
+      run_bind,runWGPrefix_lift,point.residual]
+    rfl
   | read run=>
     rw [reserve_factor]
     simp only [reserveObserved,reserveBody,savedReceipt,runWGPrefix_receiptWGObserved,run_bind,runWGPrefix_lift,run]
@@ -68,6 +80,7 @@ theorem ReservePoint.selected (point : ReservePoint kid w a h v b middle rest)
     CompleteSelected.Ready ledger debts locals generation pid peer position middle v b := by
   cases point with
   | entry=>exact before
+  | reading point=>exact point.selected before
   | read run=>exact (readShape kid).selected before run
   | written read write=>exact (writeShape kid _).selected ((readShape kid).selected before read) write
   | nonce read write=>
