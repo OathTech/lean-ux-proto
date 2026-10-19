@@ -63,48 +63,11 @@ theorem keepalive_rule (pid : PeerId) (P Q : WGWorld → Prop)
     (staged : Ensures (sendStagedPackets pid) P (fun _ => Q))
     (write : ∀g d p mtu, g.dev = some d → d.peers[pid]? = some p → P g →
       P {g with dev := some {d with peers := d.peers.insert pid ({p with staged := p.staged ++ [{mtu := mtu}]})}}) :
-    Ensures (sendKeepalive pid) P (fun _ => Q) := by
-  have ambient_state {α : Type} (action : AmbientM α) (g f : WGWorld)
-      (a b : Ambient) (r : α)
-      (run : (((monadLift action : WG.M α)).run g).run a = .ok ((r,f),b)) : f = g :=
-    (hoare_iff_run_ambient _ _ _).mp (hoare_liftAmbient action (· = g)) g a r f b rfl run
-  intro g a r f b pre run
-  unfold sendKeepalive at run
-  rw [MaterialOrigin.bind_ok_ambient] at run
-  obtain ⟨p,read,ar,getter,run⟩ := run
-  obtain ⟨same,time,d,hd,hp⟩ := getPeer_normal pid g read p a ar getter
-  subst read
-  subst ar
-  rw [MaterialOrigin.bind_ok_ambient] at run
-  obtain ⟨empty,guarded,ag,guard,run⟩ := run
-  have same := ambient_state (AmbientM.branch .keepaliveStagedEmpty p.staged.isEmpty) g guarded a ag empty guard
-  subst guarded
-  cases empty with
-  | false =>
-    simp only [Bool.false_eq_true,ite_false] at run
-    exact staged g ag r f b pre run
-  | true =>
-    simp only [ite_true,MaterialOrigin.bind_ok_ambient] at run
-    obtain ⟨allocated,read,aa,alloc,failed,guarded,af,guard,run⟩ := run
-    have same := ambient_state (AmbientM.hiddenAlloc .keepaliveSkb) g read ag aa allocated alloc
-    subst read
-    have same := ambient_state (AmbientM.branch .keepaliveNoMem (!allocated)) g guarded aa af failed guard
-    subst guarded
-    cases failed with
-    | true =>
-      simp only [ite_true] at run
-      cases run
-      exact returns g pre
-    | false =>
-      simp only [Bool.false_eq_true,ite_false,MaterialOrigin.bind_ok_ambient] at run
-      obtain ⟨dev,read,ad,getter,u,prepared,ap,changed,run⟩ := run
-      obtain ⟨same,time,_⟩ := DecryptCarrier.getDev_current af ad getter
-      subst read
-      subst ad
-      simp only [WG.setPeer,WG.modifyDev] at changed
-      cases changed
-      exact staged _ af r f b (write g d p dev.mtu hd hp pre)
-        (by simpa only [hd,Option.map_some] using run)
+    Ensures (sendKeepalive pid) P (fun _ => Q) :=
+  StagingAmbientRules.keepalive_rule pid (fun g _=>P g) (fun g _=>Q g)
+    (fun g _=>returns g) staged (fun g _=>write g)
+    (fun site value=>(ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.branch site value) P))
+    ((ensures_iff _ _ _).mpr (hoare_liftAmbient_variant (AmbientM.hiddenAlloc .keepaliveSkb) P))
 
 theorem sendKeepalive_rich (pid : PeerId) (entry : WGWorld) :
     Ensures (sendKeepalive pid) (Frame entry) (fun _ => Frame entry) := by

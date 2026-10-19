@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Progress.PipeReadClaims
+import Leanux.Proofs.WG.Progress.PipeWriteOuterClaims
+import Leanux.Proofs.WG.Progress.StagingSuffixClaims
 import Leanux.Proofs.WG.Progress.TimerSuffixClaims
 import Leanux.Proofs.WG.Progress.RecordedPending
 import Leanux.Proofs.WG.Progress.PipeWriteClaims
@@ -1084,5 +1087,34 @@ theorem original_receive_timer_record_suffix (records : List HiddenRecord) (peer
       (fun s=>s.ambient.hidden=some records)
       (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
   RecordSuffix.timersDataReceived_record_suffix records peer
+
+
+/-- The complete original read has an exact finite evaluator, including its
+concrete wake/timestamp callbacks and every original failure. -/
+theorem original_pipe_read_finite_evaluation (iocb : Kiocb) (count : Nat) :
+    pipeRead iocb count = PipeRead.finite iocb count :=
+  original_pipe_read_finite iocb count
+
+/-- The complete original write reuses the finite inner evaluator and keeps
+its actual wake/time suffix and all original outcomes. -/
+theorem original_pipe_write_complete_finite_evaluation (iocb : Kiocb) (src : IovIter) :
+    pipeWrite iocb src = PipeWriteOuter.finite iocb src :=
+  original_pipe_write_finite iocb src
+
+/-- Actual staging preserves a recorded suffix on normal return; this is
+neither strict record decrease nor a successful-return premise for termination. -/
+theorem original_staged_record_suffix (records : List HiddenRecord) (peer : PeerId) :
+    Campaign2.Ensures (sendStagedPackets peer)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.staged_record_suffix records peer
+
+/-- The actual keepalive caller has the same concrete normal record-suffix
+contract, with its allocation and staging dependencies discharged. -/
+theorem original_keepalive_record_suffix (records : List HiddenRecord) (peer : PeerId) :
+    Campaign2.Ensures (sendKeepalive peer)
+      (fun s=>s.ambient.hidden=some records)
+      (fun _ s=>RecordSuffix.Tail records s.ambient.hidden) :=
+  RecordSuffix.keepalive_record_suffix records peer
 
 end Leanux.Proofs.WG.Progress

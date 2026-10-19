@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.TimerDiscipline.HookTransmitClaims
+import Leanux.Proofs.WG.TimerDiscipline.HookJournalClaims
 import Leanux.Proofs.WG.TimerDiscipline.EpisodeJournalClaims
 import Leanux.Proofs.WG.TimerDiscipline.InitializedGiveUpCurveSource
 import Leanux.Proofs.WG.TimerDiscipline.OutgoingTraversalAllModeClaims
@@ -937,5 +939,35 @@ theorem original_deferred_wheel_episode_journal (call : Lifetimes.EnvDeferredCal
     Campaign2.Product.Returns (EpisodeJournal.inspectDeferred call) (fun _=>True)
       (fun result _=>∀receipt∈result.2,EpisodeJournal.Valid receipt) :=
   EpisodeJournal.original_deferred_episodes call
+
+
+/-- Each of the eight original hook invocations has a source-linked projected
+receipt, including Stop. Caller occurrence is supplied by caller observers. -/
+theorem original_timer_hook_receipt (hook : HookJournal.Hook) (peer : PeerId) :
+    Campaign2.Observes (HookJournal.action hook peer) (fun _=>True)
+      (fun before outcome=>(⟨hook,peer,before,outcome⟩ : HookJournal.Receipt).Valid) :=
+  HookJournal.original_receipt hook peer
+
+/-- A successful session-derived hook preserves its actual allocation stamp
+and enqueues zero or one wheel entry; this is not a cross-call count. -/
+theorem original_session_hook_receipt_counters {receipt : HookJournal.Receipt}
+    (valid : receipt.Valid) (kind : receipt.hook = .sessionDerived)
+    (device : Device) (peer : Peer)
+    (present : receipt.before.wg.device = some device)
+    (resident : device.peers[receipt.pid]? = some peer)
+    {after : Campaign2.Snapshot} (normal : receipt.outcome = .ok ((),after)) :
+    after.wg.keypairCounter = receipt.before.wg.keypairCounter ∧
+    (after.wg.timerEnqueues = receipt.before.wg.timerEnqueues ∨
+      after.wg.timerEnqueues = receipt.before.wg.timerEnqueues + 1) :=
+  valid.sessionDerived_counters kind device peer present resident normal
+
+/-- The complete original encrypted-data completion caller retains each
+reached timer-hook receipt and the exact original result, including Stop. -/
+theorem original_transmit_hook_journal (peer : PeerId) (items : List SkbId) :
+    (do let result←HookJournal.Transmit.inspection peer items; pure result.1) =
+      Campaign2.inspect (createDataDone peer items) ∧
+    Campaign2.Returns (HookJournal.Transmit.inspection peer items) (fun _=>True)
+      (fun result _=>∀r∈result.2,r.Valid) :=
+  HookJournal.Transmit.original peer items
 
 end Leanux.Proofs.WG.TimerDiscipline

@@ -69,7 +69,7 @@ The optional pending-identity review above is not a second established defect.
 
 Current disposition (2026-10-19): confirmed mirror-lane defect, under repair
 on `task/env-requests`; not yet landed in this proof branch. See the campaign
-report's resumption scope.
+report's current checkpoint.
 
 Status: reproduced by executable model evaluation on `ca6b22e`, independently
 reviewed against the mirror and pristine C. This is an environment-bound
@@ -143,7 +143,7 @@ explicit rather than counting it as a proved termination counterexample.
 
 Current disposition (2026-10-19): confirmed mirror-lane defect, under repair
 on `task/env-requests`; not yet landed in this proof branch. See the campaign
-report's resumption scope.
+report's current checkpoint.
 
 Status: source correspondence error over `ca6b22e`, with a kernel-checked
 reachable model witness and two independent read-only source reviews. No
@@ -200,7 +200,7 @@ limit instead of claiming an output or kernel defect.
 
 Current disposition (2026-10-19): confirmed mirror-lane defect, under repair
 on `task/env-requests`; not yet landed in this proof branch. See the campaign
-report's resumption scope.
+report's current checkpoint.
 
 Status: new accepted initialized runtime counterexample over main 783510e8;
 [full report and reproducer](2026-10-19-proof-campaign-2-supplied-pending.md).

@@ -35,10 +35,12 @@ def run {α : Type} (action : FS.M α) (f : FSWorld) (t : TaskWorld) (a : Ambien
       (run action f t a >>= fun (((x,g),u),b)=>pure (((fn x,g),u),b)) := rfl
 def rings (pid : PipeId) (f : FSWorld) : Option Nat := (f.pipes[pid]?).map (·.ringSize)
 
-theorem release_ring (pid : PipeId) (i : Nat) (f f' : FSWorld)
+def shape (pid : PipeId) (f : FSWorld) : Option (Nat × UInt32 × UInt32) :=
+  (f.pipes[pid]?).map (fun p=>(p.ringSize,p.head,p.tail))
+theorem release_shape (pid : PipeId) (i : Nat) (f f' : FSWorld)
     (t t' : TaskWorld) (a a' : Ambient)
     (hr : run (pipeBufRelease pid i) f t a = .ok ((((),f'),t'),a')) :
-    rings pid f' = rings pid f := by
+    shape pid f' = shape pid f := by
   cases hp : f.pipes[pid]? with
   | none => simp [pipeBufRelease,getPipeBuf,getPipe,hp] at hr
   | some p =>
@@ -60,10 +62,20 @@ theorem release_ring (pid : PipeId) (i : Nat) (f f' : FSWorld)
           · cases htmp : p.tmpPage
             all_goals simp [htmp,setPipe,putPipePage,getPage,hpg,one] at hr
             all_goals rcases hr with ⟨⟨rfl,rfl⟩,rfl⟩
-            all_goals simp [rings,hp]
+            all_goals simp [shape,hp]
           · by_cases zero : pg.pageCount=0
             all_goals simp [putPipePage,getPage,hpg,one,zero,setPage] at hr
             rcases hr with ⟨⟨rfl,rfl⟩,rfl⟩
-            simp [rings,hp]
+            simp [shape,hp]
+
+
+
+theorem release_ring (pid : PipeId) (i : Nat) (f f' : FSWorld)
+    (t t' : TaskWorld) (a a' : Ambient)
+    (hr : run (pipeBufRelease pid i) f t a = .ok ((((),f'),t'),a')) :
+    rings pid f' = rings pid f := by
+  have kept:=release_shape pid i f f' t t' a a' hr
+  have projected:=congrArg (Option.map Prod.fst) kept
+  simpa only [shape,rings,Option.map_map,Function.comp_def] using projected
 
 end Leanux.Proofs.WG.Progress.PipeFree
