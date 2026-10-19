@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.TimerDiscipline.HookSchedulerReceiveSource
 import Leanux.Proofs.WG.TimerDiscipline.HookStateFrames
 import Leanux.Proofs.WG.Queues.SchedulerPreservation
 import Leanux.Proofs.WG.Queues.NapiSource
@@ -12,18 +13,6 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Leanux.Proofs.WG.Queues Leanux.Proofs.WG.Lifetimes
 open RxHistory.SchedulerSource
 variable {E : Type}
-
-structure Callbacks (E : Type) where
-  transmit : PeerId → PrefixM E IterResult
-  receive : PrefixM E Bool
-  softirq : PrefixM E Unit
-  irq : PrefixM E Unit
-
-structure ErasureContracts (c : Callbacks E) : Prop where
-  transmit : ∀ pid, ErasesPrefix (c.transmit pid) (txIter pid (Env.condResched .txWorker))
-  receive : ErasesPrefix c.receive (liftWG WG.receiveStep)
-  softirq : ErasesPrefix c.softirq Env.napiSoftirq
-  irq : ErasesPrefix c.irq Env.napiIrqExit
 
 structure HistoryContracts (S : List E → Prop) (c : Callbacks E) : Prop where
   transmit : ∀ pid, PrefixPreserves (fun h _=>S h) S (c.transmit pid)
@@ -68,9 +57,6 @@ def decrypt (c : Callbacks E) : PrefixM E IterResult :=
   workerIterPrefix .decryptWorker none (decryptStep c)
     (do liftPrefix (branch .decWorkerNeedResched (←liftPrefix (Env.condResched .decryptWorker))))
 
-def receive (c : Callbacks E) : PrefixM E IterResult :=
-  workerIterPrefix .receiveWorker none c.receive (liftPrefix (Env.condResched .receiveWorker))
-
 theorem encrypt_erases (c : Callbacks E) (h : ErasureContracts c) :
     ErasesPrefix (encrypt c)
       (encryptIter Env.checksumHelp Env.napiSoftirq (Env.condResched .encryptWorker)) := by
@@ -87,11 +73,6 @@ theorem decrypt_erases (c : Callbacks E) (h : ErasureContracts c) :
       (decryptIter Env.napiSoftirq Env.napiIrqExit (Env.condResched .decryptWorker)) :=
   workerIterPrefix_erases _ _ (decryptStep_erases c h)
     (erasesPrefix_bind (erasesPrefix_lift _) (fun _=>erasesPrefix_lift _))
-
-theorem receive_erases (c : Callbacks E) (h : ErasureContracts c) :
-    ErasesPrefix (receive c)
-      (workerIter .receiveWorker none (liftWG WG.receiveStep) (Env.condResched .receiveWorker)) :=
-  workerIterPrefix_erases _ _ h.receive (erasesPrefix_lift _)
 
 structure StateContracts (I : List E → World → Prop) (S : List E → Prop)
     (c : Callbacks E) : Prop where

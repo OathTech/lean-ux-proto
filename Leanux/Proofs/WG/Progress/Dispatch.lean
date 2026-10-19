@@ -26,16 +26,20 @@ def dispatchPrefix (w : Worker) : M (Option (Option Nat)) := do
   | _ => return none
   return some pid
 
-def dispatchAfterPrefix (w : Worker) : Option (Option Nat) → M Bool
+def dispatchAfterPrefixWith (run : Activation → M Unit) (w : Worker) : Option (Option Nat) → M Bool
   | none => pure false
   | some pid => do
     _ ← hidden (.sectionStart w)
-    Activation.run { worker := w, pid }
+    run { worker := w, pid }
     return true
+
+
+def dispatchAfterPrefix (w : Worker) : Option (Option Nat) → M Bool :=
+  dispatchAfterPrefixWith Activation.run w
 
 theorem dispatch_source (w : Worker) :
     dispatch w = (do let a ← dispatchPrefix w; dispatchAfterPrefix w a) := by
-  cases w <;> simp only [dispatch, dispatchPrefix, dispatchAfterPrefix, bind_assoc, pure_bind]
+  cases w <;> simp only [dispatch, dispatchPrefix, dispatchAfterPrefix, dispatchAfterPrefixWith, bind_assoc, pure_bind]
   all_goals congr 1
   all_goals funext d
   all_goals first

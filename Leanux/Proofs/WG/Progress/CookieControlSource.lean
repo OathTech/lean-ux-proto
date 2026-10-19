@@ -67,10 +67,10 @@ theorem cookieResched_run (w : World) (records : List HiddenRecord)
     simp only [ite_true, cookieReschedResult, ite_eq_right next]
     rfl
 
-def activationStepSource (_ : Nat) (state : Option Unit × Activation) :
+def activationStepSourceWith (iteration : Activation → M IterResult) (_ : Nat) (state : Option Unit × Activation) :
     M (ForInStep (Option Unit × Activation)) := do
   let act := state.2
-  match ← Activation.iter act with
+  match ← iteration act with
   | .ended =>
     let _ ← hidden (.sectionStop act.worker)
     pure (.done (some (), act))
@@ -79,13 +79,22 @@ def activationStepSource (_ : Nat) (state : Option Unit × Activation) :
     modifyAmbient fun s => {s with suspended := s.suspended ++ [{act with iterations := act.iterations + 1}]}
     pure (.done (some (), act))
 
+
+def activationStepSource (_ : Nat) (state : Option Unit × Activation) :
+    M (ForInStep (Option Unit × Activation)) :=
+  activationStepSourceWith Activation.iter 0 state
+
 def activationFinishSource (a : Activation) (occupancy refills : Nat) (state : Option Unit × Activation) : M Unit :=
   match state.1 with
   | some u => pure u
   | none => invariant s!"{a.worker.symbol} consumed more items than its queue held ({occupancy}) plus the refills its run could take ({refills})"
 
+def activationLoopSourceWith (iteration : Activation → M IterResult) (turns : List Nat)
+    (a : Activation) : M (Option Unit × Activation) :=
+  forIn turns (none, a) (activationStepSourceWith iteration)
+
 def activationLoopSource (turns : List Nat) (a : Activation) : M (Option Unit × Activation) :=
-  forIn turns (none, a) activationStepSource
+  activationLoopSourceWith Activation.iter turns a
 
 theorem activation_run_source (a : Activation) :
     Activation.run a = (do
@@ -93,7 +102,7 @@ theorem activation_run_source (a : Activation) :
       let refills ← Activation.refills
       let state ← activationLoopSource (List.range' 0 (occupancy + refills + 1)) a
       activationFinishSource a occupancy refills state) := by
-  unfold activationLoopSource activationStepSource activationFinishSource
+  unfold activationLoopSource activationLoopSourceWith activationStepSourceWith activationFinishSource
   simp [Activation.run, Std.Legacy.Range.forIn_eq_forIn_range']
   congr 1
   funext occupancy

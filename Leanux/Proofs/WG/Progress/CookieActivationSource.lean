@@ -93,7 +93,7 @@ theorem cookieEmptyActivation_run (a : Activation) (receive : a.worker = .receiv
               activationFinishSource a d.handshakeQueue.count
                 (records.length + d.peers.toList.countP (fun pair : PeerId × Peer => pair.2.napiScheduled) * NAPI_POLL_WEIGHT)
                 state).run w) = _
-  simp only [activationLoopSource, List.range'_succ, List.forIn_cons, activationStepSource, StateT.run_bind]
+  simp only [activationLoopSource, activationLoopSourceWith, List.range'_succ, List.forIn_cons, activationStepSourceWith, StateT.run_bind]
   rw [cookieEmptyIter_run a receive w d device empty]
   simp only [Bind.bind, Except.bind]
   rw [receive]

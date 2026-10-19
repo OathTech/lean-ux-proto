@@ -13,7 +13,7 @@ theorem original_iteration_finite (a : Activation) :
   rfl
 
 /-- Finite activation evaluation retains all native outcomes, including an
-occupancy-budget exhaustion. No successful-service premise is imposed. -/
+occupancy-plus-refill budget exhaustion. No successful-service premise is imposed. -/
 theorem original_run_finite (a : Activation) :
     Campaign2.Product.AgreesOn (fun _ => True) (Env.Activation.run a) (run a) := by
   rw [run_source]

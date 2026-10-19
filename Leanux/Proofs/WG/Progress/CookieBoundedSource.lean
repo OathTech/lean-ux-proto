@@ -79,7 +79,7 @@ private theorem cookieHybridLoop_eq (turns : List Nat) (a : Activation) (w : Wor
   induction turns generalizing a w with
   | nil => rfl
   | cons turn turns ih =>
-    simp only [activationLoopSource, List.forIn_cons, activationStepSource,
+    simp only [activationLoopSource, activationLoopSourceWith, List.forIn_cons, activationStepSourceWith,
       StateT.run_bind, List.length_cons, cookieHybridLoop]
     rw [cookieHybridIteration_eq a receive w]
     cases executed : cookieHybridIteration a w with

@@ -105,5 +105,7 @@ the five shared modules listed above. It reports no owned failure; dependent
 modules skipped behind those failures remain unvalidated. The axiom phase
 does not run after the build failure. The 444-job maintenance/key and
 183-job installation/key-client scoped builds pass, with 85 standard-axiom
-audits and fresh KeyInstallReplay at exit zero. Complete native activation/scheduler evaluation is being factored
-through the carried owned sources next.
+audits and fresh KeyInstallReplay at exit zero. Complete native activation/scheduler evaluation now passes through the
+carried owned sources: 303 scoped jobs, 47 standard-axiom audits and fresh
+ActivationCarryReplay. This preserves five existing claims but leaves the
+shared-enum observer wrapper dependencies lagging.

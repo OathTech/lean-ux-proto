@@ -52,7 +52,7 @@ projection, and shared campaign-1 layers and the gate are unchanged.
 | H5 Progress | 250 | 1590 | Closed proofs current: exact runner/activation/scheduler observations and completion guards; initialized committed receipts; finite curve, allocation and pipe helpers. Actual routing, sockets, whole handshake calls, inner delivery, poll/GRO and all NAPI callers now preserve supplied-record suffixes with concrete dependencies. Every normal receive/encrypt/decrypt/transmit activation strictly consumes supplied records, as do selected send and clear dispatches. The transmit claim includes actual cryptAhead and complete disposal/payments; nonempty receive needs no empty-start premise. Actual dispatch, scheduler and timer continuing turns strictly consume records; whole scheduling, delivery and timer looping retain suffixes. The scheduler, send, timer and batch outer record budgets are adequate within their stated normal-result or exact-source scopes. Initialized committed activation receipts derive same-call strictness, including before later Stops. Separate exact finite evaluators now cover all four handshake create/consume calls, both senders, the queued send worker, keepalive, cookie/rate/reply paths and the complete native receive step. The record measures alone do not assert callback evaluation; activation fuel adequacy, useful service and global termination remain open. The environment fixes have landed and await this branch’s carry; cleanup, timer/deferred, FS release and concrete Seccomp conversion finite composition now closes; configuration and runner composition continues. |
 | H6 Timers | 100 | 1183 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness with checked concrete curve outputs and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; the initialized runner and all deferred constructors now retain every reached actual runTimers invocation with exact JSON/indexed Stops and actual wheel-selection chains for normal episodes. Placeholder passes are separate; failed episodes retain their exact Stop but no partial turn list. Eight hook adapters now retain exact outcomes and local effects, and the complete createDataDone caller retains its three possible hook invocations on both return and Stop. Complete initiation/send dispatch, response/reception/receiveStep, consumeDataDone and transmit iteration now retain exact hook histories. Successful session and derived-hook receipts are adjacent with equal per-counter occurrence counts, including hook Stop. Complete concrete poll/NAPI, scheduler and every deferred operation now retain the same histories and local wheel effects. Configuration/lifecycle/traffic/syscall composition and initialized committed hook coverage now close with exact original outcomes. Complete response/reception/receive-step histories also have ordered allocation IDs and at most one derived hook per label. Initialized successful session stamps are now strictly ordered, session/derived-hook counts agree and are at most one per stamp, and completed session-derived enqueue totals are at most one. H6 is complete within the recorded guarded/completed-call scope; no arbitrary interleaved retry-block decomposition or stopped final state is claimed. |
 
-The current surface is 9,287 theorems and 849 headlines in 2,165
+The current surface is 9,287 theorems and 849 headlines in 2,166
 campaign-owned modules. The completed retrofit accounts for 1,983:
 1,321 retyped, 244 explicitly corrected, 239 retained and 179 added
 support/finding declarations. Subsequent extensions add a net 7,304
@@ -116,6 +116,62 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env le
 
 
 
+
+## Native activation and scheduler carry, 2026-10-19
+
+The concrete activation evaluator now uses the owned carried source factors:
+occupancy and refills are read in native order, the captured bound is their
+sum plus one, and dispatch retains pending empty device units. Reception uses
+the concrete finite handshake evaluator; encrypt/decrypt/transmit and their
+NAPI/Stack dependencies retain bounded native operations. The four packet
+allocation sites reduce to the already-checked laxZero leaves. Those paths
+queue later handshake work rather than executing an unaccounted creator.
+Copied consistency trials use the same finite run and discard successors;
+the existing scheduler turn and captured record budget are reused.
+
+Four unchanged receiver declarations move from HookSchedulerWorkersSource
+into TimerDiscipline/HookSchedulerReceiveSource. Three callback parameters
+are exposed in the existing owned activation-step, loop and dispatch-suffix
+factors; their native specializations retain their original headers. The
+five projected finite claims and their terminal statements are unchanged.
+No frame, theorem or headline is removed or added; one module brings the
+campaign to 9,287 / 849 / 2,166 and TimerDiscipline to 267 modules. H5 remains
+1,590 / 250 / 332. All 77 retained declaration headers/types in the handoff
+were checked unchanged.
+
+The real isolated activation build passed but its scheduler file failed on
+an omitted final reflexivity step; the combined stdin context had hidden
+that requirement. Restoring the original step fixes it. A subsequent client
+build also exposed one old step name left in a simp list and reached three
+inherited shared failures; it failed, not partially passed. The corrected
+303-job scoped build passes activation/scheduler claims and all four affected
+cookie/exit clients. An audit of 47 declarations includes the exact five
+terminal bodies and the private cookie support; all use standard axioms.
+Fresh ActivationCarryReplay exits zero. Agent drafting had nine probes:
+three corrected form failures and six clean passes. No infrastructure rerun
+or limit change occurs.
+
+The enum-dependent observer family remains lagging. DispatchRecordSource
+also sits behind inherited source failures; its one-line unfold adaptation
+is uncommitted pending validation. None of these skipped modules is counted
+as checked by the scoped build. The latest complete gate remains the
+3,096-job failed attempt recorded above; all six whole-run rows remain lagging.
+
+Five further root Prefill probes included three clean name/expression
+inspections and two failed proofs at stock recursion depth. The stored native
+body and a literal candidate body compare syntactically equal, yet even their
+closed reflexivity bridge exceeds the kernel limit. The rejected theorem
+placeholders consequently report a self dependency in axiom inspection;
+these failed probes are not trusted code or accepted results. No limit is
+raised, and no mirror change is proposed for the proof-form issue.
+
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake build Leanux.Proofs.WG.Progress.ActivationFiniteClaims Leanux.Proofs.WG.Progress.SchedulerFiniteClaims Leanux.Proofs.WG.Progress.ActivationExitSource Leanux.Proofs.WG.Progress.CookieBoundedSource Leanux.Proofs.WG.Progress.CookieActivationSource Leanux.Proofs.WG.Progress.CookieActivationBoundFindings
+```
+
+Fresh replay uses an ignored ActivationCarryReplay root with those imports,
+the exact five terminal bodies and 47 axiom inspections, compiled with lake
+env lean and replayed by leanchecker --fresh under capped/scripts/in-bundle.
 
 ## Private-key stage and full Seccomp installation, 2026-10-19
 

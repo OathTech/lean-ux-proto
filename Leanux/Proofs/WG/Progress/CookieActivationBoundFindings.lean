@@ -106,8 +106,8 @@ theorem cookieBadTail_activation_run (a : Activation) (w : World) (d : Device)
   change ((do let state ← activationLoopSource (List.range' 0 (1 + (1 + extra) + 1)) a
               activationFinishSource a 1 (1 + extra) state).run w) = _
   rw [show 1 + (1 + extra) + 1 = extra + 3 by omega]
-  simp only [activationLoopSource, List.range'_succ, List.forIn_cons,
-    activationStepSource, StateT.run_bind]
+  simp only [activationLoopSource, activationLoopSourceWith, List.range'_succ, List.forIn_cons,
+    activationStepSourceWith, StateT.run_bind]
   dsimp only [StateT.run, StateT.bind, StateT.pure, Except.pure, Bind.bind, Pure.pure,
     Except.bind] at iter1 iter2 iter3 stopped ⊢
   rw [iter1]

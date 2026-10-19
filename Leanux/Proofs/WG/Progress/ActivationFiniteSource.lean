@@ -1,6 +1,8 @@
 import Leanux.Proofs.WG.Progress.PacketAllocationFiniteSource
 import Leanux.Proofs.WG.Progress.ReceptionFiniteSource
-import Leanux.Proofs.WG.TimerDiscipline.HookSchedulerSource
+import Leanux.Proofs.WG.TimerDiscipline.HookSchedulerReceiveSource
+import Leanux.Proofs.WG.Progress.CookieControlSource
+import Leanux.Proofs.WG.Progress.Dispatch
 
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress.ActivationFinite
@@ -26,32 +28,47 @@ theorem callbacks_erases : HookScheduler.ErasureContracts callbacks := by
   · exact erasesPrefix_lift _
   · exact erasesPrefix_lift _
 
-/-- The existing worker-iteration factory, evaluated with concrete finite
-callbacks. Erasing its empty journal preserves every original outcome. -/
+/-- Only reception reaches a nonstructural handshake evaluator. The other
+worker arms retain the original bounded packet/NAPI computations; their
+concrete allocation sites reduce through PacketAllocationFiniteSource. -/
 def iteration (a : Activation) : Leanux.M IterResult :=
-  fun w => (runPrefix (HookScheduler.iteration callbacks a) w []).1
+  match a.worker with
+  | .receiveWorker => fun w => (runPrefix (HookScheduler.receive callbacks) w []).1
+  | _ => Env.Activation.iter a
 
 theorem iteration_source (a : Activation) :
     Env.Activation.iter a = iteration a := by
-  funext w
-  exact (HookScheduler.iteration_erases callbacks callbacks_erases a w []).symm
+  cases worker : a.worker <;> simp only [iteration,worker]
+  all_goals first
+    | rfl
+    | (funext w
+       simp only [Env.Activation.iter,worker]
+       change (workerIter .receiveWorker none (liftWG WG.receiveStep)
+         (Env.condResched .receiveWorker)).run w = _
+       exact (HookScheduler.receive_erases callbacks callbacks_erases w []).symm)
 
-/-- The existing occupancy-bounded activation factory. Exhaustion remains the
-original invariant Stop; finite evaluation does not establish sufficient fuel. -/
-def run (a : Activation) : Leanux.M Unit :=
-  fun w => (runPrefix (HookScheduler.run callbacks a) w []).1
+/-- The carried native activation factor captures occupancy and refills at
+their actual reads. Every iteration and exhaustion outcome remains literal. -/
+def run (a : Activation) : Leanux.M Unit := do
+  let occupancy ← Env.Activation.occupancy a
+  let refills ← Env.Activation.refills
+  let state ← activationLoopSourceWith iteration (List.range' 0 (occupancy + refills + 1)) a
+  activationFinishSource a occupancy refills state
 
 theorem run_source (a : Activation) : Env.Activation.run a = run a := by
-  funext w
-  exact (HookScheduler.run_erases callbacks callbacks_erases a w []).symm
+  rw [activation_run_source]
+  unfold run activationLoopSource
+  rw [funext iteration_source]
 
-/-- Actual worker selection and section entry from the existing dispatch
-factory, followed by the same bounded activation evaluation. -/
-def dispatch (worker : Worker) : Leanux.M Bool :=
-  fun w => (runPrefix (HookScheduler.dispatch callbacks worker) w []).1
+/-- The carried selection prefix retains pending empty device units; the
+selected finite run follows the actual section-start read. -/
+def dispatch (worker : Worker) : Leanux.M Bool := do
+  let selected ← dispatchPrefix worker
+  dispatchAfterPrefixWith run worker selected
 
 theorem dispatch_source (worker : Worker) : Env.dispatch worker = dispatch worker := by
-  funext w
-  exact (HookScheduler.dispatch_erases callbacks callbacks_erases worker w []).symm
+  rw [Progress.dispatch_source]
+  unfold dispatch dispatchAfterPrefix
+  rw [funext run_source]
 
 end Leanux.Proofs.WG.Progress.ActivationFinite

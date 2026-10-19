@@ -100,8 +100,8 @@ theorem activationExitLoop_erases (original : Activation) (occupancy refills fue
   induction fuel generalizing start count active entry with
   | zero => rfl
   | succ fuel ih =>
-    simp only [activationLoopSource, List.range'_succ, List.forIn_cons,
-      activationStepSource, StateT.run_bind, activationExitLoop]
+    simp only [activationLoopSource, activationLoopSourceWith, List.range'_succ, List.forIn_cons,
+      activationStepSourceWith, StateT.run_bind, activationExitLoop]
     cases run : (Activation.iter active).run entry with
     | error error => rfl
     | ok pair =>
