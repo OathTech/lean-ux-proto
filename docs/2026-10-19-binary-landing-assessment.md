@@ -1,12 +1,15 @@
 # Binary experiment: landing preparation and validation
 
-Status: **validation complete; ready for landing**, rebased onto main `3f3879e0`, using
-the actual split mirror and an explicit s5 image pin. Full build, standalone
+Status: **landing conditions in progress**, rebased onto main `3308c49a`, using
+the actual split mirror and an explicit s5 image pin. At the preceding
+`9af3b709` checkpoint, the full build, standalone
 binary gate, unit tests, selected differential recordings, exact witnesses,
 paired suites and all six actual-capture replays pass. **The external export
 gate passed on 2026-10-19**, and no merge to main or push is authorized or
 performed. Earlier assessment/checkpoint sections below retain their failed
-attempts and historical pins; the current results are at the end.
+attempts and historical pins; the current landing conditions are at the end.
+The coordinator will rerun the package gate and mirror fast tier on the
+completed landing-condition series before presenting it for integration.
 
 ## Scope and inputs
 
@@ -553,3 +556,17 @@ capture/recording outputs are removed after their conclusions are recorded;
 the accepted export is likewise removed after recording this result and can
 be regenerated using the command in `binary/README.md`. This gate acceptance
 does not authorize a merge to main or a push.
+
+### Landing conditions after the shared proof carry
+
+[USER 2026-10-19] Rebase the landing branch onto the shared proof carry at
+`3308c49a` and prepare separate cleanup commits before integration review.
+The coordinator owns the package-gate and mirror fast-tier reruns on the
+resulting head. No integration or push is authorized by this preparation.
+
+The rebase preserves the existing experiment history and imports the shared
+carry without changing `binary/`, the harness, or the evaluator relative to
+`9af3b709`. Recreating the historical merge required its original resolutions
+in `docs/README.md`, `harness/linux.py`, and `scripts/proof-gate`; none of those
+files changed in the shared carry. The mirror proof tree, `AGENTS.md`, and the
+mirror gate match `3308c49a`. The experiment branch remains at `272104798c4c0cd0acd34212e1ec4712d52d0d66`.

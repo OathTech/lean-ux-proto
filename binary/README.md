@@ -3,7 +3,7 @@
 This is a standalone refinement experiment against the pinned **s5** Linux
 image under explicitly unrealistic sequential/environment assumptions. It now
 uses the split mirror through its actual adapters. The landing branch is
-`task/binary-pair-landing`, rebased onto main `3f3879e0`; the original experiment
+`task/binary-pair-landing`, rebased onto main `3308c49a`; the original experiment
 branch is preserved. See the [landing report](../docs/2026-10-19-binary-landing-assessment.md)
 for current validation and the still-open milestone-1 review obligations.
 Historical results below retain their original commits and gate scope.
