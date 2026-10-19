@@ -341,6 +341,14 @@ Source-67 `7e1ea08f` connects the original initialized routed front, its pre-rec
 
 Source-68 `f11eadfe` connects the original selected return callback and post-transmit send drain to send-worker entries and their nested scheduler iterations. Direct encrypt activations and TX crypt-ahead retain the actual selected poll item, intervening softirq state, initialized encryption entry and original continuation; TX entries from both scheduler callers retain matched failure accounts. These are concrete entry bridges, not exhaustive native-interior coverage. Validation: 3904 build jobs, 1534 terminal declarations, 77 standard-or-empty public theorem queries across 16 new modules, fresh root replay and twelve recipes; all 3857 frozen hashes match. The 916 inherited proof files, main and mirror are unchanged.
 
+The [native-cut closure review](2026-10-19-review-campaign-3-t2-native-cut-closure.md)
+refines the remaining obligation into a finite mutation and caller worklist.
+All four findings are accepted. Fixed source-point composition must cover
+successful and stopped interiors; current initialized entry bridges and
+selected failure witnesses are not that completeness theorem. A conditional
+send-drain instance is in progress, with its delivery, send-worker and
+scheduler child contracts explicit. No mirror defect was identified.
+
 ## Validation
 
 Source-68 checkpoint `f11eadfe` passes the 3904-job aggregate build and 1534-declaration gate across thirteen roots, using only standard axioms. All 77 public theorems in its 16 new modules pass focused standard-or-empty axiom queries. Fresh root kernel replay and all twelve witness recipes pass. All 3857 frozen proof-source hashes match; all 916 inherited proof modules, main at `783510e8` and mirror `77c9b555` are unchanged. The unchanged model and harness retain source-56 validation: 66 build jobs and 131 unit tests (one configured-kernel skip). The preceding fully validated checkpoint is `7e1ea08f`.

@@ -24,9 +24,11 @@ facts are named hypotheses, not silently discharged dependencies.
 | T5 responder confirmation | Complete and validated. `initialized_responder_confirmation_discipline` joins promotion-label uniqueness, each confirmation's own accepted transport cause and actual responder AEAD after confirmation of the same allocation. Initialized transport covers inner promotion receipts even when the enclosing receive later stops. `PendingPromotion.H1DriverFrames` and `H1ResponderCurrentEdges` remain named local C2 operational assumptions; no incoming carrier, reachability, funding or callback premise remains. |
 | T6 retirement / C3-F1 | Complete. `RetirementSecurity.reference_aware_retirement_outcome` composes unconditional TX/RX check-site safety and invalidation, initialized R2 access/holder accounting, session-derived zero-arm and selected-arm provenance, actual timer/worker unpublication, retained material and final release. Native final RX cleanup covers authenticated packets too. The holder census is at normal Runner endpoints. Clock/worker runs and residual-reference conditions remain explicit; no bounded latency or physical zeroization is claimed. Both R5 witnesses remain permitted retained work. |
 
-The [staged-origin review](2026-10-19-review-campaign-3-staged-origin.md)
-and [forward-conservation review](2026-10-19-review-campaign-3-t2-completeness.md)
-remain the T2 disposition record. Historical key ownership and initialized
+The [staged-origin review](2026-10-19-review-campaign-3-staged-origin.md),
+[forward-conservation review](2026-10-19-review-campaign-3-t2-completeness.md),
+[cuts review](2026-10-19-review-campaign-3-t2-cuts.md) and
+[native-cut closure review](2026-10-19-review-campaign-3-t2-native-cut-closure.md)
+record the T2 dispositions and remaining source coverage work. Historical key ownership and initialized
 available-credit injectivity are proved. Local fixed-ticket disposal is proved; native transport of stopped caller
 locals and the complete pending/terminal partition remain open. Original early
 transmit refusals now have their exact invocation-level error charge; a GSO
