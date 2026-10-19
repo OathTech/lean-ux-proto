@@ -5,8 +5,18 @@ ledger, cached peer and native take anchor. This includes a decrement or
 index erasure followed by a later native failure. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.StagingPrimitive
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
-open Staged.Obligations
+open Staged.Obligations Lifetimes
 set_option maxHeartbeats 600000
+
+theorem KeyPoint.view {action : WG.M α} {shape : KeyShape action}
+    (point : KeyPoint shape w a leaf v b rest) :
+    StagedEntry.view v = StagedEntry.view w := by
+  induction point with
+  | entry=>rfl
+  | returned shape run=>exact (ProjectedAction.iff_run_ambient _ _ _).mp shape.frame _ _ _ _ _ run
+  | left tail point ih=>exact ih
+  | right head tail leading point ih=>
+    exact ih.trans ((ProjectedAction.iff_run_ambient _ _ _).mp head.frame _ _ _ _ _ leading)
 
 theorem KeyPoint.selected {action : WG.M α} {shape : KeyShape action}
     (point : KeyPoint shape w a leaf v b rest)

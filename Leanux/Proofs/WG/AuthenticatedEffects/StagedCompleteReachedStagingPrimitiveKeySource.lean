@@ -13,6 +13,7 @@ set_option maxHeartbeats 600000
 
 inductive KeyAtom : Type → Type 1 where
   | world : KeyAtom WGWorld
+  | ambient (body : AmbientM α) : KeyAtom α
   | table (entries : List IndexEntry) : KeyAtom Unit
   | branch (site : Leanux.Decision) (flag : Bool) : KeyAtom Bool
   | compare (site : Leanux.Decision) (flag : Bool) (left right : Int) : KeyAtom Bool
@@ -26,6 +27,7 @@ inductive KeyAtom : Type → Type 1 where
 
 def KeyAtom.action : KeyAtom α → WG.M α
   | .world=>get
+  | .ambient body=>monadLift body
   | .table entries=>modifyDev fun d=>{d with indexTable:=entries}
   | .branch site flag=>Leanux.branch site flag
   | .compare site flag left right=>branchCmp site flag left right
@@ -60,6 +62,13 @@ def readShape (kid : KeypairId) : KeyShape (getKeypair kid) := by
   cases d.keypairs.get? kid with
   | none=>exact .atom (.failed _ s!"dangling keypair {kid}")
   | some key=>exact .pure key
+def peerShape (pid : PeerId) : KeyShape (getPeer pid) := by
+  unfold getPeer
+  apply KeyShape.bind deviceShape
+  intro d
+  cases d.peers.get? pid with
+  | none=>exact .atom (.failed _ s!"dangling peer {pid}")
+  | some peer=>exact .pure peer
 def writeShape (kid : KeypairId) (key : Keypair) : KeyShape (setKeypair kid key) := .atom (.write kid key)
 def ownerShape (kid : KeypairId) : KeyShape (IndexOwner.peerDeref (.keypair kid)) := by
   unfold IndexOwner.peerDeref IndexOwner.peerWord
