@@ -1,6 +1,6 @@
 import Leanux.Proofs.WG.Progress.InitiationFiniteSource
 import Leanux.Proofs.WG.Progress.SendBufferFiniteSource
-import Leanux.Proofs.WG.TimerDiscipline.InitiationTraversalSource
+import Leanux.Proofs.WG.TimerDiscipline.InitiationTraversalFactors
 
 set_option autoImplicit false
 

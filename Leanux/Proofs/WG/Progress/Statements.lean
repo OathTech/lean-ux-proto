@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Progress.FsFinalCallerFiniteClaims
+import Leanux.Proofs.WG.Progress.SeccompFilterFiniteClaims
+import Leanux.Proofs.WG.Progress.SeccompTranslationFiniteClaims
 import Leanux.Proofs.WG.Progress.FsEpollFiniteClaims
 import Leanux.Proofs.WG.Progress.SeccompProgramFiniteClaims
 import Leanux.Proofs.WG.Progress.FsFcntlFiniteClaims
@@ -2216,5 +2219,50 @@ theorem original_epoll_ctl_finite (epfd : Nat) (op fd : Int) (events : UInt32) (
       (liftFS (Leanux.sysEpollCtl epfd op fd events data))
       (liftFS (FsFinite.sysEpollCtl epfd op fd events data)) :=
   FsFinite.original_sysEpollCtl_finite epfd op fd events data
+
+/-- Exact finite caller evaluation retains original cleanup, refusals and Stops. -/
+theorem original_fs_ksysDup3_finite (oldfd newfd : Nat) (flags : UInt32) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.ksysDup3 oldfd newfd flags)) (liftFS (FsFinite.ksysDup3 oldfd newfd flags)) :=
+  FsFinite.original_ksysDup3_finite oldfd newfd flags
+
+/-- Exact finite caller evaluation retains original cleanup, refusals and Stops. -/
+theorem original_fs_sysDup_finite (fd : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.sysDup fd)) (liftFS (FsFinite.sysDup fd)) :=
+  FsFinite.original_sysDup_finite fd
+
+/-- Exact finite caller evaluation retains original cleanup, refusals and Stops. -/
+theorem original_fs_sysClose_finite (fd : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.sysClose fd)) (liftFS (FsFinite.sysClose fd)) :=
+  FsFinite.original_sysClose_finite fd
+
+/-- Exact finite caller evaluation retains original cleanup, refusals and Stops. -/
+theorem original_fs_sysEpollWait_finite (epfd : Nat) (maxevents timeout : Int) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (liftFS (Leanux.sysEpollWait epfd maxevents timeout)) (liftFS (FsFinite.sysEpollWait epfd maxevents timeout)) :=
+  FsFinite.original_sysEpollWait_finite epfd maxevents timeout
+
+/-- Exact finite evaluation retains every original result, refusal and Stop. -/
+theorem original_seccomp_prepare_filter_finite (fprog : Leanux.Seccomp.SockFprog) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (Leanux.liftSeccomp (Leanux.Seccomp.seccompPrepareFilter fprog))
+      (Leanux.liftSeccomp (SeccompFilterFinite.prepare fprog)) :=
+  SeccompFilterFinite.original_prepare_finite fprog
+
+/-- Exact finite evaluation retains every original result, refusal and Stop. -/
+theorem original_seccomp_prepare_user_filter_finite
+    (fprog : Leanux.Seccomp.SockFprog) (badFprog : Bool) :
+    Campaign2.Product.AgreesOn (fun _ => True)
+      (Leanux.liftSeccomp (Leanux.Seccomp.seccompPrepareUserFilter fprog badFprog))
+      (Leanux.liftSeccomp (SeccompFilterFinite.user fprog badFprog)) :=
+  SeccompFilterFinite.original_user_finite fprog badFprog
+
+/-- Exact finite evaluation retains every original result, refusal and Stop. -/
+theorem original_seccomp_translation_check_finite
+    (p : Leanux.Seccomp.ClassicProg) (d : Leanux.Seccomp.SeccompData) :
+    Leanux.Seccomp.checkTranslation p d = SeccompTranslationFinite.check p d :=
+  SeccompTranslationFinite.original_check_result_finite p d
 
 end Leanux.Proofs.WG.Progress
