@@ -34,13 +34,11 @@ elab "prepare_shape_head " expected:ident : tactic => do
 macro "prepare_shape_step" : tactic => `(tactic| first
   | exact Shape.pure _
   | (prepare_shape_head liftWGPrefix
-     apply Shape.quiet
-     intro initial
-     change Preserves (fun w => StagedEntry.view w = initial) _
-     try simp only [decryptKeyReject,WG.orM,branch,branchCmp,hiddenAlloc,invariant,unsupported,refcountInc]
+     apply Shape.metadata
      repeat' first
-       | (rx_retention_head branchExpired; exact (branchExpired_sameWGWorld _ _ _ _).wp (fun w=>StagedEntry.view w=initial))
-       | entry_key_step initial)
+       | (metadata_source_head decryptKeyReject; exact PeerMetadata.decryptRejectShape _)
+       | unfold refcountInc
+       | receive_metadata_step)
   | (prepare_shape_head getRxSkbPrefix; exact Shape.access (.readRx _))
   | (prepare_shape_head writeRxSkbPrefix; exact Shape.access (.writeRx _ _))
   | (prepare_shape_head getKeypairPrefix; exact Shape.access (.readKey _))

@@ -27,13 +27,10 @@ noncomputable def softirq : Shape loopbackSoftirqPrefix := by
   repeat' first
     | (prepare_shape_head savedPeerAny; exact savedAny _ _)
     | (prepare_shape_head liftWGPrefix
-       apply Shape.quiet
-       intro initial
-       change Preserves (fun w=>StagedEntry.view w=initial) _
-       first
-         | (rx_retention_head loopbackFinish; exact TimerFrames.store loopbackFinish_sameStore initial)
-         | (unfold unsupported; exact hoare_liftAmbient _ _)
-         | entry_key_step initial)
+       apply Shape.metadata
+       repeat' first
+         | (metadata_source_head loopbackFinish; exact PeerMetadata.loopbackFinishShape)
+         | socket_metadata_step)
     | socket_route_shape_step
 
 noncomputable def loopback (sites : List HiddenSite) (raised : Bool) : Shape (loopbackSendPrefix sites raised) := by
@@ -41,7 +38,7 @@ noncomputable def loopback (sites : List HiddenSite) (raised : Bool) : Shape (lo
   apply Shape.bind (SocketCache.ambientShape (AmbientM.skipCut sites))
   intro ignored
   apply boolShape raised
-  · exact .bind (.quiet _ (TimerFrames.store raiseLoopbackRx_sameStore)) (fun _=>softirq)
+  · exact .bind (.metadata _ PeerMetadata.loopbackRaiseShape) (fun _=>softirq)
   · exact .pure ()
 
 noncomputable def tunnel (e : Endpoint) (bytes : List UInt8) (r : Route) (exactRx : Bool) :
@@ -50,14 +47,10 @@ noncomputable def tunnel (e : Endpoint) (bytes : List UInt8) (r : Route) (exactR
   repeat' first
     | (prepare_shape_head loopbackSendPrefix; exact loopback _ _)
     | (prepare_shape_head liftWGPrefix
-       apply Shape.quiet
-       intro initial
-       change Preserves (fun w=>StagedEntry.view w=initial) _
-       first
-         | (rx_retention_head socketPort; exact TimerFrames.store (socketPort_sameStore _) initial)
-         | (rx_retention_head skipCut; unfold skipCut; exact hoare_liftAmbient _ _)
-         | (rx_retention_head unsupported; unfold unsupported; exact hoare_liftAmbient _ _)
-         | entry_key_step initial)
+       apply Shape.metadata
+       repeat' first
+         | (metadata_source_head socketPort; exact PeerMetadata.socketPortShape _)
+         | socket_metadata_step)
     | socket_route_shape_step
 
 noncomputable def afterRouteShape (e : Endpoint) (bytes : List UInt8) (ds : Nat) (exactRx : Bool)

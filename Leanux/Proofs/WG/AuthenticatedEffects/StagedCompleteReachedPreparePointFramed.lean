@@ -12,6 +12,7 @@ variable {w v u : WGWorld} {a b c : Ambient} {h middle last : List E} {value : �
 
 def Framed : {E α : Type} → {action : WGPrefix E α} → Shape action → WGWorld → Ambient → List E → Prop
   | _,_,_,.pure _,_,_,_ => True
+  | _,_,_,.metadata _ _,_,_,_ => True
   | _,_,_,.quiet _ _,_,_,_ => True
   | _,_,_,.access token,w,_,_ => token.Entry w
   | _,_,_,@Shape.bind _ _ _ body _ head tail,w,a,h => Framed head w a h ∧
@@ -36,6 +37,9 @@ theorem Framed.normal {shape : Shape action} (framed : Framed shape w a h)
     StagedEntry.view v=StagedEntry.view w := by
   induction shape generalizing w a v b with
   | pure => cases performed; rfl
+  | metadata body source =>
+      rw [runWGPrefix_lift] at performed
+      exact (ProjectedAction.iff_run_ambient _ _ _).mp source.frame _ _ _ _ _ (congrArg Prod.fst performed)
   | quiet body frame =>
       rw [runWGPrefix_lift] at performed
       exact (ProjectedAction.iff_run_ambient _ _ _).mp frame _ _ _ _ _ (congrArg Prod.fst performed)

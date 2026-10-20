@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSocketCacheFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSocketMetadataCanonical
 
 /-! IPv4 and IPv6 routing witnesses retain every original branch, native
 route lookup, cache child and successful bind prefix before tunnel emission. -/
@@ -14,14 +15,12 @@ macro "socket_route_shape_step" : tactic => `(tactic| first
   | (prepare_shape_head send4ClearSrcPrefix; exact SocketCache.clear4Shape _)
   | (prepare_shape_head Six.clear; exact SocketCache.clear6Shape _)
   | (prepare_shape_head liftWGPrefix
-     apply Shape.quiet
-     intro initial
-     change Preserves (fun w=>StagedEntry.view w=initial) _
-     try simp only [branch,unsupported,invariant,getRouting]
+     apply Shape.metadata
      repeat' first
-       | (rx_retention_head liftRouting; exact TimerFrames.store (liftRouting_sameWGStore _) initial)
-       | (allocation_release_lift_from Net.M; exact TimerFrames.store (liftRouting_sameWGStore _) initial)
-       | entry_key_step initial)
+       | (metadata_source_head getRouting; exact PeerMetadata.routingReadShape)
+       | (metadata_source_head liftRouting; exact PeerMetadata.routeAdapterShape _)
+       | (metadata_source_head liftM; exact PeerMetadata.routeAdapterShape _)
+       | socket_metadata_step)
   | prepare_shape_step)
 
 noncomputable def fourFinish (e : Endpoint) (bytes : List UInt8) (ds : Nat) (exactRx : Bool) (route : Option Route) :

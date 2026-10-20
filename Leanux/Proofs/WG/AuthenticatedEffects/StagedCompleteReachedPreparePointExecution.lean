@@ -12,6 +12,10 @@ inductive Execution : {E α : Type} → {action : WGPrefix E α} → Shape actio
     WGWorld → Ambient → List E → Outcome α → List E → Prop where
   | pure {E α : Type} (value : α) (w : WGWorld) (a : Ambient) (h : List E) :
       Execution (.pure value) w a h (.ok ((value,w),a)) h
+  | metadata {E α : Type} (body : WG.M α) (source : PeerMetadata.Shape body)
+      {w : WGWorld} {a : Ambient} {h last : List E} {result : Outcome α}
+      (performed : runWGPrefix (liftWGPrefix body) w a h=(result,last)) :
+      Execution (.metadata body source) w a h result last
   | quiet {E α : Type} (body : WG.M α) (frame : Leanux.Proofs.Framing.SameView StagedEntry.view body)
       {w : WGWorld} {a : Ambient} {h last : List E} {result : Outcome α}
       (performed : runWGPrefix (liftWGPrefix body) w a h=(result,last)) :
@@ -51,6 +55,7 @@ theorem Execution.run {E α : Type} {action : WGPrefix E α} {shape : Shape acti
     (trace : Execution shape w a h result last) : runWGPrefix action w a h=(result,last) := by
   induction trace with
   | pure => rfl
+  | metadata body source performed => exact performed
   | quiet body frame performed => exact performed
   | access token performed => exact performed
   | stopped head tail trace ih =>
@@ -75,6 +80,7 @@ theorem execution_cases {E α : Type} {action : WGPrefix E α} (shape : Shape ac
     (performed : runWGPrefix action w a h=(result,last)) : Execution shape w a h result last := by
   induction shape generalizing w a with
   | pure value => cases performed; exact .pure _ _ _ _
+  | metadata body source => exact .metadata body source performed
   | quiet body frame => exact .quiet body frame performed
   | access token => exact .access token performed
   | @bind E α β body next head tail ihHead ihTail =>

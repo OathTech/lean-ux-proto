@@ -22,7 +22,7 @@ noncomputable def eraseShape (id stamp : Nat) : Shape (eraseKeypairPrefix id sta
 
 noncomputable def removeShape (id : KeypairId) : Shape (removeKeypairEntryPrefix id) := by
   unfold removeKeypairEntryPrefix
-  exact .bind (peerDeref id) (fun _=>.quiet _ (KeyFrames.index (indexRemove (.keypair id))))
+  exact .bind (peerDeref id) (fun _=>.metadata _ (.access (PeerMetadata.indexShape (indexRemove (.keypair id)))))
 
 noncomputable def canonical (kid : Option KeypairId) (now : Bool) :
     Shape (keypairPutPrefix kid now) := by

@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteDecryptSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPrepareMetadataSource
 
 /-! Fixed source witnesses for decrypt preparation. Access atoms retain the
 original lifetime observer; their native mutation and following receipt are
@@ -80,6 +81,7 @@ theorem Access.run {E α : Type} {body : WGPrefix E α}
 
 inductive Shape : {E α : Type} → WGPrefix E α → Type 1 where
   | pure (value : α) : Shape (pure value : WGPrefix E α)
+  | metadata (body : WG.M α) (source : PeerMetadata.Shape body) : Shape (liftWGPrefix body : WGPrefix E α)
   | quiet (body : WG.M α) (frame : SameView StagedEntry.view body) : Shape (liftWGPrefix body : WGPrefix E α)
   | access {E α : Type} {body : WGPrefix E α} (token : Access body) : Shape body
   | bind {body : WGPrefix E α} {next : α → WGPrefix E β}
@@ -93,6 +95,7 @@ inductive Shape : {E α : Type} → WGPrefix E α → Type 1 where
 theorem Shape.appends {E α : Type} {action : WGPrefix E α} (shape : Shape action) : StateAppends action := by
   induction shape with
   | pure value => exact StateAppends.pure value
+  | metadata body source => exact StateAppends.lift body
   | quiet body frame => exact StateAppends.lift body
   | access token =>
       intro w a h

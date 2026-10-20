@@ -38,7 +38,7 @@ theorem receiptFrom_run (w : WGWorld) (a : Ambient) (body : WGPrefix E α)
       | ok out => obtain ⟨⟨value,v⟩,c⟩:=out; rfl
 
 inductive Site where
-  | entry | returned | nativeBeforeReceipt | beforeDecryptReceipt
+  | entry | returned | nativeBeforeReceipt | beforeDecryptReceipt | metadata
   | left (site : Site) | right (site : Site)
   | focused (site : Site) | captured (site : Site)
 
@@ -49,6 +49,10 @@ inductive Point : {E α : Type} → {action : WGPrefix E α} → Shape action �
       {w v : WGWorld} {a b : Ambient} {h last : List E}
       (performed : runWGPrefix action w a h=(.ok ((value,v),b),last)) :
       Point shape w a h .returned v b last (pure value)
+  | metadata {E α : Type} {body : WG.M α} {source : PeerMetadata.Shape body}
+      {w v : WGWorld} {a b : Ambient} {h : List E}
+      (point : PeerMetadata.Point source w a v b) :
+      Point (.metadata body source) w a h .metadata v b h (PeerMetadata.prefixRemainder point)
   | native {E α : Type} {action : WGPrefix E α} {value : α} (token : Access action)
       {w v : WGWorld} {a b : Ambient} {h : List E}
       (performed : (token.native.run w).run a=.ok ((value,v),b)) :

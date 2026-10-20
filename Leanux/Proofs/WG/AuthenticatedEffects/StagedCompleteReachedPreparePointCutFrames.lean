@@ -14,6 +14,7 @@ theorem Point.view (point : Point shape w a h site v b middle remaining)
   induction point with
   | entry shape => rfl
   | returned shape performed => exact framed.normal performed
+  | metadata point => exact point.frame
   | native token performed => exact token.native_frame framed performed
   | left tail point ih => exact ih framed.1
   | right head tail leading point ih =>
@@ -34,6 +35,7 @@ theorem Point.appends (point : Point shape w a h site v b middle remaining) :
   induction point with
   | entry shape => exact ⟨[],by simp⟩
   | returned shape performed => exact shape.appended performed
+  | metadata point => exact ⟨[],by simp⟩
   | native token performed => exact ⟨[],by simp⟩
   | left tail point ih => exact ih
   | right head tail leading point ih =>
@@ -69,6 +71,7 @@ theorem Point.remaining_appends (point : Point shape w a h site v b middle remai
   induction point with
   | entry shape => exact shape.appends
   | returned shape performed => exact StateAppends.pure _
+  | metadata point => exact PeerMetadata.prefixRemainder_appends point
   | native token performed => exact emitMany_appends _ _
   | left tail point ih => exact StateAppends.bind ih (fun value=>(tail value).appends)
   | right head tail leading point ih => exact ih
