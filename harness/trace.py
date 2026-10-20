@@ -610,6 +610,15 @@ def validate_trace(trace):
             raise InvalidTrace("wg_inject to: wg0 is unroutable from the creating namespace")
         if any(op["op"] == "wg_inject" for op in trace["ops"][closes[0]:]):
             raise InvalidTrace("wg_inject after wg_netns_close: no socket in the creating namespace")
+        # The fixture's holders are reserved descriptors like 0..7 (design
+        # 3.1): the injector at 8 and the namespace pin at 9. A literal that
+        # names one aliases or closes a holder; a retained alias of the pin
+        # keeps the creating namespace alive past wg_netns_close, whose
+        # cleanup the mirror models only inside that operation's wait.
+        for i, op in enumerate(ops):
+            for field in ("fd", "newfd", "epfd"):
+                if field in op and op[field].get("literal") in (8, 9):
+                    raise InvalidTrace(f"ops[{i}].{field}: descriptor {op[field]['literal']} is the foreign-creator fixture's (the injector and the namespace pin)")
     elif closes:
         raise InvalidTrace("wg_netns_close: only in the foreign-creator fixture")
     # W2 (design 4.2, 8.1): a stepped dump holds the fixture's second
@@ -622,6 +631,10 @@ def validate_trace(trace):
         need = 10 if any(op["op"] in LIFECYCLE_OPS for op in trace["ops"]) else 9
         if trace.get("rlimit_nofile", 32) < need:
             raise InvalidTrace(f"wg_get_start/wg_get_recv: rlimit_nofile below {need} (the dump socket is descriptor 8)")
+        for i, op in enumerate(ops):
+            for field in ("fd", "newfd", "epfd"):
+                if field in op and op[field].get("literal") == 8:
+                    raise InvalidTrace(f"ops[{i}].{field}: descriptor 8 is the stepped dump's socket")
     return deepcopy(trace)
 
 

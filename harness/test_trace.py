@@ -588,5 +588,54 @@ class LifecycleWireTests(unittest.TestCase):
                          KCOV_TASK_CMP_CAPACITY)
 
 
+class FixtureDescriptorTests(unittest.TestCase):
+    """The fixture's holders are reserved descriptors (harness/trace.py's
+    rule beside the mirror's `reservedFds`): 0..7 always, 8 under a stepped
+    dump or the seccomp child, 8 and 9 under the foreign-creator fixture.
+    Campaign 2's namespace-pin finding (docs/2026-10-20-proof-campaign-2-
+    namespace-pin.md) duplicated the pin at 9 and closed the alias after
+    wg_netns_close, keeping the creating namespace alive past the only
+    operation whose wait runs its cleanup."""
+    FOREIGN = {"version": 1, "id": "fixture-foreign", "net_fixture": "foreign-creator", "ops": [{"op": "wg_netns_close"}]}
+    STEPPED = {"version": 1, "id": "fixture-stepped", "ops": [{"op": "wg_get_start"}, {"op": "wg_get_recv"}]}
+    PLAIN = {"version": 1, "id": "fixture-plain", "ops": [{"op": "eventfd2", "init": 0, "flags": 0}]}
+    # campaign 2's reproducer, as the finding states it
+    NAMESPACE_PIN_ALIAS = {"version": 1, "id": "campaign2-namespace-pin-alias", "net_fixture": "foreign-creator",
+                           "ops": [{"op": "dup", "fd": {"literal": 9}}, {"op": "wg_netns_close"}, {"op": "close", "fd": {"ref": 0}}]}
+
+    def check(self, base, valid, invalid):
+        for extra in valid:
+            with self.subTest(extra=extra):
+                t = deepcopy(base)
+                t["ops"].append(extra)
+                validate_trace(t)
+        for extra in invalid:
+            with self.subTest(extra=extra):
+                t = deepcopy(base)
+                t["ops"].append(extra)
+                with self.assertRaises(InvalidTrace):
+                    validate_trace(t)
+
+    def test_foreign_creator_holds_8_and_9(self):
+        self.check(self.FOREIGN,
+                   valid=[{"op": "dup", "fd": {"literal": 10}}, {"op": "close", "fd": {"literal": 31}}],
+                   invalid=[{"op": "dup", "fd": {"literal": 9}}, {"op": "dup", "fd": {"literal": 8}},
+                            {"op": "close", "fd": {"literal": 9}}, {"op": "close", "fd": {"literal": 7}},
+                            {"op": "dup3", "fd": {"literal": 20}, "newfd": {"literal": 9}, "flags": 0},
+                            {"op": "read", "fd": {"literal": 8}, "count": 8}])
+        with self.assertRaises(InvalidTrace):
+            validate_trace(deepcopy(self.NAMESPACE_PIN_ALIAS))
+
+    def test_stepped_dump_holds_8(self):
+        self.check(self.STEPPED,
+                   valid=[{"op": "dup", "fd": {"literal": 9}}],
+                   invalid=[{"op": "dup", "fd": {"literal": 8}}, {"op": "close", "fd": {"literal": 8}}])
+
+    def test_plain_fixture_holds_0_to_7(self):
+        self.check(self.PLAIN,
+                   valid=[{"op": "dup", "fd": {"literal": 8}}, {"op": "dup", "fd": {"literal": 9}}],
+                   invalid=[{"op": "dup", "fd": {"literal": 7}}, {"op": "dup", "fd": {"literal": 0}}])
+
+
 if __name__ == '__main__':
     unittest.main()

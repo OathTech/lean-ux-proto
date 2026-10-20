@@ -95,6 +95,28 @@ def Operation.isPipe : Operation → Bool
   | .pipe2 _ => true
   | _ => false
 
+/-- The descriptor arguments of an operation, for the parser's domain rule
+    (`reservedFds`). Every constructor is listed, so a new one with a
+    descriptor cannot slip past the rule unnoticed. -/
+def Operation.descriptors : Operation → List FDArg
+  | .dup fd | .close fd | .read fd _ | .write fd _ _ | .fcntl fd _ _ | .epollWait fd _ _ => [fd]
+  | .dup3 fd newfd _ => [fd, newfd]
+  | .epollCtl epfd _ fd _ _ => [epfd, fd]
+  | .eventfd2 .. | .pipe2 _ | .epollCreate1 _
+  | .wgSet _ | .wgGet _ | .wgGetStart _ | .wgGetRecv | .wgUp | .wgXmit .. | .wgSetMtu _ | .wgObserve
+  | .wgInject .. | .wgDeladdr _ | .wgDelroute .. | .wgAddroute .. | .wgAddaddr .. | .wgFlood ..
+  | .wgBatch .. | .wgAdvance _ | .wgCreate | .wgDown | .wgDelete | .wgNetnsClose
+  | .seccompInstall .. | .seccompProbe .. | .seccompPrctl .. | .seccompCapdrop | .seccompQuery .. => []
+
+/-- The fixture's reserved descriptors: 0-2 the console, 3 the KCOV fd, 4-7
+    the fixture's sockets or fillers; 8 the stepped dump's socket (W2) or the
+    seccomp child's KCOV fd; 8 and 9 the foreign-creator fixture's injector
+    and namespace pin (W8). A trace names none of them: a literal below the
+    count is outside the domain (`parseTrace`, with `harness/trace.py`'s
+    matching rule), as a user operation on the harness's own apparatus. -/
+def reservedFds (foreign stepped seccompChild : Bool) : Nat :=
+  if foreign then 10 else if stepped || seccompChild then 9 else 8
+
 structure Trace where
   id : String
   ops : Array Operation
@@ -948,6 +970,16 @@ def parseTrace (j : Json) : Except String Trace := do
   if trace.stepped && rlimit < 9 then throw "a stepped dump needs rlimit_nofile >= 9"
   if trace.stepped && rlimit < 10 && ops.any (fun | .wgCreate | .wgDelete => true | _ => false) then
     throw "a stepped dump with wg_create or wg_delete needs rlimit_nofile >= 10"
+  -- the fixture's holders are reserved descriptors like 0..7 (`reservedFds`):
+  -- a literal that names one would alias or close the harness's apparatus
+  -- (a retained alias of W8's pin keeps the creating namespace alive past
+  -- `wg_netns_close`, whose cleanup runs only in that operation's wait)
+  let reserved := reservedFds foreign trace.stepped seccompChild
+  for op in ops do
+    for fd in op.descriptors do
+      if let .literal n := fd then
+        if 0 ≤ n && n < reserved then
+          throw s!"descriptor literal {n} is the fixture's (reserved 0..{reserved - 1})"
   return trace
 
 /-! ## Harness fixture and trace execution
@@ -978,10 +1010,6 @@ def fixtureFile (name : String) (refs : Nat) : File :=
   else
     { fFlags := O_RDWR, fMode := FMODE_READ ||| FMODE_WRITE ||| FMODE_OPENED,
       fCount := refs, fOp := some (.fixture name), fInode := some (.fixture name) }
-
-/-- The fixture's reserved descriptors (0-2, the KCOV fd, the fixture's sockets). -/
-def reservedFds (foreign stepped seccompChild : Bool) : Nat :=
-  if foreign then 10 else if stepped || seccompChild then 9 else 8
 
 /-- The trace process at the start (the task store): its file table over the
     reserved descriptors, the rlimit, SIGPIPE blocked (P design section 6)

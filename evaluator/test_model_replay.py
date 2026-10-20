@@ -744,3 +744,48 @@ class FixedWidthCounters(unittest.TestCase):
             raise AssertionError(f'{FIXED_WIDTH_TESTS} is missing: run `lake build leanux-fixed-width-tests` first')
         result = subprocess.run([FIXED_WIDTH_TESTS], capture_output=True, timeout=60)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
+class FixtureDescriptors(unittest.TestCase):
+    """The parser's reserved-descriptor rule (Leanux/Runner.lean `reservedFds`,
+    `parseTrace`) matches the validator's (harness/trace.py): a literal that
+    names a fixture holder is invalid input (exit 2), under the plain fixture
+    (0..7), a stepped dump (8) and the foreign-creator fixture (8 and 9).
+    Campaign 2's namespace-pin reproducer is the foreign-creator case."""
+    NAMESPACE_PIN_ALIAS = {"version": 1, "id": "campaign2-namespace-pin-alias", "net_fixture": "foreign-creator",
+                           "ops": [{"op": "dup", "fd": {"literal": 9}}, {"op": "wg_netns_close"}, {"op": "close", "fd": {"ref": 0}}]}
+
+    def parse(self, trace):
+        if not MODEL.is_file():
+            raise AssertionError(f'{MODEL} is missing: run `lake build leanux-model` first')
+        result = subprocess.run([MODEL, '--domain'], input=(json.dumps(trace) + '\n').encode(), capture_output=True, timeout=120)
+        return result.returncode, (result.stdout + result.stderr).decode()
+
+    def with_op(self, trace, op, index=0):
+        trace = copy.deepcopy(trace)
+        trace['ops'][index] = op
+        return trace
+
+    def test_the_namespace_pin_alias_is_rejected_by_both_sides(self):
+        from harness.trace import InvalidTrace, validate_trace
+        with self.assertRaises(InvalidTrace):
+            validate_trace(copy.deepcopy(self.NAMESPACE_PIN_ALIAS))
+        code, out = self.parse(self.NAMESPACE_PIN_ALIAS)
+        self.assertEqual(code, 2, out)
+        self.assertIn('descriptor literal 9 is the fixture\'s (reserved 0..9)', out)
+
+    def test_the_injector_is_the_fixtures_too(self):
+        code, out = self.parse(self.with_op(self.NAMESPACE_PIN_ALIAS, {"op": "dup", "fd": {"literal": 8}}))
+        self.assertEqual(code, 2, out)
+        self.assertIn('descriptor literal 8 is the fixture\'s (reserved 0..9)', out)
+
+    def test_a_free_descriptor_parses(self):
+        code, out = self.parse(self.with_op(self.NAMESPACE_PIN_ALIAS, {"op": "dup", "fd": {"literal": 10}}))
+        self.assertEqual(code, 0, out)
+
+    def test_the_stepped_dump_holds_8_and_the_plain_fixture_does_not(self):
+        stepped = {"version": 1, "id": "stepped-8", "ops": [{"op": "dup", "fd": {"literal": 8}}, {"op": "wg_get_start"}, {"op": "wg_get_recv"}]}
+        code, out = self.parse(stepped)
+        self.assertEqual(code, 2, out)
+        self.assertIn('descriptor literal 8 is the fixture\'s (reserved 0..8)', out)
+        code, out = self.parse({"version": 1, "id": "plain-8", "ops": [{"op": "dup", "fd": {"literal": 8}}]})
+        self.assertEqual(code, 0, out)
+
