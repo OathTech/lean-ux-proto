@@ -2,260 +2,259 @@
 
 ## Progress
 
-Review base: `eba3c2b6`, mirror `1f766662`. The campaign is rebased, with
-source closure at `85d707da` and the existing C3 counter carry at `8ec35a98`.
-All four C3 result directories are byte-for-byte identical to pre-rebase
-`efac7e0d`; inherited proof files match the review base. Full validation at
-`da621504` passes: 6677 build jobs, 2448 standard-only terminal declarations
-across nineteen roots, all fifteen counterexample recipes, and fresh full-root
-kernel replay. Every process returned zero; all 6738 frozen Lean hashes match.
-That rebase changed neither theorem types nor resource settings. This is not
-a campaign-wide claim: the campaign carries resource raises, and the T1/T6
-targets were amended on 2026-10-18 (the amendment is recorded below).
+Branch `proofs/campaign-3` is rebased onto `ac55c7d5`, incorporating the
+namespace-pin shared carry (`a4aec70e`, registered by `7f89077d` and
+`66188b74`) and the resource rule at `25c89371`. The mirror pin is `218d3ffd`.
+The independent landing review (`ad268adc` on `task/review-campaign-3-landing`)
+is being dispositioned below. Current validation is pending; the earlier full
+pass at `7b8994b1` was over `1f766662`, not this mirror. No mirror edit, merge
+to main or push is part of this repair.
 
-**Resource limits (B1, census at `7b8994b1`).** Across the whole proof tree,
-1,337 files contain `maxHeartbeats` directives and 462 contain `maxRecDepth`
-directives. Of those, 1,314 and 462 files respectively contain file-wide
-directives (1,320 and 467 directives; some files contain more than one).
-The four C3 result directories account for 898 heartbeat-setting files,
-879 with file-wide settings, and 428 recursion-setting files, all file-wide.
-The earlier assertion that the campaign raised no limits was false.
-These existing raises are grandfathered by the 2026-10-20 decision in
-[AGENTS.md](../AGENTS.md), landed at `25c89371`. Files touched for this review
-must put their existing raises on individual declarations with reasons;
-this repair introduces no higher limit. The counts distinguish files from
-directives and all settings from file-wide settings.
+The campaign does not establish all six original charter sentences without
+qualification. T1/T6 have the October 18 amendment, T2 has declared cut-point
+and separate binding scopes, T3 has per-call boundaries, and T4/T5 retain the
+explicit undischarged source premises identified below. The Results table in
+[the register](proofs.md#results) is the current claim register. Historical
+tranche notes have been replaced by these per-result reports; their commits
+remain in the branch history, not as current claims or reproduction recipes.
 
-**Newer-main lag:** main advanced during validation to `218d3ffd`, the
-namespace-pin mirror landing. All six C3 outcomes are validated over
-`1f766662` and remain uncarried to that newer mirror. The head is ready for the
-requested independent review on the `eba3c2b6` base; it is not a claim over
-`218d3ffd`, nor a merge-to-main or push.
+**Resource correction (B1).** The earlier campaign-wide assertion that no
+resource limit was raised was false. At review head `7b8994b1`, the whole proof
+tree had `maxHeartbeats` directives in **1,337 files**, of which **1,314** had
+file-wide directives (1,320 such directives), and file-wide `maxRecDepth`
+directives in **462 files** (467 directives). C3's four result directories
+accounted for 898 heartbeat-setting files, 879 file-wide, and 428 recursion-
+setting files, all file-wide. The counts distinguish files from directives and
+all settings from file-wide settings. Existing raises are grandfathered by
+[AGENTS.md](../AGENTS.md); every file touched by this repair scopes any retained
+raises to individual declarations with reasons. No limit is increased here.
 
-[AGENT 2026-10-18] Work begins on `proofs/campaign-3` at `783510e8`, under
-the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
-proof tree includes campaign 1's GRO carry. At campaign start, no mirror
-definition or landed proof had been changed. The source contracts now cover staged nonce allocation, encryption receipts,
-cookie egress, native handshake histories and session reference payments. The six outcomes are closed at their stated boundaries. T2's source
-composition and audit are complete, and full validation passes on the
-review base. The newer-main lag is recorded above.
+**Statement history (S5).** The October 18 amendment narrowed T1's
+post-limit cancellation clause and T6's use-time validity/expiry clause to the
+C's admission/decryption checks and reference-aware retirement. Both wordings
+and the reason are below and in [decisions.md](decisions.md), with
+[USER 2026-10-18] provenance. The fixed-width and namespace carries preserve
+the proved claims; that is not a claim that the original targets were unchanged.
 
-**C3-F1 is dispositioned as a statement artefact.** The original T6 wording
-excluded behavior already represented by R5's coherent initialized replays.
-Both reproduce on this branch. [USER 2026-10-18] Resume with the actual TX
-admission/RX decryption checks and reference-aware retirement, retaining the
-counterexamples. Further wording artefacts are corrected while work continues;
-only a blocker, substantive finding, completed campaign or user instruction
-stops the work. The last validated checkpoint and the current integration status are recorded below.
+All results are about the single-CPU executable mirror, with primitive
+cryptographic operations treated as contracts. C simulation, concurrent
+interleavings, timing channels and physical key erasure are excluded. The
+observer erasure theorems relate runner results/Stops; event-site completeness
+for AEAD/session/timer/work journals rests on hook placement and audit. Socket
+append coverage additionally has the `Emissions.Inv` theorem. No new
+cryptographic or Linux-schedule claim is made.
 
-| Outcome | Status and remaining obligation |
-| --- | --- |
-| T1 nonce safety | **Validated over `1f766662`; lagging `218d3ffd`.** Complete and validated. `initialized_nonce_safety` joins unique native reservations, actual key-allocation/nonce pairs, bounded serialized AEAD nonces and exact packet/header encoding, including stopped prefixes. Universal native rejection contracts prove invalidation, whole-batch restoration and unchanged drop count; the native rekey contracts expose the guarded helper request. No incoming invariant or campaign-2 premise remains. |
-| T2 transmit authorization and conservation | **Validated over `1f766662`; lagging `218d3ffd`.** Proof and source audit closed; full validation passes on the review base. `initialized_transmit_source_conservation` derives `AccountOrRecords` from the original initialized source point, without an incoming invariant, semantic certificate or child-family premise. `transmit_source_children_are_closed` eliminates all five extension parameters. Each admitted ticket has one pending or terminal status; resident cells have native ownership and unique recorded backing or selected-ticket allocation aliases. Terminal receipts have exact cardinality. Native mutation intervals retain only their original pending record suffix on the same WG state; no arbitrary future history is allowed. The fixed source composition covers setup, dispatch, traffic, timers, scheduling, receive, configuration, lifecycle, dump and cleanup, including successful interiors and prefixes before Stop. Existing socket claims bind admitted plaintext, historically selected key and peer, ciphertext and the endpoint actually read at send; T3 supplies converse append coverage. Successful splice or new keepalive is the admission boundary. `original_transmit_refusal_charged_once` separately preserves the named early errno and one charge per invocation, independent of GSO length. Pending work need not complete. The claim is over the mirror projection, not C memory or cryptographic correctness. Validated mirror pin `1f766662` on base `eba3c2b6`; independent review and the separate `218d3ffd` mirror carry remain. |
-| T3 authenticated effects and silence | **Validated over `1f766662`; lagging `218d3ffd`.** Complete and validated. `AuthenticatedEffects.initialized_silence_security_outcome` combines every native append’s own authorization, rooted timer/work effects, latest own handshake admission, authenticated replay and packet-specific GRO delivery. The cookie exception uses actual load/MAC guards: at most one source-bound 64-byte reply per invocation, strictly smaller than its initialized input, without session effects. Refused initialized consumers preserve every WG field modulo map representation; MAC refusal masks only load/cookie-secret/rate-limit bookkeeping, and decryption names the exact pre-AEAD invalidation alternative. Consumer equality is at completed native cuts, retained through later outer Stop; internally stopped effects use prefix observations. No incoming invariant, funding, coherence or H1 premise remains. No global reply-rate, CPU, timing or cryptographic-unforgeability claim is made. |
-| T4 handshake replay resistance | **Validated over `1f766662`; lagging `218d3ffd`.** Complete and validated. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Actual initialized stale initiation receipts are refused, restore all peer records and preserve sent data. The factored native continuation returns without a response from the exact receipt endpoint; it requires no separate ambient-history join. The final-journal exports also establish response-consumption and session-installation uniqueness by exchange epoch, and exactly one allocation from the same successful session receipt. Named C2 source assumptions stay visible. |
-| T5 responder confirmation | **Validated over `1f766662`; lagging `218d3ffd`.** Complete and validated. `initialized_responder_confirmation_discipline` joins promotion-label uniqueness, each confirmation's own accepted transport cause and actual responder AEAD after confirmation of the same allocation. Initialized transport covers inner promotion receipts even when the enclosing receive later stops. `PendingPromotion.H1DriverFrames` and `H1ResponderCurrentEdges` remain named local C2 operational assumptions; no incoming carrier, reachability, funding or callback premise remains. |
-| T6 key retirement | **Validated over `1f766662`; lagging `218d3ffd`.** Complete and validated. `reference_aware_retirement_outcome` packages unconditional native TX/RX checks, invalidation, exact age comparison, initialized R2 access and holder accounting, the session-derived zero timer, selected-arm provenance, actual dispatch and worker unpublication, retained material and final removal. Actual clock/worker runs and residual-reference conditions remain explicit. Universal native RX final release includes authenticated cleanup. No worker-latency or physical-zeroization claim is made. |
+## T1 — nonce safety
 
-## Rebase onto `eba3c2b6`
+**Architecture and claim.** `TransmitSecurity.initialized_nonce_safety`
+combines the initialized reservation ledger, `EncryptionMaterial` allocation
+stamps and exact header/AEAD encoding over the final causal journal. Normal
+and stopped prefixes have unique reservations and unique allocation/nonce and
+serialized nonce pairs; each recorded AEAD nonce is below the rejection bound.
+The allocation stamp is `internalId`, not a recyclable store slot. The
+packet-to-reservation association is used inside the proof but is not an extra
+headline conjunct. Completeness of the AEAD journal is by construction/audit.
+Native rejection and guarded rekey contracts are separate function-level claims.
+No H1 premise remains in this nonce theorem.
 
-The existing C3 carry replays as `8ec35a98`: thirty-nine modules, 58 lines
-retyped or adjusted on each side. Dump generation parameters use `UInt32`;
-route-generation reads use the word's numeric value, matching the mirror.
-No theorem or frame is added or removed by this carry, and no resource option
-changes. All four C3 result directories, including their terminal statements,
-match the pre-rebase head exactly. No additional C3 repair is needed.
+**Both wordings and finding.** Before October 18, the limit clause prohibited
+later encryption under a key after its counter reached the limit. The amended
+clause rejects further staging admission and restores the batch; an earlier
+admission may still encrypt with its unique, below-limit nonce. This changes
+the cancellation clause, not uniqueness or the bound on encrypted nonces.
+No initialized T1 limit counterexample was reproduced. C3-F1 and R5 give the
+related validity/expiry evidence; a counter gap is not a nonce collision.
 
-The earlier inherited-layer carry is subsumed by main's landed repair and
-is absent from the rebased commit series. All inherited proof files and the
-mirror match main. Register conflicts preserve main's current C1/C2 rows and
-C3's historical records. The old source pins remain available through
-`refs/archive/proofs-campaign-3-pre-eba3c2b6` for the historical recipes below.
+**Effort.** Substantial shared observer/material work, smaller than T2's source
+closure. It shares `TransmitSecurity`, `HandshakeSecurity` and the causal
+journal with the other outcomes; file counts are not independent result costs.
+Historical wall time was not measured. Landing repair trims the docstring's
+unexported packet-assignment claim. Its files include grandfathered raises.
 
-Validation at `da621504`: the full proof gate returned zero after 6677 build
-jobs and 2448 terminal declarations across nineteen roots. Axioms are limited
-to `propext`, `Classical.choice` and `Quot.sound`; token/import checks pass.
-All fifteen counterexample recipes returned zero, including the three C2
-recipes omitted from the earlier scoped run. No warning or error was emitted.
-Fresh full-root kernel replay returned zero. All 6738 frozen Lean source
-hashes match across replay. These are complete aggregate checks on the review
-base; the former fixed-width blocker is resolved.
-Reproduce these checks with:
+**Ranked mirror changes that would simplify the proof (none adopted).**
+1. Factor the existing staging reservation loop and encryption prefix into
+   named operational helpers, retaining every choice in order — altitude-
+   preserving, but currently disallowed by the mirror rule.
+2. Store a proof-only allocation-history certificate in each packet — not
+   altitude-preserving; it introduces state the C does not carry.
 
-```sh
-capped -- scripts/in-bundle scripts/proof-gate
-capped -- scripts/in-bundle scripts/proof-counterexamples
-capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
-```
+## T2 — transmit authorization and conservation
 
-### Main advanced during validation
+**Architecture and claim.** `initialized_transmit_source_conservation` derives
+`NativeAccounting.AccountOrRecords` at the tree's declared `SourcePoint` cuts.
+It supplies an existential ledger at each point: every admitted ticket has one
+pending or terminal status, resident cells have ownership/backing, and terminal
+receipts have exact counts. A mutation interval may append only its actual
+pending records on the same WG state. The type does not export persistence of
+terminal status between two points. `transmit_source_children_are_closed`
+proves independence from five extension parameters; it is not a coverage theorem.
+The source audit in the [native-cut review](2026-10-19-review-campaign-3-t2-native-cut-closure.md)
+justifies the choice of cuts; finer sibling claims remain separately stated.
 
-[AGENT 2026-10-20] Keep this fixed-width handoff on its requested, fully
-validated `eba3c2b6` base. The concurrent `218d3ffd` landing changes the mirror's
-namespace-close and cleanup paths, parser domain and two-mode runner completion
-guard; carrying that change is a separate follow-on. Its integration record
-also assigns the now-refuted `NamespacePinPending` parser-acceptance recipe to
-campaign 2's follow-on. This report makes no passing-check claim for that newer
-mirror. All six C3 outcomes lag it until their source equations and frames are
-carried and the complete checks are repeated. No mirror finding is inferred
-from this unperformed carry.
+Binding is also in separate pieces: `recorded_admission_destination` gives the
+lookup/admission destination relation; `initialized_socket_route_key_core_and_endpoint`
+gives local socket validity, actual emitted bytes and endpoint, historical
+key/current-slot selection and key ownership; `initialized_socket_ciphertext_provenance`
+gives the earlier AEAD receipt. `Born` gives matching earlier plaintext, not
+an occurrence-identity equality tying that birth to the AEAD. `SocketReceipt.Valid`
+does not join its post-peer-read world to its socket-call entry. No single
+headline composes every peer/key/endpoint/packet edge. T3 supplies converse
+coverage of socket appends. Early refusal is charged by the separate
+`original_transmit_refusal_charged_once`, once per invocation, not per GSO item.
 
-## Historical T2 closure at `decb640d`
+**Both wordings.** The charter promised one obligation at every run point for
+packets admitted at `wgXmit`, and listed early `tx_errors` among their terminal
+dispositions. The implemented claim starts admission at a successful staging
+splice or creation of a new keepalive and quantifies over declared tree cuts;
+early refused `wgXmit` invocations remain outside that ledger and have their
+own named errno/one-charge contract. This admission-boundary and coverage
+reshaping is recorded here and in the register. Pending work need not finish.
+The original composed binding wording is represented by the separate pieces
+above; the missing joins are not claimed proved.
 
-The following records the pre-rebase checkpoint. Its source is unchanged at
-rebased `85d707da`; the current aggregate status is recorded above.
+**Findings and effort.** No new mirror defect was established. Tray 01's
+uncounted disposal paths remain intentional boundaries. This was the dominant
+campaign cost: source factoring, receipt intervals, native-point refinement and
+review-driven closure, with most of the 3,545 pre-review C3 files shared along
+that dependency graph. Historical wall time was not measured; the scale is a
+maintenance cost, not evidence of stronger coverage. Its files carry raises.
 
-The final claim is
-[`initialized_transmit_source_conservation`](../Leanux/Proofs/WG/TransmitSecurity/Statements.lean),
-paired with `transmit_source_children_are_closed`. Its only reachability premise
-is the original initialized `SourcePoint`; it requires no incoming account or
-child contract. The [native-source audit](2026-10-19-review-campaign-3-t2-native-cut-closure.md#final-source-audit-at-decb640d)
-and [conservation review dispositions](2026-10-19-review-campaign-3-t2-completeness.md#final-dispositions-at-decb640d)
-explain how the source refinements close each recorded gap. The audit does not
-substitute parameter independence for coverage. Historical key/peer selection,
-actual socket endpoints, the separate early-refusal counter theorem and T3's
-converse append coverage remain part of the T2 package.
+**Ranked mirror changes (none adopted).**
+1. Name existing queue mutation/receipt-adjacent operational phases without
+   changing state or branching — altitude-preserving; would reduce copied source
+   equations, but requires a separately authorized mirror factoring policy.
+2. Replace physical queue aliases by one linear logical-ticket store — not
+   altitude-preserving; it erases C data/control structure and makes conservation
+   true by representation instead of proving it.
 
-The thirteen C1/C3 roots pass 4509 build jobs. All 1569 terminal declarations
-are included in 2337 root/carry axiom queries; all are standard or empty. The
-167 focused public-declaration queries and the gate's token/import checks pass.
-Fresh `leanchecker --fresh C3FinalCheck` returned zero, with all 6738 frozen
-Lean source hashes unchanged. The root module contains exactly the thirteen
-imports of `a241295c^1:Leanux/Proofs.lean`; it excludes the six C2 roots.
-All twelve C1/C3 counterexample recipes pass (retrieved exit zero), including
-the retained R5 delayed-encryption and coherent-post-clear witnesses. The three
-C2 recipes were not run in this scope.
+## T3 — authenticated effects and silence
 
-The 2337-query set is reproducible from those current terminal declarations,
-public declarations in the sixteen and thirty-nine files changed by
-`bc9f2dc5` and `5b311948` (read at `5b311948`), and the fourteen declarations
-in `StagedCompleteReachedNativeSourceClosure.lean`, with duplicate names removed.
-The 167-query set uses that new module and `TransmitSecurity/Statements.lean`.
-Only `propext`, `Classical.choice` and `Quot.sound` are admitted. The final
-closure adds no frame, resource-limit increase or warning suppression.
+**Architecture and claim.** `AuthenticatedEffects.initialized_silence_security_outcome`
+packages occurrence-specific transmission authorization, named `Protected`
+effects, timer/work causal roots, handshake admission, replay and GRO provenance.
+A fixture root includes effects inside a fixture-initiated operation. It is not
+an independent noninterference theorem for each injected datagram. Transport
+endpoint learning is supplied by landed C2 H3's
+`Roaming.original_initialized_data_consumptions_authenticated_final`; it is
+not part of `Protected` or a conjunct of `SecurityOutcome`.
 
-After the scoped build below, reproduce the fresh replay and twelve-recipe
-speedbump without editing the aggregate root:
+**Both wordings and boundaries.** The charter's global silence wording becomes
+whole-run rooting for the enumerated events plus local refusal contracts.
+Qualifying cookie behavior is at most one source-bound 64-byte reply per
+invocation, smaller than that initialized input, not a run-wide rate bound.
+Refused-consumer equality is per completed native call; MAC bookkeeping and
+pre-AEAD invalidation exceptions are named. Later Stop retains receipts, while
+an internally stopped call is covered only by its prefix observations. No
+whole-world isolation or CPU/amplification budget across repeated invocations
+is claimed. The cryptographic primitives and cookie unforgeability are excluded.
 
-```sh
-capped -- scripts/in-bundle python3 - <<'PY_SCOPE'
-import re, runpy, subprocess
-from pathlib import Path
-source = subprocess.check_output(
-    ['git', 'show', 'a241295c^1:Leanux/Proofs.lean'], text=True)
-modules = re.findall(r'^import (\S+)', source, re.M)
-assert len(modules) == 13
-path = Path('.tmp/C3FinalCheck.lean')
-path.parent.mkdir(exist_ok=True)
-path.write_text(''.join(f'import {m}\n' for m in modules))
-subprocess.run(['lake', 'env', 'lean', str(path), '-o',
-                '.lake/build/lib/lean/C3FinalCheck.olean'], check=True)
-subprocess.run(['lake', 'env', 'leanchecker', '--fresh', 'C3FinalCheck'], check=True)
-replay = runpy.run_path('scripts/proof-counterexamples')
-excluded = {'h1-confirmation-incarnations', 'h5-namespace-pin',
-            'h6-initialized-giveup'}
-recipes = replay['RECIPES']
-assert len(recipes) == 15 and excluded <= {r[0] for r in recipes}
-replay['main'].__globals__['RECIPES'] = [r for r in recipes if r[0] not in excluded]
-raise SystemExit(replay['main']())
-PY_SCOPE
-```
+**Findings and effort.** No new mirror defect. The main work was factoring all
+append sites and joining causal timer/work receipts; refusal projections needed
+separate maintenance masks. Historical wall time was not measured. Landing
+repair makes the per-call scope and H3 dependency explicit. Its files carry raises.
 
-These are scoped results, not an aggregate proof-gate pass. At that checkpoint the C2
-failures below blocked aggregate validation. Main `eba3c2b6` resolves them;
-current post-rebase validation is recorded above. All sixteen inherited carry files match `bc9f2dc5`. Two C3 carry
-files were subsequently extended for dump/socket source coverage, as recorded
-at source-130 and source-131. No new differential claim, mirror finding, merge
-to main or push accompanies this proof checkpoint.
+**Ranked mirror changes (none adopted).**
+1. Name the existing post-authentication receive suffixes and socket append
+   helpers — altitude-preserving when choices and writes stay in order.
+2. Attach a proof-only authorization token to every timer and work item — not
+   altitude-preserving; the C has no such runtime field.
 
-## Historical carry to main `1f766662`
+## T4 — handshake replay resistance
 
-The inherited-layer carry is `bc9f2dc5`: sixteen C1 modules, with twenty-two
-repaired theorem declarations (twenty public, two private) and six source/data
-declarations. No theorem or frame is added or deleted. Dump parameters follow
-the mirror's `UInt32` generation, socket observers read the route word's numeric
-value, and the allowed-IP sequence proof uses word addition. The separate C3
-carry `5b311948` repairs thirty-nine result modules. No mirror or C2 file changes.
+**Architecture and claim.** Timestamp receipts, exchange epochs and session
+allocation receipts share the initialized causal journal. The stale-initiation
+claims preserve the consumed freshness state and refuse a response; the final
+response/session claims distinguish exchange epochs and one installation per
+exchange, including before Stop. Refused sessions preserve the WG state.
 
-Validation covers the thirteen imports of `a241295c^1:Leanux/Proofs.lean`:
-4457 build jobs, 1567 terminal declarations plus public declarations from repaired modules
-(2321 exact axiom queries in total), fresh kernel replay, the gate's token and
-import checks, and all twelve C1/C3 counterexample recipes. Every query uses
-only `propext`, `Classical.choice` and `Quot.sound`; all 6686 Lean source hashes
-match across the frozen replay. C3's validated mirror pin is now `1f766662`
-within this scope. The three newer C2 recipes are not included in this run.
+**Premises and both wordings (S1).** The charter's unconditional replay/install
+wording was reported as complete while `H1DriverSourceFacts`,
+`H1ConfigurationTagFrames` and `H1TrafficTagFrames` were unconstructed.
+`LandedH1TagFrames` and `LandedH1Exchange` now supply direct adapters from C2 H1
+on main. The direct adapter checks pass; full-tree validation is recorded below. The final role-slot/material
+headline still needs `H1ResponderCurrentEdges` and `H1SessionPlacement`; this
+result is conditional on those named local contracts, not complete. The latter
+requires final resident material/role slots, stronger than C2's released-slot
+freshness condition; the former concerns the complete sending-key core, not
+only the slot/tag projections. They need additional projection proofs, not just
+substitution of a headline theorem. No false premise or counterexample to them
+has been established. The H1 contract comments and adapter modules cite the landed C2 dependency.
 
-This is **not an aggregate proof-gate pass**. The aggregate build exposed C2's
-`TimerDiscipline/SendView.lean:34` (`SendConfiguration` still ends in `Nat`) and
-`Config/DeviceDumpSource.lean:19,101` (`prevSeq0`/`prevSeq` still use `Nat`). The
-latter also produced downstream elaboration timeouts. That build was stopped
-after the failures; these are the known blockers, not an exhaustive C2 carry
-inventory. C2 was untouched in this checkpoint. The subsequent carry landed on main
-at `eba3c2b6`; its current validation status is recorded above.
+**Findings and effort.** No new Rule Zero finding. Exchange tagging and final
+journal projection were substantial; direct H1 reuse is bounded adapter work,
+not a new replay proof. Historical wall time was not measured. The landing repair constructs the direct
+adapters; proving the remaining stronger packages is separate work. Its files
+include raises.
 
-The scoped build can be reproduced on this branch without selecting C2 roots:
+**Ranked mirror changes (none adopted).**
+1. Factor the original session rotation/clear suffix as a named operational
+   helper — altitude-preserving, reducing repeated source inversion.
+2. Store exchange epochs in native peer state — not altitude-preserving; the
+   epochs are proof-side history and are absent from the C.
 
-```sh
-capped -- scripts/in-bundle python3 - <<'PY_SCOPE'
-import re, subprocess
-source = subprocess.check_output(
-    ['git', 'show', 'a241295c^1:Leanux/Proofs.lean'], text=True)
-modules = re.findall(r'^import (\S+)', source, re.M)
-subprocess.run(['lake', 'build', *modules], check=True)
-PY_SCOPE
-```
+## T5 — responder key confirmation
 
-The ordinary aggregate claim-point commands remain `scripts/proof-gate`,
-`lake env leanchecker --fresh Leanux.Proofs`, and `scripts/proof-counterexamples`,
-through the bundle and `capped`; their full result awaits the C2 carry.
+**Architecture and claim.** Pending allocation tickets, promotion labels and
+responder key material share the transport journal. The final discipline links
+responder AEAD to an earlier accepted confirmation of the same allocation and
+requires distinct promotion labels, including retained inner receipts before Stop.
 
-## Carry to main `3f3879e0`
+**Premises and both wordings (S1).** The original headline was unconditional.
+The implementation took `PendingPromotion.H1DriverFrames` and
+`H1ResponderCurrentEdges`. `LandedH1PendingFrames` constructs the direct frame
+fields from C2 H1; their direct check passes. Its aggregate still takes
+`H1PendingPromotionEdges`, whose confirmation clause names the actual actor and
+whose session clause includes bounded/unique pending-store transport. H1's
+abstract `Step` alone does not retain the required actor equality. Together
+with `H1ResponderCurrentEdges`, these remain unconstructed local premises in
+the final claim. Thus the result remains conditional, not complete; replacing
+these packages by initialized confirmation as an assumption would be circular.
 
-The separate inherited-layer carry consists of `74b03922`, `0c8f59fb`
-and `7a189c9e`, in that order. It repairs 48 landed modules and adds two
-helpers. No mirror file, C3 result directory or existing theorem signature
-is changed by those commits; no theorem or frame is deleted.
+**Findings and effort.** No new mirror finding. Pending-store frames and journal
+transport dominate this outcome; direct frame reuse avoids reproving them.
+Historical wall time was not measured. Its files include grandfathered raises.
 
-| Landed change | Carry |
-| --- | --- |
-| Occupancy plus refills | Align activation copies and exact source equations; record each saved-peer read in the lifetime refill observer. |
-| Pending-work lifecycle | Retain pending empty-ring dispatch, propagate its store frames, and include pending-unit refusal in wait and operation completion copies. |
-| Dump cancellation | Capture the peers-nest snapshot before reserving the header and align the dump observer and source factors. |
-| Dependent proofs | Transport the new atoms through existing preservation contracts; give two expanded runner proofs local heartbeat budgets. |
+**Ranked mirror changes (none adopted).**
+1. Name the existing promotion and post-confirmation suffixes — altitude-
+   preserving; would reduce source-equation duplication.
+2. Make a native key type encode that a responder was confirmed — not
+   altitude-preserving; it replaces a behavior to prove with a typing assumption.
 
-The public native store/view frame delta is six additions, three repairs
-and zero deletions, plus two private read-frame helpers. Source-equation and observer-preservation repairs are separate
-from that count. The five scoped C1 result targets pass 970 build jobs; the
-anti-replay `Bounds` follow-up passes 102 jobs. The former runner proof
-budgets failed before the local increases; these were elaboration and
-compilation failures, not mirror findings. The mirror's existing `String.mk`
-deprecation remains outside this proof-only scope.
+## T6 — reference-aware key retirement
 
-Validation used a detached copy of `3f3879e0` with exactly the three carry
-commits, in the order above. Its final gate passes 975 build jobs and 895
-terminal declarations across nine roots, with only `propext`, `Classical.choice`
-and `Quot.sound`. All eight additional public-declaration axiom queries pass;
-fresh root kernel replay exits zero; all twelve counterexample recipes pass,
-including both retained-key witnesses. All 983 frozen Lean-source hashes match,
-and the clean validation tree matches the parent series on all fifty carry
-paths. The earlier two-commit gate failed solely at the old `Bounds` heartbeat
-limit; `7a189c9e` repairs that failure.
+**Architecture and claim.** `reference_aware_retirement_outcome : Outcome`
+has eighteen documented fields, not one end-to-end retirement run theorem.
+`txChecks`, `rxChecks` and `ageCheck` are universal native check-site contracts;
+rejection fields establish local invalidation. `initializedAccess` cites R2's
+initialized audit safety, while `initializedCredits` is a final successful-run
+holder account. `derivedArm` is per call, `selectedArm` is initialized timer
+provenance, and `timerDispatch` requires a live entry. Worker and release fields
+are implications from actual successful calls; final removal requires entry
+refcount one. Removed-read/acquire fields concern that call's entry, not
+permanent absence. Authenticated RX cleanup obeys the same final-reference rule.
 
-Reproduction on a detached copy of main `3f3879e0` with only `74b03922`,
-`0c8f59fb` and `7a189c9e` applied:
+**Both wordings and boundaries.** Original T6 forbade encryption with invalid
+or expired sending keys even for retained work. The October 18 replacement
+checks validity/age at TX admission and validity/age/count before RX decryption.
+Slot/index unpublication does not destroy a packet-held reference. Previously
+admitted packets may encrypt after expiry or unpublication, with **no time or
+count bound proved**. The headline does not itself link delayed AEAD to its
+admission certificate. `initialized_conditional_tx_retirement` and RX companions
+are separate runner compositions with supplied dispatch, worker and last-reference
+release premises. Neither fairness nor physical memory zeroization is proved.
 
-```sh
-capped -- scripts/in-bundle scripts/proof-gate
-capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
-capped -- scripts/in-bundle scripts/proof-counterexamples
-```
+**Finding and effort.** C3-F1 is the retained statement artefact documented
+below, using R5's two existing witnesses. Holder accounting and all release arms
+were substantial; unconditional progress was never obtained by hiding scheduling
+premises. Historical wall time was not measured. Its files carry grandfathered
+raises. The landing repair documents all eighteen domains explicitly.
 
-The coordinator owns integration into main; no main update or push has been
-performed. The separate C3 commit `38efba22` repairs twenty-six campaign
-modules and passes the 4181-job root build. Its native source paths retain
-both occupancy and refill reads, pending-device selection, section-start
-pending-bit clearing and the new completion guards. No security outcome
-statement changes. Combined C3 validation passes at source-79 `8d9bfbca`, including all eleven source-78 helpers and forty-seven saved handoff modules. T2's initialized native-cut obligation remains open. Preparation and its initialized worker connection are subsequently closed at source-80 `0fc64409`; the remaining caller graph is still open.
+**Ranked mirror changes (none adopted).**
+1. Name each existing clear/unpublish/final-release suffix — altitude-preserving,
+   reducing duplicated call inversions without changing ownership.
+2. Cancel queued encryption or erase material when a slot is cleared — not
+   altitude-preserving and behavior-changing; R5's witnesses exercise the C's
+   retained-reference behavior that this would remove.
 
 ## C3-F1: invalidation and clearing do not cancel previously admitted encryption
 
@@ -309,14 +308,15 @@ with empty plaintext.
 | `r5-delayed-encryption` | Session material is derived at 132 seconds. Nonce 1 is staged at 311 seconds, before the 312-second deadline. At 322 seconds, a later staging attempt invalidates the same sending key. The earlier packet then produces its expected ciphertext before queued handshake work runs. |
 | `r5-coherent-post-clear` | The later expiry check occurs at 679 seconds, after the zero timer's bucket becomes due at 678.832 seconds. The clear worker empties the slots and removes the index entry. One queued packet retains the same key allocation and then encrypts; transmission releases the packet and final key reference. |
 
-Reproduction from the campaign worktree:
+Individual reproduction from the repository root:
 
 ```sh
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
 set -o pipefail
 python3 -B docs/proof-campaign-replay.py r5-delayed-encryption |
-  capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/KeyLifetime/ReplayDelayed.lean
+  cap lake env lean --run Leanux/Proofs/WG/KeyLifetime/ReplayDelayed.lean
 python3 -B docs/proof-campaign-replay.py r5-coherent-post-clear |
-  capped -- scripts/in-bundle lake env lean --run Leanux/Proofs/WG/KeyLifetime/ReplayDelayed.lean
+  cap lake env lean --run Leanux/Proofs/WG/KeyLifetime/ReplayDelayed.lean
 ```
 
 **Classification and disposition.** This is a recurrence of an established
@@ -349,426 +349,47 @@ No initialized nonce-limit counterexample has been reproduced here, so this
 was a wording concern, not a second established replay finding. The charter
 now distinguishes the limit's admission refusal from already admitted work.
 
-## Proof structure and boundaries
+## Landing-review dispositions
 
-[AGENT 2026-10-19] The six outcomes use initialized claims where history or
-identity matters and universal native source contracts at fixed check/release
-sites. T1 and amended T6 do not require a second observer merely to restate
-those universal contracts. Their operational progress clauses retain the actual
-source calls and reference counts explicitly.
+| Item | Disposition |
+| --- | --- |
+| B1 | Corrected the false campaign-wide resource claim, with the census scope and grandfathering decision above. |
+| S1 | Direct landed-H1 adapters are supplied; the remaining named premises keep T4/T5 conditional. The direct adapters elaborate without additional resource settings. |
+| S2 | T2 now says declared cuts, per-point existential accounts and audited coverage; headline binders are explicit and both admission-boundary wordings are recorded. |
+| S3 | Binding is described as separate pieces, including the plaintext/occurrence and socket-world join boundaries. |
+| S4 | All eighteen T6 fields have domain docstrings; the report and register state unbounded retained work and separate conditional runner retirement. |
+| S5 | Both T1/T6 wordings and the October 18 user amendment are recorded in the report and decisions file. |
+| S6 | T3 names H3's transport endpoint result and the per-invocation, per-call and fixture-root scopes. |
+| S7 | Six per-result reports and Results-table rows replace the campaign's tranche logs and stale open/complete claims. |
+| S8 | Reproduction uses the current clone's root and scripts, with an optional cap wrapper; private-ref recipes are removed. |
 
-The shared parameterized driver follows the native actors, configuration,
-lifecycle, timer wheel, deferred drains and initialized Runner. Its observers
-retain internal cuts and stopped prefixes, and exact projections recover the
-prior observers and original execution. Endpoint equality alone never supplies
-an internal invariant. Claims use projections of WGWorld; frame proofs remain
-in separate files. The mirror is unchanged. The separate C1 carry repairs
-observer definitions and proof bodies while retaining existing theorem signatures.
+The related N1–N3 notes are reflected in the observer-completeness boundary,
+T1's trimmed encoding docstring and function-level rejection wording. None of
+these documentation corrections adds a coverage or progress theorem.
 
-The source structure records these choices:
+## Validation and reproduction
 
-- Encryption identity pairs the device epoch with a packet slot; key material
-  uses the actual key allocation stamp. A single certified reservation bank
-  joins assignment, material, nonce and wire encoding. Numeric slot equality
-  alone does not identify an allocation.
-- Timer and send-work receipts name actual arms/enqueues and their context.
-  Nested lifecycle drains use the shared send callback. Timer scopes close on
-  normal callback return; stopped scopes retain their actual unfinished prefix.
-  Fixture causes occur only around the guarded local send operations.
-- Buffered GRO input has its own candidate, accepted replay and earlier AEAD
-  occurrence. The generic history interface accepts complete native-poll and
-  handshake contracts so authentication is proved at their real source cuts.
-- The existing packet-origin carrier now checks completion entries as well as
-  AEAD receipts. Its full initialized transport is reused. A head certificate
-  justifies the completion's causal ancestor; it does not substitute for each
-  emitted packet's separate ciphertext certificate.
-- Nullable key-owner bookkeeping is not immutable. Successful native peer
-  acquisition at admission supplies a non-null owner and an exact peer credit;
-  current-slot compatibility then identifies that owner with the selected peer.
-  The local entry premises stay visible until their initialized join is proved.
-- Queue aliases are representations of one obligation. Resident uniqueness
-  alone does not prove coverage of all admitted packets. T2 still requires the
-  routed/staged occurrence chain and complete pending/terminal accounting.
+The post-review full gate and counterexample speedbump are pending. Main's
+shared carry records one known speedbump lag: C2's `h5-namespace-pin` recipe
+still expects parser acceptance that mirror `218d3ffd` intentionally refuses.
+This campaign does not edit C2's files or reinterpret that failure as a pass.
 
-Campaign-1 reuse is explicit: R1 supplies replay-window facts; R2's
-`LifetimeSafety.runner_initialized_access_safety` supplies allocation-lifetime
-safety; holder/credit contracts separately establish reference accounting;
-R3's `CryptokeyRouting.parsed_initialized_transmit_authorization` supplies
-selection-time routing authorization; R5 supplies native admission/attempt
-checks and the retained-work counterexamples; R6 supplies the cookie gate's
-local contracts. The cookie exception is not a reply-rate bound.
-T6's `Outcome.initializedCredits` is a normal-Runner-endpoint census; it does
-not assert that census at arbitrary internal cuts. `selectedArm` identifies
-the actual prior zero-arm occurrence, while `derivedArm` is the separate
-native session-derived contract. Actual successful dispatch, worker and final
-release calls and the stated residual reference conditions remain premises.
-No fair-drain, no-orphan or bounded-latency result follows from this package.
-
-Campaign 2 remains a read-only dependency. Its report was read at `ca860a24`,
-with H1 initially named at `3407cbff`; operational tag/frame interfaces are
-pinned at `5177bd9c`. Final claims retain named hypotheses such as
-`H1ResponseEdges`, `H1SessionEffects` and `H1ResponderCurrentEdges`. The new local pending-promotion interface names
-`H1PendingPromotionEdges` from read-only C2 pin `7ff94e48`; its initialized
-transport now closes through the native runner, with the local facts collected
-in `PendingPromotion.H1DriverFrames`. No campaign-2 fact is silently discharged and no
-campaign-2 file is edited.
-
-[AGENT 2026-10-19] Routing and keepalive births use positions in the same
-final journal, packet ordinals, device epochs and peer allocation stamps.
-Keepalive preparation is recorded at its actual source; T3 supplies its causal
-root separately. Equal payloads do not identify occurrences. Historical key
-ownership is retained at admission, since retirement may clear the later owner
-word. Complete initialized transports now join staging, allocation, AEAD and
-socket receipts without incoming carriers. The live birth bank also supplies
-cross-allocation injectivity. These facts do not establish forward conservation.
-
-The [staged-origin review](2026-10-19-review-campaign-3-staged-origin.md) and
-[conservation review](2026-10-19-review-campaign-3-t2-completeness.md) remain the
-T2 disposition record. Historical ownership is repaired. Local fixed-ticket disposal is proved. First terminal outcomes separated
-from later cleanup and initialized stopped caller-local frontiers remain open. Native scheduler/deferred-call proofs supply TX service;
-the destructor's disposal cut retains its explicit idle-entry premise.
-
-[AGENT 2026-10-19] Staged disposal uses callback-parametric source cuts for purge
-and peer release. Concrete native instances discharge neutrality; generic
-contracts retain callback premises. Actual input, disposal and outer send-result
-observations extend the final journal, so every positional invariant is paid
-against the resulting history. Exact old-journal projection remains required;
-token positions across different event vocabularies are not equated.
-
-The original transmit front distinguishes completed invocation refusal from
-successful splice admission. `-EPROTONOSUPPORT`, `-ENOKEY`,
-`-EDESTADDRREQ` and `-ENOMEM` charge the optional device error projection
-once; GSO list length does not multiply the charge. A stopped prefix is not
-a completed rejection. The independent raw observer records the actual
-socket append, and its exact final-journal projection maps every raw position
-to its own authorization receipt, including stopped prefixes.
-
-[AGENT 2026-10-19] Conservation uses one fixed ordered ledger of birth
-tickets. A ticket has one pending location or one first terminal result;
-terminal results persist through later cleanup. Admission appends only fresh
-source-position/ordinal tickets. Native counted purge and final peer release
-now settle the exact incoming queue tickets, preserve the ledger and all other
-queues, and expose the same native counter increment. The release receipt
-precedes the suffix that can stop. Exact frames quantify over missing queues,
-so deletion cannot hide an obligation by falsifying a residency premise.
-
-The local ledger and new source factors are included in the current aggregate
-build. The factors expose staging take/restore, TX publication and nested
-consumer/RX/dump repayments. Allocation is total from a resident device;
-there is no fictitious partial-allocation event. The new cuts and their carrier adapters are integrated into the shared final
-driver and pass the aggregate gate and fresh kernel replay.
-T2 remains open: selected and allocated tickets need native backing, terminal
-classification and stopped-frontier transport through the initialized Runner.
-The algebra alone is not a conservation claim.
-
-T3's package at `f7370e9d` closes the local per-input cookie cardinality and
-complementary refusal-state proof gaps. `RefusalOutside.full` retains every
-WG field and complete pointwise peer/keypair records, abstracting only the
-maps’ balanced-tree representation. `MacWorld.view` masks only the under-load
-timestamp, cookie secret/birthdate and rate-limit tables. Endpoint and session
-authorization use the actual pre-effect handshake and replay guards, separately
-from the protected timer/work-event predicate. The package assumes no entry
-funding, replay coherence, causal well-formedness or C2 hypothesis. The aggregate
-gate and fresh kernel replay pass; T3 is complete with the stated boundaries.
-
-The source-44 integration exposes actual staging take/restore, TX publication,
-terminal disposal and nested reference release in the final Driver. Exact
-native and old-journal projections preserve the completed outcomes. Local
-allocation assignment joins selected tickets to the actual distinct allocator
-IDs, preserves older pending cells and retains all terminal entries. Native
-admission appends fresh source-position/ordinal tickets; refusal and overflow
-retain their exact invocation-level counter charges.
-
-A stopped take/borrow result retains the completed take receipt and its exact
-selected tickets even when the outer selection receipt never appears. This
-closes that local stopped cut. Normal restoration composition still has a
-trivial error postcondition and is not a proof of general stopped-frontier
-conservation. The first-terminal source facts and local allocation backing
-remain conditional on explicit incoming carriers. T2 still needs their
-transport through the initialized Runner and the complete fixed-ticket
-pending/terminal partition.
-
-The source-45 tranche distinguishes a pending allocated ticket from a terminal
-ticket whose native cell awaits cleanup. Converse cell coverage and mixed
-pending/debt uniqueness are explicit local carriers. Actual socket/refusal cuts
-create the corresponding cleanup debt; ordinary source cleanup discharges it
-without inventing another terminal event. Native allocation/publication and
-front selection/body contracts compile under visible entry obligations. The
-actual front charges one error per refused invocation, independently of segment
-count. These local source facts do not establish initialized conservation.
-
-The new core ledger uses a canonical birth list computed from the final journal,
-so its domain cannot omit an admission by choosing a smaller list. Native
-staging take, restoration and all three keepalive-preparation cases transport
-the combined queue and physical carriers. Composition caught an incorrect draft
-birth guard: preparation can return true for an already nonempty staged queue.
-The corrected domain requires a true result and an empty pre-queue, matching the
-native allocation arm and the existing birth relation. This was a proof-model
-error, not a mirror finding. The source-45 additions pass aggregate validation below. Exact native allocation,
-purge, overflow, final/nonfinal release and routed admission now transport the
-combined core ledger. The whole observed front also retains canonical queue
-accounting at its last completed stopped checkpoint. Whole completion batches,
-stopped ownership frontiers and full initialized transport remain open.
-
-The source-46 continuation adds a concrete selected-batch frontier at the actual
-take receipt. Only nonconsuming selection/nonce events may follow while that
-frontier owns the batch. Native borrow, checks, reservation and the no-key
-prefix preserve it; restoration establishes its own receipt-bound Core cut.
-The checked loop supplies the exact ordered plaintext/peer/key batch to its
-submission callback. Native refusal disposal, queue installation and whole
-completion sequencing have local source contracts with explicit stopped
-ownership obligations; concrete callback discharge is continuing. The whole
-transmit front now derives Core at normal return or its actual stopped
-checkpoint from the incoming Core alone. These additions pass aggregate validation below.
-
-A separate semantic gap in the proof carrier remains explicit: Core's domain,
-queue and physical properties alone do not justify arbitrary terminal labels
-or bind an allocated ticket to its original birth. Separate source receipt evidence and
-birth-to-allocation carriers now compile, including strict birth-before-terminal
-ordering and whole-front normal/stopped transport. The richer selected carrier
-preserves both through checked nonce traversal, restore and native allocation;
-restore/allocation clear every selected location. Initialized transport of these
-carriers remains open. No initialized
-T2 claim is made from Core alone; this is a proof-surface gap, not a mirror
-counterexample.
-
-
-The source-47 continuation joins a complete initialized entry bundle: Core,
-terminal provenance, allocation lineage, empty selected locations, packet
-allocation bounds and native TX ownership. Actual front, take, keepalive and
-restore now transport that bundle. The selected nonce source retains allocation
-preconditions through borrow and checks; actual owner acquisition and allocation
-produce the full unpublished entry. The no-key path recovers full entry at its
-restore cut. The whole actual staging source now composes those joins; create
-and queued-initiation callbacks remain explicit pending their source discharge. Completion now has an indexed cursor sharing the
-entry's exact ledger and cleanup debts; its send/free/timer joins remain open.
-These local results pass the aggregate checks below; initialized T2 conservation remains open.
-
-Source-48 local joins retain full Entry through native queue admission, both peer-release observers, queued initiation and refusal frees. The actual transmit/keepalive composition now leaves only its creation callback open; completion uses indexed settlement and cleanup. Exact normal refusal-debt restoration, enclosing source transport and historical terminal completeness remain open. These local joins pass the source-48 aggregate checks below; they do not establish initialized conservation.
-
-Source-49 local joins derive pending-ticket evidence at the actual allocator and discharge the real creation callback, including exact original-debt restoration after refusal. Full transmit and keepalive now compose without an assumed creation or queued-initiation callback. Counted purge, encryption, receive maintenance and the family-selected completion send retain the full Entry bundle. Stop certificates remain local source frontiers; initialized transport and the converse historical terminal relation are still open. The 3321-job combined root build and eleven focused standard-axiom queries pass. Source-49 has not yet repeated the aggregate gate or fresh root replay; the last fully validated checkpoint is `13d285cf`.
-
-Source-50 local joins cover actual TX selection and DEAD repayment, all send-result arms and nested completion release, receive finishing and timer callbacks, and native key creation, confirmation and clearing. Idle selection derives its pending batch from empty cleanup debts. Retirement algebra proves that empty native staged/TX ownership leaves no pending ticket; the lifecycle caller must still establish that quiescence before reset. The combined root build passes 3344 jobs and fourteen focused queries use only standard axioms. Whole initialized conservation and the converse historical terminal relation remain open. These local joins pass the source-50 aggregate checks below; they do not close initialized T2 conservation.
-
-Source-51 joins the complete native TX worker up to its explicit crypted-completion contract. Indexed send/free loops retain each settlement and restore empty cleanup debt; disposal retains the actual peer-release successor. All five timer callbacks, native handshake checking paths, configuration metadata and routing edits now have full-entry contracts. Peer creation preserves the exact old staged queues under the visible native peer-slot bound. The combined root passes 3367 jobs and fifteen focused standard-axiom queries. Whole initialized transport and historical terminal completeness remain open; source-50 `78cbb619` remains the last aggregate gate/replay checkpoint.
-
-Source-52 defines receipt-to-terminal completeness on the same ledger, proves exact fresh-position settlement and old-receipt preservation, and pairs it with full Entry in `CompleteCarrier`. Passive reuse requires terminal-quiet history explicitly. Native removal and down now compose counted disposal with the still-explicit handshake-work drain. The combined root passes 3375 jobs and nine focused standard-axiom queries. These are local source and algebra joins; initialized conservation and converse transport remain open. The last aggregate gate/replay checkpoint is source-50 `78cbb619`.
-
-Source-53 composes full Entry through native handshake checking and the complete handshake worker, flushed send/clear workers, saved configuration metadata writes, configuration tail and interface opening. Fresh completion rekeying derives its own borrow and exact nonfinal repayment. Purge and both peer-release observers now retain Entry and terminal completeness on the identical successor ledger, including actual stopped cuts. The combined root passes 3396 jobs and fourteen focused standard-axiom queries. Whole initialized conservation and converse transport remain open. This checkpoint, `51c7344a`, also passes the aggregate gate, fresh root replay, all twelve counterexample recipes, default model build and unit suite.
-
-Source-54 closes the Entry-only crypted completion callback and composes actual peer/device configuration, opening and removal. Native allocation freshness is transported on the same observed run. Admission and creation retain terminal completeness on the same ledger, including refusal and stopped cuts; the release evidence is derived from actual reference funding. The combined root passes 3424 jobs and seventeen focused standard-axiom queries. Initialized conservation and whole-history terminal completeness remain open. The last aggregate gate and fresh replay checkpoint remains source-53 `51c7344a`.
-
-Source-55 pairs terminal completeness with forward accounting through actual front admissions, keepalive births, take/allocation/restore, socket results and ordinary completion cleanup. The paired handshake/send/clear workers, send drain, removal/down and peer/device configuration now compose; staging and keepalive callbacks remain explicit in configuration until their paired whole-source join. The root passes 3460 jobs and eighteen focused standard-axiom queries. Initialized conservation, the remaining completion/staging joins and reset quiescence are open. Source-53 `51c7344a` remains the last aggregate gate and fresh replay checkpoint.
-
-Source-56 closes paired whole staging, keepalive and routed transmit, the crypted completion callback, and concrete configuration. Full receive polling, tagged GRO/stack replies, all five timers and both NAPI paths retain the identical ledger and terminal completeness. The paired product-state carrier and native scheduler composition retain explicit worker contracts; stopped prefixes preserve their actual selected or intermediate-cleanup cut. The combined root passes 3495 jobs and twenty-four focused standard-axiom queries. Initialized conservation, the remaining worker/runner joins and reference-aware reset quiescence remain open. This checkpoint, `5a802513`, also passes the aggregate gate, fresh replay and all twelve counterexample recipes.
-
-Source-57 closes the whole paired TX worker, including DEAD disposal and the original stopped settlement chain. Concrete encryption, ring polling and decryption preparation now join native allocation safety; full NAPI, timer dispatch, deferred and traffic wrappers compose the exact callbacks. Guarded device creation retains the old ledger, and namespace cleanup is a frame. Destruction retains the same ledger after a checked quiescent cut; its reference-accounting premises remain explicit. A new upper bound shares C1's actual holders with the lower funding bound through creation, payment, detachment and receive/stack transfers. The root passes 3532 jobs and thirty focused standard-axiom queries. UDP ingress, remaining administrative/worker joins, initialized reference-account transport and final T2 conservation remain open. Source-56 `5a802513` remains the last aggregate gate and fresh replay checkpoint.
-
-Source-58 closes actual UDP ingress, scheduled TX/send/clear workers, dump cursor callbacks and every retained administrative arm. The concrete scheduler, deferred work and traffic wrappers compose without callback premises. The exact outer syscall composition leaves only the destruction contract explicit; this is not initialized T2 conservation. Native RX acquisition/allocation/selection/payment/free and TX selection/disposal now carry both peer-reference bounds on the same holders, with temporary RX phases separated from stable queued carriers. The combined root passes 3553 jobs and thirty-three focused queries use only standard axioms. Initialized upper-account transport, reset discharge and the final T2 claim remain open. Source-58 `57598814` passes the aggregate gate, fresh root replay and all twelve counterexample recipes.
-
-Source-59 extends the exact peer-reference account through native dump cursors, send/clear drains, single and bulk removal, full handshake workers, TX completion, RX enqueue outcomes and all timer callbacks. Peer configuration now retains the same account through actual lookup/creation, early cleanup, routing edits and removal. The combined root passes 3593 jobs; thirty-eight focused queries use only standard axioms. Whole RX polling/admission, scheduler transport, lifecycle reset discharge and initialized T2 conservation remain open. Source-59 `782432ab` also passes the aggregate gate, fresh root replay and all twelve counterexample recipes.
-
-Source-60 completes the exact peer account through whole RX polling, native ingress and crypt workers, scheduler/deferred composition, complete device configuration, routed transmit and lifecycle controls. Deletion exposes the same account and positive resident references at its actual prepared guard; successful native guards derive the empty RX ledger. The original runner now supports a stronger idle operation entry and a weaker syscall endpoint, using its real final guard and retaining stopped journals. The combined root passes 3633 jobs, the 1523-declaration gate and thirty-eight focused standard-axiom queries. Outer traffic/account transport, the packet-ledger reset join and initialized T2 conservation remain open. Source-60 `d672ba3e` also passes fresh root kernel replay and all twelve counterexample recipes.
-
-Source-61 closes native outer traffic and every syscall companion, actual guarded packet deletion, and initialized accounting for the returned journal. The same-ledger consequence layer adds pending-location predicates, terminal uniqueness and exact receipt cardinalities; the selected branch now retains native ownership at its recorded take. The combined root passes 3671 jobs. The [cuts review](2026-10-19-review-campaign-3-t2-cuts.md) identifies two remaining obligations: all internal prefixes, and an actual source-cut relation for the accounted snapshot. A separate prefix foundation is integrated; neither it nor the endpoint theorem discharges those obligations. Source-61 `9d2511bb` passes the 1523-declaration gate, 243 focused standard-only axiom queries, fresh root kernel replay and all twelve counterexample recipes. All 3624 frozen proof hashes match; the 916 inherited proof modules, main and mirror are unchanged.
-
-Source-62 adds actual normal runner endpoint correspondence, active admission/staging/disposal prefix contracts, source-matched completion projections and concrete snapshot anchors. Product and passive composition retain all earlier logical prefixes; scheduler composition leaves its worker contracts explicit. Native interval provenance and whole initialized prefix coverage remain open. Source-62 `e97ff936` passes the 3700-job root build, the 1523-declaration gate, 132 focused standard-only axiom queries, fresh root kernel replay and all twelve recipes. All 3653 frozen proof hashes match; the 916 inherited proof modules, main and mirror remain unchanged.
-
-Source-63 closes initialized logical-prefix accounting: `CompletePrefix.Runner.reached` and the exported `initialized_every_journal_prefix_accounted` cover every prefix of the original journal on normal completion or Stop. Concrete TX, crypt, receive, handshake, timer, scheduler, traffic, dump, configuration and guarded deletion sources discharge every callback premise. Fixed native selection/dequeue and queue-install prefixes retain their matched same-ledger cuts; this does not yet connect every accounted snapshot to an initialized native cut or cover all silent intervals. The first cuts-review gap is closed; the second remains open, so T2 remains open. Source-63 `eb4f48cc` passes 3801 build jobs, the 1524-declaration gate, 392 focused standard-only axiom queries in 101 delta modules, fresh root replay and all twelve recipes. All 3754 frozen proof hashes match; the 916 inherited proof files, main and mirror are unchanged.
-
-
-Source-64 `e5d73508` derives initialized native dispatch entry through the original numeric operation prefix and syscall guards, retaining the exact continuation. Partial native allocation retains selected-ticket aliases before its receipt; publication, send and DEAD cleanup retain fixed source intervals and matching accounts. These local cuts still require complete initialized caller composition. T2 remains open. Validation: 3825 build jobs, 1525 terminal declarations, 90 standard-only public theorem queries across 24 new modules, fresh root replay and all twelve witness recipes; all 3778 frozen hashes match. The 916 inherited proof files, main and mirror are unchanged.
-
-Source-65 `f2a9731f` derives actual initialized return-callback accounts and post-transmit crypt/send entries, preserving their original continuations. Staging now derives take/borrow/guard outcomes and allocation preconditions from its incoming concrete account; failed send-loop prefixes and every ordered DEAD cleanup boundary retain their matched ledger and native source. The full initialized internal-cut composition remains open. Validation: 3848 build jobs, 1526 terminal declarations, 79 standard-only public theorem queries across 23 new modules, fresh root replay and twelve witness recipes; all 3801 frozen hashes match. The 916 inherited proof files, main and mirror are unchanged.
-
-Source-66 `da445410` connects the initialized routed-send entry and first post-transmit crypt scheduler to their original continuations. Stopped crypted completion now retains a fixed worker prefix, matched ledger and cleanup debts. Native DEAD erasure carries an explicit pending receipt until its exact total emission suffix finishes on the same world; the old resident-cell account is proved inapplicable during that interval. Complete initialized internal-cut composition remains open. Validation: 3868 build jobs, 1527 terminal declarations, 65 standard-or-empty public theorem queries across 20 new modules, fresh root replay and twelve witness recipes; all 3821 frozen hashes match. The 916 inherited proof files, main and mirror are unchanged.
-
-Source-67 `7e1ea08f` connects the original initialized routed front, its pre-receipt native world, post-transmit scheduler activation and TX-worker entry. The same paths retain fixed bounded loop prefixes, actual crypt-ahead execution, matching worker failure ledgers and original continuations. Local transmit paths also derive staging alternatives and partial-allocation intervals; other initialized caller roots and native interiors remain open. Validation: 3888 build jobs, 1530 terminal declarations, 94 standard-or-empty public theorem queries across 20 new modules, fresh root replay and twelve recipes; all 3841 frozen hashes match. The 916 inherited proof files, main and mirror are unchanged.
-
-Source-68 `f11eadfe` connects the original selected return callback and post-transmit send drain to send-worker entries and their nested scheduler iterations. Direct encrypt activations and TX crypt-ahead retain the actual selected poll item, intervening softirq state, initialized encryption entry and original continuation; TX entries from both scheduler callers retain matched failure accounts. These are concrete entry bridges, not exhaustive native-interior coverage. Validation: 3904 build jobs, 1534 terminal declarations, 77 standard-or-empty public theorem queries across 16 new modules, fresh root replay and twelve recipes; all 3857 frozen hashes match. The 916 inherited proof files, main and mirror are unchanged.
-
-Source-69 `2443f3be` connects the initialized routed front to its actual pre-release/trim/splice selection state. Every completed send-list prefix, including prefixes of successful calls, now retains its remaining-batch account, original completion-scope continuation and selected-worker packet capture on the same settlement chain. The combined root passes 3911 jobs and 38 focused standard-or-empty queries across seven new modules. These intermediate helpers do not close native-interior coverage. At that commit they had scoped validation only; source-70 below validates the combined delta.
-
-Source-70 `14a5f051` connects ordered encryption packet prefixes and publication entry to initialization, retaining the original batch and enclosing callback receipt. Actual overflow prefixes retain the same ticket cohort through removal-before-charge, and the initialized overflow receipt restores the complete account before splice. The send drain now has fixed native points and exact normal/stopped execution decomposition, with initialized composition conditional on three named delivery, send-worker and scheduler source contracts. This is not T2 closure. The combined source-69/70 delta passes 3929 build jobs, 1539 terminal declarations, 161 standard-or-empty public theorem queries across 25 new modules, fresh root replay and twelve recipes; all 3882 frozen source hashes match. The 916 inherited files, main and mirror are unchanged.
-
-Source-71 `8526e3e4` derives successful worker selection and every ordinary cleanup erase from initialization, consuming the already-recorded terminal debt at the native free. Encryption reads, byte writes and publication cuts retain the same batch and original runner continuation on normal and stopped paths. Peer release and purge retain their exact ordered cohort across native erasure and the later counted receipt; initialized publication reaches the fixed release prefixes with its original receipt origin intact. Canonical scheduler source points cover native bookkeeping and exact finite loops, conditional on the two named committed iteration and NAPI interior contracts. Other caller roots, remaining intervals and concrete child contracts remain open; this does not close T2. Validation passes 3967 build jobs, 1544 terminal declarations, 181 standard-or-empty public theorem queries across 38 new modules, fresh root replay and twelve recipes. All 3920 frozen source hashes match; the 916 inherited proof files, main and mirror are unchanged.
-
-Source-72 `e1156284` connects initialized routed take, worker socket result and publication release-finish intervals to their original continuations. Silent queue clearing preserves the ordered ticket cohort until the actual receipt transfers it to selection; socket results retain one existing receipt and one settlement on the same ledger. Native take, restore and keepalive classifications preserve exact order, counters and birth ordinals. Peer release-finish covers the timer guard and both work-list writes, including the busy-timer stop with its existing receipt. Other caller roots, concrete child contracts and unexpanded stopped socket-front interiors remain open; this does not close T2. Validation passes 3987 build jobs, 1547 terminal declarations, 131 standard-or-empty public theorem queries across 20 new modules, fresh root replay and twelve recipes. All 3940 frozen source hashes match; the 916 inherited proof files, main and mirror are unchanged.
-
-Source-73 `33251831` connects the initialized native dequeue setter to the original selected worker and runner. The exact cached cohort moves into the selected local on the same ledger before the existing write/removal events; those events add no terminal charge. Native peek/drop cases retain the actual first-read and queue-choice Stops. Canonical worker iteration now structurally fills the scheduler iteration contract, with all normal/Stop executions and source-built remainders; its eight deeper child contracts and external NAPI remain explicit. Other caller roots, child instances and remaining native intervals stay open. Validation passes 4003 build jobs, 1549 terminal declarations, 65 standard-or-empty public theorem queries across 16 new modules, fresh root replay and twelve recipes. All 3956 frozen hashes match; main, mirror and the 916 inherited proof files are unchanged.
-
-Source-74 `e3028f49` connects initialized native peek, routed staging selection and runner boundaries to their original continuations. Canonical NAPI now supplies scheduler NAPI and iteration softirq/IRQ-exit contracts; staging and runner source trees retain exact normal/Stop cases and explicit deeper child obligations. The runner boundary account does not claim all native interiors. T2 and the remaining caller/interval worklist stay open. Intermediate validation passes 4037 build jobs, the 1554-declaration gate and 110 standard-or-empty public theorem queries across 34 new modules; all 3990 frozen hashes match. Main, mirror and the 916 inherited proof files are unchanged. Fresh root replay and all twelve recipes last passed at source-73 `33251831`; they were not repeated for this helper checkpoint.
-
-Source-75 `223c63cf` closes the shared peer-release native point family: read, decrement, test, unlink, queue guard, erasure, receipt and release-finish retain their actual world and original continuation. Each cut has the same account or the exact pending receipt and successor; initialized publication and both NAPI/iteration release children use that proof. Canonical creation adds mark/install, EPIPE and refused-free joins; receive consumption and dispatch gain fixed source coverage, and dispatch composes with initialization. Universal creation/staging phase evidence, deeper native interiors and the remaining caller contracts stay open. T2 is not complete. The frozen 43-module delta passes 4080 build jobs, the 1557-declaration gate and 144 standard-or-empty public theorem queries. All 4033 frozen source hashes and 916 inherited files match; main and mirror are unchanged. Fresh aggregate kernel replay passes with retrieved exit 0, and all twelve counterexample recipes pass. This completes aggregate validation of the combined source-74/75 delta; the preceding full replay/recipes checkpoint is source-73 `33251831`.
-
-Source-76 `62e82ce5` derives every canonical creation point from the original unpublished account and pending batch, retaining a successor of that same ledger. Receive endpoint/key/timer helpers and wheel placement now have concrete source coverage; peer release remains shared. Canonical timer services compose through dispatch and initialization. Delivery has no deeper child and its source points and original remainder are derived without callback assumptions; the send drain uses that concrete delivery contract and scheduler construction. Staging phases, lifecycle and other worker/caller interiors remain open, so T2 is not complete. The 53-module delta passes 4133 build jobs, the 1560-declaration gate and 176 standard-or-empty public theorem queries. All 4086 frozen proof hashes and 916 inherited files match; main and mirror are unchanged. Fresh aggregate kernel replay and all twelve counterexample recipes pass with retrieved exit 0. Aggregate validation completed at that checkpoint.
-
-Source-77 `795e8829` closes every fixed encryption-ring polling point with the same ledger and original remainder. Queued initiation now joins concrete receive helpers, wheel placement and peer release; the initialized receive scheduler retains seven named deeper packet-source contracts. Core lifecycle roots derive their boundary coverage from actual entries, including the stronger retirement guard. Partial staging phases cover take, key borrow, nonce guards, restore and the original creation path; whole staging/keepalive and environment lifecycle wrappers remain open. T2 is not complete. The 46-module delta passes 4179 build jobs, the 1563-declaration gate and 157 standard-or-empty public theorem queries. Fresh aggregate kernel replay and all twelve counterexample recipes pass with retrieved exit 0. All 4132 frozen proof hashes match; main, mirror and all 916 inherited proof files are unchanged. Aggregate validation completed at that checkpoint.
-
-[USER 2026-10-19] Carry main `3f3879e0` into the campaign branch and repair the affected proof frames; main itself and remotes remain unchanged. [AGENT 2026-10-19] Source-78 `df10ef27` preserves eleven helper modules before that carry: concrete environment lifecycle dispatch and scheduled work/service joins. Scoped builds (2836 and 3028 jobs) and all 58 public theorem axiom queries passed against the old mirror. At that intermediate point, source-77 was the last complete aggregate checkpoint and the results lagged the newly carried mirror.
-
-The [native-cut closure review](2026-10-19-review-campaign-3-t2-native-cut-closure.md)
-refines the remaining obligation into a finite mutation and caller worklist.
-All four findings are accepted. Fixed source-point composition must cover
-successful and stopped interiors; current initialized entry bridges and
-selected failure witnesses are not that completeness theorem. The conditional
-send-drain instance is proved, with its delivery, send-worker and scheduler
-child contracts explicit. Their concrete instances and the other caller
-families remain open. No mirror defect was identified.
-
-## Validation
-
-Source-80 `0fc64409` derives the complete preparation frame from the actual getters, RX residency and cached publication peer. Every fixed preparation point retains the same ledger and its original continuation, including writes before their access receipts; both outer history projections are carried into the shared hook. The initialized receive scheduler now derives its prepare contract and retains six explicit deeper families: receive staging, routed transmit, IPv6 receive, encryption, peer transmit and handshake. Finer native-atom interiors and the other caller/interval work remain open; T2 is not complete. The seven-module delta passes the 4243-job root build, the 1563-declaration gate across thirteen roots, all 43 standard-or-empty public-declaration queries, fresh aggregate kernel replay (exit 0) and all twelve counterexample recipes (exit 0). All 4196 frozen proof hashes match. Main, mirror and all fifty validated inherited carry paths are unchanged. Development elaboration and history-normalization failures were repaired before these passing checks; no mirror finding arose. No differential result is added by this proof-only checkpoint. The inherited Env deprecation remains outside scope.
-
-Reproduce the proof and model checks from the campaign worktree:
+Run from the repository root of a clone with Python 3 and the pinned Lean
+toolchain on `PATH` (for example through elan, which reads `lean-toolchain`):
 
 ```sh
-capped -- scripts/in-bundle scripts/proof-gate
-capped -- scripts/in-bundle scripts/proof-counterexamples
-capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
-capped -- scripts/in-bundle lake build
-capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation evaluator.test_model_replay harness.test_trace harness.test_wg harness.test_linux
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cap scripts/proof-gate
+cap scripts/proof-counterexamples
+cap lake env leanchecker --fresh Leanux.Proofs
 ```
 
-The inherited `Leanux/Env.lean:873` `String.mk` deprecation is outside this
-proof lane and is neither suppressed nor changed. The gate's nested wrapper
-lookup reports that `capped` is absent inside the bundle PATH; the outer
-wrapper contains the gate and its children. No differential guest run is
-claimed for this proof-only work.
+On a checkout with the optional staged bundle already prepared, insert
+`scripts/in-bundle` after `cap`; that is the environment used for the checks
+reported here. The plain commands above do not require that bundle.
 
-Failed development checks remain failures. Source-69 repaired prefix unfolding, match normalization and an implicit ledger binder in scoped development builds. Its front-path worker also had one failed invocation caused by a missing generated query file; the regenerated focused query and fresh local replay passed before adoption. Source-61 repaired ordinary deletion-wrapper elaboration failures and two tactic timeouts by composing the explicit native prefix, callback and suffix. The final combined build and all trust checks pass. Source-60’s first aggregate gate rejected six uses of a local identifier reserved by the token scanner. Renaming that identifier repairs the failure; the unchanged gate passes. Earlier non-fresh checker runs
-exceeded their caps; the fresh-root command above passes. Ordinary local
-elaboration, frame and projection failures were repaired without changing the
-mirror or weakening statements. In this tranche, the first gate stopped on a
-nested terminal namespace; flattening the exports and resolving their names
-repairs it, and the complete gate passes. Source-44 aggregate attempts also failed on downstream callback adapters,
-missing imports and exhaustive event cases. Those failures were repaired before
-the successful complete rebuild; scoped passes did not replace them. Source-45 first failed on two implicit
-statement binders shadowed by the new canonical `births` definition; explicit
-local binders repair that failure without changing either statement. Source-47
-first failed when two completion modules exported the same theorem name; the
-release-specific export is renamed and the combined import check passes. New source
-files have no warnings. Source-57 initially failed when a new device-creation frame reused an existing campaign-3 packet-creation filename. The previous module was restored byte-for-byte, the new modules renamed, and the combined root rebuilt successfully. No inherited lemma changed.
-
-The earlier unchecked tactic-array panic and later SIGBUS were preserved in
-snapshot refs before repair. The SIGBUS followed replacement of a dependency
-artifact while Lean had it mapped; all dependency synchronization now occurs
-outside active builds. These were infrastructure/development failures, not
-counterexamples to the security statements. Their diagnoses and validation
-are retained in the branch history.
-
-During this later source integration a worker mistakenly invoked
-`lake env leanchecker --help` without `capped`. The tool treated it as work,
-grew to about 81 GB and reported a `CausalStackHistory` checking problem.
-The verified process was terminated (exit 143); this is a failed invocation,
-not validation evidence. All twelve worktrees were audited and the six dirty
-trees, including untracked files, preserved under
-`refs/snapshots/c3-checker-help-interruption-20261019T100705Z/` before further
-edits or builds. Branches and normal indexes were unchanged. The current source passes a coherent rebuild and the documented capped
-fresh-root replay; no checker help/flag probes will be used. The dependency-output
-audit also identified one child's live links to mutable parent artifacts; those
-links were replaced and its dependency closure rebuilt with private output files.
-
-The branch is preserved without merging or pushing. Completed checkpoint
-history and its individual validation counts remain in the branch commits.
-
-Source-81 `4656199a` expands the actual key/device lookup, owner dereference and index writeback source points. Reservation getter cuts retain the original captured before-state and the selected cohort on the same ledger. Queued-initiation interiors and complete initialized caller coverage remain open. The four-module delta passes the 4244-job root build, the 1563-declaration gate across thirteen roots and all 33 standard-or-empty public-declaration queries. All 4197 frozen hashes and fifty inherited carry paths match. Fresh replay and the twelve recipes last passed at source-80 `0fc64409`; they were not repeated for this intermediate checkpoint. Main and mirror are unchanged.
-
-Source-82 `1b41a945` extends queued-initiation coverage through its native decision/install source, cached peer reads and writes, and the fixed peer-release points. The same invocation borrow proves repayment nonfinal; the original ledger is retained even before its receipt. Existing restored-staging and keepalive joins carry these expanded points and their original continuations. Universal initialized caller composition remains open. The seven-module delta passes 4247 root build jobs and all 60 standard-or-empty public-declaration queries; all 4200 frozen hashes and fifty inherited carry paths match. The aggregate gate last passed at source-81, and fresh replay plus all twelve recipes at source-80. Development elaboration failures and an unused simp argument were repaired before validation. Main and mirror are unchanged.
-
-
-Source-83 `19c14c21` joins allocation intervals and canonical creation points to the original selected staging invocation, including keepalive, on the same ledger. Fixed nested key-release points preserve that ledger and the original source continuation; native erasure before its lifetime receipt is included. Nested peer release, refused cleanup interiors and complete initialized caller composition remain open. The nine new modules pass 4256 root build jobs, the 1563-declaration gate across thirteen roots, all 33 standard-or-empty public-declaration queries, fresh root kernel replay (exit 0) and all twelve counterexample recipes (exit 0). All 4209 frozen hashes and fifty inherited carry paths match. Development elaboration failures (including failed declaration elaboration) and frame-proof heartbeat failures were repaired before these passing checks; no accepted holes or mirror finding remain. Main's landed carry at `3308c49a` is merged at `ab65f1fd`; it changes only the register note relative to the validated sources, and every frozen proof hash still matches. No differential result is added by this proof-only checkpoint; the inherited Env deprecation remains outside scope.
-
-
-Source-84 `2621e227` derives refused-cleanup loop entries from the original admission and repayment runs; accepted creation cannot enter this loop. Ordered free cursors retain the same ledger lineage, and both post-erase intervals carry the actual pending terminal receipt. Staging and keepalive joins retain their original continuations without incoming cleanup accounts. Nested peer release and universal initialized caller composition remain open. The four-module delta passes 4260 root build jobs and all fifteen standard-or-empty public-declaration queries; all 4213 frozen sources and fifty inherited carry paths match. The aggregate gate, fresh replay and twelve recipes last passed at source-83. Development namespace, implicit-index and dependent-equality elaboration errors were repaired before validation; no mirror finding arose. Main and mirror are unchanged.
-
-Source-85 `36239b83` joins the five fixed nested peer-release stages, final native erasure, pending lifetime/count records and finish points to the canonical creation call and original staging or keepalive invocation. Each point retains the original ledger lineage and literal continuation; the post-erase account records the actual pending receipts. Creation mutation interiors and universal initialized caller composition remain open. The seven-module delta passes 4267 root build jobs, the 1563-declaration gate across thirteen roots, all 54 standard-or-empty public-declaration queries, fresh root kernel replay (exit 0) and all twelve counterexample recipes (exit 0). All 4220 frozen proof hashes and fifty landed carry paths match. Development elaboration and focus/frame errors were repaired before validation; no accepted holes or mirror finding remain. Main and mirror are unchanged. No differential result is added; the inherited Env deprecation remains outside scope.
-
-Source-86 `f52dbdb9` joins creation's silent packet marks and queue installation to their original source paths, deriving live phases before access and queued receipts. The combined creation family includes canonical/key-repayment points, mutation cuts, refused cleanup and nested peer release, with source-only continuations and staging/keepalive joins. Universal initialized caller composition and finer atom interiors remain open. Its five new modules pass 4272 root build jobs and all nineteen standard-or-empty public-declaration queries; all 4225 frozen proof hashes and fifty landed carry paths match. Source-85 remains the latest aggregate gate, fresh replay and twelve-recipe checkpoint. Development namespace and implicit-index errors were repaired; no mirror finding arose. Main and mirror are unchanged.
-
-Source-87 `650a4aff` assembles the canonical staging tree and its reservation, rejected-key repayment, queued-initiation, allocation and creation children with source-only continuations and same-ledger evidence. The initialized receive scheduler derives its staging contract, leaving five explicit deeper packet families: routed transmit, IPv6 receive, encryption, peer transmit and handshake. Expanded keepalive points preserve their actual preparation admission and supply the timer keepalive contract. Finer primitive interiors and universal initialized caller composition remain open. The seven-module delta passes 4279 root build jobs, the 1563-declaration gate across thirteen roots, all 39 standard-or-empty public-declaration queries, fresh root kernel replay (exit 0) and all twelve counterexample recipes (exit 0). All 4232 frozen proof hashes and fifty landed carry paths match. Namespace and source-context elaboration failures were repaired before validation; no accepted holes or mirror finding remain. Main and mirror are unchanged; no differential result is added and the inherited Env deprecation remains outside scope.
-
-Source-88 `08d0e804` supplies fixed encryption callback points from the actual head read, ordered packet loop and publication prefix. Same-ledger accounting includes native peer release and the return before its original receipt. The initialized receive scheduler now retains four deeper contracts: routed transmit, IPv6 receive, peer transmit and handshake. Crypto primitive interiors and universal initialized native-cut composition remain open. The five-module delta passes 4284 root build jobs and 31 standard-or-empty public-declaration queries; all 4237 frozen hashes and fifty landed carry paths match. Source-87 remains the latest aggregate gate, fresh replay and twelve-recipe checkpoint. Development namespace and syntax errors were repaired; no mirror finding arose.
-
-Source-89 `210bf296` derives the zero-key timer repayment from its executed borrowing prefix. Fixed raw release points preserve the same ledger and history, and that invocation cannot enter final peer erasure. Canonical timer coverage now supplies raw repayment, observed peer release and expanded keepalive children, retaining exact continuations. Initialized caller joins, finer primitive interiors and universal T2 coverage remain open. Validation passes 4289 root build jobs and nineteen standard-or-empty public-declaration queries; all 4242 frozen hashes and fifty landed carry paths match. The latest aggregate gate, fresh replay and twelve-recipe checkpoint remains source-87. Development namespace and proof elaboration errors were repaired; no mirror finding arose.
-
-Source-90 `47030f62` connects the fixed native preparation tree and key-read/scatter prefixes to the original encryption callback and initialized scheduler. Each cut retains the same packet ledger, while resumed execution preserves the original preparation and key-read snapshots in its eventual receipt. The four deeper packet contracts, other primitive intervals and universal initialized caller composition remain open. Aggregate validation passes 4294 root build jobs, the 1563-declaration gate across thirteen roots, 56 standard-or-empty public-declaration queries, fresh root kernel replay (retrieved exit 0) and all twelve recipes (retrieved exit 0). All 4247 frozen proof hashes and fifty landed carry paths match. Development elaboration, namespace and normalization errors were repaired before validation; no mirror finding arose. Main and mirror are unchanged; no differential result is added and the inherited Env deprecation remains outside scope.
-
-Source-91 `4087b2ab` joins the expanded receive scheduler, work services, send drain and concrete timers through all seven service families and the initialized runner. The runner send and post-transmit callbacks now derive their contracts from that graph, retaining the actual mixed-work refusal and pending-work completion checks. Four packet families, the flushed protocol sender, twelve dispatch bodies and remaining primitive intervals stay open. Validation passes 4299 root build jobs and 24 standard-or-empty public-declaration queries; all 4252 frozen hashes and fifty landed carry paths match. Source-90 remains the latest aggregate gate, fresh replay and twelve-recipe checkpoint. Source elaboration errors were repaired; no mirror finding arose.
-
-Source-92 `f676d7a0` supplies IPv6 receive from its fixed source: predicate checks, explicit refusals, WG read and inbox write. A structural proof excludes every child callback, and its packet-account frame and original remainder replace the IPv6 premise in the initialized runner. Three packet families, the flushed protocol sender, twelve dispatch bodies and finer native intervals remain open. Validation passes 4303 root build jobs and 21 standard-or-empty public-declaration axiom queries; all 4256 frozen proof hashes and fifty landed carry paths match. Source-90 remains the latest aggregate gate, fresh replay and twelve-recipe checkpoint. Source elaboration failures were repaired before validation; no mirror finding arose. Main and mirror are unchanged.
-
-Source-93 `4e53d136` supplies the flushed protocol sender from its fixed original binds, creation receipt, timer helpers, socket call and counted peer repayment. The initialized runner no longer assumes a flushed-sender contract. Three packet families, twelve dispatch bodies and finer native interiors remain open; T2 is not complete. Aggregate validation passes 4307 root build jobs, the 1563-declaration gate across thirteen roots, 31 standard-or-empty public-declaration axiom queries, fresh root kernel replay (retrieved exit 0) and all twelve counterexample recipes (retrieved exit 0). All 4260 frozen proof hashes and fifty landed carry paths match. Source elaboration, layout and normalization failures were repaired before validation; no mirror finding arose. Main and mirror are unchanged; no differential result is added, and the inherited Env deprecation remains outside scope.
-
-Source-94 `a3ba20bf` joins fixture-scoped staging and keepalive, protocol-send drains, counted purge and peer release to the existing create/delete/up/down source proofs and the initialized runner. The stronger deletion entry and native quiescence guard remain intact. Eight dispatch bodies, three packet families and finer native interiors remain open. The sender source also builds with default Lean limits after removing its file-wide increases. Validation passes 4311 root build jobs and 43 standard-or-empty public-declaration axiom queries; all 4264 frozen proof hashes and fifty landed carry paths match. Source-93 `4e53d136` remains the latest aggregate gate, fresh replay and twelve-recipe checkpoint. Development namespace and source-normalization errors were repaired; no mirror finding arose. Main and mirror are unchanged.
-
-Source-95 `55c71bde` supplies the three dump dispatch contracts from fixed source witnesses, retaining counted cursor release and the landed header cancellation. Five dispatch bodies, three packet families and finer native interiors (including header/walk atoms) remain open. Validation passes 4314 root build jobs and 32 standard-or-empty public-declaration axiom queries; all 4267 frozen proof hashes and fifty carry paths match. Source-93 remains the latest aggregate gate, fresh replay and twelve-recipe checkpoint. A namespace elaboration error was repaired; no mirror finding arose. Main and mirror are unchanged.
-
-Source-96 `06271ec7` connects routed transmit from its actual front result through expanded staging and counted repayment. Two packet families and five dispatch bodies remain; the compound front and other finer native interiors are still explicit coverage obligations. Aggregate validation passes 4317 root build jobs, the 1563-declaration gate across thirteen roots, 23 standard-or-empty public-declaration axiom queries, fresh root replay (retrieved exit 0) and all twelve recipes (retrieved exit 0). All 4270 frozen proof hashes and fifty carry paths match. Namespace and rewrite-normalization errors were repaired before validation; no mirror finding arose. Main and mirror are unchanged; the inherited Env deprecation remains outside scope.
-
-Source-97 `8fba7fc3` supplies the handshake worker from its fixed branches, scopes, receipts, timer helpers, expanded keepalive and counted release. Peer transmit is the remaining packet-family premise; five dispatch bodies and finer native intervals, including compound consumers/session/socket atoms, remain open. Validation passes 4322 root build jobs and 37 standard-or-empty public axiom queries; 4275 frozen proof hashes and fifty carry paths match. Source-96 remains the latest aggregate gate, fresh replay and twelve-recipe checkpoint. Source decomposition resolved an elaboration timeout at default limits; layout and binder errors were repaired. No mirror finding arose; main and mirror are unchanged.
-
-Source-98 `39904f78` gives fixed TX read/dequeue/selection cuts their original worker continuations and same-ledger evidence. The read cut is idle ownership; dequeue transfers the actual queued batch to a selected local, with its pending tickets retained. The existing successful-selection theorem is reused. Peer-transmit composition, five dispatch bodies and send/disposal or other native interiors remain open. Validation passes 4325 root build jobs and 19 standard-or-empty public axiom queries; 4278 frozen proof hashes and fifty carry paths match. Source-96 remains the latest aggregate checkpoint. An exploratory duplicate of the existing selection theorem was removed; a binder error was repaired. No mirror finding arose; main and mirror are unchanged.
-
-Source-99 `438ef973` joins fixed DEAD and ordinary-cleanup loop boundaries and native erase intervals to actual worker selection. Continuations use only source runs; entry accounting derives successor-ledger ownership, the exact pending terminal receipt, or the consumed cleanup debt. Peer-transmit composition, five dispatch bodies and remaining native intervals stay open. Validation passes 4329 root build jobs and 24 standard-or-empty public axiom queries; all 4282 frozen proof hashes and fifty carry paths match. Source-96 remains the latest aggregate gate, fresh replay and twelve-recipe checkpoint. Development syntax, namespace and source-normalization errors were repaired at default Lean limits; no mirror finding arose. Main and mirror are unchanged.
-
-Source-100 `def57484` connects both actual cleanup arms to shared key repayment and the nested peer-release observer, retaining its original access histories, before-state and counted receipts. Completed cleanup derives an empty-debt account on the same successor ledger; source-only continuations need no incoming cleanup certificate. Send-completion composition, five dispatch bodies and finer native intervals remain open. Validation passes 4333 root build jobs, the 1563-declaration gate across thirteen roots, nineteen standard-or-empty public axiom queries, fresh kernel replay (retrieved exit 0) and twelve recipes (retrieved exit 0). All 4286 frozen hashes and fifty carry paths match. The first source draft used the wrong peer observer; correcting it to the existing nested observer removed the elaboration timeout at default limits. Namespace and binder errors were repaired; no mirror finding arose. Main advanced to `1a69cebb` during validation and is merged at `66d9ffb7`, retaining both register sections. Its sole mirror delta replaces the deprecated observation string constructor; the subsequent merged-tree gate passed 4333 jobs and 1563 terminal declarations without proof-source changes.
-
-
-Source-101 `270ef749` derives ordered-send, packet-capture, socket-result/receipt and completion-stage cuts from the original worker selection, retaining both receipt entry worlds and the same ledger lineage. The initialized runner now supplies peer transmit and direct transmit dispatch, including fixture exit and descriptor repayment. Four dispatch bodies and finer native intervals remain open. Validation over main `1a69cebb` passes 4346 build jobs, the 1563-declaration gate across thirteen roots, 109 standard-or-empty public queries, fresh kernel replay (retrieved exit 0) and twelve recipes (retrieved exit 0). All 4299 frozen proof hashes and fifty carry files match. The post-merge source-100 gate also passed; this mirror spelling change required zero proof-frame repairs. Development source-normalization, binder and layout errors and unused arguments were repaired at default Lean limits. No mirror finding or accepted warning remains.
-
-
-Source-102 `ee479c1a` supplies receive, flood and batch dispatch from their original control flow and concrete shared scheduler/NAPI instances. Fixture-wrapped batch transmit retains the original scope token and routed child. Configuration is the remaining dispatch premise; finer native intervals, including the compound receive-entry atom, remain open. Validation passes 4355 build jobs, the 1563-declaration gate across thirteen roots and 49 standard-or-empty public queries. All 4308 frozen proof hashes and fifty carry paths match. Fresh kernel replay and twelve recipes last passed at source-101 `270ef749`; they were not repeated for this helper checkpoint. A native-token elaboration timeout was resolved by separating kind, result and action, at default Lean limits. No mirror finding or accepted warning remains; main and mirror are unchanged.
-
-Source-103 `a144e4a7` supplies configuration dispatch from its fixed original source witness. `ConfigConcrete.initialized` now derives every declared dispatch-family contract, retaining semantic evidence acceptance and finer native intervals as explicit obligations. Peer creation carries the allocation invariant; saved keepalive and preshared-key writes retain their actual read prefixes; removal reuses the original null guard and concrete after-dead children. Configuration fixture sends retain their own trigger and original scope. T2 remains open. The thirteen-module delta passes 4368 build jobs, the 1563-declaration gate across thirteen roots, 68 standard-or-empty public axiom queries, fresh root kernel replay (exit 0) and all twelve counterexample recipes (exit 0). All 4321 frozen proof hashes and fifty inherited carry paths match. Source decomposition and narrower elaboration resolve the development resource failures at default Lean limits; no warning or mirror finding remains. Main and mirror are unchanged.
-
-Source-104 `308d4c84` joins actual peer reads, family guards, unsupported-family refusal and completed sends to the transmit worker, and carries the exact socket settlement through native byte accounting before its access receipt. Source-only continuations retain the original outer send witness. T2 remains open at socket-route/cache and other finer native interiors, semantic evidence interpretation and universal source coverage. The nine-module delta passes 4376 build jobs and all 54 standard-or-empty public axiom queries without warnings; all 4329 frozen proof hashes and fifty inherited carry paths match. Source-103 `a144e4a7` remains the latest aggregate gate, fresh kernel replay and twelve-recipe checkpoint. Development rewrite and dependent-state errors were repaired at default Lean limits. Main and mirror are unchanged.
-
-Source-105 `e32a4d02` expands the fixed socket front through IPv4 retry, IPv6 routing, cache reads/writes, the saved-peer scan and tunnel preparation. Native source points retain the actual getter prefixes and both original receipt entry worlds; worker entry derives the same packet account. Other native interiors, semantic evidence interpretation and universal source coverage remain open. The ten-module delta (nine new modules, 780 lines) passes 4385 build jobs, the 1563-declaration gate across thirteen roots, 89 standard-or-empty public axiom queries, fresh full-root kernel replay (retrieved exit 0) and all twelve recipes (retrieved exit 0). All 4338 frozen hashes and fifty carry files match. Smaller source witnesses resolve development elaboration timeouts at default limits; no warnings or mirror finding remain. Main and mirror are unchanged.
-
-Source-106 `75bfe606` joins the actual receive-entry guards, RX allocation, admission, refusal cleanup and counted peer releases to receive, flood and batch dispatch. RX allocation and erasure transport the TX account using packet bounds, while source-only continuations retain the original ingress. Native access atoms, other finer intervals and final semantic source coverage remain open. The seven-module delta passes 4390 build jobs and 46 standard-or-empty public axiom queries without warnings; all 4343 frozen proof hashes and fifty carry paths match. Source-105 `e32a4d02` remains the latest aggregate gate, fresh kernel replay and twelve-recipe checkpoint. Main and mirror are unchanged.
-
-Source-107 `01dfbd7d` connects the original overflow iterations, guard, queue removal and pending counter charge to routed transmit and the initialized caller graph. Removed tickets stay on the incoming ledger until the actual overflow receipt; the splice retains its pending routed birth receipt and both original entry snapshots. The front evidence acceptance is explicit. Other native intervals and final semantic interpretation remain open. The seventeen-module delta (four new modules, 272 lines) passes 4394 build jobs, the 1563-declaration gate across thirteen roots, 86 standard-or-empty public axiom queries, fresh full-root kernel replay (retrieved exit 0) and all twelve recipes (retrieved exit 0). All 4347 frozen proof hashes and fifty carry paths match. Development binder, rewrite and argument-order errors were repaired at default Lean limits; no warnings or mirror finding remain. Main and mirror are unchanged.
-
-Source-108 `935b1b13` derives concrete initialized accounting evidence over the WG projection without an abstract safety predicate or semantic-acceptance premises. The new statement preserves selected, allocation and pending-receipt phases. Ordinary and selected current-state partitions give each admitted ticket one status; held plaintext retains its actual take and current vacant queue, without identifying the current world with the earlier snapshot. Finer native coverage and complete interval interpretation remain open. The four-module delta passes 4397 build jobs, the 1564-declaration gate across thirteen roots, fifteen new standard-or-empty public axiom queries, fresh full-root kernel replay (retrieved exit 0) and all twelve recipes (retrieved exit 0). All 4350 frozen proof hashes and fifty carry paths match. Draft elaboration and unavailable-tactic errors were repaired at default Lean limits; no warnings or mirror finding remain. Main and mirror are unchanged.
-
-Source-109 `16daf7e3` interprets every declared initialized phase as a current semantic account or one of fifteen fixed mutation intervals. Current accounts derive one status per admitted ticket, native cell ownership and unique ticket backing, terminal uniqueness and receipt cardinality on the same ledger. A trim guard changes only the ambient trace, so its WG projection reuses the loop interval. Pending cohorts, allocation aliases and receipts remain explicit; per-ticket interval consequences and complete native source coverage remain open. The four-module delta passes 4400 build jobs, the 1565-declaration gate across thirteen roots, 36 new standard-or-empty public axiom queries, fresh full-root kernel replay (retrieved exit 0) and all twelve recipes (retrieved exit 0). All 4353 frozen proof hashes and fifty carry paths match. Explicit world and packet-id binders repair draft elaboration failures at default Lean limits; no warnings or mirror finding remain. Main and mirror are unchanged.
-
-Source-110 `77d0f2ab` derives the current semantic account after the original pending records for all twelve receipt-only interval families: take, restore, keepalive birth, routed admission, trim completion, purge, original and nested peer release, native frees and socket handoff. Each result retains its actual source equation or fixed total record emission on the same native world. Partial allocation, trim-loop progress and complete native source coverage remain open. The three-module delta passes 4402 build jobs and twelve new standard-or-empty public axiom queries; all 4355 frozen proof hashes and fifty carry paths match. Source-109 `16daf7e3` remains the latest aggregate gate, fresh root replay and twelve-recipe checkpoint. An explicit world equality repairs a draft projection rewrite; no warnings or mirror finding remain. Main and mirror are unchanged.
-
-Source-111 `537c7dad` joins the twelve receipt-only families into initialized coverage. `RecordsDue` fixes each completion to its original source witness and captured entry; its records restore the semantic current account without changing the native world. Only partial allocation and active trim remain in `Transient`; finer native source coverage is still open. Validation passes 4405 build jobs, the 1566-declaration gate across thirteen roots, thirteen new standard-or-empty public axiom queries, fresh full-root kernel replay (retrieved exit 0), and all twelve counterexample recipes (retrieved exit 0). All 4358 frozen proof hashes and fifty carry paths match. No mirror change or finding; all new declarations use default Lean limits.
-
-Source-112 `cc4ef4fd` closes the semantic interpretation of partial allocation and trim. `CutAccount` gives every admitted ticket one meaningful status and every resident TX cell a native owner plus recorded backing or an actual selected-ticket allocation alias. Trim retains the precise removed prefix in the original ledger until its overflow receipt, including removal before counter charge. `initialized_source_points_have_semantic_ticket_accounts` derives this account now or after only the original pending records on the unchanged native world. Coverage of finer source interiors remains open. Validation passes 4411 build jobs, the 1567-declaration gate across thirteen roots, 37 new standard-or-empty public axiom queries, fresh full-root kernel replay (retrieved exit 0), and all twelve recipes (retrieved exit 0). All 4364 frozen hashes and fifty carry paths match; main and mirror are unchanged. The six new modules use default limits with no warnings.
-
-Source-113 `79cd5525` expands initialized UDP-ingress points through literal access trees for key get, null get, put, header validation, DS-field extraction and CPU selection. Leaves are world reads, individual framed world writes or Ambient computations; the native index adapter is unfolded through its actual write-back. Each interior keeps the same ticket projection and original continuation, including before later failure. Index lookup and RX queue/publication interiors remain open. Validation passes 4414 build jobs and 36 changed/new standard-or-empty public axiom queries with no warnings at default limits. All 4367 frozen proof hashes and fifty carry paths match. Source-112 `cc4ef4fd` remains the latest aggregate gate, fresh root replay and twelve-recipe checkpoint; main and mirror are unchanged.
-
-Source-114 `7207e10d` expands initialized ingress through the original index bucket loop, maybe-zero peer acquisition and owner-word write. Every point retains the actual source continuation; the reference write uses the peer saved by that same read. The semantic account is derived at these interiors with no new caller premise. RX queue/publication and other finer native source interiors remain open. Validation passes 4420 build jobs, the 1567-declaration gate across thirteen roots, 45 changed/new standard-or-empty public axiom queries, fresh full-root kernel replay (retrieved exit 0), and all twelve recipes (retrieved exit 0). All 4373 frozen proof hashes and fifty carry paths match. Main and mirror are unchanged; new modules use default limits without warnings.
-
-Source-115 `328a0d2c` joins packet-store adapter and RX queue-admission interiors to initialized accounting. The adapter has no WG mutation before its single write-back; allocation and erasure after it use their packet-bound contracts. Admission retains the actual peer read, queue write and device-ring tail. Each point keeps the original continuation and complete TX account, without creating RX tickets. Publication and other finer native interiors remain open. Validation passes 4427 build jobs and 52 changed/new standard-or-empty public axiom queries. All 4380 proof hashes and fifty carry paths match; main and mirror are unchanged. New modules use default Lean limits with no warnings. Source-114 `7207e10d` remains the latest aggregate gate, fresh root replay and twelve-recipe checkpoint.
-
-Source-116 `fe6161d3` joins RX publication interiors to initialized ingress: original peer resolution, strict reference acquisition, queue-membership check, RX state write and saved-peer publication write. Each cut retains its actual continuation and complete TX account. Remaining ordinary ingress reads, guards and handshake-queue production now use atomic access trees. Other finer native interiors remain open, including compound handshake consumers/session/protocol calls, configuration helpers and lifecycle atoms. Validation passes 4431 build jobs, the 1567-declaration gate across thirteen roots, 42 changed/new standard-or-empty public axiom queries, fresh full-root kernel replay (retrieved exit 0), and all twelve recipes (retrieved exit 0). All 4384 frozen hashes and fifty carry paths match. Main and mirror are unchanged; new modules use default limits without warnings.
-
-Source-117 `095e3aa7` joins saved-peer metadata source points to initialized handshake accounting. Response creation, outgoing MACs, authenticated-send/receive timer deletion, handshake completion and direct metadata updates retain their own peer read and original continuation. Every write preserves that peer allocation, staged payloads and allocated TX queue. Other compound native calls and full source coverage remain open. Validation passes 4434 build jobs and 51 changed/new standard-or-empty public axiom queries. All 4387 proof hashes and fifty carry paths match; main and mirror are unchanged. Narrow helper selection repairs the draft elaboration timeout at default Lean limits, without warnings. Source-116 `fe6161d3` remains the latest aggregate gate, fresh root replay and twelve-recipe checkpoint.
-
-
-Source-118 `67607187` joins native protocol sockets and their surrounding reads and byte updates to initialized handshake accounting. Route/cache points retain the original causal context, entry world and receipt continuation. The reused source has no incoming account certificate. Other native interiors remain open. Validation passes 4440 build jobs, the 1567-declaration gate across thirteen roots, 74 changed/new standard-or-empty public axiom queries, fresh full-root kernel replay (retrieved exit 0) and all twelve recipes (retrieved exit 0). All 4393 frozen hashes and fifty carry paths match. Main and mirror are unchanged; new modules use default limits without warnings.
-
-
-Source-119 `e9f496fb` joins session allocation, key derivation, handshake clearing and slot rotation through actual source accesses and saved-peer writes. Both original session receipts remain in order around the same native run. Flushed outgoing handshakes now include initiation creation, MAC updates and the shared protocol socket interiors. Validation passes 4441 build jobs and 68 changed/new standard-or-empty public axiom queries; all 4394 frozen proof hashes and fifty carry paths match. Main and mirror are unchanged, with default limits and no warnings. Other native families remain open. Source-118 `67607187` is the latest aggregate gate, fresh root replay and twelve-recipe checkpoint.
-
-
-Source-120 `cdf1eda8` joins MAC validation, cookie-secret rotation, rate-limit writes, load bookkeeping and endpoint updates to initialized handshake accounting. The captured MAC result retains its original entry while continuing from native points; ordinary handshake fallback calls now use atomic metadata trees. Validation passes 4442 build jobs and 44 changed/new standard-or-empty public axiom queries; all 4395 frozen proof hashes and fifty carry paths match. Draft constructor inference was corrected at default limits, with no warnings. Main and mirror are unchanged. Compound consumers, cookie emission and administrative interiors remain open. Source-118 `67607187` remains the latest aggregate gate, fresh root replay and twelve-recipe checkpoint.
-
-
-Source-121 `722b7a0e` joins initiation, response and cookie consumers through their actual authentication fronts, public-key/index lookups, original captures and acceptance receipts, saved-peer writes and counted repayment children. The original flood delay is retained; abstracting its closed arithmetic during witness construction resolves the draft recursion limit at default settings. Validation passes 4445 build jobs, the 1567-declaration gate across thirteen roots and 58 changed/new standard-or-empty public axiom queries. All 4398 frozen proof hashes and fifty carry paths match. Main and mirror are unchanged, with no warnings. Cookie emission and other native administrative/service interiors remain open. Fresh root replay and twelve recipes last passed at source-118 `67607187`.
-
-
-Source-122 `7f9005de` joins the complete cookie-emission path: native message creation, reply selection, IPv4/IPv6 route/cache source, tunnel capture, sent-list append and receipt. Exact erasure and relabelling equations preserve the original capture entry and journal. The nine-module delta passes 4450 build jobs and 73 changed/new standard-or-empty public axiom queries. All 4403 frozen proof hashes and fifty carry paths match; main and mirror are unchanged, with no warnings. The route and capture drafts needed explicit native-result types and record destructuring; no mirror finding arose. Configuration, lifecycle and service interiors remain open. The aggregate gate last passed at source-121; fresh root replay and twelve recipes last passed at source-118 `67607187`.
-
-
-Source-123 `5b0a99a1` joins configuration metadata, public-key lookup, fresh peer creation and the send-worker prefix to initialized accounting. Delayed metadata writes retain the actual saved peer across native reads and Ambient decisions; identity and both TX queues are preserved at every source cut. Creation exposes the guards, counter/frontier writes, fresh peer insertion and subsequent metadata. Its actual front derives slot vacancy from the initialized allocation bound; inserting an empty peer preserves the same packet ledger without claiming equality of the full resident-peer projection. Configuration routing edits, lifecycle and remaining service interiors remain open.
-
-The fourteen-module delta passes 4456 build jobs, the 1567-declaration gate across thirteen roots, 106 changed/new standard-or-empty public axiom queries, fresh root kernel replay and all twelve counterexample recipes. Every process returned exit zero. All 4409 frozen proof hashes and fifty carry paths match; main and mirror are unchanged. Saved-write induction indexing and unguided witness selection caused development failures; explicit indices and source-head dispatch repaired them without warnings or raised limits in the new modules. No mirror finding arose. Fresh replay completed after the source commit; this entry supersedes its in-progress validation note.
-
-
-Source-124 `94d177c7` joins newlink interiors through allocation guards, metadata initialization, registration and the final Ambient suffix. The registration write changes the empty setup epoch while preserving the original terminal ledger; source points assume no account at the cut. Configuration routing edits, other lifecycle helpers and service interiors remain open. The eight-module delta passes 4459 build jobs and 87 changed/new standard-or-empty public axiom queries, with 4412 proof hashes and fifty unchanged carry paths. New modules use default limits without warnings. Source-123 `5b0a99a1` remains the latest aggregate gate, fresh root replay and twelve-recipe checkpoint. This validation is over mirror `1a69cebb`; main has advanced to `1f766662` with campaign 2 and fixed-width counters, whose merge and carry follow separately.
+The counterexample speedbump includes both R5 recipes used for C3-F1. No recipe
+requires a private archive ref, an old pre-rebase commit or a worktree-specific
+path. The gate checks the complete imported terminal surface, standard axioms
+and forbidden trust tokens. Kernel replay is an additional check of the built
+root; validation counts and the checked head will be recorded when retrieved.
