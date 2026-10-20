@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWorkServicePointExecution
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSavedCallFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWorkServicePointFrames
 
 /-! Fixed-source point composition. The shape parameter is data, not a proof
@@ -12,6 +13,7 @@ abbrev ChildPoints := Child → World → History → World → History → Prop
 inductive Site where
   | entry
   | returned
+  | acquire
   | interior
   | leaf (site : Consume.Leaf.Site)
   | left (site : Site)
@@ -27,6 +29,8 @@ inductive Point (inside : ChildPoints) : {α : Type} → {action : PrefixM Event
   | leaf (source : Consume.Leaf.Shape action)
       (point : Consume.Leaf.Point leafPoints source w h site u middle) :
       Point inside (.leaf source) w h (.leaf site) u middle
+  | acquire {w : World} (point : SavedCall.AcquirePoint pid w.wg w.ambient v b) :
+      Point inside (.native (.acquire pid)) w h .acquire {w with wg:=v,ambient:=b} h
   | interior (token : Child) (point : inside token w h u middle) :
       Point inside (.child token) w h .interior u middle
   | left {body : PrefixM Event α} {next : α → PrefixM Event β}
@@ -62,6 +66,7 @@ theorem Point.coverage (contracts : ChildContracts native inside Good)
   induction point with
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
+  | acquire point => exact .acquire point
   | leaf source point => exact .leaf source point
   | interior token point => exact .interior token ((contracts.contract token).coverage _ _ _ _ point)
   | left tail point ih => exact .left tail ih
@@ -76,6 +81,9 @@ theorem Point.safe (carrierGood : ∀ h w, Carrier h w → Good h w)
   induction point with
   | entry shape => exact carrierGood _ _ before
   | returned shape performed => exact carrierGood _ _ (shape.normal before performed)
+  | acquire point =>
+      obtain ⟨ledger,account⟩:=before
+      exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
   | leaf source point => exact carrierGood _ _ (point.safe (fun _ _ h => h) leafContracts before)
   | interior token point => exact (contracts.contract token).safe _ _ _ _ before point
   | left tail point ih => exact ih before

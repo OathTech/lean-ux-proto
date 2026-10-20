@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedServicePointExecution
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSavedCallFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedServicePointFrames
 
 /-! Fixed-source point composition. The shape parameter is data, not a proof
@@ -13,6 +14,7 @@ abbrev ChildPoints := (α : Type) → (action : PrefixM Event α) → Child acti
 inductive Site where
   | entry
   | returned
+  | delete
   | interior
   | left (site : Site)
   | right (site : Site)
@@ -24,6 +26,8 @@ inductive Point (inside : ChildPoints) : {α : Type} → {action : PrefixM Event
   | returned (shape : Shape action)
       (performed : runPrefix action w h = (.ok (value,u),middle)) :
       Point inside shape w h .returned u middle
+  | delete {w : World} (point : SavedCall.DeletePoint pid timer w.wg w.ambient v b) :
+      Point inside (.native (.kind (.delete pid timer))) w h .delete {w with wg:=v,ambient:=b} h
   | interior (token : Child action) (point : inside _ _ token w h u middle) :
       Point inside (.child token) w h .interior u middle
   | left {body : PrefixM Event α} {next : α → PrefixM Event β}
@@ -80,6 +84,7 @@ theorem Point.coverage (contracts : ChildContracts native inside Good)
   induction point with
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
+  | delete point => exact .delete point
   | interior token point => exact .interior token ((contracts.at token).coverage _ _ _ _ point)
   | left tail point ih => exact .left tail ih
   | right head tail leading point ih => exact .right head tail leading ih
@@ -93,6 +98,7 @@ theorem Point.safe (carrierGood : ∀ h w, CompleteProduct.Carrier h w → Good 
   induction point with
   | entry shape => exact carrierGood _ _ before
   | returned shape performed => exact carrierGood _ _ (shape.normal before performed)
+  | delete point => exact carrierGood _ _ (point.carrier before)
   | interior token point => exact (contracts.at token).safe _ _ _ _ before point
   | left tail point ih => exact ih before
   | right head tail leading point ih => exact ih (head.normal before leading)

@@ -17,6 +17,9 @@ inductive Residual {native inside : ChildPoints} {Good : History → World → P
   | leaf (source : Consume.Leaf.Shape action)
       (remaining : Consume.Leaf.Residual leafContracts source w h site u middle remainder) :
       Residual children (.leaf source) w h (.leaf site) u middle remainder
+  | acquire {w : World} (point : SavedCall.AcquirePoint pid w.wg w.ambient v b) :
+      Residual children (.native (.acquire pid)) w h .acquire {w with wg:=v,ambient:=b} h
+        (SavedCall.acquireRemainder h point)
   | interior (token : Child) (point : native token w h u middle) :
       Residual children (.child token) w h .interior u middle
         ((children.contract token).remainder w h u middle point)
@@ -41,6 +44,7 @@ theorem Point.residual (children : ChildContracts native inside Good)
   induction point with
   | entry shape => exact ⟨_,.entry shape⟩
   | returned shape performed => exact ⟨_,.returned shape performed⟩
+  | acquire point => exact ⟨_,.acquire point⟩
   | leaf source point =>
       obtain ⟨remaining,residual⟩ := point.residual leafContracts
       exact ⟨_,.leaf source residual⟩
@@ -60,6 +64,7 @@ theorem Residual.point (residual : Residual children shape w h site u middle rem
   induction residual with
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
+  | acquire point => exact .acquire point
   | leaf source remaining => exact .leaf source remaining.point
   | interior token point => exact .interior token point
   | left tail remaining ih => exact .left tail ih
@@ -73,6 +78,7 @@ theorem Residual.run {α : Type} {action : PrefixM Event α} {shape : Shape acti
   induction residual with
   | entry shape => rfl
   | returned shape performed => exact performed.trans (runPrefix_pure _ _ _).symm
+  | acquire point => exact SavedCall.acquireRemainder_run _ point
   | leaf source remaining => exact remaining.run
   | interior token point => exact (children.contract token).continuation _ _ _ _ point
   | left tail remaining ih => exact Scheduler.bind_run_equal _ ih
