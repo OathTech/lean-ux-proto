@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPreparePointCuts
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPrepareReadFrames
 
 /-! A source point keeps the same ownership projection, including the native
 mutation before its receipt. The write requirements remain in Framed until
@@ -14,6 +15,7 @@ theorem Point.view (point : Point shape w a h site v b middle remaining)
   induction point with
   | entry shape => rfl
   | returned shape performed => exact framed.normal performed
+  | nativeRead point => exact point.frame
   | metadata point => exact point.frame
   | native token performed => exact token.native_frame framed performed
   | left tail point ih => exact ih framed.1
@@ -35,6 +37,7 @@ theorem Point.appends (point : Point shape w a h site v b middle remaining) :
   induction point with
   | entry shape => exact ⟨[],by simp⟩
   | returned shape performed => exact shape.appended performed
+  | nativeRead point => exact ⟨[],by simp⟩
   | metadata point => exact ⟨[],by simp⟩
   | native token performed => exact ⟨[],by simp⟩
   | left tail point ih => exact ih
@@ -71,6 +74,7 @@ theorem Point.remaining_appends (point : Point shape w a h site v b middle remai
   induction point with
   | entry shape => exact shape.appends
   | returned shape performed => exact StateAppends.pure _
+  | nativeRead point => exact point.remainder_appends
   | metadata point => exact PeerMetadata.prefixRemainder_appends point
   | native token performed => exact emitMany_appends _ _
   | left tail point ih => exact StateAppends.bind ih (fun value=>(tail value).appends)

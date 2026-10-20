@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPreparePointFramed
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPrepareReadSource
 
 /-! Source-generated residuals include silent native writes before access
 receipts, and the decrypt capture before its receipt. A stopped primitive
@@ -38,7 +39,7 @@ theorem receiptFrom_run (w : WGWorld) (a : Ambient) (body : WGPrefix E α)
       | ok out => obtain ⟨⟨value,v⟩,c⟩:=out; rfl
 
 inductive Site where
-  | entry | returned | nativeBeforeReceipt | beforeDecryptReceipt | metadata
+  | entry | returned | nativeBeforeReceipt | beforeDecryptReceipt | metadata | nativeRead
   | left (site : Site) | right (site : Site)
   | focused (site : Site) | captured (site : Site)
 
@@ -53,6 +54,10 @@ inductive Point : {E α : Type} → {action : WGPrefix E α} → Shape action �
       {w v : WGWorld} {a b : Ambient} {h : List E}
       (point : PeerMetadata.Point source w a v b) :
       Point (.metadata body source) w a h .metadata v b h (PeerMetadata.prefixRemainder point)
+  | nativeRead {E α : Type} {body : WGPrefix E α} {token : Access body}
+      {w v : WGWorld} {a b : Ambient} {h : List E}
+      (point : ReadPoint token w a v b) :
+      Point (.access token) w a h .nativeRead v b h point.remainder
   | native {E α : Type} {action : WGPrefix E α} {value : α} (token : Access action)
       {w v : WGWorld} {a b : Ambient} {h : List E}
       (performed : (token.native.run w).run a=.ok ((value,v),b)) :

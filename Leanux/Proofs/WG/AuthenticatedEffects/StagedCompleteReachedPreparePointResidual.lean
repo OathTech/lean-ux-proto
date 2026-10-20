@@ -43,6 +43,7 @@ theorem Point.run {E α : Type} {action remaining : WGPrefix E α} {shape : Shap
   induction point with
   | entry shape => rfl
   | returned shape performed => exact performed.trans (runStatePrefix_pure _ _ _ _).symm
+  | nativeRead point => exact point.remainder_run _
   | metadata point => exact PeerMetadata.prefixRemainder_run point _
   | native token performed => rw [token.run,performed,emitMany_run]
   | left tail point ih =>
