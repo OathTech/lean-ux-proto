@@ -982,6 +982,9 @@ theorem original_transmit_hook_journal (peer : PeerId) (items : List SkbId) :
   HookJournal.Transmit.original peer items
 
 open HookJournal in
+/-- A valid, normally completed initiation-hook receipt gives the actual
+retransmit delay with jitter below HZ / 3 when the running/live guard holds;
+otherwise WireGuard state is unchanged. -/
 theorem original_initiation_hook_receipt_effect {r : Receipt} (valid : r.Valid)
     (kind : r.hook = .handshakeInitiated) (d : Device) (p : Peer)
     (device : r.before.wg.device = some d) (resident : d.peers[r.pid]? = some p)
@@ -993,6 +996,9 @@ theorem original_initiation_hook_receipt_effect {r : Receipt} (valid : r.Valid)
   valid.handshakeInitiated kind d p device resident normal
 
 open HookJournal in
+/-- A valid, normally completed data-sent hook leaves an already pending
+new-handshake timer unchanged; otherwise its running/live guard controls
+the timeout-plus-jitter arm effect, with jitter below HZ / 3. -/
 theorem original_data_sent_hook_receipt_effect {r : Receipt} (valid : r.Valid)
     (kind : r.hook = .dataSent) (d : Device) (p : Peer)
     (device : r.before.wg.device = some d) (resident : d.peers[r.pid]? = some p)
@@ -1006,6 +1012,8 @@ theorem original_data_sent_hook_receipt_effect {r : Receipt} (valid : r.Valid)
   valid.dataSent kind d p device resident normal
 
 open HookJournal HookJournal.Initiation in
+/-- The initiation inspection erases to the original send outcome and records
+valid reached timer-hook receipts, including prefixes before a Stop. -/
 theorem original_initiation_hook_journal (pid : PeerId) :
     (do let result←inspection pid; pure result.1) =
       Campaign2.inspect (sendHandshakeInitiation pid) ∧
@@ -1014,6 +1022,8 @@ theorem original_initiation_hook_journal (pid : PeerId) :
   HookJournal.Initiation.original pid
 
 open HookJournal HookJournal.Initiation in
+/-- The handshake-send-worker inspection preserves its original outcome and
+the validity of recorded timer-hook receipts, including stopped prefixes. -/
 theorem original_initiation_worker_hook_journal (pid : PeerId) :
     (do let result←workerInspection pid; pure result.1) =
       Campaign2.inspect (handshakeSendWorker pid) ∧
@@ -1022,6 +1032,8 @@ theorem original_initiation_worker_hook_journal (pid : PeerId) :
   HookJournal.Initiation.original_worker pid
 
 open HookJournal HookJournal.SendEnvironment in
+/-- The selected environment send-worker inspection preserves the original
+product outcome and records valid reached hook receipts, including on Stop. -/
 theorem original_selected_send_worker_hook_journal :
     (do let result←inspection; pure result.1) =
       Campaign2.Product.inspect Env.runOneSendWorker ∧
@@ -1030,6 +1042,8 @@ theorem original_selected_send_worker_hook_journal :
   HookJournal.SendEnvironment.original
 
 open ReceiveHookJournal in
+/-- Data completion has a matching inspection of its actual outcome whose
+recorded timer hooks satisfy validity and the caller-specific receipt facts. -/
 theorem original_receive_hook_journal (pid : PeerId) (pkt : RxPacket) (ep : Endpoint) :
     Campaign2.Observes (consumeDataDone pid pkt ep) (fun _=>True)
       (fun before outcome=>∃ result : Inspection,
@@ -1037,6 +1051,9 @@ theorem original_receive_hook_journal (pid : PeerId) (pkt : RxPacket) (ep : Endp
   ReceiveHookJournal.original_consume_hooks pid pkt ep
 
 open HandshakeJournal in
+/-- Response inspection preserves the original outcome, with a valid paired
+session/derived-hook history and equal event counts for each serial; this
+counts recorded calls, not completed timer-wheel enqueues. -/
 theorem original_response_session_hook_journal (pid : PeerId) :
     (do let result←inspect (response pid);pure result.1)=Campaign2.inspect (sendHandshakeResponse pid) ∧
     Campaign2.Returns (inspect (response pid)) (fun _=>True)
@@ -1046,6 +1063,9 @@ theorem original_response_session_hook_journal (pid : PeerId) :
   HandshakeJournal.original_response pid
 
 open HandshakeJournal in
+/-- Handshake reception inspection preserves the original outcome, with a
+valid paired history and equal session/derived-hook event counts per serial,
+including stopped prefixes. -/
 theorem original_reception_session_hook_journal (msg : List UInt8) (src : SkbSource) :
     (do let result←inspect (reception msg src);pure result.1)=Campaign2.inspect (receiveHandshakePacket msg src) ∧
     Campaign2.Returns (inspect (reception msg src)) (fun _=>True)
@@ -1055,6 +1075,9 @@ theorem original_reception_session_hook_journal (msg : List UInt8) (src : SkbSou
   HandshakeJournal.original_reception msg src
 
 open HandshakeJournal in
+/-- The receive-step inspection preserves the original outcome, with a valid
+paired history and equal session/derived-hook event counts per serial,
+including stopped prefixes. -/
 theorem original_receive_step_session_hook_journal :
     (do let result←inspect step;pure result.1)=Campaign2.inspect receiveStep ∧
     Campaign2.Returns (inspect step) (fun _=>True)

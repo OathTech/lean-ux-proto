@@ -176,12 +176,14 @@ theorem original_executeTrace_finite (trace : Runner.Trace) (placeholders : Bool
     Runner.executeTrace trace placeholders = RunnerFinite.executeTrace trace placeholders :=
   original_executeTrace_finite_claim trace placeholders
 
-/-- The historical trace is rejected at the current batch-completion boundary. -/
+/-- Kernel-checked evaluation of one constructed historical trace shows
+rejection at the current batch-completion boundary, not a universal result. -/
 theorem original_pending_batch_accepted : accepted = false :=
   SourceClaims.original_pending_batch_accepted
 
 
-/-- The old direct-call fixture omits current FIB initialization and yields no backlog. -/
+/-- Kernel-checked evaluation of the single constructed direct-call fixture
+shows no backlog; that fixture omits the current FIB initialization. -/
 theorem original_pending_batch_state : backlog = none :=
   SourceClaims.original_pending_batch_state
 
@@ -1249,6 +1251,8 @@ theorem original_keepalive_record_suffix (records : List HiddenRecord) (peer : P
   RecordSuffix.keepalive_record_suffix records peer
 
 open RecordSuffix in
+/-- On normal return, the queued zero-key callback leaves a suffix of its
+supplied hidden records; it need not consume a record. -/
 theorem original_clear_callback_record_suffix (records : List HiddenRecord) (pid : PeerId) :
     Campaign2.Ensures (queuedExpiredZeroKeyMaterial pid)
       (fun s=>s.ambient.hidden=some records)
@@ -1256,6 +1260,8 @@ theorem original_clear_callback_record_suffix (records : List HiddenRecord) (pid
   RecordSuffix.original_clear_callback_record_suffix records pid
 
 open RecordSuffix in
+/-- On normal return, one actual clear-worker section strictly consumes its
+supplied hidden records, including the section observations. -/
 theorem original_clear_worker_record_decrease (records : List HiddenRecord) :
     Campaign2.Product.Ensures Env.runOneClearWorker
       (fun s=>s.ambient.hidden=some records)
