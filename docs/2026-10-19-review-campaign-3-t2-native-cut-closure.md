@@ -417,3 +417,6 @@ Source-119 `e9f496fb` joins native session creation/rotation and outgoing initia
 
 
 Source-120 `cdf1eda8` joins captured MAC validation, load/rate-limit writes and endpoint metadata to the initialized source relation. Ordinary handshake fallback atoms are expanded. Compound consumers, cookie emission and administrative interiors remain open; the campaign report records scoped validation.
+
+
+Source-121 `722b7a0e` joins compound initiation, response and cookie consumers, including native authentication, lookup, accepted writes and counted releases under their original captures and receipts. Cookie emission and other administrative/service interiors remain open. The campaign report records the passing gate and scoped checks.
