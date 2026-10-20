@@ -476,7 +476,11 @@ plain fixture's four plus 8 and 9, `next_fd` 10; the mirror's
 `initialKernel` for this mode installs fixture files at 4-9 (the L design
 rejected a persistent extra descriptor for *all* network traces because it
 shifts the layout of every existing trace; here it is confined to this
-mode, and its traces are new). An alternative plumbing — create in C as
+mode, and its traces are new). The holders are reserved descriptors like
+0..7: a trace names none of them by literal (`harness/trace.py` and
+`Runner.reservedFds`, the parser's rule; 2026-10-20, after campaign 2's
+namespace-pin finding, where an alias of the pin kept C alive past
+`wg_netns_close`). An alternative plumbing — create in C as
 today, then move with `RTM_SETLINK` + `IFLA_NET_NS_FD`
 (`__dev_change_net_namespace`, which keeps `creating_net` and the sockets)
 — reaches the same state through more core code outside any window; not
@@ -678,6 +682,14 @@ New `Decision` constructors (the `d` form, `Decision.lean:912-916`):
   `netnsCHolders`. `wg_up` → `ENONET`; `wg_set` with port/fwmark → `EPERM`;
   `wg_delete` works (`wg_destruct` tolerates a NULL `creating_net`, L
   section 2.4).
+- **Where the teardown runs.** C's `cleanup_net` section runs only in
+  `wg_netns_close`'s wait, and only because the pin's close queued it
+  (`FS.fputFinal`'s pin hook, the C's last `put_net`): `Syscalls.netnsClose`
+  reports an invariant if the close queued nothing, `Env.netnsCleanup`
+  requires the queued unit before it opens the section, and a unit still
+  pending at an operation's end is refused in both record modes
+  (`Runner`). A cleanup queued anywhere else has no run site in the mirror;
+  the reserved-descriptor rule (3.1) keeps it unreachable.
 - **`portBound` is C's**: `{51998, 51999}`, as in the plain fixture (the
   listeners are in C by necessity, section 3.1).
 - **Carrier and flags.** For a down device nothing observable changes

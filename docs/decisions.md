@@ -904,3 +904,18 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   separates DoS resource bounds, with the exposure named, from the missing drop
   statistics; the statements commit to outcomes and leave the decomposition and
   order open. The seven findings are dispositioned in the charter's section 9.
+- **2026-10-20 [USER]** Campaign 2's namespace-pin finding (a retained alias
+  of the foreign-creator fixture's pin kept the creating namespace alive past
+  `wg_netns_close`, and the placeholder run accepted the pending cleanup) is
+  fixed on the mirror lane with the fixture-constraint shape: the fixture's
+  holders (W8's injector at 8 and pin at 9, the stepped dump's socket at 8,
+  the seccomp child's 8) are reserved descriptors like 0..7, in the validator
+  and the parser alike, rather than modelling `cleanup_net` after an
+  arbitrary later close, which is scheduling-dependent in a guest that waits
+  only inside the namespace close. [AGENT, coordinator: the shape's details;
+  fork: the namespace close reports an invariant when the pin's close queued
+  no cleanup, `Env.netnsCleanup` requires the queued unit, and the
+  end-of-operation pending-unit refusal applies in both record modes.] The
+  proof tree's H5 recipe that asserted the parser's former acceptance lags
+  until campaign 2 repairs it.
+
