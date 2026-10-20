@@ -210,3 +210,6 @@ Source-115 `328a0d2c` joins RX adapter and queue-admission points to initialized
 Source-116 `fe6161d3` joins RX publication through the actual resolution, borrow, guard and saved writes. Ordinary ingress reads and writes now have access-tree points as well. Compound handshake, configuration and lifecycle native calls remain among the open coverage obligations. The campaign report records the full validation checkpoint.
 
 Source-117 `095e3aa7` joins actual saved-peer metadata points for response creation, MAC updates and related handshake timers. The read-derived write preserves peer identity and both TX queues, with its original continuation. Other compound native calls remain open; the campaign report records intermediate validation and the latest aggregate checkpoint.
+
+
+Source-118 `67607187` joins protocol socket interiors to initialized handshake accounting, preserving the original route/cache source, causal context and receipt entry. Other native families remain open. The campaign report records the passing aggregate gate, fresh replay and twelve recipes.
