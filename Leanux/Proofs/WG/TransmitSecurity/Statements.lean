@@ -1537,8 +1537,10 @@ theorem recorded_admission_destination (receipt : Journal.RoutingHistory.Receipt
 /-- Nonce reuse would break transport confidentiality and integrity. Every
 initialized execution, including a stopped prefix, retains unique reservations,
 unique actual key-allocation/AEAD nonce pairs, and unique serialized wire nonces.
-Every ciphertext uses its packet's assigned header and AEAD counter below the
-native rejection bound. No incoming carrier or campaign-2 hypothesis remains. -/
+Each recorded ciphertext has an exact header/AEAD nonce encoding below the
+native rejection bound. The packet-to-reservation link is used internally and
+is not a separate conjunct here. No incoming carrier or campaign-2 hypothesis
+remains; completeness of the AEAD journal depends on hook placement. -/
 theorem initialized_nonce_safety (trace : Runner.Trace) (placeholders : Bool) :
     let h := (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2.filterMap
       AuthenticatedEffects.CausalJournal.old?
@@ -1724,12 +1726,13 @@ theorem initialized_encrypted_plaintext_origin (trace : Runner.Trace) (placehold
       Born pre generation r.read.value.peer stamp ticket r.read.value.plaintext :=
   Staged.Origins.initialized_encryption trace placeholders pre post r position
 
-/-- Security: every initialized transport socket receipt binds the actual
-endpoint and emitted bytes to an earlier AEAD and its own earlier staged
-plaintext origin. The selected current-slot allocation and sending core are
-bound historically. The actual key at allocation is owned by the socket peer,
-and its sending core matches the AEAD key even after owner clearing. Converse
-coverage of all emissions and exactly-once conservation remain separate. -/
+/-- Security: an initialized transport socket receipt has valid local reads,
+an emission at its recorded endpoint, and an earlier AEAD with the same peer
+and ciphertext. Historical current-slot selection and key ownership supply
+separate conjuncts. `Born` supplies an earlier matching plaintext, not an
+occurrence-identity link to that AEAD. Destination lookup is a separate theorem;
+`SocketReceipt.Valid` does not join the post-peer-read world to the socket entry.
+Converse emission coverage and cut-point conservation are separate claims. -/
 theorem initialized_socket_route_key_core_and_endpoint (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List CausalJournal.Event) (r : Completion.SocketReceipt)
     (position : (runPrefixOuter (CausalJournal.execute trace placeholders) []).2 =
@@ -2765,23 +2768,26 @@ end
 section
 open AuthenticatedEffects.StagedEntry.Reached
 
-/-- Security: every native source point of the initialized runner has one
-semantic account for each admitted packet, with a unique pending or terminal
-status, native cell ownership, allocation backing and exact terminal receipt
-counts. A mutation-to-receipt interval uses only its actual total pending
-records and keeps the same WG state. The concrete source family covers setup,
-traffic, scheduling, receive, timers, configuration, lifecycle, dump and cleanup;
-it requires no incoming invariant, child-family or semantic-acceptance premise.
-Eventual completion of pending packets and simulation of C memory are excluded. -/
+/-- Security: at each cut admitted by the tree's declared `SourcePoint`
+relation, an existential ledger gives every admitted ticket a unique pending
+or terminal status, native cell ownership, allocation backing and exact receipt
+counts. Admission is successful staging splice or new keepalive creation;
+earlier transmit refusals are accounted separately. The ledger is chosen at
+each point: this type does not export persistence of terminal status between
+points. A mutation-to-receipt interval uses its actual pending records on the
+same WG state. Source-cut coverage is audited, not established by this theorem;
+there is no incoming invariant or child-family premise and no progress bound. -/
 theorem initialized_transmit_source_conservation
     (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    {site : AuthenticatedEffects.StagedEntry.Reached.Runner.Points.Site}
+    {w : World} {h : List CausalJournal.Event}
     (point : NativeAccounting.SourcePoint trace placeholders site w h) :
     NativeAccounting.AccountOrRecords h w.wg :=
   NativeAccounting.initialized_concrete_account trace placeholders point
 
-/-- Security: changing any former extension family cannot omit a native child
-from the concrete initialized source relation. Every such parameter is eliminated
-by the source composition before the conservation claim is made. -/
+/-- Security scope: the declared source relation is independent of these five
+extension parameters. This equality eliminates caller-supplied child families;
+it does not prove that the declared cuts cover every native source location. -/
 theorem transmit_source_children_are_closed
     (consume : Consume.Points.ChildPoints) (napi : Napi.Points.ChildPoints)
     (worker : Iteration.Points.ChildPoints) (work : WorkService.Points.ChildPoints)

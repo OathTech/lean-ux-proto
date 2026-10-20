@@ -99,10 +99,10 @@ def SourcePoint (trace : Leanux.Runner.Trace) (placeholders : Bool)
     (site : Runner.Points.Site) (w : World) (h : List Event) : Prop :=
   Runner.Points.Point concreteChildren (Runner.Points.executeShape trace placeholders) [] site w h
 
-/-- Security: every concrete initialized native source point conserves each
-admitted ticket and each resident cell, either in its present account or after
-its original total pending records on the same WG state. No extension family
-or incoming semantic certificate is supplied. -/
+/-- Security: each declared initialized `SourcePoint` admits a ticket/cell
+account, either immediately or after its original pending records on the same
+WG state. The ledger is existential at that point; source-cut coverage is an
+audit obligation. No extension family or incoming certificate is supplied. -/
 theorem initialized_concrete_account (trace : Leanux.Runner.Trace) (placeholders : Bool)
     (point : SourcePoint trace placeholders site w h) : AccountOrRecords h w.wg :=
   initialized_account_or_records trace placeholders site w h point
