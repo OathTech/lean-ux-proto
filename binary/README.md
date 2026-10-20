@@ -58,8 +58,16 @@ overwrites the flags. Focused tests check both ZF outcomes for both initial
 values at 16, 32 and 64 bits; the native comparison observes CF, not undefined
 ZF. Passing that concrete comparison is not a claim about every vendor CPU.
 
-Concrete tests and image comparison require the read-only s5 build. Set
-`LEANUX_BINARY_KERNEL_DIR` to its directory; the default is
+Proof compilation and the binary gate use committed image terms: a clone can
+bootstrap Kraken (with network access) and build/replay those proofs without
+an ELF. Kernel-execution tests and image/layout comparison are more restricted:
+the mutation runner, sequence-wrap witness, recorded comparisons, captures and
+generator `--check` commands below need the exact read-only s5 ELF, SHA-256
+`06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e`.
+That saved artifact is box-local. This repository has no recipe that promises
+to regenerate that exact ELF hash, and the mirror's current oracle is different.
+Those tests therefore cannot be reproduced from a clone alone; the artifact
+must also be supplied. Set `LEANUX_BINARY_KERNEL_DIR` to its directory; the default is
 `.artifacts/kernel-net-choice-s5` in the common checkout. `binary/target.py`
 verifies the exact ELF hash and selects `binary/kernel-identity-s5.txt` for
 boots/captures. This is an explicit binary-package pin; it does not follow
