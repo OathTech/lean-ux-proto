@@ -235,6 +235,45 @@ Binary.Pair.Allowedips.ChildPublish.publication_restores : ∀ (fetch : Int64 �
                                                           (Except.ok.{0, 0} ()))
                                             { data := s,
                                               pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1778 }
+Binary.Pair.Allowedips.Select.selection_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {names : Binary.Pair.Trie.Names} {s : MachineData} {node : Binary.Pair.Trie.Node} {key : Nat} {memory : DataMem}
+      {registers : Reg64s} {offset : Nat},
+      Eq.{1} (Binary.Pair.Trie.decodeNode names Binary.Pair.Allowedips.Root.nodeOffsets s.dmem s.regs.rbx.toNat)
+          (Except.ok.{0, 0} node) →
+        Binary.AllowedipsChild.QueryWords s.dmem s.regs.r13.toBitVec node.width key →
+          LT.lt.{0} node.cidr node.width →
+            Eq.{1} (Binary.Pair.Allowedips.Select.effect s)
+                (Except.ok.{0, 0} (Prod.mk.{0, 0} memory (Prod.mk.{0, 0} registers offset))) →
+              Eventually (Binary.instructionStep fetch)
+                (fun t =>
+                  Eq.{1} t.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry (Int64.ofNat offset)) ∧
+                    Eq.{1} t.data.dmem memory ∧
+                      Eq.{1} t.data.regs registers ∧
+                        Binary.EqualOutside (Binary.InRange s.regs.rsp.toBitVec 8) s.dmem t.data.dmem ∧
+                          Binary.Pair.MappedLe s.dmem t.data.dmem ∧
+                            Eq.{1} t.data.regs.rax.toNat
+                                (HMod.hMod.{0, 0, 0}
+                                  (HDiv.hDiv.{0, 0, 0} key
+                                    (HPow.hPow.{0, 0, 0} 2
+                                      (HSub.hSub.{0, 0, 0} (HSub.hSub.{0, 0, 0} node.width 1) node.cidr)))
+                                  2) ∧
+                              Eq.{1} t.data.regs.rdx.toNat
+                                  (HMod.hMod.{0, 0, 0}
+                                    (HDiv.hDiv.{0, 0, 0} key
+                                      (HPow.hPow.{0, 0, 0} 2
+                                        (HSub.hSub.{0, 0, 0} (HSub.hSub.{0, 0, 0} node.width 1) node.cidr)))
+                                    2) ∧
+                                (Eq.{1} offset 1760 →
+                                  Eq.{1}
+                                    (getElem?.{0, 0, 0} node.children
+                                      (HMod.hMod.{0, 0, 0}
+                                        (HDiv.hDiv.{0, 0, 0} key
+                                          (HPow.hPow.{0, 0, 0} 2
+                                            (HSub.hSub.{0, 0, 0} (HSub.hSub.{0, 0, 0} node.width 1) node.cidr)))
+                                        2))
+                                    (some.{0} none.{0})))
+                { data := s, pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 530 }
 Binary.Pair.Allowedips.ChildPublish.publication_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
     ∀ {s : MachineData} {memory : DataMem} {registers : Reg64s},
@@ -1669,6 +1708,28 @@ fun before after a =>
   Binary.InRange (HAdd.hAdd.{0, 0, 0} after.r8.toBitVec 48) 8 a ∨
     Binary.InRange
       (HAdd.hAdd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} before.rbx.toBitVec (HMul.hMul.{0, 0, 0} after.rax.toBitVec 8)) 8) 8 a
+def Binary.Pair.Allowedips.Select.effect : MachineData →
+  Except.{0, 0} String (Prod.{0, 0} DataMem (Prod.{0, 0} Reg64s Nat)) :=
+fun s => do
+  let byteIndex ← readNat { data := s, pc := 0 } (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 25) 1
+  let shift ← readNat { data := s, pc := 0 } (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 26) 1
+  let base ← readNat { data := s, pc := 0 } (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 24) 8
+  let byte ← readNat { data := s, pc := 0 } (HAdd.hAdd.{0, 0, 0} s.regs.r13.toNat byteIndex) 1
+  Binary.Pair.require (decide (LT.lt.{0} byteIndex 16) && decide (LT.lt.{0} shift 8)) "select.selectors"
+  have direction : Nat := HMod.hMod.{0, 0, 0} (HDiv.hDiv.{0, 0, 0} byte (HPow.hPow.{0, 0, 0} 2 shift)) 2
+  let child ←
+    readNat { data := s, pc := 0 }
+        (HAdd.hAdd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 8) (HMul.hMul.{0, 0, 0} direction 8)) 8
+  let memory ← Binary.Pair.Allowedips.Root.store s.dmem s.regs.rsp.toNat 8 child
+  pure.{0, 0}
+      (Prod.mk.{0, 0} memory
+        (Prod.mk.{0, 0}
+          (have __src := s.regs;
+          { rax := UInt64.ofNat direction, rbx := __src.rbx, rcx := UInt64.ofNat child, rdx := UInt64.ofNat direction,
+            rsi := __src.rsi, rdi := __src.rdi, rsp := __src.rsp, rbp := __src.rbp, r8 := UInt64.ofNat base,
+            r9 := __src.r9, r10 := __src.r10, r11 := __src.r11, r12 := __src.r12, r13 := __src.r13, r14 := __src.r14,
+            r15 := __src.r15 })
+          (ite.{1} (Eq.{1} child 0) 1760 577)))
 def Binary.Pair.Allowedips.NodeInit.effect : MachineData → Except.{0, 0} String (Prod.{0, 0} DataMem Nat) :=
 fun s => do
   let __x ← Binary.Pair.Allowedips.NodeInit.attach s

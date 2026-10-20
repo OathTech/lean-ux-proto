@@ -97,6 +97,7 @@ def main():
                                            for c in r['calls']+r['isolatedRootCases']),
                          exact_segments=sum(c['insert']['exactSegments'] for r in rows for c in r['calls']),
                          child_segments=sum(c['insert']['childSegments'] for r in rows for c in r['calls']),
+                         select_segments=sum(c['insert']['selectSegments'] for r in rows for c in r['calls']),
                          node_init_segments=sum(c['insert']['nodeInitSegments'] for r in rows for c in r['calls']),
                          return_segments=sum(c['insert']['returnSegments'] for r in rows
                                              for c in r['calls']+r['isolatedRootCases']),

@@ -1087,3 +1087,41 @@ seconds. Those entries remain constructed and allocation/free services supplied.
 Fresh kernel replay of `AllowedipsInsertionSurface` passes. The reviewed printed
 surface adds the publication theorem with standard axioms; `TrustBase.lean` and
 the clean private Kraken pin are unchanged. No external gate acceptance is claimed.
+
+## Executed child selection (09:25 UTC)
+
+`Select.selection_checked` proves the twelve instructions from `add+0x212`
+through the empty-child or occupied-child exit. The tested summary reads the
+parent's selector bytes, saved allocation and query byte, reads the selected
+child, and saves that child in the stack word. It exports exact memory/registers,
+the one-word write frame and preserved readability. From the decoded parent and
+actual query words, the selected bit equals the mirror's key arithmetic. The
+empty-child exit establishes that the corresponding mirror slot is empty.
+
+The generated test passes all 18 selector segments within the existing 66
+retained-heap insertion/lookup calls and 24 isolated root cases (3.201 seconds).
+Its count is compared with the mirror's selector branches. Two initial test
+runs failed because the history filter omitted the new boundaries and because
+the occupied-child exit is also reached directly by the no-parent path. The
+filter now records the boundaries; the checker explicitly permits that shared
+exit without a selector start, while still rejecting a missing start on the
+empty-child exit and enforcing the source-derived count. These were checker
+wiring defects, not mirror/binary discrepancies.
+
+Five modules add 338 lines for the executable summary, symbolic execution and
+source-key/empty-slot interpretation. The main physical normalization reused
+the prior selector arithmetic. Development exposed recursion failures when
+normalizing a signed stored word and when a broad simplification traversed the
+whole effect; an explicit signed-word identity and staged flag/branch reduction
+resolved them without raising limits. The helper build and default package
+build pass without warnings; the default build has 1,141 jobs. The fast tier
+passes 137 tests, one skipped (24.066 seconds). Recorded three-way execution
+passes eight calls under two seeds, 170 coverage entries, 64 comparisons and
+117 decisions (0.312 seconds). Fresh kernel replay and the reviewed surface
+diff pass with standard axioms and unchanged `TrustBase.lean`.
+
+This adds physical instruction coverage, not completed function coverage.
+The before/after coverage calls, saved publication inputs and pending-node frame
+still need to join initialization to publication; the other insertion branches,
+entry establishment and function/sequence composition remain open. No external
+acceptance or completion of A/B is claimed.
