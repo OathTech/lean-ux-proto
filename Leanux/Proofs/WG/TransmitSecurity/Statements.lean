@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConfigConcreteInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTrafficConcreteInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedXmitConcreteComposition
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxRepaymentWorker
@@ -2685,6 +2685,26 @@ theorem initialized_scheduler_receive_source_points_conditional
       (Napi.Composition.schedulerChildren carrierGood (napiChildren carrierGood accept receive)
         (workerChildren carrierGood accept workers)) (Scheduler.Points.scheduleShape none) world history :=
   ReceiveWorker.Composition.initialized_scheduler entry carrierGood accept receive workers
+
+end
+
+section
+open AuthenticatedEffects AuthenticatedEffects.StagedEntry AuthenticatedEffects.StagedEntry.Reached
+
+/-- Security: every declared initialized source point has a concrete packet
+account or named selected, allocation or pending-receipt phase on its actual
+WG projection. No accounting or semantic-acceptance premise is supplied;
+finer native source coverage remains a separate obligation. -/
+theorem initialized_source_points_have_native_accounting
+    (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    {nativeConsume : Consume.Points.ChildPoints} {nativeNapi : Napi.Points.ChildPoints}
+    {nativeWorker : Iteration.Points.ChildPoints} {nativeWork : WorkService.Points.ChildPoints}
+    {nativeDispatch : Dispatch.Points.ChildPoints} :
+    Reached.Runner.Points.Covered
+      (NativeAccounting.children nativeConsume nativeNapi nativeWorker nativeWork nativeDispatch)
+      (fun h w=>NativeAccounting.Evidence h w.wg)
+      (Reached.Runner.Points.executeShape trace placeholders) [] :=
+  NativeAccounting.initialized trace placeholders
 
 end
 
