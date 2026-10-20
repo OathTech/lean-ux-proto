@@ -1,4 +1,5 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxAccountingAccessFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPreparePointCanonicalFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSocketInteriorSource
 
 /-! Fixed cache-source witnesses expose cached peer reads, clock inputs and
 native slot writes. The frame requirements are proved separately from the

@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedProtocolPointFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerMetadataCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRoutedTransmitComposition
 

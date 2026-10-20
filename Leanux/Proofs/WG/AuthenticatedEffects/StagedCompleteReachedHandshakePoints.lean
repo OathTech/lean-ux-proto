@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.HandshakeCon
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
 
 inductive Site where
-  | entry | returned | release | keepalive | metadata
+  | entry | returned | release | keepalive | metadata | protocol
   | leaf (site : Consume.Leaf.Site)
   | left (site : Site) | right (site : Site)
 
@@ -16,6 +16,8 @@ inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action �
   | entry (shape : Shape action) : Point shape w h .entry w h
   | returned (shape : Shape action) (performed : runPrefix action w h=(.ok (value,u),middle)) :
       Point shape w h .returned u middle
+  | protocol (point : ProtocolPoints.RootPoint pid bytes w h u middle) :
+      Point (.native (.protocol pid bytes)) w h .protocol u middle
   | metadata {w : World} {source : PeerMetadata.Shape body}
       (point : PeerMetadata.Point source w.wg w.ambient v b) :
       Point (.native (.metadata body source)) w h .metadata {w with wg:=v,ambient:=b} h
@@ -47,6 +49,7 @@ theorem Point.safe (carrierGood : ∀h w,Carrier h w → Good h w)
     exact carrierGood _ _ before
   | returned shape performed=>
     exact carrierGood _ _ (shape.normal before performed)
+  | protocol point=>exact carrierGood _ _ (ProtocolPoints.Point.accounted before point)
   | metadata point=>
     obtain ⟨ledger,account⟩:=before
     exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
@@ -72,6 +75,7 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {shape : Shape a
     exact ⟨_,rfl⟩
   | returned shape performed=>
     exact ⟨pure _,performed⟩
+  | protocol point=>exact ProtocolPoints.Point.remaining point
   | metadata point=>exact point.observed_remaining _
   | leaf source point=>
       obtain ⟨remaining,residual⟩:=point.residual WorkService.Points.leafContracts
