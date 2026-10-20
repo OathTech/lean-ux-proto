@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxSocketWorker
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxPostSocket
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxPassiveFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxRepaymentWorker
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxSelectionPointFrames
@@ -17,6 +17,8 @@ inductive Point (pid : PeerId) (w : World) (h : List CausalJournal.Event) : Worl
   | repayment (point : TxRepayment.WorkerPoint pid w h u middle) : Point pid w h u middle
   | sending (point : TxSending.Point pid w h u middle) : Point pid w h u middle
   | socket (point : TxSocket.WorkerPoint pid w h u middle) : Point pid w h u middle
+  | sendFront (point : TxSendFront.WorkerPoint pid w h u middle) : Point pid w h u middle
+  | accounting (point : TxPostSocket.WorkerPoint pid w h u middle) : Point pid w h u middle
   | passive (point : TxPassive.Point pid w h u middle) : Point pid w h u middle
 
 theorem Point.remaining (point : Point pid w h u middle) :
@@ -28,6 +30,8 @@ theorem Point.remaining (point : Point pid w h u middle) :
   | repayment point=>exact point.remaining
   | sending point=>exact point.remaining
   | socket point=>exact point.remaining
+  | sendFront point=>exact point.remaining
+  | accounting point=>exact point.remaining
   | passive point=>exact point.remaining
 
 noncomputable def remainder (point : Point pid w h u middle) : PrefixM CausalJournal.Event Bool :=
@@ -62,6 +66,12 @@ theorem Point.evidence (before : Accounted h ledger [] locals w.wg)
       exact .repayment next step proof
   | sending point=>exact .selected (point.evidence before)
   | socket point=>
+      obtain ⟨context,peer,localEq,origin,next,debts,step,proof⟩:=point.evidence before
+      exact .socket context peer localEq origin next debts step proof
+  | sendFront point=>
+      obtain ⟨context,peer,localEq,origin,next,debts,step,proof⟩:=point.evidence before
+      exact .socket context peer localEq origin next debts step proof
+  | accounting point=>
       obtain ⟨context,peer,localEq,origin,next,debts,step,proof⟩:=point.evidence before
       exact .socket context peer localEq origin next debts step proof
   | passive point=>exact .selected (point.evidence before)
