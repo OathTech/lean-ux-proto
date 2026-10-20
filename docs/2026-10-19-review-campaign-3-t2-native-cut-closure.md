@@ -423,3 +423,6 @@ Source-121 `722b7a0e` joins compound initiation, response and cookie consumers, 
 
 
 Source-122 `7f9005de` joins complete cookie emission through native routing, tunnel capture, append and receipt points. Exact source equations retain the original capture and journal. Configuration, lifecycle and service interiors remain open; the campaign report records scoped validation and the latest aggregate checks.
+
+
+Source-123 `5b0a99a1` joins configuration metadata, public-key lookup, peer creation and the delayed send-worker prefix. The original read supplies saved-peer fields, and initialized allocation derives creation freshness. All cuts preserve the same ticket ledger. Configuration routing edits, lifecycle and remaining service interiors remain open. The campaign report records the passing aggregate gate, fresh replay, twelve recipes and scoped axiom queries.

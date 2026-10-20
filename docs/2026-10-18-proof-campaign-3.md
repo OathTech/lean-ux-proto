@@ -2,7 +2,7 @@
 
 ## Progress
 
-Current source: source-122 `7f9005de` passes 4450 build jobs and 73 public axiom queries over main `1a69cebb`. All 4403 frozen proof hashes and fifty carry paths match. Complete cookie emission now joins initialized accounting. The 1567-declaration gate last passed at source-121; fresh root replay and twelve recipes last passed at source-118 `67607187`. T2 remains open at complete native source coverage; the other five outcomes retain their stated boundaries.
+Current source: source-123 `5b0a99a1` passes 4456 build jobs, the 1567-declaration gate, 106 public axiom queries, fresh root kernel replay and all twelve counterexample recipes over main `1a69cebb`. All 4409 frozen proof hashes and fifty carry paths match. Configuration metadata, lookup, peer creation and the delayed send-worker prefix now join initialized accounting. T2 remains open at complete native source coverage; the other five outcomes retain their stated boundaries.
 
 [AGENT 2026-10-18] Work begins on `proofs/campaign-3` at `783510e8`, under
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
@@ -569,3 +569,8 @@ Source-121 `722b7a0e` joins initiation, response and cookie consumers through th
 
 
 Source-122 `7f9005de` joins the complete cookie-emission path: native message creation, reply selection, IPv4/IPv6 route/cache source, tunnel capture, sent-list append and receipt. Exact erasure and relabelling equations preserve the original capture entry and journal. The nine-module delta passes 4450 build jobs and 73 changed/new standard-or-empty public axiom queries. All 4403 frozen proof hashes and fifty carry paths match; main and mirror are unchanged, with no warnings. The route and capture drafts needed explicit native-result types and record destructuring; no mirror finding arose. Configuration, lifecycle and service interiors remain open. The aggregate gate last passed at source-121; fresh root replay and twelve recipes last passed at source-118 `67607187`.
+
+
+Source-123 `5b0a99a1` joins configuration metadata, public-key lookup, fresh peer creation and the send-worker prefix to initialized accounting. Delayed metadata writes retain the actual saved peer across native reads and Ambient decisions; identity and both TX queues are preserved at every source cut. Creation exposes the guards, counter/frontier writes, fresh peer insertion and subsequent metadata. Its actual front derives slot vacancy from the initialized allocation bound; inserting an empty peer preserves the same packet ledger without claiming equality of the full resident-peer projection. Configuration routing edits, lifecycle and remaining service interiors remain open.
+
+The fourteen-module delta passes 4456 build jobs, the 1567-declaration gate across thirteen roots, 106 changed/new standard-or-empty public axiom queries, fresh root kernel replay and all twelve counterexample recipes. Every process returned exit zero. All 4409 frozen proof hashes and fifty carry paths match; main and mirror are unchanged. Saved-write induction indexing and unguided witness selection caused development failures; explicit indices and source-head dispatch repaired them without warnings or raised limits in the new modules. No mirror finding arose. Fresh replay completed after the source commit; this entry supersedes its in-progress validation note.
