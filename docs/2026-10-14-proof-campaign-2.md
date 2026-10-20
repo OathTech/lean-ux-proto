@@ -183,7 +183,47 @@ Effort: 1,183 theorems, 100 headlines, 267 modules. Ranked mirror changes:
 none requested for these statement/representation artefacts. No firing fairness,
 universal retry-history bound or stronger site-completeness theorem is claimed.
 
-## Current checkpoint
+## Landing-review disposition, 2026-10-20
+
+[USER 2026-10-20] Apply the seven landing-review corrections without new
+theorems, changed statements or mirror edits; keep recipe guest slots at 16.
+The review is retained unchanged from `task/review-campaign-2` at `38ed7fb5`;
+its N8 resource note is superseded by that guidance.
+
+| Item | Disposition | Commit |
+| --- | --- | --- |
+| S1 | Six short status rows distinguish proved scope and exclusions; no run narratives | `90656358` |
+| S2 | Rows moved into Results with Review cells, six claim-carrying entries, repository-relative intro and no campaign checkpoint narrative | `e505e329` |
+| S3 | Pin finding/request 5 identify operation-1 teardown, silent skip, supplied-mode refusal and two unchosen mirror-lane fix shapes | `8a09c592` |
+| S4 | Three recipes added; both helper modules imported into the built Progress terminal module | `4d8c94d4` |
+| S5 | Six opening summaries give architecture, both statement wordings, findings, effort and ranked mirror requests | `5ed9ea4a` |
+| S6, N4 | Eleven missing docstrings added; two concrete-evaluation headlines clarified | `52e861eb` |
+| S7 | Supplied-pending finding marked as a mirror defect fixed at 3f3879e0, with regression retained | `8e24451b` |
+
+Validation after all seven commits:
+
+- `capped -- scripts/in-bundle scripts/proof-gate`: PASS, **3,141 build jobs,
+  1,774 terminal statements**, only `propext`, `Classical.choice`, `Quot.sound`;
+  actual exit zero.
+- `capped -- scripts/in-bundle scripts/proof-counterexamples`: PASS,
+  **15 recipes**, including confirmation incarnations, namespace pin and
+  initialized give-up; actual exit zero.
+
+Both runs used `LEAN_NUM_THREADS=32` and `LEANUX_QEMU_SLOTS=16` with the
+unchanged outer memory cap. The bundle's inner capped-discovery notice does
+not remove that outer cap. No failure, infrastructure rerun, KILLED outcome
+or Lean-limit change occurred. Fresh kernel replay was not repeated for this
+imports/docstrings-only Lean change; the pre-review replay remains historical.
+
+Lightweight checks confirm all 879 owned terminal theorems have docstrings;
+all Lean declaration/proof tokens match `3dbf9a02` after removing comments
+and import lines; the review copy is byte-identical; the six Results rows,
+six claim-carrying entries and their document links are present. No new
+proof, statement change or mirror fix was needed. The owned census remains
+9,443 theorems / 879 headlines / 2,210 modules. H5 request 5 remains open as
+a recorded mirror defect; these corrections do not prove pending quiescence.
+
+## Pre-review checkpoint, 2026-10-20
 
 The staged Prefill proof is integrated without increasing any Lean resource
 limit. Unconditional finite evaluation of the complete typed trace is closed.
@@ -216,7 +256,7 @@ three campaign projection modules. Claims remain over the campaign projection;
 physical frames remain separate. No shared campaign-1 lemma or mirror file is
 edited by this campaign.
 
-Final validation: full gate **3,137 jobs / 1,774 terminal statements**, with
+Pre-review validation: full gate **3,137 jobs / 1,774 terminal statements**, with
 only the three standard axioms; fresh whole-root kernel replay exits zero.
 The separately built helper modules also pass their 12 axiom inspections and
 fresh replay at the `AmbientRetentionFrames` and `SuppliedRecordSource` roots.
