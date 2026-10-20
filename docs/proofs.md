@@ -1,34 +1,25 @@
 # Proofs about the mirrors
 
 `Leanux/Proofs/` is the repository's proof tree: every theorem about the
-executable mirrors lives there and nowhere else. Campaign 1's tree returned
-to main at aacaed43; this branch also incorporates its GRO carry 8ba82097 over
-mirror 77c9b555 and campaign 2's six result directories. Proofs are a validation
-channel for the models beside the differential check, under Rule Zero: the
-mirror is never edited to let a proof close; a proof that cannot close is a
-report against the mirror, settled by the check. The standing rule and the
-gate are in [AGENTS.md](../AGENTS.md); this file is the map of the tree and
-the register of its results.
+executable mirrors lives there and nowhere else. It includes the shared
+layers and results of campaign 1 and the six results of campaign 2. Proofs
+are a validation channel beside the differential check, under Rule Zero:
+the mirror is never edited to let a proof close. The standing rule and gate
+are in [AGENTS.md](../AGENTS.md); this file maps the tree and registers its
+claims, premises and mirror pins.
 
-## Current GRO carry
+## Current register
 
-All seven results are current over `77c9b555`. The [GRO carry report](2026-10-18-proof-gro-carry.md)
-records the corrected classification and held-first same-flow completion,
-the replacement source-selected order contract and its conditional reversal
-helper. Chronological post-GRO order remains refuted by the accepted distinct-flow
-replay. The mirror is unchanged by this carry.
+The Results table is the current claim register; historical validation
+counts below it are not current pins. Campaign 1's [GRO report](2026-10-18-proof-gro-carry.md)
+and [state-split report](2026-10-16-proof-state-split.md) describe the shared
+layers, including the environment carry landed at `3308c49a`. Campaign 2's
+[report](2026-10-14-proof-campaign-2.md) and [landing review](2026-10-20-review-campaign-2-landing.md)
+describe its scope over `1a69cebb`. H5's unrestricted pending-work clause
+remains refuted with an open environment request; this is a recorded finding,
+not a proved quiescence claim. Each result's row below names its mirror pin.
 
-Carry [AGENT 2026-10-19]: the lag from the environment fixes (the activation fuel, the pending-work lifecycle, the dump's nest cancellation) is repaired by the carry commits 74b03922, 0c8f59fb and 7a189c9e (Codex#1, as campaign 1's carry: the inherited observers and source equations, the refill and pending-work frames in `Framing/BatchRefills.lean`, the expanded anti-replay runner proof's budget; 50 files, all within the landed layers); the gate passes with 895 terminal statements and the twelve counterexample recipes replay, so every result is current over main at this commit.
-
-The complete 973-job build, the 895-declaration proof gate over nine root modules,
-fresh root kernel replay and all twelve executable witness recipes pass.
-The unit suite passes 131 tests with one skip. The tree still has 916 proof
-files; named theorems increase from 12,302 to 12,310 (thirteen added, five obsolete
-helpers removed). The seven result surfaces retain all 860 declarations.
-Independent review findings are corrected. Campaign 1's dispositions remain
-complete; further work awaits campaign 3's charter.
-
-## Completed state-split retrofit
+## Historical state-split retrofit
 
 The completed retrofit was validated over `b3f56807`, whose executable
 mirror is identical to split landing `b700659` (the `6089dc4` split). All seven
@@ -66,7 +57,7 @@ Leanux.Proofs passes after compilation. The sole build warning is the existing
 mirror-side String.mk deprecation. The [retrofit report](2026-10-16-proof-state-split.md)
 records the contract changes, findings, failed development checks and validation.
 
-## Current R3 extension
+## R3 extension history
 
 The [current-identity extension](2026-10-17-r3-current-identity.md),
 [reached-routing extension](2026-10-17-r3-reached-routing.md),
@@ -133,7 +124,7 @@ concrete NAPI, crypt workers, scheduler, deferred work and syscall continuations
 are connected to the original initialized runner. Public parsing supplies the
 configuration shape premise; exact erasure retains JSON and indexed Stops.
 
-## Current R4 extension
+## R4 extension history
 
 The [full-ring closure](2026-10-17-r4-full-ring.md) adds five support modules,
 one executable witness and eleven terminal exports after the
@@ -1038,12 +1029,21 @@ open. All earlier theorem bodies are unchanged. Gate: 918 jobs/834 declarations,
 | R4: ingress conservation, W7 characterization and GRO order finding | Every accepted runner exposes all actual ingress positions, including admissions removed before syscall return. Each accepted carrier has exactly one pending identity or an actual named completed-poll disposition/release; initialized stamp uniqueness prevents duplicate Stack entries. Live logical ring bounds and physical refinement are derived from initialization. Kernel-proved arbitrary-payload geometry and an accepted generated original-run replay characterize the named W7 episode: 1022 enqueues and two refused allocations, later released as DEAD heads without completion. Chronological GRO order is refuted; run-wide pre-GRO order is not claimed, and the order result is the per-poll subsequence theorem `original_poll_buffered_entry_subsequence` (`DeliveryOrder/Statements.lean:537`): the C's first-in-first-out order through the per-peer queue up to `napi_gro_receive` is proved within one poll only. The finite W7 runtime checks are compiled evidence, not universal outgoing-disposal or eventual-delivery theorems. Local cleanup-totality findings remain. The universal quantifier over ingress positions and carriers ranges over the events the proof-side observers record; that the observers cover every admission and poll site is established by review of their wiring, not by a kernel-checked theorem. | `Leanux/Proofs/WG/DeliveryOrder/` (`Statements.lean`, 326 terminal theorems; `ReplayGro.lean`, `ReplayFullRing.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [full-ring report](2026-10-17-r4-full-ring.md), [ingress coverage report](2026-10-17-r4-ingress-coverage.md), [campaign report](2026-10-13-proof-campaign.md#r4--ingress-conservation-full-ring-characterization-and-gro-order-finding) | 77c9b555 | current: GRO carry validated; charter disposition complete |
 | R5: key lifetime enforcement; Rule Zero findings | Thirteen local theorems identify exact original clock tests, RX AEAD admission and failed-tag coverage, accepted-wire-nonce bounds, TX staging certificates, zero-timer store framing and timer-pass erasure. Accepted original/observed replays authenticate nonce R+1 before rejection and encrypt queued transport keepalives after recorded expiry or zero/clear before a new handshake, using the same packet-held material. New time inputs have coherent coarse/jiffies/arm arithmetic, without a Linux schedule claim. The original unconditional statement is false; universal replacement transport theorems are not claimed. | `Leanux/Proofs/WG/KeyLifetime/` (`Statements.lean`, 13 terminal theorems; `Replay.lean`, `ReplayDelayed.lean`, `ReplayPostClear.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r5--key-lifetime-enforcement-rule-zero-findings) | 77c9b555 | current: GRO carry validated |
 | R6: cookie exclusion and retry-limit finding | Original under-load calculation and rejected-initiation suffix are exact. Invalid MAC2 against the actual original cookie result executes only the cookie reply; invalid MAC1 drops earlier. Ordinary completion preserves full Noise stores, indices and peer/keypair allocation counters. An accepted generated episode has 19 retries and 20 total initiations with MAX=18, then gives up on callback 20; this refutes the literal limit without claiming a universal replacement bound; the give-up behaviour is also shown on Linux by the differentially checked corpus trace `corpus/wireguard/d3_retransmit_gives_up.json` (20 `wg_advance`s in the `wireguard` suite). The whole advance observer has exact original erasure. | `Leanux/Proofs/WG/FloodResistance/` (`Statements.lean`, 6 terminal theorems; `Replay.lean`) | [campaign charter](2026-10-13-charter-proof-campaign.md) | [campaign report](2026-10-13-proof-campaign.md#r6--cookie-exclusion-and-retry-limit-finding) | 77c9b555 | current: GRO carry validated |
+| H1 Noise session state machine | 75 terminal declarations: whole-run tag ownership; per-function slot effects; completed confirmation uniqueness. | `Leanux/Proofs/WG/Noise/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 1a69cebb | Current. Whole-run edge ownership; rotation, confirmation, expiry and clearing are per-function contracts, with no whole-run slot-change theorem. One keypair per slot holds by the Option type; exactly-once is at-most-once per allocation stamp for successful completed confirmations. Observer-site completeness rests on source construction and review. |
+| H2 Session index uniqueness | 162 terminal declarations: initialized endpoint index/owner coherence, lookup and local collision retry. | `Leanux/Proofs/WG/Index/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 1a69cebb | Current at normal initialized endpoints; stopped runs and intermediate boundaries are not covered. Lookup has an arbitrary-state contract; collision retry is local and supplied-record-mode only, without a runner-level insertion-draw theorem. |
+| H3 Endpoint roaming | 45 terminal declarations: final latest-setter provenance and authentication of observed handshake attempts/data checks. | `Leanux/Proofs/WG/Roaming/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 1a69cebb | Current for normal final provenance and observed attempts/checks, not every physical endpoint write. Packet provenance ties the endpoint to the same checked packet source; the outer address is copied, not AEAD-bound. Observer-site completeness rests on source construction and review. |
+| H4 Configuration semantics | 217 terminal declarations: mixed scalar readback, initialized getter, flag contracts and ordered configuration effects. | `Leanux/Proofs/WG/Config/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 1a69cebb | Current scoped contracts: mixed peer get-after-set is one-directional over internalId, PSK, keepalive and endpoint, under an entry invariant not derived at initialized endpoints; the initialized getter is separate. Replace-peers is flag-only. The charter’s allowed-IP removal flag is recast as peer REMOVE_ME/REPLACE_ALLOWEDIPS because Linux 6.12 has no per-allowed-IP flag. No mixed-request creation/removal completeness or full peer-field readback is claimed. |
+| H5 Termination and progress | 280 terminal declarations: finite trace evaluation, operation guards and committed activation receipts. | `Leanux/Proofs/WG/Progress/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 1a69cebb | Current finite evaluation preserves every Stop, including budget exhaustion; it is not general budget adequacy. Accepted supplied-mode operation boundaries have empty pending work, but propagation of supplied mode to interior receipts remains unproved. Unrestricted pending emptiness is refuted in placeholder mode; the environment defect is open as request 5. Receipt decrease retains its supplied-entry premise. |
+| H6 Timer discipline | 100 terminal declarations: guarded arm effects, hook journals, qualifying retry blocks and session-relative counts. | `Leanux/Proofs/WG/TimerDiscipline/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 1a69cebb | Current guarded contracts, with no theorem that arming occurs only at the listed sites. Keepalive re-arms are conditional on reaching the hook; caller coverage rests on journal construction and review. Session counting proves at most one completed enqueue per stamp plus a separate give-up cause, not once per session. The bound 19 covers qualifying contiguous retry blocks in one normal timer episode, not arbitrary interleavings. |
 
 The gate for every row: `capped -- scripts/in-bundle scripts/proof-gate`
 (the build, the axioms of every declaration of every module the root
 imports, the forbidden tokens, the imports and the default targets). The
-declarations the gate prints are the terminal statements, 860 at this
-landing; the theorems that carry each result's claim are these:
+declarations the gate prints are the terminal statements; current counts are
+recorded with validation in the campaign reports. Whole-run observations erase
+to the original JSON or indexed Stop. Completeness of observation sites rests
+on the reviewed source construction, not erasure alone. The declarations
+carrying each result's claim are these:
 
 | Result | Claim-carrying theorems |
 | --- | --- |
@@ -1054,6 +1054,12 @@ landing; the theorems that carry each result's claim are these:
 | R4 | `accepted_runner_all_ingress_fates` (`DeliveryOrder/Statements.lean:3625`), `original_poll_buffered_entry_subsequence` (`:536`), the GRO finding `original_gro_held_then_normal` (`:430`), `two_carried_full_ring_result` (`:3688`) |
 | R5 | the thirteen local contracts of `KeyLifetime/Statements.lean`; no run-wide theorem |
 | R6 | `original_invalid_mac2_cookie_only` (`FloodResistance/Statements.lean:41`), `original_invalid_mac2_noise_preserved` (`:53`) |
+| H1 | `original_initialized_driver_tags`, `original_initialized_confirmation_unique`, `original_slot_rotation`, `original_confirmation`, `original_expiry_slots`, `original_clear_ordered`, `original_begin_session_ordered` ([Noise/Statements.lean](../Leanux/Proofs/WG/Noise/Statements.lean)) |
+| H2 | `original_initialized_index_tables`, `original_index_lookup`, `original_index_insert_recorded` ([Index/Statements.lean](../Leanux/Proofs/WG/Index/Statements.lean)) |
+| H3 | `original_initialized_latest_endpoint_origins`, `original_initialized_handshake_attempt_authentication`, `original_initialized_data_check_authentication` ([Roaming/Statements.lean](../Leanux/Proofs/WG/Roaming/Statements.lean)) |
+| H4 | `original_mixed_scalar_getter`, `original_initialized_mixed_readback`, `original_replace_peers_completion`, `original_queued_remove_peer_command`, `original_update_only_existing`, `original_configuration_key_stage` ([Config/Statements.lean](../Leanux/Proofs/WG/Config/Statements.lean)) |
+| H5 | `original_executeTrace_finite`, `original_accepted_operation_boundaries`, `original_turn_dispatch_runs`, `original_turn_resumes`, `original_initialized_completed_record_decrease` ([Progress/Statements.lean](../Leanux/Proofs/WG/Progress/Statements.lean)); [namespace-pin counterexample and open request](2026-10-20-proof-campaign-2-namespace-pin.md) |
+| H6 | `original_guarded_arm`, `original_initialized_session_counts`, `original_timer_actual_retry_block_counts`, `original_giveUp_arms_without_session_creation` ([TimerDiscipline/Statements.lean](../Leanux/Proofs/WG/TimerDiscipline/Statements.lean)) |
 
 The speedbump beside the gate, run at claim points and never blocking:
 `capped -- scripts/in-bundle scripts/proof-counterexamples`, which replays
@@ -1214,99 +1220,6 @@ checked separately and are not included in the terminal declaration count.
 
 C memory safety, constant time, cryptographic security and the physical
 erasure of secrets are separate claims that no row makes.
-
-## Campaign 2 working checkpoints
-
-[USER 2026-10-18] Incorporate campaign 1's validated GRO carry
-`8ba82097` over main `77c9b555`, without modifying shared proofs.
-Campaign 2's projection and six result directories remain owned here.
-The full combined gate passes: 2,640 build jobs and 1,439 terminal declarations
-with standard axioms only. Fresh combined-root replay passes for initialized ownership and exact refusal endpoints.
-The [campaign report](2026-10-14-proof-campaign-2.md) records the carry,
-per-result scope and exact validation.
-
-Campaign 2 incorporates documentation-only main 783510e8; its shared proof and mirror
-sources are unchanged from the validated GRO-corrected split mirror `77c9b555`; each row distinguishes
-its terminal validation from the remaining charter scope. The
-[retrofit report](2026-10-16-proof-campaign-2-state-split.md) records baseline
-counts, carries, deletions and validation. The proof target and gate are the landed main versions.
-The complete owned retrofit checks 1,983 theorems in 587 modules (1,321
-retyped/generalized, 244 corrected statements, 239 retained and 179
-support/finding declarations), deletes twenty-two type-given frames, and
-separately retires five refuted historical cookie claims. All H1–H6 terminal
-modules now check over the split mirror. The full combined gate passes after the GRO carry.
-Current totals are 8,312 theorems and 687 headlines in 1,986 owned modules.
-Current validation and the per-tranche build, axiom and replay counts are in the
-[campaign report](2026-10-14-proof-campaign-2.md).
-The original 258 headline names and order remain. The initialized give-up and
-confirmation-recreation runtime witnesses each contribute a module but no theorem
-or headline. H1 is complete for normal accepted executions and documented
-completed-call observations; H2 is complete at normal initialized runner
-endpoints. H3's initialized committed handshake/data-attempt authentication and
-normal latest-setter provenance are complete within their documented scope.
-H4 is complete within its normal-outcome and bounded-getter scope; H5–H6 remain
-in progress. The report distinguishes each exact claim
-from stronger internal-write, chronology or termination properties.
-The [cookie-bound finding](2026-10-17-proof-campaign-2-cookie-bound.md)
-refutes the old unrestricted activation prediction on malformed ring metadata.
-A second checked witness shows that initial logical cookie membership need not
-classify the packet exposed by the next physical consume. The corrected source
-loop now describes exact bounded execution with actual receive fallback and
-retains exhaustion errors; drain adequacy remains open. The full-schedule
-witness also checks the actual scheduler refusal on its original domain.
-The corrected schedule factors its bounded first turn and actual remainder.
-Two further witnesses refute count recomposition and the old logical-only
-yield prediction; these make no reachability claim.
-The [missing-clock finding](2026-10-17-proof-campaign-2-missing-clock.md)
-refutes the old absent-give-up totality on its original input domain. The corrected
-give-up contract factors its exact actual arm tail, including errors.
-All 52 original H2 terminal declarations and their full Product sequence observations
-check; all 258 original audit names remain
-in their Statements files.
-The [H6 retrofit finding](2026-10-17-proof-campaign-2-timer-carry.md) is a
-checked counterexample to the legacy timer-deletion statement after wheel state
-was added. A second witness shows that a logical expiry can be due without
-a corresponding entry selected by the actual wheel; its scope is arbitrary
-model states, not reachability. Projected arming and deletion contracts now describe the complete
-current wheel effects; guarded arming and session-derived effects also account
-for all wheel changes. Traversal, data-receipt and handshake-completion effects
-are corrected too; all seven identified contracts are carried. Their downstream
-configuration timer cleanup and recorded-site source effects are also corrected;
-jitter and initiation-send arming effects are corrected too. Their timer and worker consumers are also current; complete caller coverage
-and whole scheduler episodes remain open.
-The [H2 peer-release finding](2026-10-17-proof-campaign-2-peer-release.md)
-checks two stopped outcomes within the old totality domain. The corrected
-peer-release contract now classifies the exact queue/timer refusal or successful
-Device effect under the same premises. Both affected H2 headlines now use checked
-projected outcome companions; their full terminal closure and downstream users
-are current. No reachability claim is made.
-The [H4 queued-handshake finding](2026-10-17-proof-campaign-2-queued-handshake.md)
-checks a stale pending-peer prediction after the queue-record change in
-`1f0fbeb`; all five queued-send source contracts now carry the actual inspection
-result, with exact erasure equalities. Retry, absent/invalid-key staged,
-installation and terminal callers now carry the actual observation too.
-This inspection does not establish queue-drain completion.
-The [H5 backlog carry](2026-10-17-proof-campaign-2-backlog-carry.md) proves
-the old accepted fixture now receives the exact pending-work rejection from
-the actual runner. General boundary and legacy backlog wrappers are current;
-positive global progress remains open.
-The [H4 removal finding](2026-10-17-proof-campaign-2-removal-carry.md)
-refutes the old quiet/live totality domain using a scheduled NAPI poll and
-the actual crypt-work Stop. Its source factor and local removal contracts
-are current with their original domains; general ownership transport and
-queued cleanup remain open.
-
-
-| Result | Checked local surface | Directory | Charter/report | Mirror commit | Status |
-| --- | --- | --- | --- | --- | --- |
-| H1 Noise session state machine | 75 terminal declarations: whole-run tag ownership; per-function slot effects; completed confirmation uniqueness. | `Leanux/Proofs/WG/Noise/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | 1a69cebb | Current. Whole-run edge ownership; rotation, confirmation, expiry and clearing are per-function contracts, with no whole-run slot-change theorem. One keypair per slot holds by the Option type; exactly-once is at-most-once per allocation stamp for successful completed confirmations. Observer-site completeness rests on source construction and review. |
-| H2 Session index uniqueness | 162 terminal declarations: initialized endpoint index/owner coherence, lookup and local collision retry. | `Leanux/Proofs/WG/Index/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | 1a69cebb | Current at normal initialized endpoints; stopped runs and intermediate boundaries are not covered. Lookup has an arbitrary-state contract; collision retry is local and supplied-record-mode only, without a runner-level insertion-draw theorem. |
-| H3 Endpoint roaming | 45 terminal declarations: final latest-setter provenance and authentication of observed handshake attempts/data checks. | `Leanux/Proofs/WG/Roaming/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | 1a69cebb | Current for normal final provenance and observed attempts/checks, not every physical endpoint write. Packet provenance ties the endpoint to the same checked packet source; the outer address is copied, not AEAD-bound. Observer-site completeness rests on source construction and review. |
-| H4 Configuration semantics | 217 terminal declarations: mixed scalar readback, initialized getter, flag contracts and ordered configuration effects. | `Leanux/Proofs/WG/Config/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | 1a69cebb | Current scoped contracts: mixed peer get-after-set is one-directional over internalId, PSK, keepalive and endpoint, under an entry invariant not derived at initialized endpoints; the initialized getter is separate. Replace-peers is flag-only. The charter’s allowed-IP removal flag is recast as peer REMOVE_ME/REPLACE_ALLOWEDIPS because Linux 6.12 has no per-allowed-IP flag. No mixed-request creation/removal completeness or full peer-field readback is claimed. |
-| H5 Termination and progress | 280 terminal declarations: finite trace evaluation, operation guards and committed activation receipts. | `Leanux/Proofs/WG/Progress/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | 1a69cebb | Current finite evaluation preserves every Stop, including budget exhaustion; it is not general budget adequacy. Accepted supplied-mode operation boundaries have empty pending work, but propagation of supplied mode to interior receipts remains unproved. Unrestricted pending emptiness is refuted in placeholder mode; the environment defect is open as request 5. Receipt decrease retains its supplied-entry premise. |
-| H6 Timer discipline | 100 terminal declarations: guarded arm effects, hook journals, qualifying retry blocks and session-relative counts. | `Leanux/Proofs/WG/TimerDiscipline/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | 1a69cebb | Current guarded contracts, with no theorem that arming occurs only at the listed sites. Keepalive re-arms are conditional on reaching the hook; caller coverage rests on journal construction and review. Session counting proves at most one completed enqueue per stamp plus a separate give-up cause, not once per session. The bound 19 covers qualifying contiguous retry blocks in one normal timer episode, not arbitrary interleavings. |
-
-
 
 ## Adding a result
 
