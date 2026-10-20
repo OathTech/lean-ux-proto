@@ -38,7 +38,7 @@ def fixture (input : Input) (w : World) : Except String Session := do
   let names : Names := ⟨tableAddr,⟨[],d.peers.toList.map (fun (id,_) => (id,peerAddr id))⟩,d.nextNode⟩
   let mut m ← AllowedipsProbe.materialize d input.lookup.offsets 0 128 input.lookup.preempt input.lookup.entryPreempt
   m := m.storeBytes (.ofNat 64 names.table) (List.replicate AllowedipsMutationLayout.tableSize 0)
-  m := put m (names.table+AllowedipsMutationLayout.seq) 8 d.peerAllowedips.seq
+  m := put m (names.table+AllowedipsMutationLayout.seq) 8 d.peerAllowedips.seq.toNat
   m := put m input.cacheWord 8 cacheAddress
   for (id,a) in names.trie.peers do
     let some p := d.peers.get? id | throw "fixture.peer"

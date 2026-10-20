@@ -1399,7 +1399,7 @@ fun names o m => do
           | Prod.mk.{0, 0} id a => Binary.Pair.Allowedips.decodePeer names o m id a)
         names.trie.peers
   pure.{0, 0}
-      { table := { root4 := root4, root6 := root6, seq := seq }, nodes := nodes, peers := peers,
+      { table := { root4 := root4, root6 := root6, seq := seq.toUInt64 }, nodes := nodes, peers := peers,
         nextNode := names.nextNode }
 def Binary.Pair.Allowedips.target : Leanux.WG.Device → Binary.Pair.Allowedips.State :=
 fun d =>

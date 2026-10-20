@@ -1,7 +1,8 @@
 # Scaling binary refinement through the allowed-IPs component
 
-Status: independently reviewed; F2/F3 clarified below, F1 is a mirror-counter
-finding that blocks full closure while independent obligations proceed.
+Status: independently reviewed; F2/F3 clarified below. The F1 mirror-counter
+correction landed on main at `1f766662` and its binary witness now passes;
+the original finding and unrestricted intended scope remain recorded below.
 Worktree `.worktrees/binary-allowedips`, branch
 `task/binary-allowedips`, starting from landed main
 `1a69cebb93fc6c5b5adf010562c709e126413c3e`.

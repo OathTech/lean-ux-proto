@@ -97,7 +97,7 @@ def reconstruct (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) : De
   let seq ← word m "table.seq" (names.table+AllowedipsMutationLayout.seq) 8
   let nodes ← names.trie.nodes.mapM fun (id,a) => decodeNode names o m id a
   let peers ← names.trie.peers.mapM fun (id,a) => decodePeer names o m id a
-  return ⟨{root4,root6,seq},nodes,peers,names.nextNode⟩
+  return ⟨{root4,root6,seq := seq.toUInt64},nodes,peers,names.nextNode⟩
 
 def internalListCheck (names : Names) (m : DataMem) (id : NodeId) : Except String Unit := do
   let a ← Trie.address names.trie.nodes (some id)

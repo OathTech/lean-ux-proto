@@ -1,15 +1,16 @@
 # Allowed-IPs binary refinement: scaling report
 
 Status: work in progress on `task/binary-allowedips`, based on landed main
-`1a69cebb`. Neither checkpoint A nor B is complete. The
+`1f766662` after the authorized rebase (original base `1a69cebb`). Neither
+checkpoint A nor B is complete. The
 [charter](2026-10-20-charter-binary-allowedips.md) defines the target; the
 [independent review](2026-10-20-review-binary-allowedips-charter.md) records its
 three findings. Work began at 2026-10-20 01:25:17 UTC, including preparation.
 
 ## First Rule Zero finding: the allowed-IPs sequence counter
 
-The mirror's `AllowedIps.seq` is a Nat and insertion increments it without
-truncation. Linux stores a u64, and the compiled wrappers increment that word.
+At discovery, the mirror's `AllowedIps.seq` was a Nat and insertion
+incremented it without truncation. Linux stores a u64, and the compiled wrappers increment that word.
 This is observable state: the dump tests a saved counter against zero and the
 current sequence. It cannot silently be reclassified as an unobserved epoch.
 
@@ -28,7 +29,8 @@ captured kernel entry or a theorem of entry reachability.
 Both undefined-value seeds (0 and all ones) produce these results. IPv4 executes
 124 instructions and IPv6 127, including the real service bodies. The runner
 checks the return PC/stack and callee-save registers. The permanent reproducer
-fails with exit 1 for the mismatch; it is not a passing refinement test:
+failed with exit 1 for that mismatch before the fix; the historical result
+is not a passing refinement test:
 
 ```sh
 capped python3 -B binary/allowedips_seq_wrap.py
@@ -39,10 +41,10 @@ instructions and DWARF offsets, builds `binary-allowedips-seq-wrap`, and runs it
 Its disposable input is `.tmp/allowedips/seq-wrap.json`. After a mirror fix the
 same comparator should pass without changing its expected binary result.
 
-F1 remains open pending the mirror correction. [USER 2026-10-20] The
-coordinator owns the correction on the mirror lane; this branch continues
-independent work and retains the failing witness. No non-wrapping precondition or modulo target has been introduced. The
-charter retains exact counter correspondence and independent work continues.
+F1 was assigned to the coordinator's mirror lane [USER 2026-10-20]. The
+correction is now on main at `1f766662`, and the preserved witness passes as
+reported in the carry checkpoint below. No non-wrapping precondition or
+modulo target was introduced. The charter retains exact counter correspondence.
 
 ## Review dispositions and preparation
 
@@ -681,3 +683,46 @@ before these checks; no resource-limit increase, KILLED run or timeout occurred
 in this step. Disposable normalization probe sources were removed after their
 conclusion was recorded. `TrustBase.lean` and the runtime runner are unchanged;
 no new external export acceptance is claimed.
+
+## Carry to the fixed-width mirror (06:43 UTC)
+
+The branch is rebased onto main `1f766662`, including campaign 2 and the
+fixed-width correction. The pre-rebase dirty proof work was preserved and
+restored; no changes were made to main or the private Kraken pin. The
+materializer reads `AllowedIps.seq.toNat`; reconstruction decodes the eight
+bytes into the actual mirror's UInt64. `reconstruct_fields` proves that its
+natural value is exactly the read value, using the existing byte-width bound.
+This is an exact representation change, with no non-wrapping Pre or weakened
+comparison. The old wrap discrepancy remains documented above.
+
+The preserved reproducer passes all eight cases. For both families and both
+undefined-value seeds, sequence `2^64-1` becomes zero on both sides and the
+invalid-prefix call returns `-EINVAL` through the ABI return. Ordinary sequence
+1 still becomes 2. The binary expectation is unchanged.
+
+Validation on this carry:
+
+- Default binary build: 1,059 jobs, no warnings. Fresh kernel replay of
+  `AllowedipsInsertionSurface` passes; explicit axiom prints remain standard.
+- The printed trust surface initially failed on exactly the intended
+  `seq.toUInt64` reconstruction change. That one-line specification diff was
+  reviewed and updated; the subsequent diff passes. `TrustBase.lean` is
+  unchanged by this carry.
+- Generated execution: 66 insertions and 66 retained-heap lookups, plus 24
+  isolated root insertions/lookups; 20 exact and 28 root segments, 3.552 seconds.
+- Recorded three-way comparison: eight calls, two seeds, 170 coverage entries,
+  64 comparison records and 117 decisions, 0.281 seconds. These are still
+  constructed entries with recorded arguments and outcomes.
+- Actual captured first-insertion replay: both seeds pass, 254 interpreted
+  WireGuard/coverage instructions and 822,856 compared endpoint bytes per run.
+  The generic allocator remains a supplied captured transition. The first
+  invocation mistakenly supplied a prior result JSON as the input and failed
+  decoding; the corrected invocation used `mutation.json`.
+- The fast tier first failed because the newly landed fixed-width witness
+  executable was missing. After building `leanux-model` and
+  `leanux-fixed-width-tests`, all 137 tests pass, one skipped, in 23.653 seconds.
+
+No external export acceptance is claimed for this increment. A and B remain
+open, with zero newly completed functions. The counter correction removes a
+semantic blocker; fresh-allocation reconstruction and full insertion
+composition are still proof work.

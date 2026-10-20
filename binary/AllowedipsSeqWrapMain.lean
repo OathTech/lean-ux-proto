@@ -16,7 +16,7 @@ def peer : Peer := {
   remoteStatic := List.replicate 32 0, presharedKey := List.replicate 32 0,
   precomputedStaticStatic := List.replicate 32 0, internalId := 0 }
 
-def world (seq : Nat) : World := {
+def world (seq : UInt64) : World := {
   ambient := {env := Leanux.Runner.harnessEnv, timing := Leanux.Env.timing},
   tasks := Leanux.Runner.initialTasks 1024 false false false, fs := {},
   wg := { dev := some {ifindex := 1, ifname := "wg0", peerAllowedips := {seq}, peers := ({} : Std.TreeMap PeerId Peer).insert 0 peer} } }
@@ -24,7 +24,8 @@ def world (seq : Nat) : World := {
 def witness (input : SeqInput) (family seq : Nat) (seed : UInt64) : Except String Json := do
   let width := if family == 4 then 32 else 128
   let some entry := input.entries[if family == 4 then 0 else 1]? | throw "missing family entry"
-  let initialWorld := world seq
+  unless seq < 2^64 do throw "sequence witness outside u64"
+  let initialWorld := world seq.toUInt64
   let (answer, final) ← (liftWG (insert family 0 (width+1) 0)).run initialWorld |>.mapError Stop.message
   let some d := final.wg.dev | throw "source lost device"
   let mut m : DataMem := (List.replicate 0x810 (0 : UInt8)).At (.ofNat 64 (stackAddr-0x800))
@@ -50,8 +51,8 @@ def witness (input : SeqInput) (family seq : Nat) (seed : UInt64) : Except Strin
   let actual ← readNat result.state (0x100000+input.seqOffset) 8
   unless actual == (seq+1)%2^64 do throw "unexpected counter values"
   return Json.mkObj [("family",toJson family),("seed",toJson seed.toNat),
-    ("entry_seq",toJson seq),("binary_seq",toJson actual),("mirror_seq",toJson d.peerAllowedips.seq),
-    ("equal",toJson (actual == d.peerAllowedips.seq)),("instructions",toJson result.pcs.size),
+    ("entry_seq",toJson seq),("binary_seq",toJson actual),("mirror_seq",toJson d.peerAllowedips.seq.toNat),
+    ("equal",toJson (actual == d.peerAllowedips.seq.toNat)),("instructions",toJson result.pcs.size),
     ("result",toJson answer)]
 
 def main (args : List String) : IO UInt32 := do

@@ -4,6 +4,7 @@
 Run through capped from the worktree root. Exit 1 means the mirror and binary
 counter differ; an infrastructure failure also fails noisily. These are labeled
 constructed states, not kernel captures or claims of kernel-entry reachability.
+The fixed mirror exposes the exact UInt64 value; the binary expectation is unchanged.
 """
 import json
 from pathlib import Path

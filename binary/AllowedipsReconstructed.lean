@@ -11,7 +11,7 @@ structure Reconstructed (names : Names) (o : AllowedipsProbe.Offsets) (m : DataM
     Trie.pointer names.trie.nodes "table.root4" raw=.ok s.table.root4
   root6 : ∃ raw, word m "table.root6" (names.table+AllowedipsMutationLayout.root6) 8=.ok raw ∧
     Trie.pointer names.trie.nodes "table.root6" raw=.ok s.table.root6
-  seq : word m "table.seq" (names.table+AllowedipsMutationLayout.seq) 8=.ok s.table.seq
+  seq : word m "table.seq" (names.table+AllowedipsMutationLayout.seq) 8=.ok s.table.seq.toNat
   nodes : Mapped (fun pair entry => decodeNode names o m pair.1 pair.2=.ok entry) names.trie.nodes s.nodes
   peers : Mapped (fun pair entry => decodePeer names o m pair.1 pair.2=.ok entry) names.trie.peers s.peers
   nextNode : s.nextNode=names.nextNode
@@ -27,7 +27,10 @@ theorem reconstruct_fields {names o m s} (run : reconstruct names o m=.ok s) : R
   obtain ⟨nodes,nodeReads,run⟩ := bind_ok run
   obtain ⟨peers,peerReads,run⟩ := bind_ok run
   cases Except.ok.inj run
-  exact ⟨valid,⟨r4,root4,root4Decoded⟩,⟨r6,root6,root6Decoded⟩,seqRead,mapM_ok nodeReads,mapM_ok peerReads,rfl⟩
+  have exactSeq : seq.toUInt64.toNat=seq := by
+    simp only [Nat.toUInt64,UInt64.toNat_ofNat',Nat.mod_eq_of_lt (word_bound seqRead)]
+  refine ⟨valid,⟨r4,root4,root4Decoded⟩,⟨r6,root6,root6Decoded⟩,?_,mapM_ok nodeReads,mapM_ok peerReads,rfl⟩
+  simpa only [exactSeq] using seqRead
 
 theorem decodePeer_fields {names o m id base current count entries}
     (run : decodePeer names o m id base=.ok (current,count,entries)) :
