@@ -5,6 +5,7 @@ import PairAllowedipsRoot
 import PairAllowedipsRootBoundary
 import PairAllowedipsReturn
 import PairAllowedipsNodeInit
+import PairAllowedipsChildPublish
 import PairAllowedipsNames
 import PairAllowedips
 
@@ -124,7 +125,7 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   for _ in [:4] do
     r ← runUntil input.lookup.instructions input.lookup.labels input.lookup.hooks input.lookup.preempt
       r.state seed true input.lookup.budget input.lookup.entryPreempt #[input.alloc,input.free]
-      (some r) frame.returnPC (some #[input.add+0xf7,input.add+0x9c,input.add+0x120,input.add+0x3ca,input.add+0x3e5,input.add+0x443,input.add+0x156,input.add+0x1ff,input.add+0x549,input.add+0x54e,input.insert4+0x42,input.insert6+0x4f])
+      (some r) frame.returnPC (some #[input.add+0xf7,input.add+0x9c,input.add+0x120,input.add+0x3ca,input.add+0x3e5,input.add+0x443,input.add+0x156,input.add+0x1ff,input.add+0x6f2,input.add+0x549,input.add+0x54e,input.insert4+0x42,input.insert6+0x4f])
       (some fun t => match TrustBase.KcovPlan .pc t with
         | none => .error "insert.coverage-inputs"
         | some writes => .ok (!writes.isEmpty))
@@ -143,6 +144,7 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   unless returnSegments==2 do throw "insert.return-segment-count"
   let exactSegments ← Exact.check r.history
   let nodeInitSegments ← NodeInit.check r.history
+  let childSegments ← ChildPublish.check r.history
   let rootSegments ← Root.check r.history
   let rootBoundaries ← Root.checkBoundary s.names input.lookup.offsets s.world key cidr pid r.history
   unless rootBoundaries==rootSegments do throw "insert.root-boundary-count"
@@ -153,6 +155,9 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   let expectedExact := (world.steps.toList.drop s.world.steps.size).countP fun step =>
     step.decision==.addExact && step.outcome
   unless exactSegments==expectedExact do throw "insert.exact-segment-count"
+  let expectedChild := (world.steps.toList.drop s.world.steps.size).countP fun step =>
+    step.decision==.addNoDown && step.outcome
+  unless childSegments==expectedChild do throw "insert.child-segment-count"
   let expectedNodeInit := (world.steps.toList.drop s.world.steps.size).countP fun step =>
     step.decision==.addNewnodeNoMem && !step.outcome
   unless nodeInitSegments==expectedNodeInit do throw "insert.node-init-segment-count"
@@ -173,7 +178,7 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   assertAt names input.lookup.offsets r.state.data.dmem world
   return (⟨names,world,r,released⟩,Json.mkObj [("family",toJson family),("cidr",toJson cidr),
     ("result",toJson answer),("placementVisits",toJson visits),("exactSegments",toJson exactSegments),
-    ("nodeInitSegments",toJson nodeInitSegments),("rootSegments",toJson rootSegments),("returnSegments",toJson returnSegments),("instructions",toJson r.pcs.size),("services",toJson services),
+    ("nodeInitSegments",toJson nodeInitSegments),("childSegments",toJson childSegments),("rootSegments",toJson rootSegments),("returnSegments",toJson returnSegments),("instructions",toJson r.pcs.size),("services",toJson services),
     ("coverage",toJson (r.coverage.toList.drop s.binary.coverage.size)),
     ("comparisons",toJson (r.comparisons.toList.drop s.binary.comparisons.size)),
     ("decisions",toJson ((world.steps.toList.drop s.world.steps.size).map Step.label))])

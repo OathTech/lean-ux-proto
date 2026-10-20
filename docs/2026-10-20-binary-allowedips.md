@@ -931,3 +931,43 @@ store. A separate low-byte lemma and explicit address normalization removed
 the failure without raising limits. No KILLED run occurred. Physical proof
 reuse is visible here, but the still-unfinished restoration of reconstruction
 after structural mutation remains the important scaling cost.
+
+
+## Child publication and record reconstruction (08:16 UTC)
+
+The no-child publication tail, `Add+0x6f2` through `Add+0x711` to
+`Add+0x549`, now executes against `ChildPublish.effect`. Its eleven
+instructions perform both stores and the intervening saved-index read.
+`publication_checked` exports exact memory/registers and the two-word byte
+footprint. It imposes no alias exclusion or child-index bound on the physical
+summary. Ten generated child-publication segments pass in the retained-heap
+sequences, including the subsequent lookup; the runner checks that this count
+matches successful no-child branches in the mirror.
+
+`record_checked` adds reconstruction of the fresh record's packed child-parent
+pointer and exports the old parent's updated child word. Its input facts are
+current saved words, the initialized record, parent identity/alignment, address
+extents and two explicit separation facts. The saved index is framed across
+the first store, rather than assumed correct at an intermediate state. The
+shared `connect_record` lemma preserves initialized record fields across a
+packed-parent/link pair; `parent_child` decodes both child tags. These are local
+reconstruction components. The complete function still must derive their
+premises, update the old parent's decoded record, and restore the whole trie,
+ownership and heap assertions. No complete insertion path is claimed.
+
+This checkpoint adds six proof modules (396 lines) and one executable summary
+module (34 lines). The default build passes 1,104 jobs without warnings and the
+new headline axioms are standard. The generated run passes 66 sequence
+insertions/lookups, 24 isolated root cases, 28 root, 20 exact, 30 node-init,
+ten child-publication and 180 return segments in 3.327 seconds. The recorded
+three-way check passes eight calls under two seeds, 170 coverage entries,
+64 comparisons and 117 decisions, in 0.294 seconds. The fast tier passes 137
+tests, one skipped, in 23.473 seconds. The reviewed printed-surface diff adds
+the publication/record headlines and the tested effect/footprint definitions;
+`TrustBase.lean` is unchanged. Fresh
+`leanchecker --fresh AllowedipsInsertionSurface` kernel replay passes.
+No external export acceptance or nonempty capture is claimed; A/B remain open.
+
+Ordinary elaboration errors and a default recursion-depth failure in byte
+increment normalization were repaired with an isolated, kernel-evaluated
+finite arithmetic lemma. No limits were raised and no KILLED run occurred.
