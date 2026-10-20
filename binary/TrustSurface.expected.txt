@@ -1,4 +1,33 @@
 HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
+Binary.Pair.Allowedips.Exact.assignment_simulation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {names : Binary.Pair.Allowedips.Names} {o : AllowedipsProbe.Offsets} {s : MachineData} {memory : DataMem}
+      {regs : Reg64s} {k : Leanux.WGWorld} {d : Leanux.WG.Device} {ambient : Leanux.Ambient} {id : Leanux.WG.NodeId}
+      {base : Nat} {node : Leanux.WG.AipNode} {pid : Leanux.WG.PeerId} {peer : Nat} {owner : Leanux.WG.Peer},
+      Eq.{1} k.dev (some.{0} d) →
+        Binary.Pair.Allowedips.Corresponds names o s.dmem d →
+          Eq.{1} (Binary.Pair.Allowedips.heap names (Binary.Pair.Allowedips.target d) s.dmem) (Except.ok.{0, 0} ()) →
+            Membership.mem.{0, 0} names.trie.nodes (Prod.mk.{0, 0} id base) →
+              Eq.{1} (Std.TreeMap.get?.{0, 0} d.nodes id) (some.{0} node) →
+                Membership.mem.{0, 0} names.trie.peers (Prod.mk.{0, 0} pid peer) →
+                  Eq.{1} (Std.TreeMap.get?.{0, 0} d.peers pid) (some.{0} owner) →
+                    Eq.{1} s.regs.rbx.toNat base →
+                      Eq.{1} s.regs.r14.toNat peer →
+                        Eq.{1} (Binary.Pair.Allowedips.Exact.effect s) (Except.ok.{0, 0} (Prod.mk.{0, 0} memory regs)) →
+                          Exists.{1} fun finalWG =>
+                            Exists.{1} fun finalAmbient =>
+                              Eq.{1}
+                                  (StateT.run.{0, 0}
+                                    (StateT.run.{0, 0} (Binary.Pair.Allowedips.Exact.assignment id pid) k) ambient)
+                                  (Except.ok.{0, 0} (Prod.mk.{0, 0} (Prod.mk.{0, 0} () finalWG) finalAmbient)) ∧
+                                Eventually (Binary.instructionStep fetch)
+                                  (fun t =>
+                                    Eq.{1} t.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1353) ∧
+                                      Eq.{1} t.data.regs regs ∧
+                                        Exists.{1} fun finalDevice =>
+                                          Eq.{1} finalWG.dev (some.{0} finalDevice) ∧
+                                            Binary.Pair.Allowedips.Corresponds names o t.data.dmem finalDevice)
+                                  { data := s, pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 997 }
 Binary.Pair.Allowedips.Placement.loop_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsDecoderAgreement fetch →
     Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
@@ -870,6 +899,62 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                 Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
                   Eventually (Binary.instructionStep fetch)
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
+def Binary.Pair.Allowedips.Exact.assignment : Nat → Nat → Leanux.WG.M Unit :=
+fun id pid => do
+  let __do_lift ← liftM.{0, 0, 0} (Leanux.WG.getNode id)
+  liftM.{0, 0, 0}
+      (Leanux.WG.setNode id
+        (have __src := __do_lift;
+        { peer := some.{0} pid, bit := __src.bit, cidr := __src.cidr, bitlen := __src.bitlen, bits := __src.bits,
+          parent := __src.parent }))
+  Leanux.WG.listDel id
+  Leanux.WG.listAddTail pid id
+def Binary.Pair.Allowedips.Exact.effect : MachineData → Except.{0, 0} String (Prod.{0, 0} DataMem Reg64s) :=
+fun s => do
+  let __x ← Binary.Pair.Allowedips.Exact.removeEffect s
+  match __x with
+    | Prod.mk.{0, 0} memory regs =>
+      Binary.Pair.Allowedips.Exact.appendEffect
+        { regs := regs, zmms := s.zmms, status := s.status, system := s.system, dmem := memory }
+def Binary.Pair.Allowedips.Exact.removeEffect : MachineData → Except.{0, 0} String (Prod.{0, 0} DataMem Reg64s) :=
+fun s =>
+  have before := { data := s, pc := 0 };
+  do
+  let __do_lift ← readNat before (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 64) 8
+  have previous : BitVec 64 := BitVec.ofNat 64 __do_lift
+  let __do_lift ← readNat before (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 56) 8
+  have next : BitVec 64 := BitVec.ofNat 64 __do_lift
+  Binary.Pair.Allowedips.Exact.mapped s.dmem s.regs.rbx.toBitVec
+  Binary.Pair.Allowedips.Exact.mapped (Binary.Pair.Allowedips.Exact.ownerMemory s) (HAdd.hAdd.{0, 0, 0} next 8)
+  Binary.Pair.Allowedips.Exact.mapped (Binary.Pair.Allowedips.Exact.nextMemory s previous next) previous
+  have removed : DataMem := Binary.Pair.Allowedips.Exact.removedMemory s previous next
+  let __do_lift ←
+    readNat
+        { data := { regs := s.regs, zmms := s.zmms, status := s.status, system := s.system, dmem := removed }, pc := 0 }
+        (HAdd.hAdd.{0, 0, 0} s.regs.r14.toNat 1104) 8
+  have last : BitVec 64 := BitVec.ofNat 64 __do_lift
+  pure.{0, 0}
+      (Prod.mk.{0, 0} removed
+        (have __src := s.regs;
+        { rax := { toBitVec := last }, rbx := __src.rbx, rcx := { toBitVec := next },
+          rdx := { toBitVec := HAdd.hAdd.{0, 0, 0} s.regs.rbx.toBitVec 56 }, rsi := __src.rsi, rdi := __src.rdi,
+          rsp := __src.rsp, rbp := __src.rbp, r8 := __src.r8, r9 := __src.r9, r10 := __src.r10, r11 := __src.r11,
+          r12 := __src.r12, r13 := __src.r13, r14 := { toBitVec := HAdd.hAdd.{0, 0, 0} s.regs.r14.toBitVec 1096 },
+          r15 := __src.r15 }))
+def Binary.Pair.Allowedips.Exact.appendEffect : MachineData → Except.{0, 0} String (Prod.{0, 0} DataMem Reg64s) :=
+fun s => do
+  Binary.Pair.Allowedips.Exact.mapped s.dmem (HAdd.hAdd.{0, 0, 0} s.regs.r14.toBitVec 8)
+  Binary.Pair.Allowedips.Exact.mapped (Binary.Pair.Allowedips.Exact.headMemory s)
+      (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toBitVec 56)
+  Binary.Pair.Allowedips.Exact.mapped (Binary.Pair.Allowedips.Exact.forwardMemory s)
+      (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toBitVec 64)
+  Binary.Pair.Allowedips.Exact.mapped (Binary.Pair.Allowedips.Exact.backwardMemory s) s.regs.rax.toBitVec
+  pure.{0, 0}
+      (Prod.mk.{0, 0} (Binary.Pair.Allowedips.Exact.addedMemory s)
+        (have __src := s.regs;
+        { rax := __src.rax, rcx := __src.rcx, rdx := __src.rdx, rsi := __src.rsi, rdi := __src.rdi, rsp := __src.rsp,
+          rbp := __src.rbp, r8 := __src.r8, r9 := __src.r9, r10 := __src.r10, r11 := __src.r11, r12 := __src.r12,
+          r13 := __src.r13, r14 := __src.r14, r15 := __src.r15 }))
 def Binary.Pair.Allowedips.Placement.header : Binary.Pair.Allowedips.Names →
   AllowedipsProbe.Offsets →
     Binary.CommonBitsCoverage.Context →

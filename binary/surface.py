@@ -8,6 +8,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADLINES = [
+    'Binary.Pair.Allowedips.Exact.assignment_simulation',
     'Binary.Pair.Allowedips.Placement.loop_checked',
     'Binary.Pair.Allowedips.lookup_checked',
     'Binary.Pair.Allowedips.common_checked',
@@ -63,10 +64,12 @@ HEADLINES = [
 ]
 IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'AllowedipsWitnessPre',
            'PairCallbackSurface', 'PairCallWitness',
-           'PairAllowedipsLookupAdequacy', 'AllowedipsCommonChecked', 'AllowedipsPlacementChecked']
+           'PairAllowedipsLookupAdequacy', 'AllowedipsCommonChecked', 'AllowedipsInsertionSurface']
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
+    'Binary.Pair.Allowedips.Exact.assignment', 'Binary.Pair.Allowedips.Exact.effect',
+    'Binary.Pair.Allowedips.Exact.removeEffect', 'Binary.Pair.Allowedips.Exact.appendEffect',
     'Binary.Pair.Allowedips.Placement.header', 'Binary.Pair.Allowedips.Placement.locals',
     'Binary.Pair.Allowedips.Placement.cursorLocals', 'Binary.Pair.Allowedips.Placement.savedLocals',
     'Binary.Pair.Allowedips.Placement.queryLocals', 'Binary.Pair.Allowedips.Placement.query4',

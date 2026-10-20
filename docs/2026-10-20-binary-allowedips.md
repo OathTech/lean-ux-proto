@@ -449,7 +449,7 @@ separates forward, backward and owner fields without assuming peer-base
 alignment. These lemmas will also serve insertion and deletion; no generic
 search tactic was introduced. All new modules build with standard axioms and
 no resource-limit increase. A fresh replay of the enlarged partial-work root
-is pending. The previous root's replay passed at `f922daa4`.
+passed at `5d7678ba`. The previous root's replay passed at `f922daa4`.
 
 This adds 731 proof/support lines approximately eleven minutes beyond the physical-effect checkpoint. The fast unit tier passes 136 tests (one skipped) in 23.036 seconds; its printed empty-report failure is the expected unit-test fixture, not a differential run.
 It is still a partial postcondition: owner-word reconstruction, the other peer
@@ -457,3 +457,41 @@ lists and unchanged fields, the source-state update, and wrapper composition
 remain to be assembled. It adds no completed-function coverage. The mirror
 counter finding remains open pending the coordinator's landing notice; the
 failing witness and binary result are unchanged.
+
+## Full reassignment reconstruction and source fragment (04:22 UTC)
+
+`Exact.assignment_simulation` now connects the same tested 14-instruction
+segment to the actual mirror operations `setNode`, `listDel` and
+`listAddTail`, reestablishing the complete allowed-IPs reconstruction. It
+updates the owner word and every ordered peer list, and preserves the roots,
+sequence, prefixes, keys, children, packed parents, peer counts and allocation
+counter. This is a segment theorem: public entry-to-return composition and
+preservation of the structural heap assertion remain open. It adds no
+completed-function coverage.
+
+The local focus, neighbor, list-disjointness and traversal facts now follow
+from entry reconstruction and its existing heap assertion. They are not new
+restrictions on admissible aliases or ownership states. The memory proof
+preserves actual store order, including reading the destination tail after
+unlink. The source bridge reuses the landed mirror's list-operation lemmas
+and exact-device update. No mirror code or environmental assumption changed.
+
+The full reconstruction/source bridge adds 1,216 lines across fifteen small
+modules, about 24 elapsed minutes beyond the destination-list checkpoint,
+including proof failures and validation. The initial source bridge failed
+Lean elaboration; the failed output included the resulting `sorryAx` and was
+not accepted. After repair, its explicit axiom print contains only `propext`,
+`Classical.choice` and `Quot.sound`, and fresh kernel replay of the enlarged
+`AllowedipsInsertionSurface` closure passes. The default binary package build
+passes. The fast unit tier passes 136 tests, one skipped, in 25.057 seconds.
+The expected trust surface now prints the segment statement and executable
+effect definitions. No external export acceptance is claimed.
+
+Two additional support lemmas build for the next obligation: the trie
+structural check ignores peer-word changes, and the full executable heap
+check decomposes into its structural and ownership checks. These preserve
+the tested definitions by proved equalities; no runtime checker was replaced.
+Post-mutation heap preservation, allocation/failure/rollback paths, wrapper
+composition and checkpoint B remain work to do. The counter correction is
+still awaiting its landing notice; the wrap witness and its expected binary
+result remain unchanged.
