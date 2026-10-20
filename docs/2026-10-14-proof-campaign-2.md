@@ -28,10 +28,43 @@ the namespace carry of campaign 1's existing shared layers. Source inspection
 finds 14 runner-guard copies in seven shared modules, plus the namespace
 frames/observer and the parser's new validation loop. This exceeds the
 charter's small-local-variant allowance; none of those layers is copied or
-edited here. The initial whole-tree build is exposing that inherited carry.
+edited here. The initial whole-tree build failed in the following shared
+modules, plus the two owned sources since repaired by the 93-job build:
+
+| Shared module | Required namespace carry |
+| --- | --- |
+| `Framing/Syscalls` | Extend the fixed close continuation with holder clearing and the queued-cleanup check. |
+| `Logged/Checkpoints` | Retain the new unconditional pending guard and its mode-specific Stop. |
+| `WG/Keypairs/Frames/Env` | Frame the pending-device query and invariant refusal in namespace cleanup. |
+| `WG/Configuration/ParserShape` | Include reserved-descriptor validation in the parser source factor. |
+| `WG/Lifetimes/EnvControlsAudit` | Move holder clearing to the close and retain the queue check in the cleanup observer. |
+
+The stale private parser source equation exhausts its existing 1,000,000
+heartbeats comparing different implementations. Its missing validation loop
+must be carried; raising the limit would not repair the equation. The public
+parser-shape claim needs no new premise. Further shared runner factors and
+cleanup frames identified by source inspection remain behind these failures.
 The owned `RunnerFiniteSource`, `Noise/PendingEnvironmentSource` and
 `Index/LifecycleCleanupRuleSource` adaptations are prepared separately; their
 imports still prevent validation until the shared carry is available.
+
+Final owned validation covers 1,273 independent modules through 293 maximal
+targets: all 1,672 Lake jobs pass. The requested full proof gate fails its
+build check on exactly the five shared modules above (one gate finding);
+forbidden-token and import/target checks pass, and aggregate axiom checking
+is skipped after the build failure. The counterexample speedbump fails:
+two recipes pass, including the corrected namespace-pin regression, and
+13 cannot import missing `Logged/Checkpoints` or `Lifetimes/EnvControlsAudit`
+build products. These are not new behavioral counterexamples. Both commands
+ran with `LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16` through
+`capped -- scripts/in-bundle`; no resource limit was raised, no KILLED banner
+or guest timeout occurred, and there was no infrastructure rerun.
+
+The checked closure is `2655a2f4`; the three dependent owned adaptations are
+isolated in WIP commit `ddb054cf`. A read-only review found no defect in the
+proof or refusal regression. The coordinator's shared carry is to land first;
+this owned head follows it, with aggregate validation repeated over both
+carries. The historical landing counts below remain historical.
 
 The six summaries below describe the landing scope, with H5's pending-unit
 clause strengthened over `218d3ffd`, and supersede broader completion wording
