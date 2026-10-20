@@ -221,7 +221,13 @@ def taskWorkRun : FS.M Unit := do
     the pin, whose dentry's eviction drops the last reference in task
     context: `cleanup_net` is queued there (`fputFinal`'s pin hook consumes
     the queue record), and its section runs in the guest's wait
-    (`Env.netnsCleanup`, after this call). -/
+    (`Env.netnsCleanup`, after this call). The holders are gone either way;
+    the teardown runs only because the pin's release queued it (the C's
+    `cleanup_net` runs after the actual last `put_net`, nowhere else). A pin
+    whose last reference survived its close would be a retained alias, which
+    the parser's reserved-descriptor rule excludes (`reservedFds`): a close
+    that queued nothing is a mirror invariant, never a teardown (campaign 2's
+    namespace-pin finding, 2026-10-20). -/
 def netnsClose : M Int := do
   if !(← getRouting).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
   if (← getEnv).netnsCHolders.isEmpty then unsupported "wg_netns_close twice"
@@ -229,6 +235,9 @@ def netnsClose : M Int := do
     let ret ← sysClose fd
     if ret != 0 then invariant s!"close({fd}) of a fixture holder returned {ret}"
     taskWorkRun
+  modifyEnv fun w => { w with netnsCHolders := [] }
+  if !(← Env.pendingDevice .netnsCleanup false) then
+    invariant "wg_netns_close: the pin's close did not drop the creating namespace's last reference (cleanup_net was not queued)"
   return 0
 
 def dispatch : Syscall → M Int

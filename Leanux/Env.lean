@@ -1117,16 +1117,26 @@ def flood (count port family : Nat) (messages : List (List UInt8)) : M Int := do
 /-! ## W8: the creating namespace's teardown (docs/2026-10-06-w8-w9-netns-routing.md, 3.2) -/
 
 /-- The section `cleanup_net` runs in `wg_netns_close`'s wait, after the
-    pin's `__fput` queued it (`Syscalls.netnsClose`): `wg_netns_pre_exit` for
-    wg0 (device.c, anchored), then the rest of the namespace's teardown,
-    whose allocation outcomes are below the cut and which runs nothing else
-    the mirror models. Fail-noisy: a section that did not open leaves the
-    start record unmatched; a stop beyond the wait stays pending; a unit the
-    queue record did not name is a hidden mismatch. The linkwatch event the
-    carrier change queues is armed by no trace yet (W8b). -/
+    pin's `__fput` queued it (`Syscalls.netnsClose`; `FS.fputFinal`'s pin
+    hook, the C's last `put_net` at the nsfs dentry's eviction):
+    `wg_netns_pre_exit` for wg0 (device.c, anchored), then the rest of the
+    namespace's teardown, whose allocation outcomes are below the cut and
+    which runs nothing else the mirror models. Exact in both record modes,
+    as `dispatch` is for the device-level units: the unit must be pending
+    (a run with none queued is a mirror invariant: before 2026-10-20 the
+    placeholder run tore the namespace down whether or not the pin's release
+    had queued it, campaign 2's namespace-pin finding); with records the
+    section-start record names the queued unit (`peekUnit`, `resolveUnit`)
+    and `runWorker` opens the section, clearing the PENDING bit; without
+    records the placeholder section runs the same body. Fail-noisy: a
+    section that did not open leaves the start record unmatched; a stop
+    beyond the wait stays pending; a unit the queue record did not name is a
+    hidden mismatch. The linkwatch event the carrier change queues is armed
+    by no trace yet (W8b). -/
 def netnsCleanup : M Unit := do
   if !(← getRouting).foreignCreator then unsupported "wg_netns_close outside the foreign-creator fixture"
-  modifyEnv fun w => { w with netnsCHolders := [] }
+  if !(← pendingDevice .netnsCleanup false) then
+    invariant "cleanup_net: its section run with no unit queued (the pin's last release did not run)"
   if let some u ← peekUnit .netnsCleanup then _ ← resolveUnit .netnsCleanup u [0]
   runWorker .netnsCleanup do
     WG.netnsPreExit
