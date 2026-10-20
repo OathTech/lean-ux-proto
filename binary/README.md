@@ -799,7 +799,8 @@ capped lake check --from-export ../.tmp/binary-allowedips-landing.ndjson
 Earlier external acceptances do not cover these additions or patch nine.
 `AllowedipsInsertionSurface` is a partial-proof replay root, not an insertion
 adequacy theorem. The closing report distinguishes local checks from external
-acceptance. The next direction is realization R1 of
-`docs/2026-10-20-design-heap-view-overlay.md` on `task/design-heap-view`: an
-executable typed heap view over unchanged Kraken semantics. That separate
+acceptance. The next direction is realization R1 of design commit `de18ce37`
+on `task/design-heap-view`: an executable typed heap view over unchanged Kraken
+semantics. The note is not included in this landing; read it with
+`git show de18ce37:docs/2026-10-20-design-heap-view-overlay.md`. That separate
 increment begins only after this experimental landing.

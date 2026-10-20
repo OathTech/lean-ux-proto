@@ -1241,8 +1241,10 @@ limitations. Stop whole-function insertion. After landing, redirect the track
 to realization R1 of the coordinator's typed-heap-view design on a new branch
 from main. This supersedes the earlier decision to continue checkpoint A.
 
-The design is `docs/2026-10-20-design-heap-view-overlay.md` on
-`task/design-heap-view` (read with `git show task/design-heap-view:docs/2026-10-20-design-heap-view-overlay.md`).
+The design note is commit `de18ce37` on `task/design-heap-view`, path
+`docs/2026-10-20-design-heap-view-overlay.md`; it is not included in this landing.
+Read the fixed revision with
+`git show de18ce37:docs/2026-10-20-design-heap-view-overlay.md`.
 R1 presents Kraken's byte memory through an executable typed view and proves
 load/store correspondence and framing once; it leaves Kraken's instruction
 semantics unchanged. It is the next experiment, not a result of this branch.
