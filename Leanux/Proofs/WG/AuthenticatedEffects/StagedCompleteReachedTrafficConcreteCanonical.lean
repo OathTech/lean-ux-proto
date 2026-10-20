@@ -38,7 +38,7 @@ macro "traffic_shape_step" : tactic => `(tactic| first
   | (traffic_shape_head ite; apply conditionalShape)
   | (traffic_shape_head ForIn.forIn; first | apply rangeShape | apply listShape)
   | (traffic_shape_head receiveEntryObserved; exact .native (.receive _ _))
-  | (traffic_shape_head multicastObserved; exact .native (.multicast _ _))
+  | (traffic_shape_head multicastObserved; exact .stored (ProductStore.multicastShape _ _))
   | (traffic_shape_head drainObserved; exact .service (.native (.reading (ProductRead.drainedShape _ _))))
   | (traffic_shape_head inlinePollObserved; exact .poll)
   | (traffic_shape_head cryptObserved; exact .service Service.Points.cryptShape)
@@ -59,11 +59,11 @@ macro "traffic_shape_step" : tactic => `(tactic| first
   | (traffic_native_head hidden; exact .native (.base (.ambient (AmbientM.hidden _))))
   | (traffic_native_head invariant; exact .native (.base (.ambient (AmbientM.invariant _))))
   | (traffic_native_head unsupported; exact .native (.base (.ambient (AmbientM.unsupported _))))
-  | (traffic_native_head fixtureSend; exact .native .fixture)
+  | (traffic_native_head fixtureSend; exact .stored (.ambient (AmbientM.skipCut _)))
   | (traffic_native_head senderSource; exact .service (.native (.reading (ProductRead.senderShape _ _ _ _))))
   | (traffic_native_head xmitPackets; exact .service (.native (.reading (ProductRead.packetsShape _ _ _ _))))
-  | (traffic_native_head requireNotPending; exact .native (.pending _ _))
-  | (traffic_shape_head liftPrefix; exact .native (.route _))
+  | (traffic_native_head requireNotPending; exact .pure ())
+  | (traffic_shape_head liftPrefix; exact .stored (ProductStore.routeShape _))
   | maintenance_join_let
   | maintenance_join_use
   | intro value

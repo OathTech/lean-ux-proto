@@ -25,6 +25,7 @@ theorem Shape.checked (source : Shape action) : CompleteProduct.Checked action :
   induction source with
   | pure value=>exact CompleteProduct.pure_checked value
   | native kind=>exact kind.checked
+  | stored source=>exact source.checked
   | service source=>exact source.checked
   | poll=>exact CompleteProduct.inline_poll
   | transmit family addr packets mtu=>exact fixture_checked family addr packets mtu

@@ -10,7 +10,7 @@ inductive Site where
   | service (site : Service.Points.Site)
   | poll (site : Napi.Points.Site)
   | transmit
-  | ingress
+  | ingress | stored
   | left (site : Site) | right (site : Site)
 
 inductive Point (service : Service.Points.ChildPoints) (napi : Napi.Points.ChildPoints) :
@@ -27,6 +27,8 @@ inductive Point (service : Service.Points.ChildPoints) (napi : Napi.Points.Child
       Point service napi (.transmit family addr packets mtu) w h .transmit u middle
   | ingress (point : Ingress.RootPoint msg src w h u middle) :
       Point service napi (.native (.receive msg src)) w h .ingress u middle
+  | stored (point : ProductStore.Point source w u) :
+      Point service napi (.stored source) w h .stored u h
   | left {body : PrefixM Event α} {next : α → PrefixM Event β} {head : Shape body}
       (tail : ∀value,Shape (next value)) (point : Point service napi head w h site u middle) :
       Point service napi (.bind head tail) w h (.left site) u middle
@@ -51,6 +53,7 @@ theorem Point.coverage
   | poll point=>exact .poll (point.coverage polls)
   | transmit point=>exact .transmit point
   | ingress point=>exact .ingress point
+  | stored point=>exact .stored point
   | left tail point ih=>exact .left tail ih
   | right head tail leading point ih=>exact .right head tail leading ih
 
@@ -70,6 +73,7 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {source : Shape 
       exact ⟨remaining,residual.run⟩
   | transmit point=>exact point.remaining
   | ingress point=>exact point.remaining
+  | stored point=>exact point.observed_remaining _
   | left tail point ih=>
       obtain ⟨remaining,continued⟩:=ih
       exact ⟨remaining >>= _,Scheduler.bind_run_equal _ continued⟩
@@ -96,6 +100,7 @@ theorem Point.safe
   | poll point=>exact point.safe accountGood polls before.1
   | transmit point=>exact point.safe accountGood acceptStaging acceptFront acceptPeer before
   | ingress point=>exact point.safe accountGood acceptPeer before
+  | stored point=>exact accountGood _ _ (point.carrier before).1
   | left tail point ih=>exact ih before
   | right head tail leading point ih=>exact ih (head.normal before leading)
 

@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIngressPoints
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTrafficStoreSource
 
 /-! Traffic dispatch follows its actual lists, worker sections and callbacks.
 The receive token supplies normal endpoints; fixed ingress points expose
@@ -43,6 +44,7 @@ def fixtureTransmit (family addr : Nat) (packets : List Packet) (mtu : Nat) : Pr
 inductive Shape : {α : Type} → PrefixM Event α → Type 1 where
   | pure (value : α) : Shape (pure value)
   | native (kind : NativeKind) : Shape kind.action
+  | stored (source : ProductStore.Shape body) : Shape (liftPrefix body)
   | service (source : Service.Points.Shape action) : Shape action
   | poll : Shape (inlinePollObserved hooks)
   | transmit (family addr : Nat) (packets : List Packet) (mtu : Nat) : Shape (fixtureTransmit family addr packets mtu)
