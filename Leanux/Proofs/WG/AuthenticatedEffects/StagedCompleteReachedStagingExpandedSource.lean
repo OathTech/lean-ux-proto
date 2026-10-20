@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingContinuationSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAllocationNativeContinuation
 
 /-! The staging source family includes each previously proved deeper child.
 Every constructor retains the original selection/guard calls and the fixed
@@ -31,6 +32,10 @@ inductive Point (pid : PeerId) (w : WGWorld) (a : Ambient) (h : List Event) :
       (selected : runWGPrefix (CausalJournal.selection pid) w a h=(.ok ((some (peer,key),u),b),middle))
       (guarded : runWGPrefix (allocationPrefix pid peer key) u b middle=(.ok ((.submit kid packets,q),c),events))
       (device : q.dev=some d) (path : Allocation.Path packets q c count items v) : Point pid w a h v c events
+  | allocationNative
+      (selected : runWGPrefix (CausalJournal.selection pid) w a h=(.ok ((some (peer,key),u),b),middle))
+      (guarded : runWGPrefix (allocationPrefix pid peer key) u b middle=(.ok ((.submit kid packets,q),c),events))
+      (device : q.dev=some d) (point : Allocation.Point packets q c v e) : Point pid w a h v e events
   | creation
       (selected : runWGPrefix (CausalJournal.selection pid) w a h=(.ok ((some (peer,key),u),b),middle))
       (guarded : runWGPrefix (allocationPrefix pid peer key) u b middle=(.ok ((.submit kid packets,q),c),events))
@@ -49,6 +54,11 @@ theorem Point.residual (point : Point pid w a h v b last) :
   | queued selected guarded prefixRun restoreRun point=>
     exact ⟨_,StagingContinuation.queued_residual selected guarded prefixRun restoreRun point⟩
   | allocation selected guarded device path=>exact ⟨_,StagingContinuation.allocation_residual selected guarded device path⟩
+  | allocationNative selected guarded device point=>
+      refine ⟨Allocation.nativeRemainder point >>= CausalJournal.create pid,?_⟩
+      rw [(callbackPoint selected guarded).residual]
+      change runWGPrefix (state (Journal.allocate _) >>= CausalJournal.create pid) _ _ _=_
+      rw [run_bind,run_bind,Allocation.nativeRemainder_run device point]
   | creation selected guarded allocated point=>exact ⟨_,StagingContinuation.create_residual selected guarded allocated point⟩
 
 noncomputable def remainder (point : Point pid w a h v b last) : WGPrefix Event Unit :=

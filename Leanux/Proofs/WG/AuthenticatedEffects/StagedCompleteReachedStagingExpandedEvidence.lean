@@ -33,6 +33,10 @@ theorem Point.evidence (point : Point pid w a h v b last)
   | allocation selected guarded _ path=>
     obtain ⟨after,_,steps,cut,_⟩:=allocation_from_submission before selected guarded path
     exact .allocation after steps cut
+  | allocationNative selected guarded _ point=>
+    obtain ⟨count,items,rfl,path⟩ := point.path
+    obtain ⟨after,_,steps,cut,_⟩ := allocation_from_submission before selected guarded path
+    exact .allocation after steps cut
   | creation selected guarded allocated point=>
     exact .creation (all_create_from_submission before selected guarded allocated point).1
 
