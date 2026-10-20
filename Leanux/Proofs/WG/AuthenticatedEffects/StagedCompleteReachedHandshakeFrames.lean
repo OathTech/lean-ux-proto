@@ -12,6 +12,8 @@ theorem Native.checked (token : Native) : Checked token.action := by
   cases token with
   | quiet body frame=>
     exact Consume.Leaf.native_checked body frame
+  | lookup body source=>
+    exact Consume.Leaf.native_checked body source.frame
   | metadata body source=>
     exact Consume.Leaf.native_checked body source.frame
   | capturedMetadata body source=>
@@ -38,6 +40,12 @@ theorem Native.checked (token : Native) : Checked token.action := by
   | note kind pid=>
     exact CompletePoll.state _
       (CompletePassive.emit _ CompleteProduct.account_safe (.old (.handshake (.callback kind pid))) rfl (fun _=>rfl))
+  | admission event=>
+    exact CompletePoll.state _
+      (CompletePassive.emit _ CompleteProduct.account_safe (ConsumerObserved.admission event) rfl (fun _=>rfl))
+  | cookieReceipt event=>
+    exact CompletePoll.state _
+      (CompletePassive.emit _ CompleteProduct.account_safe (.cookieConsumed event) rfl (fun _=>rfl))
   | oldSession pid run=>
     exact CompletePoll.state _
       (CompletePassive.emit _ CompleteProduct.account_safe (.old (.responder (.session pid run))) rfl (fun _=>rfl))

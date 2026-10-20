@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedHandshakeSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConsumerCanonical
 
 /-! Canonical witnesses follow the unchanged handshake branches, wrappers
 and callback order. No whole-worker source premise is accepted. -/
@@ -39,9 +39,9 @@ macro "handshake_source_step" : tactic => `(tactic| first
   | (handshake_source_head Driver.keepaliveObserved; exact .child (.keepalive _))
   | (handshake_source_head ProtocolSocket.observed; exact .native (.protocol _ _))
   | (handshake_source_head CookieSocket.observed; exact .native (.cookie _ _ _))
-  | (handshake_source_head NestedPeerRelease.admitInitiationWith; exact .native (.initiation _))
-  | (handshake_source_head NestedPeerRelease.admitResponseWith; exact .native (.response _))
-  | (handshake_source_head NestedPeerRelease.cookieObserved; exact .native (.cookieConsumed _))
+  | (handshake_source_head NestedPeerRelease.admitInitiationWith; exact admittedInitiationShape _)
+  | (handshake_source_head NestedPeerRelease.admitResponseWith; exact admittedResponseShape _)
+  | (handshake_source_head NestedPeerRelease.cookieObserved; exact consumedCookieShape _)
   | (handshake_source_head TimerEffects.derivedWith; exact derivedShape _)
   | (handshake_source_head TimerEffects.traversalWith; exact .leaf (Consume.Leaf.traversalShape _))
   | (handshake_source_head StagedDisposal.Decoration.release; exact .child (.release _))

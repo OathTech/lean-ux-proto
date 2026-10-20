@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConsumerNativeCanonical
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPubkeyLookupSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCookieMetadataCanonical
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalSessionSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSessionCanonical
@@ -15,6 +17,7 @@ abbrev History := List Event
 
 inductive Native : Type 1 where
   | quiet {α : Type} (body : WG.M α) (frame : SameView StagedEntry.view body)
+  | lookup {α : Type} (body : WG.M α) (source : Lookup.Shape body)
   | metadata {α : Type} (body : WG.M α) (source : PeerMetadata.Shape body)
   | capturedMetadata {α : Type} (body : WG.M α) (source : PeerMetadata.Shape body)
   | captured {α : Type} (body : WG.M α) (frame : SameView StagedEntry.view body)
@@ -26,11 +29,14 @@ inductive Native : Type 1 where
   | cookie (mac : HandshakeMac) (bytes : Key) (src : SkbSource)
   | scope (event : CausalScope.Event Cause)
   | note (kind : HandshakeCausal.Kind) (pid : PeerId)
+  | admission (event : HandshakeAdmission)
+  | cookieReceipt (event : CookieConsumption.Receipt)
   | exchange (event : Exchange.Event)
   | oldSession (pid : PeerId) (run : WGRunWitness Bool)
 
 def Native.Result : Native → Type
   | @quiet α .. => α
+  | @lookup α .. => α
   | @metadata α .. => α
   | @capturedMetadata α .. => WGRunWitness α
   | @captured α .. => WGRunWitness α
@@ -40,6 +46,7 @@ def Native.Result : Native → Type
 
 def Native.action (token : Native) : PrefixM Event token.Result := match token with
   | .quiet body _ => liftWGObserver (liftWGPrefix body)
+  | .lookup body _ => liftWGObserver (liftWGPrefix body)
   | .metadata body _ => liftWGObserver (liftWGPrefix body)
   | .capturedMetadata body _ => liftWGObserver (captureWGRun body)
   | .captured body _ => liftWGObserver (captureWGRun body)
@@ -54,6 +61,8 @@ def Native.action (token : Native) : PrefixM Event token.Result := match token w
   | .cookie mac bytes src => liftWGObserver (CookieSocket.observed Event.cookieSocket mac bytes src)
   | .scope event => emitPrefix (.scope event)
   | .note kind pid => emitPrefix (.old (.handshake (.callback kind pid)))
+  | .admission event => emitPrefix (ConsumerObserved.admission event)
+  | .cookieReceipt event => emitPrefix (.cookieConsumed event)
   | .exchange event => emitPrefix (.exchange event)
   | .oldSession pid run => emitPrefix (.old (.responder (.session pid run)))
 

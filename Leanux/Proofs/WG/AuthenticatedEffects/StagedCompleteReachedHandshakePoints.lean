@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.HandshakeCon
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
 
 inductive Site where
-  | entry | returned | release | keepalive | metadata | protocol | captured
+  | entry | returned | release | keepalive | metadata | protocol | captured | lookup
   | leaf (site : Consume.Leaf.Site)
   | left (site : Site) | right (site : Site)
 
@@ -21,6 +21,9 @@ inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action �
   | captured {w : World} {source : PeerMetadata.Shape body}
       (point : PeerMetadata.Point source w.wg w.ambient v b) :
       Point (.native (.capturedMetadata body source)) w h .captured {w with wg:=v,ambient:=b} h
+  | lookup {w : World} {source : Lookup.Shape body}
+      (point : Lookup.Point source w.wg w.ambient v b) :
+      Point (.native (.lookup body source)) w h .lookup {w with wg:=v,ambient:=b} h
   | metadata {w : World} {source : PeerMetadata.Shape body}
       (point : PeerMetadata.Point source w.wg w.ambient v b) :
       Point (.native (.metadata body source)) w h .metadata {w with wg:=v,ambient:=b} h
@@ -56,6 +59,9 @@ theorem Point.safe (carrierGood : ∀h w,Carrier h w → Good h w)
   | captured point=>
     obtain ⟨ledger,account⟩:=before
     exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
+  | lookup point=>
+    obtain ⟨ledger,account⟩:=before
+    exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
   | metadata point=>
     obtain ⟨ledger,account⟩:=before
     exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
@@ -83,6 +89,7 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {shape : Shape a
     exact ⟨pure _,performed⟩
   | protocol point=>exact ProtocolPoints.Point.remaining point
   | captured point=>exact point.capture_remaining _
+  | lookup point=>exact point.observed_remaining _
   | metadata point=>exact point.observed_remaining _
   | leaf source point=>
       obtain ⟨remaining,residual⟩:=point.residual WorkService.Points.leafContracts
