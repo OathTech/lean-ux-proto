@@ -14,6 +14,7 @@ inductive Site where
   | entry
   | returned
   | interior
+  | stored
   | left (site : Site)
   | right (site : Site)
   | marked (label : Label) (site : Site)
@@ -26,6 +27,8 @@ inductive Point (inside : ChildPoints) : {α : Type} → {action : PrefixM Event
       Point inside shape w h .returned u middle
   | interior (token : Child action) (point : inside _ _ token w h u middle) :
       Point inside (.child token) w h .interior u middle
+  | stored (point : ProductStore.Point source w u) :
+      Point inside (.native (.stored source)) w h .stored u h
   | left {body : PrefixM Event α} {next : α → PrefixM Event β}
       {head : Shape body} (tail : ∀ value, Shape (next value)) (point : Point inside head w h site u middle) :
       Point inside (.bind head tail) w h (.left site) u middle
@@ -95,6 +98,7 @@ theorem Point.coverage (contracts : ChildContracts native inside Good)
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
   | interior token point => exact .interior token ((contracts.at token).coverage _ _ _ _ point)
+  | stored point => exact .stored point
   | left tail point ih => exact .left tail ih
   | right head tail leading point ih => exact .right head tail leading ih
   | marked label point ih => exact .marked label ih
@@ -108,6 +112,7 @@ theorem Point.safe (carrierGood : ∀ h w, CompleteProduct.Carrier h w → Good 
   | entry shape => exact carrierGood _ _ before.carrier
   | returned shape performed => exact carrierGood _ _ (before.normal performed)
   | interior token point => exact (contracts.at token).safe _ _ _ _ before point
+  | stored point => exact carrierGood _ _ (point.carrier before)
   | left tail point ih => exact ih before.1
   | right head tail leading point ih => exact ih (before.2 _ _ _ leading)
   | marked label point ih => exact ih before

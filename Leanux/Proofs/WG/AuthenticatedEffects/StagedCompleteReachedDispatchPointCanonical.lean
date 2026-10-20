@@ -42,7 +42,7 @@ noncomputable def dumpStartShape (ref : DeviceRef) : Shape (dumpDispatch (Driver
   apply socketShape
   apply Shape.bind (.native (.ambient (AmbientM.skipCut allocCuts)))
   intro _
-  apply Shape.bind (.native (.nlRead DUMP_FD))
+  apply Shape.bind (.native (.stored (ProductStore.netlinkReadShape DUMP_FD)))
   intro sock
   split
   · exact .bind (.native (.ambient (AmbientM.skipCutExactly .netlinkAutobindPort 1 allocCuts)))
@@ -73,8 +73,8 @@ noncomputable def dumpReceiveShape : Shape (dumpDispatch (Driver.nestedOps hooks
 noncomputable def observeShape : Shape (Driver.dispatchObserveObserved hooks) := by
   apply Shape.marked .observation
   unfold Driver.dispatchObserveObserved Driver.observeObserved DeliverySource.observeWith
-  apply Shape.bind (.bind (.child (.family .idle)) (fun _=>.bind (.native .observeFront)
-    (fun _=>.bind (.child (.family .delivery)) (fun _=>.native .observeFinish))))
+  apply Shape.bind (.bind (.child (.family .idle)) (fun _=>.bind (.native (.stored ProductStore.observeFrontShape))
+    (fun _=>.bind (.child (.family .delivery)) (fun _=>.native (.stored ProductStore.observeFinishShape)))))
   rintro ⟨ret,observed⟩
   exact .bind (.native (.ambientEdit (fun w=>{w with extraOut := ["datagrams","replies","stats"].map fun k=>(k,observed.getObjValD k)})))
     (fun _=>socketShape LISTEN4_FD (.pure ret))
