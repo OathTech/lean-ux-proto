@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTrafficConcreteSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTrafficReadSource
 
 /-! Canonical source witnesses expose the unchanged traffic control flow.
 Lists and ranges use their original values; no independent runner is added. -/
@@ -38,7 +39,7 @@ macro "traffic_shape_step" : tactic => `(tactic| first
   | (traffic_shape_head ForIn.forIn; first | apply rangeShape | apply listShape)
   | (traffic_shape_head receiveEntryObserved; exact .native (.receive _ _))
   | (traffic_shape_head multicastObserved; exact .native (.multicast _ _))
-  | (traffic_shape_head drainObserved; exact .native (.drained _ _))
+  | (traffic_shape_head drainObserved; exact .service (.native (.reading (ProductRead.drainedShape _ _))))
   | (traffic_shape_head inlinePollObserved; exact .poll)
   | (traffic_shape_head cryptObserved; exact .service Service.Points.cryptShape)
   | (traffic_shape_head sendWorkersObserved; exact .service (.child (.family .sends)))
@@ -46,21 +47,21 @@ macro "traffic_shape_step" : tactic => `(tactic| first
   | (traffic_shape_head scheduleObserved; exact .service (.child (.family (.schedule _))))
   | (traffic_shape_head Hooks.deliver; exact .service Service.Points.deliveryShape)
   | (traffic_shape_head liftWGObserver; exact .transmit _ _ _ _)
-  | (traffic_native_head getWG; exact .native (.base .wg))
+  | (traffic_native_head getWG; exact .service (.native (.reading (.wg .read))))
   | (traffic_native_head getDev; exact .service (.native (.reading (.wg ReadAccess.deviceShape))))
-  | (traffic_native_head getEnv; exact .native (.base .env))
-  | (traffic_native_head getRouting; exact .native (.base .routing))
+  | (traffic_native_head getEnv; exact .service (.native (.reading ProductRead.environmentShape)))
+  | (traffic_native_head getRouting; exact .service (.native (.reading ProductRead.routingShape)))
   | (traffic_native_head getAmbient; exact .native (.base (.ambient (get : AmbientM Ambient))))
   | (traffic_native_head modifyAmbient; exact .native (.base (.ambientEdit _)))
   | (traffic_native_head modifyWG; exact .native (.base .reset))
   | (traffic_native_head recordBudget; exact .native (.base (.ambient AmbientM.recordBudget)))
-  | (traffic_native_head peekNextSite; exact .native (.base .peek))
+  | (traffic_native_head peekNextSite; exact .service (.native (.reading ProductRead.peekShape)))
   | (traffic_native_head hidden; exact .native (.base (.ambient (AmbientM.hidden _))))
   | (traffic_native_head invariant; exact .native (.base (.ambient (AmbientM.invariant _))))
   | (traffic_native_head unsupported; exact .native (.base (.ambient (AmbientM.unsupported _))))
   | (traffic_native_head fixtureSend; exact .native .fixture)
-  | (traffic_native_head senderSource; exact .native (.sender _ _ _ _))
-  | (traffic_native_head xmitPackets; exact .native (.packets _ _ _ _))
+  | (traffic_native_head senderSource; exact .service (.native (.reading (ProductRead.senderShape _ _ _ _))))
+  | (traffic_native_head xmitPackets; exact .service (.native (.reading (ProductRead.packetsShape _ _ _ _))))
   | (traffic_native_head requireNotPending; exact .native (.pending _ _))
   | (traffic_shape_head liftPrefix; exact .native (.route _))
   | maintenance_join_let
