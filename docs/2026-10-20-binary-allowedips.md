@@ -1,11 +1,14 @@
 # Allowed-IPs binary refinement: scaling report
 
-Status: work in progress on `task/binary-allowedips`, based on landed main
-`1f766662` after the authorized rebase (original base `1a69cebb`). Neither
-checkpoint A nor B is complete. The
+Status: closed early for experimental landing on `task/binary-allowedips`,
+rebased onto main `eba3c2b6` (mirror `1f766662`, original base `1a69cebb`).
+Neither checkpoint A nor B is complete; there is no insertion or subsystem
+adequacy claim and no newly completed function. The
 [charter](2026-10-20-charter-binary-allowedips.md) defines the target; the
 [independent review](2026-10-20-review-binary-allowedips-charter.md) records its
 three findings. Work began at 2026-10-20 01:25:17 UTC, including preparation.
+The [closing entry](#experimental-close-and-landing-preparation) gives the
+final scope, measurements and validation; earlier checkpoints are historical.
 
 ## First Rule Zero finding: the allowed-IPs sequence counter
 
@@ -1228,3 +1231,122 @@ and epilogue, whose separate proofs remain available. Checkpoints A and B are
 not complete; completed new-function coverage is still zero, and no external
 gate acceptance is claimed. R is unchanged, and the seq-wrap finding is not
 hidden by a precondition or a modulo target.
+
+## Experimental close and landing preparation
+
+[USER 2026-10-20] Close the manual scaling increment as an intentionally early
+experiment, preserving its tested, buildable components and its measured
+limitations. Stop whole-function insertion. After landing, redirect the track
+to realization R1 of the coordinator's typed-heap-view design on a new branch
+from main. This supersedes the earlier decision to continue checkpoint A.
+
+The design is `docs/2026-10-20-design-heap-view-overlay.md` on
+`task/design-heap-view` (read with `git show task/design-heap-view:docs/2026-10-20-design-heap-view-overlay.md`).
+R1 presents Kraken's byte memory through an executable typed view and proves
+load/store correspondence and framing once; it leaves Kraken's instruction
+semantics unchanged. It is the next experiment, not a result of this branch.
+
+The manual calibration did **not** complete a new function. Four hours after
+the 01:25:17 UTC start, at 05:25:17 UTC, the count was zero. It remained zero
+at the last proof checkpoint, recorded at 09:55 UTC. Checkpoints A and B are
+both incomplete. The intervening pause and landing preparation are not counted
+as proof-development time. The approximately eight and a half elapsed hours
+to that last checkpoint include preparation, testing and coordination; they
+are not a measurement of uninterrupted proving time.
+
+| Committed checkpoint | Lean additions / deletions | Files | Without three generated image/layout modules | Newly completed functions |
+| --- | --- | --- | --- | --- |
+| Four-hour record, `7b8b257c` before rebase | 9,845 / 31 | 110 | 8,290 added lines in 107 files | 0 |
+| Final manual work, `e683be60` before rebase (`bf730baa` after rebase) | 18,529 / 31 | 221 | 16,974 added lines in 218 files | 0 |
+
+The final count is `git diff --numstat eba3c2b6..bf730baa -- 'binary/*.lean'`;
+the exclusions are `AllowedipsMutationImage`, `AllowedipsMutationLayout` and
+`AllowedipsMutationCodeLayout`. Counts include executable reconstruction,
+assertions, tests and support lemmas, not just proofs. Zero completions is the
+observed result; extrapolating a time per completed function from it is not
+possible.
+
+The retained component results are:
+
+- The existing complete lookup theorem is lifted to the extended allowed-IPs
+  reconstruction and heap assertion for both address families. This is stronger
+  reuse of an existing result, not new completed-function coverage.
+- `common_bits` is reused at both insertion call sites. The full placement
+  loop composes through its tested boundary, reconstruction and heap invariant;
+  entry-to-loop establishment is still open.
+- Exact-prefix reassignment restores reconstruction and heap validity through
+  the actual stores and ownership-list updates, including same-owner movement
+  and acquisition by a previously internal node.
+- The empty-root post-allocation tail restores reconstruction and the heap
+  assertion, with allocation-name extension, concrete field decoding and a
+  byte frame. The nonempty initialization and child path compose continuously
+  from `add+0x156` through both coverage calls, selection and publication to
+  `add+0x549`, from tested local resources and explicit source branch cases.
+- Separate shared epilogue segments execute to RET. They are not composed
+  with all insertion paths into an entry-to-return insertion theorem.
+
+The last recorded generated run checks 66 retained-heap insertions and 66
+lookups, plus 24 isolated root cases with lookups; its assertions include 28
+root segments, 20 reassignments, ten child publications and ten child-resource
+checks. The recorded comparison checks eight calls under two seeds against
+coverage, comparisons and decisions. Those entries are constructed from mirror
+state, with supplied generic allocation/free returns. The separate first-entry
+capture replay uses actual kernel bytes and an explicitly supplied captured
+allocator transition. These tests discover discrepancies; they do not establish
+the missing universal allocator or whole-function obligations.
+
+Testing exposed the unbounded sequence-counter mirror defect before universal
+composition. The fixed-width correction landed on main, and all eight preserved
+wrap witnesses pass without changing the binary expectation or narrowing Pre/R.
+The principal manual cost persisted in allocation identity extension, byte
+decoding, mutation frames and structural invariants. Compact segment execution
+composition helped (the empty-root physical tail composes in 83 lines), but
+did not eliminate that cost. This is evidence for testing a different heap
+representation, not evidence that whole-WireGuard refinement is already viable.
+
+**Trust-surface change retained:** patch nine,
+`binary/kraken-patches/0009-register-bt.patch`, pins Kraken at
+`907830a1fb207e86f7914764717e3995c1f0df2d` rather than the earlier eight-patch
+`dc3824fd` pin. The patch was already committed with the runtime checkpoint;
+the closing audit confirms it exactly matches that commit's format-patch,
+the lock, `TrustBase.krakenCommit` and the clean private checkout. It stays
+because the insertion image uses register BT at two sites. The
+[README](../binary/README.md) now states its operand-width modulo rule,
+undefined flags, unsupported forms, tests and rationale. No oracle image is
+changed. `AllowedipsMutationDecoderAgreement` names the added literal-image
+premises; no new project axiom is introduced.
+
+The branch rebased without conflict onto the requested `eba3c2b6`; the mirror
+itself is unchanged. The only changes outside `binary/`, its dependency lock
+and documentation are the opt-in insertion coverage profile in
+`harness/linux.py` and allocator-site arming in `evaluator/check.py`, needed
+to reproduce the recorded comparison. No draft Lean files or proof escapes
+are added. Earlier milestone-1 review obligations remain open as recorded in
+the [landing assessment](2026-10-19-binary-landing-assessment.md); this partial
+experiment does not close them or establish realistic caller reachability,
+concurrency, kernel-context composition or whole-subsystem refinement.
+
+In particular, the M1 NULL-owner and wrong-kind/KCOV-mode-3 theorem witnesses
+remain open (F1); the original transport still takes callback contracts (F2);
+initial representation and heap-separation premises remain assumptions (F6);
+entry realism is deferred (F7); and subsystem proof cost is unestablished (F9).
+Index insertion still carries the broader permission premise for its random
+provider. No claim here closes that earlier first-return obligation.
+
+Validation after the rebase, over code commit `bf730baa`:
+
+- `capped scripts/binary-proof-gate`: PASS, 1,160 build jobs, all 71 printed
+  headline statements within the three standard axioms, clean pinned Kraken,
+  trust declarations and statements matching the committed expected surface,
+  and no proof-source escapes. There are no new warnings.
+- `capped lake build`: PASS, 66 mirror jobs. The unit tier passes 137 tests,
+  one skipped, in 24.428 seconds. `binary.test_trust_gate` passes six tests.
+- Patch nine's focused Lean/parser/printer targets and native comparison pass
+  (33 build jobs and `test_bt.S` 1/1). The patch is byte-for-byte the exact
+  format-patch for the locked clean dependency commit.
+
+These local checks are not external `lake check` acceptance. The
+[README export recipe](../binary/README.md#allowed-ips-mutation-scaling)
+includes all nine current headline roots; no external acceptance of this
+added closure is claimed. The coordinator's independent landing review and
+the user's integration signoff are pending. No merge to main or push was made.

@@ -2,11 +2,14 @@
 
 This is a standalone refinement experiment against the pinned **s5** Linux
 image under explicitly unrealistic sequential/environment assumptions. It now
-uses the split mirror through its actual adapters. The landing branch is
+uses the split mirror through its actual adapters. The previous landing used
 `task/binary-pair-landing`, rebased onto main `3308c49a`; the original experiment
 branch is preserved. See the [landing report](../docs/2026-10-19-binary-landing-assessment.md)
-for current validation and the still-open milestone-1 review obligations.
-Historical results below retain their original commits and gate scope.
+for that landing's validation and the still-open milestone-1 review obligations.
+The subsequent [allowed-IPs experiment](../docs/2026-10-20-binary-allowedips.md)
+closes as partial component proofs and executable tests, with no new completed
+function or insertion adequacy claim. Historical results below retain their
+original commits and gate scope.
 
 The package uses Lean v4.35.0, the mirror by path, and a private patched Kraken
 checkout at `.deps/kraken`. Install the repository's Python dependencies
@@ -25,6 +28,21 @@ identities. It never repairs a dirty or differently pinned existing checkout.
 A network fetch, if needed inside Nono, must be run outside Nono. Neither setup
 nor the gate modifies machine-global configuration or requires the oracle ELF
 for Lean compilation. The separate binary gate does not build `LeanuxProofs`.
+
+The current semantics pin is `907830a1fb207e86f7914764717e3995c1f0df2d`:
+upstream `8af78062037bc237b341d20252aafd1797c1bcb7` plus **nine** committed
+patches. Patch [0009](kraken-patches/0009-register-bt.patch) adds the
+register/register `bt` forms used at two sites in the pinned allowed-IPs
+insertion image. It is retained because removing it would remove execution of
+those paths and their tested segments. Register offsets are reduced modulo
+the operand width; CF receives the selected bit, ZF and the registers are
+preserved, and OF/SF/AF/PF are undefined. Unsupported operand forms fail closed.
+The patch includes focused semantic tests, parser/printer roundtrips and a
+native x86 comparison, plus the runner's missing Bool generator needed by
+earlier ISA extensions. This is a **trust-surface change**, pinned consistently
+in `dependencies/sources.lock.json` and `TrustBase.krakenCommit`; the tests do
+not prove ISA fidelity. The closing report records its validation. No kernel
+image change accompanies it.
 
 Concrete tests and image comparison require the read-only s5 build. Set
 `LEANUX_BINARY_KERNEL_DIR` to its directory; the default is
@@ -712,10 +730,12 @@ workload checks in the report. Tests do not discharge a universal contract.
 
 ## Allowed-IPs mutation scaling
 
-Work in progress: [charter](../docs/2026-10-20-charter-binary-allowedips.md) and
-[report](../docs/2026-10-20-binary-allowedips.md). No insertion function theorem
-is claimed yet. Run these from the worktree root, using system Python with
-pyelftools (the QEMU command uses the project bundle when needed):
+Closed as an early experiment: [charter](../docs/2026-10-20-charter-binary-allowedips.md)
+and [report](../docs/2026-10-20-binary-allowedips.md). The placement loop,
+reassignment, root and child initialization/publication segments remain
+buildable under the binary gate. Insertion is open; there is no new completed
+function or subsystem adequacy claim. Run these from the worktree root, using
+system Python with pyelftools (the QEMU command uses the project bundle when needed):
 
 ```sh
 capped python3 -B binary/allowedips_mutation.py
@@ -748,3 +768,24 @@ test discharges a universal service premise. The sequence-counter reproducer
 `capped python3 -B binary/allowedips_seq_wrap.py` preserves the Rule Zero
 regression witness. It passes against the UInt64 mirror correction carried
 from main `1f766662`, with the expected binary result unchanged.
+
+The combined export for this experiment includes the earlier landing's roots
+and the new lookup lift, common-bits reuse and partial insertion surface.
+After the binary gate passes, from `binary/`:
+
+```sh
+capped lake env leanexport LookupSnapshotTransport LookupWitness LookupHitWitness \
+  AllowedipsWitnessPre PairCallbackSurface PairCallWitness \
+  PairAllowedipsLookupAdequacy AllowedipsCommonChecked AllowedipsInsertionSurface \
+  > ../.tmp/binary-allowedips-landing.ndjson
+# Require export exit zero; run the external gate outside Nono:
+capped lake check --from-export ../.tmp/binary-allowedips-landing.ndjson
+```
+
+Earlier external acceptances do not cover these additions or patch nine.
+`AllowedipsInsertionSurface` is a partial-proof replay root, not an insertion
+adequacy theorem. The closing report distinguishes local checks from external
+acceptance. The next direction is realization R1 of
+`docs/2026-10-20-design-heap-view-overlay.md` on `task/design-heap-view`: an
+executable typed heap view over unchanged Kraken semantics. That separate
+increment begins only after this experimental landing.

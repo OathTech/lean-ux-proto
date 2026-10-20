@@ -1,6 +1,10 @@
 # Scaling binary refinement through the allowed-IPs component
 
-Status: independently reviewed; F2/F3 clarified below. The F1 mirror-counter
+Status: closed early as an experimental result; neither checkpoint A nor B
+completed. See the [closing report](2026-10-20-binary-allowedips.md#experimental-close-and-landing-preparation)
+for the measured result and redirection to a typed heap view. The target below
+is retained as the original calibration target, not an achieved claim.
+Independently reviewed; F2/F3 clarified below. The F1 mirror-counter
 correction landed on main at `1f766662` and its binary witness now passes;
 the original finding and unrestricted intended scope remain recorded below.
 Worktree `.worktrees/binary-allowedips`, branch
