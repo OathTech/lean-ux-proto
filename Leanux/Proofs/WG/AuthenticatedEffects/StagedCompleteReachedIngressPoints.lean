@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Ingress
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing TransmitSecurity CausalJournal RetirementSecurity
 
 inductive Site where
-  | entry | returned | release | access | lookup | rxQueue | allocate | free
+  | entry | returned | release | access | lookup | rxQueue | publication | allocate | free
   | left (site : Site) | right (site : Site)
 
 inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action →
@@ -21,6 +21,8 @@ inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action �
       Point (.native (.access action source allocated)) w h .access {w with wg:=v,ambient:=b} h
   | lookup {w : World} (point : Lookup.Point (Lookup.canonical kinds number) w.wg w.ambient v b) :
       Point (.native (.lookup kinds number)) w h .lookup {w with wg:=v,ambient:=b} h
+  | publication {w : World} {state : PacketState} (point : RxPublicationAccess.Point skb state w.wg w.ambient v b) :
+      Point (.native (.publication skb state)) w h .publication {w with wg:=v,ambient:=b} h
   | rxQueue {w : World} (point : RxQueueAccess.Point skb w.wg w.ambient v b) :
       Point (.native (.rxQueue skb)) w h .rxQueue {w with wg:=v,ambient:=b} h
   | allocate {w : World} (point : SkbAccess.Point (SkbStore.newRx packet) w.wg w.ambient v b) :
@@ -45,6 +47,7 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {source : Shape 
   | returned source performed=>exact ⟨pure _,performed⟩
   | access allocated point=>exact point.observed_remaining _
   | lookup point=>exact point.observed_remaining _
+  | publication point=>exact point.observed_remaining _
   | rxQueue point=>exact point.observed_remaining _
   | allocate point=>exact point.observed_remaining _
   | free point=>exact point.observed_remaining _
@@ -71,6 +74,9 @@ theorem Point.safe (accountGood : ∀h w,Lifecycle.Points.Account h w → Good h
       obtain ⟨ledger,account⟩:=before.1
       exact accountGood _ _ ⟨ledger,account.entry.same_view point.frame,account.complete⟩
   | lookup point=>
+      obtain ⟨ledger,account⟩:=before.1
+      exact accountGood _ _ ⟨ledger,account.entry.same_view point.frame,account.complete⟩
+  | publication point=>
       obtain ⟨ledger,account⟩:=before.1
       exact accountGood _ _ ⟨ledger,account.entry.same_view point.frame,account.complete⟩
   | rxQueue point=>

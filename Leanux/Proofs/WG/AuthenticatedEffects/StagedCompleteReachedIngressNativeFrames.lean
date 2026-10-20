@@ -20,6 +20,10 @@ theorem NativeKind.checked (kind : NativeKind) : CompleteProduct.Checked kind.ac
         CompleteProduct.account_safe (indexLookup kinds number) (HandshakeLookup.index_lookup kinds number)
         (AllocatedFrames.observed (indexLookupPrefix_erases kinds number)
           (indexLookupPrefix_preserves_ambient allocationAmbient kinds number)))
+  | publication skb state=>
+      exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
+        CompleteProduct.account_safe (RxWorkers.publishSource skb state) (CompleteDecrypt.publication skb state)
+        (AllocatedFrames.observed (RxWorkers.publish_erases skb state) (RxWorkers.publish_preserves skb state)))
   | rxQueue skb=>
       exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
         CompleteProduct.account_safe (enqueuePerDeviceAndPeerRx skb) (CompleteIngress.enqueue skb)

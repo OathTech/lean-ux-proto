@@ -1,16 +1,17 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIngressNativeFrames
 
 /-! Literal receive-entry branches expose RX allocation, queue admission,
-publication and counted peer release. Key-reference, header and CPU calls use atomic access trees; the remaining native
-access atoms retain explicit separate interior obligations. -/
+publication and counted peer release. Native access trees expose the original
+lookup, packet adapter, queue admission and publication interiors. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Ingress
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open TransmitSecurity RetirementSecurity CausalJournal Driver NestedPeerRelease
 
 noncomputable def handshakeAppend (msg : Key) (src : SkbSource) : Shape (liftWGObserver (liftWGPrefix
     (modifyDev fun d=>{d with handshakeQueue:=d.handshakeQueue.produce (msg,src),handshakeQueueLen:=d.handshakeQueueLen+1}))) := by
-  apply quietShape
-  · complete_ingress_native
+  apply accessShape
+  · simp only [modifyDev]
+    repeat' access_source_step
   · exact AllocatedFrames.observed (erasesStatePrefix_lift _) (allocationReceiveIngress.append msg src)
 
 elab "ingress_source_head " expected:ident : tactic => do
@@ -57,6 +58,7 @@ macro "ingress_source_step" : tactic => `(tactic| first
   | (ingress_native_head freeRxSkb; exact .native (.free _))
   | (ingress_native_head modifyDev; exact handshakeAppend _ _)
   | (ingress_source_head Hooks.peerRelease; exact .release _)
+  | (ingress_native_head RxWorkers.publishSource; exact .native (.publication _ _))
   | (ingress_native_head enqueuePerDeviceAndPeerRx; exact .native (.rxQueue _))
   | (ingress_native_head indexLookup; exact .native (.lookup _ _))
   | (ingress_native_head keypairGet; apply accessShape _ (Access.getShape _); solve | ingress_allocation_frame)
@@ -66,8 +68,9 @@ macro "ingress_source_step" : tactic => `(tactic| first
   | (ingress_native_head ipTunnelGetDsfield; apply accessShape _ (Access.dsfieldShape _ _); solve | ingress_allocation_frame)
   | (ingress_native_head cpumaskNextOnline; apply accessShape _ Access.cpuShape; solve | ingress_allocation_frame)
   | (ingress_source_head liftWGPrefix
-     apply quietShape
-     · solve | complete_ingress_native
+     apply accessShape
+     · simp only [getPeer,getDev,branch,invariant,unsupported,queueDeviceWork]
+       repeat' access_source_step
      · solve | ingress_allocation_frame)
   | (ingress_source_head Pure.pure; exact pureShape _)
   | (ingress_source_head Bind.bind; apply observerBindShape)
