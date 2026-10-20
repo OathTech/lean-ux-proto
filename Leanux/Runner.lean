@@ -1220,12 +1220,19 @@ def executeTrace (trace : Trace) (placeholders : Bool := false) : Except (Nat ×
     -- of an operation is a dispatch the kernel runs inside the guest's wait
     -- (`Env.pendingDevice`), so its section belongs to this operation's
     -- records; with records, its absence is a hidden mismatch (campaign 2's
-    -- request 4, 2026-10-19). Without records every unit runs in the fixed
-    -- order, pending ones included (`Env.schedule`).
-    if w.ambient.hidden.isSome then
-      if let i :: _ := w.ambient.pendingWork then
-        let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+    -- request 4, 2026-10-19). Without records the scheduler runs every unit
+    -- it knows in the fixed order, pending ones included (`Env.schedule`), so
+    -- a unit still pending has no run site in either mode: a placeholder run
+    -- that leaves one is a mirror invariant, never a pass (campaign 2's
+    -- namespace-pin finding, 2026-10-20: the refusal sat in the record branch
+    -- only, and the placeholder run alone accepted a cleanup queued by a
+    -- retained alias of the pin).
+    if let i :: _ := w.ambient.pendingWork then
+      let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+      if w.ambient.hidden.isSome then
         throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
+      else
+        throw (index, .invariant s!"{name} is pending at the end of the operation (the fixed order ran no dispatch for it)")
     if w.wg.netRxRaised then
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w
