@@ -84,9 +84,9 @@ private theorem cleanup_source (history : List RxHistory.Event) :
   have preExit := native _ history (PublicationFrontier.netnsPreExit_preserves history)
   have effect {α : Type} (a : AmbientM α) := ambient a history
   have route {α : Type} (a : Net.M α) := routing a history
-  have env (f : EnvWorld → EnvWorld) := modifyEnv_spec f history
-  routing_tx_source [Env.netnsCleanup,Env.runWorker,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
-    using [preExit,effect,route,env]
+  routing_tx_source [Env.netnsCleanup,Env.pendingDevice,Env.runWorker,getRouting,getAmbient,peekUnit,resolveUnit,
+      skipCut,unsupported,invariant,modifyAmbient,hidden]
+    using [preExit,effect,route]
 
 theorem up : PublicationJoint.Preserves (RxHistory.audit envWgUpAudit) :=
   PublicationJoint.combine _ OwnerControlCalls.up (PublicationAudited.source _ _ envWgUpAudit_erases up_source)

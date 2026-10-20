@@ -362,6 +362,16 @@ private def traceFinish (j : Json) (id : String) (ops : Array Operation) (pauses
   if trace.stepped && rlimit < 9 then throw "a stepped dump needs rlimit_nofile >= 9"
   if trace.stepped && rlimit < 10 && ops.any (fun | .wgCreate | .wgDelete => true | _ => false) then
     throw "a stepped dump with wg_create or wg_delete needs rlimit_nofile >= 10"
+  -- the fixture's holders are reserved descriptors like 0..7 (`reservedFds`):
+  -- a literal that names one would alias or close the harness's apparatus
+  -- (a retained alias of W8's pin keeps the creating namespace alive past
+  -- `wg_netns_close`, whose cleanup runs only in that operation's wait)
+  let reserved := reservedFds foreign trace.stepped seccompChild
+  for op in ops do
+    for fd in op.descriptors do
+      if let .literal n := fd then
+        if 0 ≤ n && n < reserved then
+          throw s!"descriptor literal {n} is the fixture's (reserved 0..{reserved - 1})"
   return trace
 
 private def traceSource (j : Json) : Except String Trace := do

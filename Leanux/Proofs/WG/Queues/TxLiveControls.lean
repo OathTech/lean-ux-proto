@@ -106,8 +106,8 @@ theorem worker_control (kind : Worker) (body : Leanux.M Unit)
     | live_control_step
 
 theorem env_cleanup : Preserves (fun w : World => Ready w.wg) Env.netnsCleanup := by
-  unfold Env.netnsCleanup
-  simp (config := {zeta := false}) only [unsupported,peekUnit,resolveUnit,skipCut]
+  unfold Env.netnsCleanup Env.pendingDevice
+  simp (config := {zeta := false}) only [unsupported,invariant,getAmbient,peekUnit,resolveUnit,skipCut]
   repeat' first
     | (rx_retention_head Env.runWorker; apply worker_control)
     | (allocation_release_lift_from WG.M; exact PublicationPoll.native_product Ready _ pre_exit)

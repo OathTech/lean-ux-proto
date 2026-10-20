@@ -66,10 +66,12 @@ def runnerStep (trace : Trace) (op : Operation) (state : RunnerAccumulator) :
     throw (index, .hidden s!"a record of site {r.site} was not consumed")
   if let a :: _ := w.ambient.suspended then
     throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
-  if w.ambient.hidden.isSome then
-    if let i :: _ := w.ambient.pendingWork then
-      let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+  if let i :: _ := w.ambient.pendingWork then
+    let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+    if w.ambient.hidden.isSome then
       throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
+    else
+      throw (index, .invariant s!"{name} is pending at the end of the operation (the fixed order ran no dispatch for it)")
   if w.wg.netRxRaised then
     throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
   world := w
@@ -129,10 +131,12 @@ def runnerOperation (trace : Trace) (op : Operation) (state : RunnerAccumulator)
     throw (index, .hidden s!"a record of site {r.site} was not consumed")
   if let a :: _ := w.ambient.suspended then
     throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
-  if w.ambient.hidden.isSome then
-    if let i :: _ := w.ambient.pendingWork then
-      let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+  if let i :: _ := w.ambient.pendingWork then
+    let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+    if w.ambient.hidden.isSome then
       throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
+    else
+      throw (index, .invariant s!"{name} is pending at the end of the operation (the fixed order ran no dispatch for it)")
   if w.wg.netRxRaised then
     throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
   return (ret, w)
@@ -196,7 +200,8 @@ theorem runnerStep_operation_source (trace : Trace) (op : Operation) (state : Ru
   obtain ⟨u, after⟩ := pair
   cases u
   cases h : after.ambient.hidden with
-  | none => cases hs : after.ambient.suspended <;> cases hb : after.wg.netRxRaised <;> rfl
+  | none => cases hs : after.ambient.suspended <;>
+      cases hp : after.ambient.pendingWork <;> cases hb : after.wg.netRxRaised <;> rfl
   | some records =>
     cases records with
     | nil => cases hs : after.ambient.suspended <;>

@@ -31,10 +31,12 @@ def afterCall {E : Type} (op : Operation) (state : State) (ret : Int) (w : World
     throw (index, .hidden s!"a record of site {r.site} was not consumed")
   if let a :: _ := w.ambient.suspended then
     throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
-  if w.ambient.hidden.isSome then
-    if let i :: _ := w.ambient.pendingWork then
-      let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+  if let i :: _ := w.ambient.pendingWork then
+    let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+    if w.ambient.hidden.isSome then
       throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
+    else
+      throw (index, .invariant s!"{name} is pending at the end of the operation (the fixed order ran no dispatch for it)")
   if w.wg.netRxRaised then
     throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
   world := w
@@ -155,13 +157,18 @@ theorem afterCall_index {E : Type} (op : Operation) (state : State) (ret : Int) 
   | none =>
     cases suspended : world.ambient.suspended with
     | nil =>
-      cases raised : world.wg.netRxRaised <;>
-        simp only [hidden,suspended,raised,Bool.false_eq_true,↓reduceIte] at rest
-      · obtain ⟨branches,l,branchRun,rest⟩ := bind_normal rest
-        obtain ⟨fired,m,firedRun,rest⟩ := bind_normal rest
+      cases pending : world.ambient.pendingWork with
+      | cons unit restUnits =>
+        simp only [hidden,suspended,pending,Option.isSome_none,Bool.false_eq_true,↓reduceIte] at rest
         cases rest
-        exact ⟨_,rfl,rfl⟩
-      · cases rest
+      | nil =>
+        cases raised : world.wg.netRxRaised <;>
+          simp only [hidden,suspended,pending,raised,Bool.false_eq_true,↓reduceIte] at rest
+        · obtain ⟨branches,l,branchRun,rest⟩ := bind_normal rest
+          obtain ⟨fired,m,firedRun,rest⟩ := bind_normal rest
+          cases rest
+          exact ⟨_,rfl,rfl⟩
+        · cases rest
     | cons head tail => simp only [hidden,suspended,runPrefixOuter_bind] at rest; cases rest
   | some records =>
     cases records with

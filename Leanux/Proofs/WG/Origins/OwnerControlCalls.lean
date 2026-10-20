@@ -253,6 +253,8 @@ macro "owner_control_audit_steps" : tactic => `(tactic| first
   | (owner_control_audit_at mayHaveSlept; exact audit_lift _ (lift_store _ (liftWG_sameProductStore _ mayHaveSlept_sameWGStore)))
   | (owner_control_audit_at Env.inetdevDestroy
      exact audit_lift _ (lift_store _ inetdevDestroy_store))
+  | (owner_control_audit_at Env.pendingDevice
+     exact audit_lift _ (lift_store _ (Framing.pendingDevice_sameKernel _ _)))
   | (owner_control_audit_at getWG; exact audit_lift _ (lift_store _ (fun initial => productGetWG_spec (fun s => s = initial))))
   | (owner_control_audit_at getRouting
      exact audit_lift _ (lift_store _ (by apply (ProjectedAction.iff_run _ _ _).mpr; intro w x v hr; cases hr; rfl)))
@@ -263,7 +265,7 @@ macro "owner_control_audit_steps" : tactic => `(tactic| first
      exact audit_lift _ (lift_store _ (fun initial => productRouting_spec _ (fun s => s = initial))))
   | (owner_control_audit_at liftPrefix
      apply audit_lift
-     simp only [hidden,peekUnit,resolveUnit,modifyAmbient,unsupported,skipCut]
+     simp only [hidden,peekUnit,resolveUnit,modifyAmbient,unsupported,invariant,skipCut]
      exact lift_ambient _)
   | (owner_control_audit_at Pure.pure; exact FocusedInvariant.pure _ _ safe _)
   | (owner_control_audit_at Bind.bind; apply FocusedInvariant.bind

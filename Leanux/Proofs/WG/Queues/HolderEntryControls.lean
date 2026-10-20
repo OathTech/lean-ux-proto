@@ -119,8 +119,8 @@ theorem worker_entry (kind : Worker) (body : Leanux.M Unit)
 /-- Namespace teardown clears carrier/socket/endpoint fields but neither
 destroys the device nor discards any charged holder. -/
 theorem cleanup_entry : Preserves (fun w : World=>DeviceAuxEntry.Entry cs loans w.wg) Env.netnsCleanup := by
-  unfold Env.netnsCleanup
-  simp (config := {zeta := false}) only [unsupported,peekUnit,resolveUnit,skipCut]
+  unfold Env.netnsCleanup Env.pendingDevice
+  simp (config := {zeta := false}) only [unsupported,invariant,getAmbient,peekUnit,resolveUnit,skipCut]
   repeat' first
     | (rx_retention_head Env.runWorker; apply worker_entry)
     | (allocation_release_lift_from WG.M; exact lift_native WG.netnsPreExit preExit_entry)

@@ -210,10 +210,12 @@ def runnerTail {E : Type} (call : Syscall → PrefixM E Int) (trace : Trace) (in
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
     if let a :: _ := w.ambient.suspended then
       throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
-    if w.ambient.hidden.isSome then
-      if let i :: _ := w.ambient.pendingWork then
-        let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+    if let i :: _ := w.ambient.pendingWork then
+      let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+      if w.ambient.hidden.isSome then
         throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
+      else
+        throw (index, .invariant s!"{name} is pending at the end of the operation (the fixed order ran no dispatch for it)")
     if w.wg.netRxRaised then
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w
@@ -327,10 +329,12 @@ private def runnerHistorySourceTail (trace : Trace) (initialWorld : World) : Exc
       throw (index, .hidden s!"a record of site {r.site} was not consumed")
     if let a :: _ := w.ambient.suspended then
       throw (index, .hidden s!"{a.worker.symbol} is still suspended at the end of the operation (its stop has no record)")
-    if w.ambient.hidden.isSome then
-      if let i :: _ := w.ambient.pendingWork then
-        let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+    if let i :: _ := w.ambient.pendingWork then
+      let name := ((Worker.all.find? (·.index == i)).map (·.symbol)).getD s!"unit {i}"
+      if w.ambient.hidden.isSome then
         throw (index, .hidden s!"{name} is pending at the end of the operation (the dispatch its requeue causes has no section in the records)")
+      else
+        throw (index, .invariant s!"{name} is pending at the end of the operation (the fixed order ran no dispatch for it)")
     if w.wg.netRxRaised then
       throw (index, .invariant "a NET_RX softirq raised by a loopback transmission was left pending")
     world := w

@@ -182,11 +182,12 @@ theorem netnsCleanup_routing : ProductRetainsRoutingCall Env.netnsCleanup := by
         Preserves (fun w : World => RetainsRouting s (routingView w.wg))
           (MonadLift.monadLift a : Leanux.M α) :=
       productAmbient_spec a _ (fun _ _ h => h)
-    unfold Env.netnsCleanup
+    unfold Env.netnsCleanup Env.pendingDevice
     repeat' first
       | (control_endpoint_head getRouting; exact hr _)
       | (control_endpoint_head unsupported; exact ha _)
-      | (control_endpoint_head modifyEnv; exact (hoare_iff_run _ _ _).mpr (fun _ _ _ hi he => by cases he; exact hi))
+      | (control_endpoint_head invariant; exact ha _)
+      | (control_endpoint_head getAmbient; exact ha _)
       | (control_endpoint_head peekUnit; exact ha _)
       | (control_endpoint_head resolveUnit; exact ha _)
       | (control_endpoint_head Env.runWorker; exact hw)

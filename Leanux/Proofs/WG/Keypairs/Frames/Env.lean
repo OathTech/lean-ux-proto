@@ -359,13 +359,9 @@ theorem netnsCleanup_sameSnapshot  : SameView (fun w : World => snapshot w.wg) E
       (monadLift a : Leanux.M α) :=
     productStoreSnapshot (liftWG_sameProductStore _ (liftRouting_sameWGStore a))
   have netns : SameView (fun w : World => snapshot w.wg) (monadLift netnsPreExit : Leanux.M Unit) := nativeSnapshot netnsPreExit_sameSnapshot
-  have edit (f : EnvWorld → EnvWorld) : SameView (fun w : World => snapshot w.wg) (modifyEnv f) := by
-    apply (Lifetimes.ProjectedAction.iff_run _ _ _).mpr
-    intro w x v hr
-    cases hr
-    rfl
-  env_operation_source [Env.netnsCleanup, getRouting, peekUnit, resolveUnit, skipCut, unsupported]
-    using [runWorker_sameSnapshot, netns, routing, edit, ambient]
+  env_operation_source [Env.netnsCleanup, Env.pendingDevice, getRouting, peekUnit, resolveUnit, skipCut,
+      unsupported, invariant, getAmbient]
+    using [runWorker_sameSnapshot, netns, routing, ambient]
 
 theorem netnsCleanup_spec (P : Snapshot → Prop)  :
     ⦃fun w => ⌜P (snapshot w.wg)⌝⦄ Env.netnsCleanup

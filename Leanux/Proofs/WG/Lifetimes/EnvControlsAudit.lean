@@ -99,7 +99,8 @@ def envWgDeleteAudit : AuditM Int := do
 
 def envNetnsCleanupAudit : AuditM Unit := do
   if !(← liftPrefix getRouting).foreignCreator then liftPrefix (unsupported "wg_netns_close outside the foreign-creator fixture")
-  liftPrefix (modifyEnv fun w => { w with netnsCHolders := [] })
+  if !(← liftPrefix (Env.pendingDevice .netnsCleanup false)) then
+    liftPrefix (invariant "cleanup_net: its section run with no unit queued (the pin's last release did not run)")
   if let some u ← liftPrefix (peekUnit .netnsCleanup) then _ ← liftPrefix (resolveUnit .netnsCleanup u [0])
   runWorkerPrefix .netnsCleanup do
     auditFocus (liftWGObserver netnsPreExitPrefix)
@@ -182,8 +183,17 @@ elab "control_audit_routing" : tactic => Lean.Elab.Tactic.withMainContext do
   unless actual == ``getRouting || actual == ``modifyRouting ||
       actual.toString.startsWith "Leanux.Net." do Lean.throwError "not a routing lift"
 
+/-- The pending-unit test the namespace close and cleanup make (2026-10-20):
+an ambient read, then a pure answer; the WireGuard store is untouched. -/
+theorem pendingDevice_sameWGStore (w : Worker) (queued : Bool) :
+    SameView (fun w : World => wgStoreView w.wg) (Env.pendingDevice w queued) := by
+  unfold Env.pendingDevice
+  exact SameView.bind (fun _ => productAmbient_spec (get : AmbientM Ambient) _ (fun _ _ hi => hi))
+    (fun _ => SameView.pure _ _)
+
 macro "control_audit_store" : tactic => `(tactic|
   first
+    | (audit_contract_head Env.pendingDevice; exact auditLift_store _ (pendingDevice_sameWGStore _ _))
     | (audit_contract_head getWG; exact auditLift_store _ (by
         intro initial
         exact productGetWG_spec (fun s => s.2.2.2 = initial)))

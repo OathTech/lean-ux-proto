@@ -26,11 +26,24 @@ theorem netnsClose_sameWGStore :
     intro w x v hr
     cases hr
     rfl
+  have edit (f : EnvWorld → EnvWorld) : SameView view (modifyEnv f) := by
+    apply (Leanux.Proofs.WG.Lifetimes.ProjectedAction.iff_run _ _ _).mpr
+    intro w x v hr
+    cases hr
+    rfl
+  -- the pin's close must have queued cleanup_net (2026-10-20): a read of the
+  -- ambient pending list, then the invariant or nothing
+  have pending : SameView view (Env.pendingDevice .netnsCleanup false) := by
+    unfold Env.pendingDevice
+    exact SameView.bind (ambient (get : AmbientM Ambient)) (fun _ => SameView.pure _ _)
   have closeAll : SameView view (do
       for fd in [INJECT_FD, LISTEN6_FD, LISTEN4_FD, PIN_FD] do
         let ret ← sysClose fd
         if ret != 0 then invariant s!"close({fd}) of a fixture holder returned {ret}"
         taskWorkRun
+      modifyEnv fun w => { w with netnsCHolders := [] }
+      if !(← Env.pendingDevice .netnsCleanup false) then
+        invariant "wg_netns_close: the pin's close did not drop the creating namespace's last reference (cleanup_net was not queued)"
       pure 0 : Leanux.M Int) := by
     apply SameView.bind
     · intro initial
@@ -44,13 +57,23 @@ theorem netnsClose_sameWGStore :
           (fun _ => preserves_bind (fs taskWorkRun initial) (fun _ => preserves_pure _))
       · exact preserves_bind (fs taskWorkRun initial) (fun _ => preserves_pure _)
     · intro _
-      exact SameView.pure _ _
+      apply SameView.bind (edit _)
+      intro _
+      apply SameView.bind pending
+      intro queued
+      dsimp only
+      split
+      · exact SameView.bind (ambient (AmbientM.invariant _)) (fun _ => SameView.pure _ _)
+      · exact SameView.pure _ _
   have holders : SameView view (do
       if (← getEnv).netnsCHolders.isEmpty then unsupported "wg_netns_close twice"
       for fd in [INJECT_FD, LISTEN6_FD, LISTEN4_FD, PIN_FD] do
         let ret ← sysClose fd
         if ret != 0 then invariant s!"close({fd}) of a fixture holder returned {ret}"
         taskWorkRun
+      modifyEnv fun w => { w with netnsCHolders := [] }
+      if !(← Env.pendingDevice .netnsCleanup false) then
+        invariant "wg_netns_close: the pin's close did not drop the creating namespace's last reference (cleanup_net was not queued)"
       pure 0 : Leanux.M Int) := by
     apply SameView.bind fixture
     intro e

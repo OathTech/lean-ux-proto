@@ -215,6 +215,7 @@ macro "remaining_control_steps" : tactic => `(tactic| first
   | (deferred_audit_at getDev; exact audit_store _ (liftWG_sameProductStore _ getDev_sameWGStore))
   | (deferred_audit_at mayHaveSlept; exact audit_store _ (liftWG_sameProductStore _ mayHaveSlept_sameWGStore))
   | (deferred_audit_at Env.inetdevDestroy; exact audit_store _ inetdevDestroy_store)
+  | (deferred_audit_at Env.pendingDevice; exact audit_store _ (Framing.pendingDevice_sameKernel _ _))
   | (deferred_audit_at getRouting
      exact audit_store _ (by apply (ProjectedAction.iff_run _ _ _).mpr; intro w x v hr; cases hr; rfl))
   | (deferred_audit_at modifyEnv

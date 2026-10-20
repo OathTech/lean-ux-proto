@@ -81,9 +81,11 @@ theorem delete (seen : List Nat) :
 update, selected worker section and routing callbacks. -/
 theorem cleanup (seen : List Nat) :
     Preserves (fun w : World => NativeInv w.wg seen) Env.netnsCleanup := by
-  unfold Env.netnsCleanup
+  unfold Env.netnsCleanup Env.pendingDevice
   repeat' first
     | (rx_retention_head Env.runWorker; apply worker _ _ seen)
+    | (rx_retention_head invariant; exact productAmbient_spec (AmbientM.invariant _) _ (fun _ _ hi => hi))
+    | (rx_retention_head getAmbient; exact productAmbient_spec (get : AmbientM Ambient) _ (fun _ _ hi => hi))
     | pending_environment_step seen
 
 theorem preexit_observed : PrefixPreserves StateInv HistorySafe

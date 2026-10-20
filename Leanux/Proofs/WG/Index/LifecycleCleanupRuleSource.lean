@@ -10,7 +10,7 @@ theorem cleanup_preserves (P : WGWorld → Prop)
       Preserves (fun w : World=>P w.wg) action)
     (preexit : Preserves (fun w : World=>P w.wg) (liftWG netnsPreExit)) :
     Preserves (fun w : World=>P w.wg) Env.netnsCleanup := by
-  unfold Env.netnsCleanup
+  unfold Env.netnsCleanup Env.pendingDevice
   repeat' first
     | (rx_retention_head Env.runWorker
        apply TimerDiscipline.runWorker_kernel_contract _ _
@@ -38,6 +38,12 @@ theorem cleanup_preserves (P : WGWorld → Prop)
     | (rx_retention_head unsupported
        apply frames
        exact fun initial=>productAmbient_spec (AmbientM.unsupported _) _ (fun _ _ pre=>pre))
+    | (rx_retention_head invariant
+       apply frames
+       exact fun initial=>productAmbient_spec (AmbientM.invariant _) _ (fun _ _ pre=>pre))
+    | (rx_retention_head getAmbient
+       apply frames
+       exact fun initial=>productAmbient_spec (get : AmbientM Ambient) _ (fun _ _ pre=>pre))
     | (rx_retention_head peekUnit
        apply frames
        exact fun initial=>productAmbient_spec (AmbientM.peekUnit _) _ (fun _ _ pre=>pre))

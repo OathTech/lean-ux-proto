@@ -39,6 +39,15 @@ theorem deliverSent_sameKernel : SameProductStore Env.deliverSent := by
   intro _
   exact fun k => productModifyWG_spec (fun v => v = k) (fun w => {w with sent := []}) (fun _ => rfl)
 
+/-- The pending-unit test the namespace close and cleanup make (2026-10-20,
+the namespace-pin fix): an ambient read, then a pure answer. -/
+theorem pendingDevice_sameKernel (w : Worker) (queued : Bool) :
+    SameProductStore (Env.pendingDevice w queued) := by
+  have read : SameProductStore getAmbient := fun k => productAmbient_spec
+    (get : AmbientM Ambient) (fun w => productStoreView w = k) (fun _ _ h => h)
+  unfold Env.pendingDevice
+  exact SameView.bind read (fun _ => SameView.pure _ _)
+
 theorem peekNextSite_sameKernel : SameProductStore Env.peekNextSite := by
   have read : SameProductStore getAmbient := fun k => productAmbient_spec
     (get : AmbientM Ambient) (fun w => productStoreView w = k) (fun _ _ h => h)

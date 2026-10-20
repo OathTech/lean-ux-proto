@@ -13,6 +13,9 @@ def netnsCloseWith (close : Nat → FS.M Int) (work : FS.M Unit) : Leanux.M Int 
     let ret ← close fd
     if ret != 0 then invariant s!"close({fd}) of a fixture holder returned {ret}"
     work
+  modifyEnv fun w => { w with netnsCHolders := [] }
+  if !(← Env.pendingDevice .netnsCleanup false) then
+    invariant "wg_netns_close: the pin's close did not drop the creating namespace's last reference (cleanup_net was not queued)"
   return 0
 
 theorem netnsClose_factor :

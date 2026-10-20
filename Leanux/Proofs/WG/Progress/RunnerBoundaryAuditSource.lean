@@ -36,10 +36,13 @@ theorem runnerOperation_facts (trace : Trace) (op : Operation) (state : RunnerAc
       simp only [ha] at run
       cases hh : final.ambient.hidden with
       | none =>
-        cases hsusp : final.ambient.suspended <;> cases hn : final.wg.netRxRaised
-        all_goals simp [hh, hsusp, hn, pure, Except.pure] at run
+        cases hsusp : final.ambient.suspended <;>
+          cases hpending : final.ambient.pendingWork <;> cases hn : final.wg.netRxRaised
+        all_goals simp [hh, hsusp, hpending, hn, pure, Except.pure] at run
         all_goals obtain ⟨rfl, rfl⟩ := run
-        all_goals exact ⟨⟨middle, rfl, ha⟩, by simp [RunnerBoundaryClean, Campaign2.Product.snapshot, Campaign2.snapshot, hh, hsusp, hn]⟩
+        all_goals exact ⟨⟨middle, rfl, ha⟩, by
+          simp [RunnerBoundaryClean, Campaign2.Product.snapshot, Campaign2.snapshot,
+            hh, hsusp, hpending, hn]⟩
       | some records =>
         cases records with
         | cons record rest => simp [hh, pure, Except.pure] at run

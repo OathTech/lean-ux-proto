@@ -83,6 +83,7 @@ macro "environment_material" : tactic => `(tactic| (
     | (index_material_head Env.deliverSent; exact (kernel (project := id) (deliverSent_sameKernel)).wp (RetainsView initial))
     | (index_material_head Env.requireNoCryptWork; exact (kernel (project := id) (requireNoCryptWork_sameKernel)).wp (RetainsView initial))
     | (index_material_head Env.peekNextSite; exact (kernel (project := id) (peekNextSite_sameKernel)).wp (RetainsView initial))
+    | (index_material_head Env.pendingDevice; exact (kernel (project := id) (pendingDevice_sameKernel _ _)).wp (RetainsView initial))
     | (index_material_head Env.timerWorker; exact (kernel (project := id) (timerWorker_sameKernel _)).wp (RetainsView initial))
     | (index_material_head Env.advance; exact (kernel (project := id) (advance_sameKernel _)).wp (RetainsView initial))
     | (index_material_head Env.senderSource; exact (kernel (project := id) (senderSource_sameKernel _ _ _ _)).wp (RetainsView initial))
