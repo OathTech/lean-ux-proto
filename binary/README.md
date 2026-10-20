@@ -34,20 +34,29 @@ from that tree live in `AllowedipsSourceModel.lean`, with their origins named;
 the operational mirror. The proof campaigns can change independently of this
 package's imports.
 
-The current semantics pin is `907830a1fb207e86f7914764717e3995c1f0df2d`:
+The current semantics pin is `43df9468febc173e6cf9363d87e8ad34e76d7434`:
 upstream `8af78062037bc237b341d20252aafd1797c1bcb7` plus **nine** committed
 patches. Patch [0009](kraken-patches/0009-register-bt.patch) adds the
 register/register `bt` forms used at two sites in the pinned allowed-IPs
 insertion image. It is retained because removing it would remove execution of
 those paths and their tested segments. Register offsets are reduced modulo
-the operand width; CF receives the selected bit, ZF and the registers are
-preserved, and OF/SF/AF/PF are undefined. Unsupported operand forms fail closed.
+the operand width; CF receives the selected bit, the registers are preserved,
+and OF/SF/ZF/AF/PF are undefined. Unsupported operand forms fail closed.
 The patch includes focused semantic tests, parser/printer roundtrips and a
 native x86 comparison, plus the runner's missing Bool generator needed by
 earlier ISA extensions. This is a **trust-surface change**, pinned consistently
 in `dependencies/sources.lock.json` and `TrustBase.krakenCommit`; the tests do
 not prove ISA fidelity. The closing report records its validation. No kernel
 image change accompanies it.
+
+The vendor question is ZF: the [Intel BT specification](https://cdrdv2-public.intel.com/812383/253666-sdm-vol-2a.pdf)
+preserves it, while the [AMD architecture manual, volume 3](https://docs.amd.com/v/u/en-US/24594_3.37)
+documents it as undefined (landing review S1). The model permits both values,
+including Intel's behavior, instead of assuming the Intel rule on an AMD host.
+Neither BT site in the pinned image (`r31d`, `r577`) reads ZF before an OR
+overwrites the flags. Focused tests check both ZF outcomes for both initial
+values at 16, 32 and 64 bits; the native comparison observes CF, not undefined
+ZF. Passing that concrete comparison is not a claim about every vendor CPU.
 
 Concrete tests and image comparison require the read-only s5 build. Set
 `LEANUX_BINARY_KERNEL_DIR` to its directory; the default is

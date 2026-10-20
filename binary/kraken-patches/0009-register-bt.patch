@@ -1,29 +1,29 @@
-From 907830a1fb207e86f7914764717e3995c1f0df2d Mon Sep 17 00:00:00 2001
+From 43df9468febc173e6cf9363d87e8ad34e76d7434 Mon Sep 17 00:00:00 2001
 From: Mike Dodds <mike@oath.tech>
-Date: Tue, 20 Oct 2026 01:40:13 +0000
+Date: Tue, 20 Oct 2026 22:11:52 +0000
 Subject: [PATCH] Support register BT with modulo offsets and undefined flags
 
-Add focused Lean checks, parser roundtrips and a native x86 comparison. Register operands only; unsupported memory and immediate forms fail closed. Supply the test runner Bool generator required by earlier consumer ISA extensions. All focused tests and native comparison pass.
+Register operands only; unsupported memory and immediate forms fail closed. CF receives the indexed bit, with modulo operand width; all other status flags, including vendor-dependent ZF, are undefined. Focused Lean checks exercise both ZF values for either incoming value at every supported width. The native comparison reads CF only. Supply the test runner Bool generator required by earlier consumer ISA extensions.
 ---
- Kraken/X64/BtTests.lean       | 76 +++++++++++++++++++++++++++++++++++
- Kraken/X64/Parser/Basic.lean  |  9 +++++
+ Kraken/X64/BtTests.lean       | 82 +++++++++++++++++++++++++++++++++++
+ Kraken/X64/Parser/Basic.lean  |  9 ++++
  Kraken/X64/PrintATT.lean      |  1 +
  Kraken/X64/PrintATTTests.lean |  1 +
  Kraken/X64/PrintIntel.lean    |  1 +
- Kraken/X64/Semantics.lean     |  7 ++++
+ Kraken/X64/Semantics.lean     |  8 ++++
  Kraken/X64/Syntax.lean        |  1 +
  Kraken/X64/Test/asm/test_bt.S | 22 ++++++++++
  KrakenRunnerX64.lean          |  2 +
- 9 files changed, 120 insertions(+)
+ 9 files changed, 127 insertions(+)
  create mode 100644 Kraken/X64/BtTests.lean
  create mode 100644 Kraken/X64/Test/asm/test_bt.S
 
 diff --git a/Kraken/X64/BtTests.lean b/Kraken/X64/BtTests.lean
 new file mode 100644
-index 0000000..c844290
+index 0000000..ae71909
 --- /dev/null
 +++ b/Kraken/X64/BtTests.lean
-@@ -0,0 +1,76 @@
+@@ -0,0 +1,82 @@
 +module
 +
 +import Kraken.X64.OmniSemantics
@@ -58,7 +58,7 @@ index 0000000..c844290
 +private def check (w : Width) (value index : UInt64) (bit : Bool) : Bool :=
 +  let state : MachineData := {regs := {rax := value,rcx := index,rbx := 99},status := {cf := false,pf := false,af := false,zf := true,sf := false,of := false}}
 +  allFlags (fun t => t.pc == 3 && t.data.regs == state.regs &&
-+    t.data.status.cf == bit && t.data.status.zf) (execute (instruction w) state)
++    t.data.status.cf == bit) (execute (instruction w) state)
 +
 +#guard check .W16 0x123456789abc8000 15 true
 +#guard check .W16 0x123456789abc8000 31 true
@@ -71,13 +71,19 @@ index 0000000..c844290
 +#guard check .W64 0x8000000000000000 127 true
 +#guard check .W64 1 64 true
 +#guard check .W64 1 65 false
-+#guard allFlags (fun t => t.data.regs.rax == 0x100000001 && !t.data.status.cf && !t.data.status.zf)
++#guard allFlags (fun t => t.data.regs.rax == 0x100000001 && !t.data.status.cf)
 +  (execute (.regular .W64 .W32 (.bt (.low .rax .W32) (.low .rax .W32)))
 +    {regs := {rax := 0x100000001}})
-+#guard someFlags (fun t => t.data.status.pf && t.data.status.af && t.data.status.sf && t.data.status.of)
++#guard someFlags (fun t => t.data.status.pf && t.data.status.af && t.data.status.zf && t.data.status.sf && t.data.status.of)
 +  (execute (instruction .W32) {})
-+#guard someFlags (fun t => !t.data.status.pf && !t.data.status.af && !t.data.status.sf && !t.data.status.of)
++#guard someFlags (fun t => !t.data.status.pf && !t.data.status.af && !t.data.status.zf && !t.data.status.sf && !t.data.status.of)
 +  (execute (instruction .W32) {})
++-- Either ZF result must be permitted, independently of its incoming value.
++#guard [Width.W16, Width.W32, Width.W64].all fun w =>
++  [false, true].all fun initial =>
++    let effect := execute (instruction w) {status := {cf := false,pf := false,af := false,zf := initial,sf := false,of := false}}
++    someFlags (fun t => t.data.status.zf) effect &&
++      someFlags (fun t => !t.data.status.zf) effect
 +#guard !allFlags (fun _ => true) (execute (instruction .W8) {})
 +#guard match Parser.parse "bt %ecx,%eax" with
 +  | .ok p => p == [.instr (instruction .W32)]
@@ -157,20 +163,21 @@ index aee052c..fd8e603 100644
    | .jmp tgt => s!"jmp {tgt.toStr addr_w}"
    | .call tgt => s!"call {tgt.toStr addr_w}"
 diff --git a/Kraken/X64/Semantics.lean b/Kraken/X64/Semantics.lean
-index 86282a6..2f69d43 100644
+index 86282a6..7145d79 100644
 --- a/Kraken/X64/Semantics.lean
 +++ b/Kraken/X64/Semantics.lean
-@@ -824,6 +824,13 @@ set_option maxHeartbeats 1000000
+@@ -824,6 +824,14 @@ set_option maxHeartbeats 1000000
      let (cf, v) := (t.msb, t.take w.bits)
      (λ setof => if count == 1 then setof (v.msb != a.msb) else undefined setof) (λ of =>
      { s with status := { s.status with cf, of } }.set dst v p next))
 +  | .bt base index =>
 +    if w == .W8 then unimplemented "BT has no 8-bit form" else
 +    -- Intel SDM Vol. 2A, BT: register offsets are modulo operand width.
-+    -- ZF is preserved; OF/SF/AF/PF are undefined. Neither register is written.
++    -- Intel preserves ZF; AMD documents it as undefined. Allow either value.
++    -- OF/SF/AF/PF are undefined on both. Neither register is written.
 +    let cf := (s.regs.get base).getLsbD ((s.regs.get index).toNat % w.bits)
-+    undefined (fun pf => undefined (fun af => undefined (fun sf => undefined (fun of =>
-+      next {s with status := {s.status with cf, pf, af, sf, of}}))))
++    undefined (fun pf => undefined (fun af => undefined (fun zf => undefined (fun sf => undefined (fun of =>
++      next {s with status := {cf, pf, af, zf, sf, of}})))))
    | .bsr dst src =>
      if w == .W8 then unimplemented "BSR has no 8-bit form" else
      src.interp s p (fun a s =>
@@ -188,7 +195,7 @@ index b984e80..4fc9d7a 100644
    | jmp (target : RelRegOrMem)
 diff --git a/Kraken/X64/Test/asm/test_bt.S b/Kraken/X64/Test/asm/test_bt.S
 new file mode 100644
-index 0000000..de8f2cf
+index 0000000..1128353
 --- /dev/null
 +++ b/Kraken/X64/Test/asm/test_bt.S
 @@ -0,0 +1,22 @@
@@ -197,7 +204,7 @@ index 0000000..de8f2cf
 +cmpq %rcx, %rcx
 +btw %cx, %ax
 +setc %r8b
-+setz %r9b
++setnc %r9b
 +movq $0xdeadbeef80000000, %rax
 +movq $-1, %rcx
 +btl %ecx, %eax

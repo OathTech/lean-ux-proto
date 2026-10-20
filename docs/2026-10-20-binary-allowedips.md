@@ -1394,3 +1394,11 @@ apart from its namespace. The default binary build passes 1,119 jobs without
 warnings; the proof gate's `check_imports` step passes in isolation. This removes
 the earlier unintentional coupling to 43 proof-tree modules. No entry/return
 insertion claim is added.
+
+S1: patch nine now permits either ZF value after register BT. The new private
+Kraken pin is `43df9468febc173e6cf9363d87e8ad34e76d7434`; the regenerated patch
+and lock agree. Both image sites overwrite ZF before reading it. Focused tests
+cover both ZF values for either incoming value at 16/32/64 bits, and the native
+comparison observes CF only (1/1 pass). The full binary build passes 1,119 jobs
+without warnings under the widened semantics. The README records the vendor
+question. Earlier ZF-preservation statements and pins above are historical.

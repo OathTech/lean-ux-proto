@@ -23,7 +23,7 @@
   {
     "name": "kraken",
     "url": "https://github.com/AeneasVerif/kraken.git",
-    "commit": "907830a1fb207e86f7914764717e3995c1f0df2d",
+    "commit": "43df9468febc173e6cf9363d87e8ad34e76d7434",
     "kind": "git",
     "consumer": "binary",
     "toolchain": "leanprover/lean4:v4.35.0",
