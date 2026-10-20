@@ -56,5 +56,21 @@ theorem Pending.frame {names : Names} {entry : MachineData} {d : WG.Device}
     rw [←internalListCheck_frame n nodeOffsets same metadataApart id]
     exact pending.internal id node member internal
 
+/-- Recover an old node's core from the original relation and the pending
+resource, without asserting a new reconstruction while the fresh node is unpublished. -/
+theorem Pending.old_node {names entry d key cidr pid base memory id address node}
+    (pending : Pending names entry d key cidr pid base memory)
+    (related : Corresponds names nodeOffsets entry.dmem d)
+    (named : (id,address) ∈ names.trie.nodes) (present : d.nodes.get? id=some node) :
+    Trie.decodeNode (names.allocated base).trie nodeOffsets memory address=.ok (Trie.targetNode node) := by
+  obtain ⟨⟨current,actual⟩,member,read⟩ := (reconstruct_fields related).nodes.left (id,address) named
+  have identity := (decodeNode_fields read).1
+  dsimp only at identity
+  subst current
+  have found : d.nodes.get? id=some actual := Std.TreeMap.mem_toList_iff_getElem?_eq_some.mp member
+  have equal : actual=node := Option.some.inj (found.symm.trans present)
+  subst actual
+  exact (decodeNode_fields (pending.nodes _ named _ read)).2
+
 #print axioms Pending.frame
 end Binary.Pair.Allowedips.NodeInit

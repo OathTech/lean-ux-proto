@@ -9,6 +9,7 @@ import PairAllowedipsNodeBoundary
 import PairAllowedipsChildPublish
 import PairAllowedipsSelect
 import PairAllowedipsChildSetup
+import PairAllowedipsChildResources
 import PairAllowedipsNames
 import PairAllowedips
 
@@ -150,6 +151,8 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   let nodeBoundaries ← NodeInit.checkBoundary s.names input.lookup.offsets s.world key cidr pid r.history
   unless nodeBoundaries==nodeInitSegments do throw "insert.node-boundary-count"
   let childSegments ← ChildPublish.check r.history
+  let childResources ← ChildResources.check s.names input.lookup.offsets s.world key cidr pid r.history
+  require (childResources==childSegments) "insert.child-resource-count"
   let selectSegments ← Select.check r.history
   let (setupEntries,setupSaves) ← ChildSetup.check r.history
   require (setupEntries==nodeInitSegments && setupSaves==childSegments) "insert.child-setup-count"
@@ -189,7 +192,7 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   assertAt names input.lookup.offsets r.state.data.dmem world
   return (⟨names,world,r,released⟩,Json.mkObj [("family",toJson family),("cidr",toJson cidr),
     ("result",toJson answer),("placementVisits",toJson visits),("exactSegments",toJson exactSegments),
-    ("nodeInitSegments",toJson nodeInitSegments),("childSegments",toJson childSegments),
+    ("nodeInitSegments",toJson nodeInitSegments),("childSegments",toJson childSegments),("childResources",toJson childResources),
     ("selectSegments",toJson selectSegments),("setupEntries",toJson setupEntries),("setupSaves",toJson setupSaves),
     ("rootSegments",toJson rootSegments),("returnSegments",toJson returnSegments),("instructions",toJson r.pcs.size),("services",toJson services),
     ("coverage",toJson (r.coverage.toList.drop s.binary.coverage.size)),

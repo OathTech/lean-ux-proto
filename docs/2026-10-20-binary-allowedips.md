@@ -1167,3 +1167,64 @@ uses constructed entry memory and supplied allocation/free returns. Fresh
 kernel replay of `AllowedipsInsertionSurface` and the inspected printed-surface
 diff pass, with standard axioms. `TrustBase.lean` and the clean private Kraken
 pin are unchanged. No external gate acceptance is claimed.
+
+
+## Continuous child attachment from tested entry resources (09:55 UTC)
+
+`ChildFinish.initialization_child_checked` executes continuously from
+`add+0x156` to the success cut at `+0x549`: owner-list attachment and node
+initialization, allocation saving, the first coverage call, actual child
+selection, publication-input saving, the second coverage call and publication.
+It restores full allowed-IPs reconstruction and the unchanged heap assertion,
+exports the zero success value in RBX, the unchanged stack pointer, callback
+readiness and the combined byte-write frame. Both address families use this
+one statement. The source-side child update is the already proved actual mirror
+list append and connection operation.
+
+The theorem takes the existing executable initialization boundary and the new
+`ChildResources.resources` assertion. The latter checks the mapped caller stack,
+conditional callback resources and finite read/write separation spans. Its
+proved extraction supplies the caller premises; neither a successful future
+phase nor an intermediate pending resource or reconstruction is a hypothesis.
+Parent identity, prefix/width and the empty source child are explicit branch
+case hypotheses. The old relation derives the parent decoder; actual query
+bytes determine direction; stack stores and callback frames determine saved
+publication inputs. The source branch conditions still need to follow from
+the accepted whole-function execution when the outer composition is built.
+
+The runner exercises that same resource assertion on all ten generated child
+attachments. It explicitly distinguishes no-parent and occupied-child cases,
+rejects malformed references and compares the checked count with physical
+child publication. The 66 retained-heap insertion/lookup calls and 24 isolated
+root cases pass, including ten child resources, 18 selectors, 30 setup entries,
+ten saved-input segments and 30 nonempty initializations (3.263 seconds).
+The recorded comparison passes eight calls under two seeds, 170 coverage
+entries, 64 comparisons and 117 decisions (0.312 seconds); entry memory is
+constructed and allocation/free returns remain supplied.
+
+This checkpoint adds ten modules (714 lines) and an old-node resource lemma,
+reusing the previously proved physical instructions. Its roughly seventeen
+minutes of local development after the preceding join are composition and
+executable-resource work, not a measured new-function completion rate. The
+resource tests found no new semantic discrepancy. Elaboration failures,
+including a heartbeat timeout while normalizing a stored zero, were repaired
+with explicit intermediate types and word identities, without raising limits.
+The first resource-run invocation failed at compilation on a multiline record
+update; it did not execute tests and is not counted as a pass. No KILLED run
+occurred.
+
+The default package build passes 1,160 jobs without warnings; the fast tier
+passes 137 tests, one skipped (23.516 seconds). The printed statement and
+resource-definition diff has been inspected. The trust declarations and
+private Kraken pin are unchanged; the headline uses only standard axioms.
+Fresh kernel replay of `AllowedipsInsertionSurface` and the inspected surface
+diff pass. All eight sequence-counter regression executions pass again,
+including the UInt64 wrap with the expected binary result unchanged.
+
+Function-entry establishment, the allocator interface proof, covering and
+intermediate insertions, failure/rollback paths and complete function/sequence
+composition remain open. The child theorem stops before the final callback
+and epilogue, whose separate proofs remain available. Checkpoints A and B are
+not complete; completed new-function coverage is still zero, and no external
+gate acceptance is claimed. R is unchanged, and the seq-wrap finding is not
+hidden by a precondition or a modulo target.

@@ -57,7 +57,7 @@ theorem finish (fetch : Int64 → Option Decoded)
     (indexApart : ∀ a, InRange (.ofNat 64 (s.regs.rsp.toNat+16)) 8 a →
       ¬InRange (.ofNat 64 (base+48)) 8 a) :
     Eventually (instructionStep fetch) (fun t =>
-      t.pc=Add.entry+0x549 ∧ t.data.regs.rsp=s.regs.rsp ∧ CallsReady c t.data ∧
+      t.pc=Add.entry+0x549 ∧ t.data.regs.rbx=0 ∧ t.data.regs.rsp=s.regs.rsp ∧ CallsReady c t.data ∧
       EqualOutside (fun a => SetupWrites s.regs.rsp c a ∨ PublishWrites s.regs.rbx base direction a)
         s.dmem t.data.dmem ∧
       Corresponds (names.allocated base) nodeOffsets t.data.dmem
@@ -73,7 +73,7 @@ theorem finish (fetch : Int64 → Option Decoded)
   have childMappedA := mapped _ _ childMapped (fun a h => destinationsApart a (.inr h))
   rw [←stack] at baseRead directionRead indexRead indexApart
   rw [←bx] at childMappedA parentNamed
-  obtain ⟨published,registers,exec,stackB,baseB,indexB⟩ :=
+  obtain ⟨published,registers,exec,stackB,zeroB,baseB,indexB⟩ :=
     ChildPublish.effect_total baseRead directionRead indexRead parentMappedA childMappedA indexApart
   have bytes := publish_writes (before:=a.data.regs) baseB indexB
   rw [bx] at bytes
@@ -84,10 +84,11 @@ theorem finish (fetch : Int64 → Option Decoded)
   apply eventually_weaken (instructionStep fetch) _ _ _ _ run
   rintro t ⟨pc,mem,regs,frame,relatedT,heapT⟩
   have stackT : t.data.regs.rsp=a.data.regs.rsp := by rw [regs]; exact stackB
+  have zeroT : t.data.regs.rbx=0 := by rw [regs]; exact zeroB
   have mappedT : MappedLe a.data.dmem t.data.dmem := mem ▸ ChildPublish.effect_mapped exec
   rw [regs,bytes] at frame
   have readyT := readyA.frame stackT frame mappedT publishContextApart
-  refine ⟨pc,stackT.trans stack,readyT,?_,relatedT,heapT⟩
+  refine ⟨pc,zeroT,stackT.trans stack,readyT,?_,relatedT,heapT⟩
   intro address outside
   exact (frameA address (fun h => outside (.inl h))).trans
     (frame address (fun h => outside (.inr h)))

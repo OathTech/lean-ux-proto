@@ -18,7 +18,7 @@ theorem effect_total {s : MachineData} {base direction : Nat}
     (indexApart : ∀ a, InRange (.ofNat 64 (s.regs.rsp.toNat+16)) 8 a →
       ¬InRange (.ofNat 64 (base+48)) 8 a) :
     ∃ memory registers, effect s=.ok (memory,registers) ∧
-      registers.rsp=s.regs.rsp ∧ registers.r8.toNat=base ∧ registers.rax.toNat=direction := by
+      registers.rsp=s.regs.rsp ∧ registers.rbx=0 ∧ registers.r8.toNat=base ∧ registers.rax.toNat=direction := by
   let slot : BitVec 64 := s.regs.rbx.toBitVec+.ofNat 64 (((direction+1)%256)*8)
   let packed := slot ||| .ofNat 64 direction
   let middle := s.dmem.storeInt (.ofNat 64 (base+48)) 8 packed.toNat
@@ -36,7 +36,7 @@ theorem effect_total {s : MachineData} {base direction : Nat}
   have indexLoad : readNat ⟨{s with dmem:=middle},0⟩ (s.regs.rsp.toNat+16) 8=.ok direction :=
     readNat_of_word savedAfter
   dsimp only [packed,slot] at first
-  refine ⟨memory,registers,?_,rfl,?_,?_⟩
+  refine ⟨memory,registers,?_,rfl,rfl,?_,?_⟩
   · simp only [effect,baseLoad,directionLoad,indexLoad,first,last,ok_bind]
     rfl
   · exact UInt64.toNat_ofNat_of_lt' (by simpa using word_bound baseRead)
