@@ -46,6 +46,11 @@ theorem Native.checked (token : Native) : Checked token.action := by
   | cookieReceipt event=>
     exact CompletePoll.state _
       (CompletePassive.emit _ CompleteProduct.account_safe (.cookieConsumed event) rfl (fun _=>rfl))
+  | cookieRoute args=>
+    exact Consume.Leaf.native_checked _ (CookieRoute.action_frame args)
+  | cookieDatagram receipt=>
+    exact CompletePoll.state _
+      (CompletePassive.emit _ CompleteProduct.account_safe (.cookieSocket receipt) rfl (fun _=>rfl))
   | oldSession pid run=>
     exact CompletePoll.state _
       (CompletePassive.emit _ CompleteProduct.account_safe (.old (.responder (.session pid run))) rfl (fun _=>rfl))

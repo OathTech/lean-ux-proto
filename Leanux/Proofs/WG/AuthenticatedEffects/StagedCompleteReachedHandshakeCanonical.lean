@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCookieCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConsumerCanonical
 
 /-! Canonical witnesses follow the unchanged handshake branches, wrappers
@@ -38,7 +39,7 @@ macro "handshake_source_step" : tactic => `(tactic| first
   | (handshake_source_head CausalJournal.session; exact sessionShape _)
   | (handshake_source_head Driver.keepaliveObserved; exact .child (.keepalive _))
   | (handshake_source_head ProtocolSocket.observed; exact .native (.protocol _ _))
-  | (handshake_source_head CookieSocket.observed; exact .native (.cookie _ _ _))
+  | (handshake_source_head CookieSocket.observed; exact cookieShape _ _ _)
   | (handshake_source_head NestedPeerRelease.admitInitiationWith; exact admittedInitiationShape _)
   | (handshake_source_head NestedPeerRelease.admitResponseWith; exact admittedResponseShape _)
   | (handshake_source_head NestedPeerRelease.cookieObserved; exact consumedCookieShape _)

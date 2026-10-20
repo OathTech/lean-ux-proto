@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCookieRouteFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCookieNativeCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConsumerNativeCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPubkeyLookupSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCookieMetadataCanonical
@@ -32,6 +34,8 @@ inductive Native : Type 1 where
   | admission (event : HandshakeAdmission)
   | cookieReceipt (event : CookieConsumption.Receipt)
   | exchange (event : Exchange.Event)
+  | cookieRoute (args : ProtocolSocket.Args)
+  | cookieDatagram (receipt : CookieSocket.Receipt)
   | oldSession (pid : PeerId) (run : WGRunWitness Bool)
 
 def Native.Result : Native → Type
@@ -40,6 +44,7 @@ def Native.Result : Native → Type
   | @metadata α .. => α
   | @capturedMetadata α .. => WGRunWitness α
   | @captured α .. => WGRunWitness α
+  | .cookieRoute _ => Except Int Route
   | .session _ => Bool
   | .initiation _ | .response _ => Option PeerId
   | _ => Unit
@@ -64,6 +69,8 @@ def Native.action (token : Native) : PrefixM Event token.Result := match token w
   | .admission event => emitPrefix (ConsumerObserved.admission event)
   | .cookieReceipt event => emitPrefix (.cookieConsumed event)
   | .exchange event => emitPrefix (.exchange event)
+  | .cookieRoute args => liftWGObserver (liftWGPrefix (CookieRoute.action args))
+  | .cookieDatagram receipt => emitPrefix (.cookieSocket receipt)
   | .oldSession pid run => emitPrefix (.old (.responder (.session pid run)))
 
 inductive Child where
