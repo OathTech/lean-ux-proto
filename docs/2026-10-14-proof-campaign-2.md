@@ -1,5 +1,188 @@
 # WireGuard proof campaign 2
 
+The six summaries below describe the landing scope over `1a69cebb` and
+supersede broader completion wording in the dated history. The
+[independent landing review](2026-10-20-review-campaign-2-landing.md) requires
+no new theorem. Claims use the campaign projection, frames are separate,
+and the mirror is unchanged. Observer erasure preserves original outcomes;
+coverage of all relevant observation sites rests on source construction and
+review, not an independent completeness theorem.
+
+## H1 summary — Noise state machine
+
+Architecture: tag-edge and slot models connect to native operation contracts;
+allocation-stamped confirmation journals compose through the initialized
+runner. `original_initialized_driver_tags` proves whole-run tag ownership;
+`original_initialized_confirmation_unique` concerns successful completed
+confirmations, including prefixes before an outer Stop. Rotation, confirmation,
+expiry and clearing have per-function contracts. One keypair per slot follows
+from the three Option fields; they may alias or name absent keys.
+
+Wording pairs: “all state/slot transitions occur only at the owning functions”
+becomes whole-run tag-edge ownership plus local slot effects, with no whole-run
+slot-write discipline theorem. “Confirmed exactly once per keypair” becomes
+at most once per allocation `internalId` among successful completed consume
+receipts; it asserts neither existence nor confirmations inside a stopped
+consume. “Unique by raw store key across recreation” is refuted and replaced
+by uniqueness of the persistent allocation stamp. Local fresh-history variants
+retain their named freshness bounds and finite operation language; they are
+not unrestricted driver claims.
+
+The [recreation recipe](2026-10-18-proof-campaign-2-confirmation-incarnations.md)
+confirms raw slot 0 twice with stamps 1 and 2. This is a statement artefact,
+not a mirror defect; the counterexample remains alongside the corrected
+identity theorem. Effort: 1,597 theorems, 75 headlines, 279 modules, including
+projection retrofit and whole-run composition. Ranked mirror changes: none
+requested; identity already exists in the mirror. Shared source factors and
+local proof decomposition provide the needed support without changing altitude.
+
+## H2 summary — Session index uniqueness
+
+Architecture: local index source equations and reference/slot accounts establish
+numeric and owner uniqueness, hashed-slot coverage and store bounds. The account
+is carried through actual callers to normal initialized endpoints, with no
+entry-invariant premise on `original_initialized_index_tables`. Lookup has its
+own native contract. Collision retries are proved locally in supplied-record
+mode; the illustrative collision composition is not an accepted runner trace.
+
+Wording pairs: “no two live sessions share an index” is indexed-entry uniqueness
+at normal initialized endpoints; unindexed stale fields are not live local
+indices. “Every collision retries as C does” is a local records-mode insertion
+contract, not an occurrence theorem for insertions throughout accepted traces.
+“Local hashed-owner coherence suffices for preservation” becomes a reachable
+account that also relates slots, allocation cursors and owners. Stopped final
+states and every intermediate boundary are not covered.
+
+The [persistent-owner witness](2026-10-17-proof-campaign-2-persistent-owner.md)
+uses mismatched caller/keypair owners; the [session-alias witness](2026-10-17-proof-campaign-2-session-alias.md)
+puts a newly allocated key through a dangling previous slot, then publishes a
+dangling row. Both refute insufficient arbitrary-state invariants, not initialized
+execution. “Positive reference implies peerPut returns” was corrected to exact
+success/refusal under the same premises: [queued-work and pending-timer witnesses](2026-10-17-proof-campaign-2-peer-release.md)
+force final-release Stops. Effort: 1,532 theorems, 162 headlines, 428 modules.
+Ranked mirror changes: none open; the earlier index-owner lookup correction
+was an altitude-preserving prerequisite already landed before these claims.
+
+## H3 summary — Authenticated endpoint provenance
+
+Architecture: failure-retaining handshake setter attempts and ordered data checks
+compose with a latest-setter journal through the initialized runner. Every
+observed committed handshake attempt has successful MAC/consumer checks; every
+observed data check has earlier decrypt/configured-session authentication.
+Normal final remote endpoints have a latest configuration or authenticated
+packet setter, with the packet's source and no later setter/reset for that
+location. The outer source address is copied, not cryptographically bound.
+
+Wording pairs: “an unauthenticated datagram never moves an endpoint” becomes
+authentication of the observed setter attempts/checks plus normal final
+latest-setter provenance. This is not a theorem about every physical endpoint
+write; a transient change later undone is not excluded by these headlines.
+“The endpoint is that packet's source” retains same-packet source equality
+for the authenticated provenance witness. “Complete caller coverage” means
+the reviewed observer placement, with proved erasure and occurrence relations
+inside that construction, not a separate proof that no source site is omitted.
+
+No new mirror or kernel finding was established in this result. Equal-value
+setter attempts and attempts followed by Stops remain represented. Peer survival,
+cached local source fields and final states after Stop are outside the claim.
+Effort: 1,305 theorems, 45 headlines, 266 modules, covering local authentication,
+caller composition and final provenance after the state split. Ranked mirror
+changes: none requested; the remaining distinction is claim scope, not a
+proposal to alter the mirror or add a premise to hide a discrepancy.
+
+## H4 summary — Configuration contracts and readback
+
+Architecture: ordered mixed-request receipts and ownership accounts connect
+actual setter stages to a bounded multi-message getter and its proof-side JSON
+serialiser. Device fields relate to the request; peer scalar agreement is
+one-directional for surviving actual cells `(internalId, psk, keepalive,
+endpoint)`. The initialized getter theorem is separate from set-then-get.
+
+Wording pairs: “a dump after a set reflects the set” becomes mixed scalar
+readback under `OwnerConfiguration.ProjectedEntry` and explicit readability,
+capacity, freshness, reference and receive bounds. No headline derives that
+entry invariant from initialization for the composed setter/getter. Expected
+peer creation/removal completeness, public keys, allowed IPs and protocol
+version are not in this mixed peer agreement. “Replace-peers semantics” has a
+flag-only replacement contract, not arbitrary mixed replacement completeness.
+“The allowed-IP removal flag” is recast as peer `REMOVE_ME` and
+`REPLACE_ALLOWEDIPS`: Linux 6.12 exposes no per-allowed-IP removal flag.
+Port, fwmark and private-key effects retain their concrete source contracts.
+
+Historical corrections retain counterexamples: “already pending means no new
+handshake queueing” becomes the actual queue-record-dependent effect
+([duplicate queue witness](2026-10-17-proof-campaign-2-queued-handshake.md));
+“resident-peer removal returns” becomes exact refusal or successful cleanup
+under the same domain ([scheduled-NAPI witness](2026-10-17-proof-campaign-2-removal-carry.md)).
+Effort: 2,084 theorems, 217 headlines, 594 modules. Ranked mirror changes:
+no open H4 request; rank 1 was restoring pre-header nest cancellation tailroom
+([request 3](2026-10-14-campaign-2-mirror-requests.md#3-restore-pre-nest-tailroom-when-cancelling-the-device-peers-nest)),
+fixed at `3f3879e0`, altitude-preserving. No stronger readback is claimed here.
+
+## H5 summary — Finite evaluation, service and pending-work finding
+
+Architecture: finite replacements for nonstructural loops compose to exact
+`executeTrace` equality; committed dispatch/resume receipts preserve failures.
+Normal accepted runs have normal receipts, and a receipt with supplied records
+at its own entry strictly consumes them. The staged Prefill bridge solved the
+conversion blocker without increasing Lean limits on that finite-evaluation path.
+
+Wording pairs: “every operation terminates” is finite evaluation preserving
+all results and Stops, including exhausted budgets; it is not general fuel
+adequacy. “Dispatched/resumed work runs” has actual branch/source and receipt
+contracts; propagation of supplied mode to interior receipts remains unproved.
+“Every accepted operation ends without pending units” remains refuted without
+records; the positive boundary contract gives emptiness conditional on supplied
+mode at that boundary. No supplied-only whole-run replacement is claimed.
+
+The [namespace-pin recipe](2026-10-20-proof-campaign-2-namespace-pin.md) accepts
+`dup(9); wg_netns_close; close(ref 0)`: teardown occurs prematurely at operation
+1 and pending cleanup remains at operation 2. This is an open environment
+defect; supplied-mode checking refuses the trace. Earlier backlog, nested-refill
+and supplied-pending defects are fixed and retained as refusal/pass regressions
+([requests 1, 2, 4](2026-10-14-campaign-2-mirror-requests.md)). The old placeholder
+pending witness now checks empty pending work. Historical “cookie count/class
+alone ensures draining and predicted yields” claims were refuted by bad-tail,
+extra physical-slot and hole witnesses; exact bounded outcomes replace two
+predictions, and five false supports remain retired, not silently strengthened
+([cookie findings](2026-10-17-proof-campaign-2-cookie-bound.md)).
+
+Effort: 1,742 theorems, 280 headlines, 373 modules. Ranked mirror changes:
+rank 1, open request 5, altitude-preserving: the mirror lane must settle retained
+pin aliases/last-release cleanup. The report records two fix shapes without
+choosing one. Requests 1, 2 and 4 were also altitude-preserving and are closed.
+
+## H6 summary — Guarded timer effects and session-relative counting
+
+Architecture: actual arm/clear contracts retain wheel state and recorded clocks;
+hook/session journals compose through the initialized driver. Local contracts
+prove the guarded C delay at reached sites. Session stamps connect one derived
+hook call to each successful session; normal completed enqueue deltas are zero
+or one. Qualifying contiguous retry/send blocks within one normal timer episode
+have the proved bound 19; arbitrary interleaved or multi-episode histories do not.
+
+Wording pairs: “timers arm only at the C sites” becomes local guarded arm
+effects with inspected C correspondence, not an exclusivity theorem.
+“Persistent keepalive re-arms on every authenticated traversal” becomes the
+guarded effect if the hook is reached; all-site coverage is the reviewed journal
+construction. “Zero-key timer arms once per session” becomes at most one
+completed session-derived enqueue per allocation stamp, plus a separate give-up
+cause. Guards or unchanged expiry permit zero enqueues.
+
+The [initialized give-up recipe](2026-10-17-proof-campaign-2-initialized-giveup.md)
+has 19 retries then give-up at callback 20 with no session allocation. Retrofit
+wording pairs are also retained: “delete changes expiry only” becomes expiry
+and wheel deletion; “logical due means dispatcher-selected” becomes actual
+wheel selection ([wheel witnesses](2026-10-17-proof-campaign-2-timer-carry.md));
+“valid caller/arm records ensure return” becomes exact arm-tail execution,
+including a missing base-clock Stop ([clock witness](2026-10-17-proof-campaign-2-missing-clock.md));
+“empty send queue implies no requeue” becomes record-dependent queueing, with
+a checked matching-record counterexample in the retrofit report.
+
+Effort: 1,183 theorems, 100 headlines, 267 modules. Ranked mirror changes:
+none requested for these statement/representation artefacts. No firing fairness,
+universal retry-history bound or stronger site-completeness theorem is claimed.
+
 ## Current checkpoint
 
 The staged Prefill proof is integrated without increasing any Lean resource
@@ -21,12 +204,12 @@ pass; every row below is current over that mirror.
 
 | Result | Current mirror | Status | Headlines / theorems / modules |
 | --- | --- | --- | --- |
-| H1 Noise | 1a69cebb | Complete within normal accepted execution and completed-call observation scope; allocation internalId supplies confirmation identity, with the raw-store counterexample retained | 75 / 1597 / 279 |
-| H2 Index | 1a69cebb | Complete at normal initialized endpoints: numeric/owner uniqueness, hashed-slot coverage, store bounds and slot compatibility | 162 / 1532 / 428 |
-| H3 Roaming | 1a69cebb | Complete for committed authenticated attempts and normal final latest-setter provenance | 45 / 1305 / 266 |
-| H4 Configuration | 1a69cebb | Complete for actual mixed request effects, initialized ownership and exact getter composition under its stated static bounds | 217 / 2084 / 594 |
-| H5 Progress | 1a69cebb | Complete with finding under charter §§3/5: termination and actual dispatch/resume service claims closed; unrestricted pending-quiescence refuted by the accepted namespace-pin alias trace | 280 / 1742 / 373 |
-| H6 Timers | 1a69cebb | Complete within guarded hook, completed-enqueue and qualifying retry-block scope; complete initialized caller coverage and allocation-relative counting | 100 / 1183 / 267 |
+| H1 Noise | 1a69cebb | Current whole-run tag ownership and completed allocation-stamp uniqueness; slot effects are local, and site completeness is reviewed | 75 / 1597 / 279 |
+| H2 Index | 1a69cebb | Current normal initialized index/owner coherence; lookup and records-only collision retry are local contracts | 162 / 1532 / 428 |
+| H3 Roaming | 1a69cebb | Current observed authenticated attempts and normal final provenance; no per-write theorem | 45 / 1305 / 266 |
+| H4 Configuration | 1a69cebb | Current one-directional four-scalar readback under an uncomposed entry invariant and getter bounds; flag-only replacement | 217 / 2084 / 594 |
+| H5 Progress | 1a69cebb | Current finite evaluation and scoped service; no general budget adequacy; unrestricted pending emptiness refuted, request 5 open | 280 / 1742 / 373 |
+| H6 Timers | 1a69cebb | Current reached-hook effects, qualifying retry blocks and at-most-one enqueue per stamp; no site-exclusivity theorem, caller placement reviewed | 100 / 1183 / 267 |
 
 Campaign total: **9,443 theorems, 879 headlines, 2,210 modules**, including
 three campaign projection modules. Claims remain over the campaign projection;
