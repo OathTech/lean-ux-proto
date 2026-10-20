@@ -684,7 +684,7 @@ in this step. Disposable normalization probe sources were removed after their
 conclusion was recorded. `TrustBase.lean` and the runtime runner are unchanged;
 no new external export acceptance is claimed.
 
-## Carry to the fixed-width mirror (06:43 UTC)
+## Carry to the fixed-width mirror (06:42 UTC)
 
 The branch is rebased onto main `1f766662`, including campaign 2 and the
 fixed-width correction. The pre-rebase dirty proof work was preserved and
@@ -726,3 +726,41 @@ No external export acceptance is claimed for this increment. A and B remain
 open, with zero newly completed functions. The counter correction removes a
 semantic blocker; fresh-allocation reconstruction and full insertion
 composition are still proof work.
+
+## Empty-root reconstruction segment (07:04 UTC)
+
+`Root.initialization_segment` now connects the actual Kraken instructions from
+`Add+0x443` to `Add+0x549` to the actual mirror's `emptyInstalled` state for
+either address family. It exports the full executable reconstruction, the
+segment's output registers and a byte-write frame with the actual root slot.
+The fresh node, old nodes, both roots, sequence word, reference counts and all
+ownership lists are accounted for. Successful validation of the extended
+allocation names follows from the old relation and fresh allocation geometry;
+it does not assume the new node already decodes.
+
+This remains a local segment theorem. Its hypotheses include the successful
+checked attachment/header/copy/publication phases, fresh allocation resources,
+and query and saved-root reads at intermediate phases. Deriving these from
+entry and allocator resources, preserving the heap assertion, and composing
+the wrappers, nonempty paths, failures and return remain open. The theorem is
+not a completed insertion proof. A and B remain open with zero newly completed
+functions. No function precondition or environment contract was weakened.
+
+The checkpoint adds thirteen supporting modules, 1,248 lines in total, including
+five modules already in progress before the carry. This is not a measurement of
+new-function cost. The unused weaker `Root.effect_frame` was removed: its
+existential slot lost the association needed by the consumer, whereas the new
+segment exports the known-root frame directly. `TrustBase.lean` is unchanged.
+
+Validation: the default binary build passes 1,067 jobs without warnings; explicit
+axiom prints contain only the standard three axioms; fresh
+`leanchecker --fresh AllowedipsInsertionSurface` passes. The added headline and
+definitions were inspected in the printed surface and its subsequent diff
+passes. The fast tier passes 137 tests, one skipped, in 24.238 seconds. Runtime
+definitions are unchanged since the carry's generated, recorded and actual
+capture replays. No external export acceptance is claimed for this increment.
+
+Ordinary elaboration errors were repaired before validation. One recursion-depth
+failure came from an incorrectly inferred allocation-name argument and was fixed
+by supplying that argument explicitly; no resource limit was raised. No KILLED
+run or timeout occurred in this checkpoint.

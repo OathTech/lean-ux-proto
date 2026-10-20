@@ -8,6 +8,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADLINES = [
+    'Binary.Pair.Allowedips.Root.initialization_segment',
     'Binary.Pair.Allowedips.Root.effect_segment',
     'Binary.Pair.Allowedips.Exact.assignment_from_relation',
     'Binary.Pair.Allowedips.Exact.assignment_checked',
@@ -71,6 +72,9 @@ IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'Allo
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
+    'Binary.Pair.Allowedips.Root.Writes', 'Binary.Pair.Allowedips.Root.InitWrites',
+    'Binary.Pair.Allowedips.Names.allocated', 'Binary.Pair.Allowedips.Root.nodeOffsets',
+    'Leanux.Proofs.WG.AllowedIps.emptyInstalled',
     'Binary.Pair.Allowedips.Root.effect', 'Binary.Pair.Allowedips.Root.attach',
     'Binary.Pair.Allowedips.Root.copy', 'Binary.Pair.Allowedips.Root.publish',
     'Binary.Pair.Allowedips.Root.store', 'Binary.Pair.Allowedips.Root.headerWord',
