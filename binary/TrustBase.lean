@@ -3,6 +3,7 @@ import Image
 import IndexMutatorImage
 import IndexInsertImage
 import AllowedipsImage
+import AllowedipsMutationImage
 import ServiceImage
 import Memory
 import LookupProjection
@@ -367,6 +368,16 @@ def BhEnableContract (fetch : Int64 → Option Decoded) : Prop :=
     because peer-get is shared. The linked-label interpretation is unchanged. -/
 def AllowedipsDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
   ∀ pc instruction, AllowedipsImage.fetch pc = some instruction → fetch pc = some instruction
+
+/-- Additional literal image terms for both insertion wrappers and add.isra.0.
+The ELF decoder remains external; these premises contain no execution claim. -/
+structure AllowedipsMutationDecoderAgreement (fetch : Int64 → Option Decoded) : Prop where
+  insert4 : ∀ pc instruction, AllowedipsMutationImage.Insert4.fetch pc = some instruction →
+    fetch pc = some instruction
+  insert6 : ∀ pc instruction, AllowedipsMutationImage.Insert6.fetch pc = some instruction →
+    fetch pc = some instruction
+  add : ∀ pc instruction, AllowedipsMutationImage.Add.fetch pc = some instruction →
+    fetch pc = some instruction
 
 /-- A callback's interior is not another anchored M2 invocation. -/
 def NoAllowedipsReentry (history : List MachineState) : Prop :=

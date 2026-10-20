@@ -1,5 +1,7 @@
 import PairAllowedipsState
 import SourceAip
+import CommonBitsCheck
+import PairAllowedipsReadSet
 
 namespace Binary.Pair.Allowedips.Placement
 open Leanux Leanux.WG
@@ -58,7 +60,8 @@ def locals (names : Names) (machine : MachineState) (root : Option NodeId)
 
 /-- Validate the recorded correspondence points against independent execution
 of the mirror loop. Snapshots retain the machine heap; no state is rebuilt. -/
-def check (names : Names) (o : AllowedipsProbe.Offsets) (entry : Nat) (world : World)
+def check (names : Names) (o : AllowedipsProbe.Offsets) (c : CommonBitsCoverage.Context)
+    (entry : Nat) (world : World)
     (family key cidr pid entryStack : Nat) (states : Array MachineState) : Except String Nat := do
   let some d := world.wg.dev | throw "placement.device"
   let width := if family==4 then 32 else 128
@@ -72,16 +75,29 @@ def check (names : Names) (o : AllowedipsProbe.Offsets) (entry : Nat) (world : W
   let mut acc : Acc := (none,root,none)
   let mut visits := 0
   let mut finished := false
+  let mut current : Option NodeId := none
   for machine in states do
     unless !finished do throw "placement.multiple-exits"
     assertAt names o machine.data.dmem source
     let pc := machine.pc.toBitVec.toNat
     if pc==entry+0xf7 then
       locals names machine root key cidr width peer stack acc
+      unless Trie.frameCheck c machine.data do throw "placement.callback-frame"
+      unless spansApart (Trie.readSpans c) [(stack-48,56)] do
+        throw "placement.service-separation"
+      unless spansApart (readSpans names o) ([(stack-48,56)]++Trie.writeSpans c) do
+        throw "placement.heap-separation"
+      current := acc.2.1
       let ((step,next),nextAmbient) ← ((iteration key cidr width acc).run entries).run ambient |>.mapError Stop.message
       entries := next; ambient := nextAmbient
       acc := match step with | .done acc | .yield acc => acc
       visits := visits+1
+    else if pc==entry+0x9c then
+      let some id := current | throw "placement.common-without-header"
+      let some node := d.nodes.get? id | throw "placement.common-node"
+      let i := Common.callInput machine.data width node.bits key (machine.pc+5)
+      unless Common.callerCheck i c machine.data (machine.pc+5) do
+        throw "placement.common-caller"
     else
       unless pc==entry+0x120 || pc==entry+0x3ca do throw "placement.unknown-cut"
       if acc.1.isNone && acc.2.1.isNone then

@@ -263,3 +263,46 @@ Insertion's placement loop and mutation regions, then its function theorem,
 remain open. F1 is independently confirmed; the coordinator's `task/seq-wrap`
 correction is pending its claim point and landing notice. The failing witness,
 exact target and unrestricted wrapping case remain unchanged on this branch.
+
+## Reused helper and placement segments (03:00 UTC)
+
+Both insertion call sites now use `Allowedips.common_checked`: the actual CALL,
+all `common_bits` instructions and RET, the source arithmetic result, restored
+ABI, coverage invariant and scratch frame. The old physical instruction and
+arithmetic proofs are reused. Their history wrapper fixed lookup's return PC;
+the new sequential wrapper generalizes that caller datum and omits internal
+decision histories. The original lookup caller remains supported by the default
+return parameter. The runner executes the same `Common.callerCheck` assertion
+at the placement call site.
+
+The placement comparison regions, argument preparation, child selection and
+its actual saved-parent write check. A shared frame carries callback readiness,
+six readable scratch words, fixed input registers and the combined scratch,
+parent-slot and coverage write footprint. `Frame.common_segment` joins argument
+preparation with the complete helper from entry-memory premises. Separately,
+`Placement.compose_loop` composes the actual source loop given its iteration
+simulation; that iteration premise is still open, so this is not a loop proof.
+
+This checkpoint adds 1,069 lines across helper reuse, executable checks,
+physical segments and composition support. From the previous lookup build at
+02:25:24 to this checkpoint is about 35 elapsed minutes, including validation
+and rebuilds. There is no new completed insertion function. The useful reuse
+so far is the helper's instruction proofs and one shared physical frame; it
+does not yet establish viable whole-function cost.
+
+With all new runtime separation assertions, the generated retained-heap suite
+passes 54 insertions and 54 lookups in 2.203 seconds. The recorded eight-call,
+two-seed three-way comparison passes in 0.271 seconds with the same 170 coverage
+points, 64 comparisons and 117 decisions. Local Lean builds pass with standard
+axioms; fresh replay of the new helper/segment closure is running, and external
+export acceptance remains pending. A first trust-surface print failed because
+this fresh worktree had not built the old headline roots; building those roots
+resolved it. No failed print was treated as acceptance.
+
+The surface now prints the stronger lookup, shared helper and their tested
+definitions. Its only added environmental declaration is
+`AllowedipsMutationDecoderAgreement`, agreement with the literal ELF-derived
+instruction terms for the two insertion wrappers and `add`. It contains no
+execution or desired postcondition premise. The existing explicit coverage
+callback contracts are retained. Full insertion's allocator contracts and
+function postcondition are still to be implemented and proved.

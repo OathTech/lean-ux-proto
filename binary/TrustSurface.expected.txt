@@ -1,4 +1,91 @@
 HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
+Binary.Pair.Allowedips.lookup_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsDecoderAgreement fetch →
+    Binary.TrustBase.AnchoredDecoderAgreement fetch →
+      Binary.CommonBits.Callbacks fetch →
+        Binary.TrustBase.AllowedipsTraceCmp1Contract fetch →
+          Binary.TrustBase.AllowedipsTraceConstCmp4Contract fetch →
+            Binary.TrustBase.AllowedipsTraceConstCmp1Contract fetch →
+              Binary.TrustBase.AllowedipsBhEnableContract fetch →
+                ∀ {names : Binary.Pair.Allowedips.Names} {input : AllowedipsProbe.Input}
+                  {coverage : Binary.CommonBitsCoverage.Context} {initial : MachineState} {w : Leanux.World}
+                  {d : Leanux.WG.Device} {family key : Nat} {ra : UInt64} {answer : Option.{0} Leanux.WG.PeerId}
+                  {final : Leanux.World},
+                  Eq.{1} w.wg.dev (some.{0} d) →
+                    Eq.{1} (Binary.Pair.Allowedips.lookupBoundary names input coverage initial w family key ra)
+                        (Except.ok.{0, 0} ()) →
+                      Eq.{1}
+                          (StateT.run.{0, 0}
+                            (Binary.Source.lookup
+                              (ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) d.peerAllowedips.root4
+                                d.peerAllowedips.root6)
+                              (ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) 32 128) key)
+                            w)
+                          (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                        Eventually (Binary.instructionStep fetch)
+                          (fun t =>
+                            Binary.AllowedipsTail.Post initial coverage.coverage coverage.preempt ra
+                                {
+                                  toBitVec :=
+                                    Binary.AllowedipsRelation.pointer (Binary.Pair.Trie.interpretation names.trie.peers)
+                                      answer }
+                                t ∧
+                              (Exists.{1} fun d' =>
+                                  Eq.{1} final.wg.dev (some.{0} d') ∧
+                                    Binary.Pair.Allowedips.Corresponds names input.offsets t.data.dmem d' ∧
+                                      Eq.{1}
+                                        (Binary.Pair.Allowedips.heap names (Binary.Pair.Allowedips.target d')
+                                          t.data.dmem)
+                                        (Except.ok.{0, 0} ())) ∧
+                                Binary.EqualOutside
+                                  (fun a =>
+                                    Binary.AllowedipsEntry.TotalWrites initial coverage.coverage coverage.preempt a ∨
+                                      Binary.Pair.Trie.CountBytes names.trie input.offsets a)
+                                  initial.data.dmem t.data.dmem)
+                          initial
+Binary.Pair.Allowedips.common_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsDecoderAgreement fetch →
+    Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+      Binary.CommonBits.Callbacks fetch →
+        ∀ (pc : Int64),
+          Eq.{1} pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 156) ∨
+              Eq.{1} pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 597) →
+            ∀ (c : Binary.CommonBitsCoverage.Context) (s : MachineData) (bits stored query : Nat),
+              Eq.{1} bits 32 ∨ Eq.{1} bits 128 →
+                LT.lt.{0} stored (HPow.hPow.{0, 0, 0} 2 bits) →
+                  LT.lt.{0} query (HPow.hPow.{0, 0, 0} 2 bits) →
+                    Eq.{1}
+                        (Binary.Pair.Common.callerCheck
+                          (Binary.Pair.Common.callInput s bits stored query (HAdd.hAdd.{0, 0, 0} pc 5)) c s
+                          (HAdd.hAdd.{0, 0, 0} pc 5))
+                        true →
+                      Eventually (Binary.instructionStep fetch)
+                        (fun t =>
+                          Eq.{1} t.pc (HAdd.hAdd.{0, 0, 0} pc 5) ∧
+                            Eq.{1} t.data.regs.rsp s.regs.rsp ∧
+                              Eq.{1} t.data.regs.rbx s.regs.rbx ∧
+                                Eq.{1} t.data.regs.rbp s.regs.rbp ∧
+                                  Eq.{1} t.data.regs.r12 s.regs.r12 ∧
+                                    Eq.{1} t.data.regs.r13 s.regs.r13 ∧
+                                      Eq.{1} t.data.regs.r14 s.regs.r14 ∧
+                                        Eq.{1} t.data.regs.r15 s.regs.r15 ∧
+                                          Eq.{1} (BitVec.toNat (t.data.regs.get (Reg.low Reg64.rax Width.W8)))
+                                              (Binary.AllowedipsRelation.common bits stored query) ∧
+                                            c.At t.data.dmem ∧
+                                              Binary.EqualOutside
+                                                  (fun a => Binary.CommonBits.CallerScratch s a ∨ c.writes a) s.dmem
+                                                  t.data.dmem ∧
+                                                ∀ (n : Nat),
+                                                  LT.lt.{0} n 6 →
+                                                    Eq.{1}
+                                                      (Option.isSome.{0}
+                                                        (Mem.loadInt t.data.dmem
+                                                          (HSub.hSub.{0, 0, 0} s.regs.rsp.toBitVec
+                                                            (BitVec.ofNat 64
+                                                              (HMul.hMul.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} n 1) 8)))
+                                                          8))
+                                                      true)
+                        { data := s, pc := pc }
 Binary.Pair.Trie.findNode_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsDecoderAgreement fetch →
     Binary.CommonBits.Callbacks fetch →
@@ -744,6 +831,259 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                 Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
                   Eventually (Binary.instructionStep fetch)
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
+def Binary.Pair.Allowedips.lookupBoundary : Binary.Pair.Allowedips.Names →
+  AllowedipsProbe.Input →
+    Binary.CommonBitsCoverage.Context → MachineState → Leanux.World → Nat → Nat → UInt64 → Except.{0, 0} String Unit :=
+fun names input coverage initial w family key ra => do
+  Binary.Pair.Allowedips.assertAt names input.offsets initial.data.dmem w
+  match w.wg.dev with
+    | some.{0} d =>
+      have __do_jp := fun __r =>
+        have root := ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) d.peerAllowedips.root4 d.peerAllowedips.root6;
+        have width := ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) 32 128;
+        have __do_jp := fun __r => Binary.Pair.Trie.callBoundary names.trie input coverage initial w root width key ra;
+        ite.{1}
+          (Eq.{1}
+            (Binary.Pair.spansApart (Binary.Pair.Allowedips.metadataSpans names input.offsets)
+              (Binary.Pair.Allowedips.lookupWrites names input.offsets coverage initial))
+            true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "allowedips.lookup.metadata-separation"
+          __do_jp __r;
+      ite.{1} (Eq.{1} (BEq.beq.{0} family 4 || BEq.beq.{0} family 6) true) (__do_jp ()) do
+        let __r ← throw.{0, 0, 0} "allowedips.lookup.family"
+        __do_jp __r
+    | x => throw.{0, 0, 0} "allowedips.lookup.device"
+def Binary.Pair.Allowedips.Corresponds : Binary.Pair.Allowedips.Names →
+  AllowedipsProbe.Offsets → DataMem → Leanux.WG.Device → Prop :=
+fun names o m d =>
+  Eq.{1} (Binary.Pair.Allowedips.reconstruct names o m) (Except.ok.{0, 0} (Binary.Pair.Allowedips.target d))
+def Binary.Pair.Allowedips.reconstruct : Binary.Pair.Allowedips.Names →
+  AllowedipsProbe.Offsets → DataMem → Binary.Pair.Decode.{0} Binary.Pair.Allowedips.State :=
+fun names o m => do
+  Binary.Pair.Allowedips.validate names o
+  let __do_lift ←
+    Binary.Pair.word m "table.root4" (HAdd.hAdd.{0, 0, 0} names.table Binary.AllowedipsMutationLayout.root4) 8
+  let root4 ← Binary.Pair.Trie.pointer names.trie.nodes "table.root4" __do_lift
+  let __do_lift ←
+    Binary.Pair.word m "table.root6" (HAdd.hAdd.{0, 0, 0} names.table Binary.AllowedipsMutationLayout.root6) 8
+  let root6 ← Binary.Pair.Trie.pointer names.trie.nodes "table.root6" __do_lift
+  let seq ← Binary.Pair.word m "table.seq" (HAdd.hAdd.{0, 0, 0} names.table Binary.AllowedipsMutationLayout.seq) 8
+  let nodes ←
+    List.mapM.{0, 0, 0}
+        (fun x =>
+          match x with
+          | Prod.mk.{0, 0} id a => Binary.Pair.Allowedips.decodeNode names o m id a)
+        names.trie.nodes
+  let peers ←
+    List.mapM.{0, 0, 0}
+        (fun x =>
+          match x with
+          | Prod.mk.{0, 0} id a => Binary.Pair.Allowedips.decodePeer names o m id a)
+        names.trie.peers
+  pure.{0, 0}
+      { table := { root4 := root4, root6 := root6, seq := seq }, nodes := nodes, peers := peers,
+        nextNode := names.nextNode }
+def Binary.Pair.Allowedips.target : Leanux.WG.Device → Binary.Pair.Allowedips.State :=
+fun d =>
+  { table := d.peerAllowedips, nodes := Std.TreeMap.toList.{0, 0} d.nodes,
+    peers :=
+      List.map.{0, 0}
+        (fun x =>
+          match x with
+          | Prod.mk.{0, 0} id p => Prod.mk.{0, 0} id (Prod.mk.{0, 0} p.refcount p.allowedipsList))
+        (Std.TreeMap.toList.{0, 0} d.peers),
+    nextNode := d.nextNode }
+def Binary.Pair.Allowedips.heap : Binary.Pair.Allowedips.Names →
+  Binary.Pair.Allowedips.State → DataMem → Except.{0, 0} String Unit :=
+fun names s m => do
+  Binary.Pair.Trie.heap
+      {
+        nodes :=
+          List.map.{0, 0}
+            (fun x =>
+              match x with
+              | Prod.mk.{0, 0} id n => Prod.mk.{0, 0} id (Binary.Pair.Trie.targetNode n))
+            s.nodes,
+        counts :=
+          List.map.{0, 0}
+            (fun x =>
+              match x with
+              | Prod.mk.{0, 0} id (Prod.mk.{0, 0} count snd) => Prod.mk.{0, 0} id count)
+            s.peers }
+      (List.cons.{0} s.table.root4 (List.cons.{0} s.table.root6 List.nil.{0}))
+  forIn.{0, 0, 0, 0} s.nodes PUnit.unit.{1} fun x __s =>
+      match x with
+      | Prod.mk.{0, 0} id n =>
+        have roots :=
+          List.cons.{0} (Prod.mk.{0, 0} s.table.root4 (Prod.mk.{0, 0} Leanux.WG.Slot.root4 32))
+            (List.cons.{0} (Prod.mk.{0, 0} s.table.root6 (Prod.mk.{0, 0} Leanux.WG.Slot.root6 128)) List.nil.{0});
+        have incoming := List.nil.{0};
+        do
+        let __s ←
+          forIn.{0, 0, 0, 0} roots incoming fun x __s =>
+              have incoming := __s;
+              match x with
+              | Prod.mk.{0, 0} root (Prod.mk.{0, 0} slot width) =>
+                ite.{1} (Eq.{1} (BEq.beq.{0} root (some.{0} id)) true)
+                  (have __do_jp := fun __r =>
+                    have incoming := List.cons.{0} slot incoming;
+                    pure.{0, 0} (ForInStep.yield.{0} incoming);
+                  ite.{1} (Eq.{1} (BEq.beq.{0} n.bitlen width) true) (__do_jp ()) do
+                    let __r ← throw.{0, 0, 0} "heap.root-family"
+                    __do_jp __r)
+                  (pure.{0, 0} (ForInStep.yield.{0} incoming))
+        have incoming : List.{0} Leanux.WG.Slot := __s
+        let __s ←
+          forIn.{0, 0, 0, 0} s.nodes incoming fun x __s =>
+              have incoming := __s;
+              match x with
+              | Prod.mk.{0, 0} pid p => do
+                let __s ←
+                  forIn.{0, 0, 0, 0} (List.zipIdx.{0} (Array.toList.{0} p.bit)) incoming fun x __s =>
+                      have incoming := __s;
+                      match x with
+                      | Prod.mk.{0, 0} child bit =>
+                        ite.{1} (Eq.{1} (BEq.beq.{0} child (some.{0} id)) true)
+                          (have incoming := List.cons.{0} (Leanux.WG.Slot.child pid bit) incoming;
+                          pure.{0, 0} (ForInStep.yield.{0} incoming))
+                          (pure.{0, 0} (ForInStep.yield.{0} incoming))
+                have incoming : List.{0} Leanux.WG.Slot := __s
+                pure.{0, 0} (ForInStep.yield.{0} incoming)
+        have incoming : List.{0} Leanux.WG.Slot := __s
+        have __do_jp : Unit → Except.{0, 0} String (ForInStep.{0} PUnit.{1}) := fun __r =>
+          have owners :=
+            List.flatMap.{0, 0}
+              (fun x =>
+                match x with
+                | Prod.mk.{0, 0} pid (Prod.mk.{0, 0} fst xs) =>
+                  List.filterMap.{0, 0} (fun x => ite.{1} (Eq.{1} (BEq.beq.{0} x id) true) (some.{0} pid) none.{0}) xs)
+              s.peers;
+          have __do_jp := fun __r =>
+            ite.{1} (Eq.{1} (Option.isNone.{0} n.peer) true)
+              (do
+                Binary.Pair.Allowedips.internalListCheck names m id
+                pure.{0, 0} (ForInStep.yield.{0} PUnit.unit.{1}))
+              (pure.{0, 0} (ForInStep.yield.{0} PUnit.unit.{1}));
+          ite.{1} (Eq.{1} (BEq.beq.{0} owners (Option.toList.{0} n.peer)) true) (__do_jp ()) do
+            let __r ←
+              throw.{0, 0, 0}
+                  (HAppend.hAppend.{0, 0, 0}
+                    (HAppend.hAppend.{0, 0, 0} (toString.{0} "heap.peer-membership[") (toString.{0} id))
+                    (toString.{0} "]"))
+            __do_jp __r
+        ite.{1} (Eq.{1} (BEq.beq.{0} incoming (List.cons.{0} n.parent List.nil.{0})) true) (__do_jp ()) do
+            let __r ←
+              throw.{0, 0, 0}
+                  (HAppend.hAppend.{0, 0, 0}
+                    (HAppend.hAppend.{0, 0, 0}
+                      (HAppend.hAppend.{0, 0, 0} (toString.{0} "heap.parent[") (toString.{0} id)) (toString.{0} "]: "))
+                    (toString.{0} (repr.{0} incoming)))
+            __do_jp __r
+  pure.{0, 0} ()
+def Binary.Pair.Allowedips.lookupWrites : Binary.Pair.Allowedips.Names →
+  AllowedipsProbe.Offsets → Binary.CommonBitsCoverage.Context → MachineState → List.{0} Binary.Pair.Span :=
+fun names o c s =>
+  HAppend.hAppend.{0, 0, 0}
+    (HAppend.hAppend.{0, 0, 0}
+      (HAppend.hAppend.{0, 0, 0} (Binary.Pair.Trie.callStack s false) (Binary.Pair.Trie.callBuffers c))
+      (List.cons.{0} (Prod.mk.{0, 0} Binary.TrustBase.preemptCountAddress.toNat 4) List.nil.{0}))
+    (Binary.Pair.Trie.countSpans names.trie o)
+def Binary.Pair.Common.callInput : MachineData → Nat → Nat → Nat → Int64 → Binary.CommonBits.Input :=
+fun s bits stored query returnPC =>
+  { node := s.regs.rdi, key := s.regs.rsi, stack := HSub.hSub.{0, 0, 0} s.regs.rsp 40, family := BitVec.ofNat 8 bits,
+    stored32 := UInt32.ofNat stored, query32 := UInt32.ofNat query,
+    storedHigh := UInt64.ofNat (HDiv.hDiv.{0, 0, 0} stored (HPow.hPow.{0, 0, 0} 2 64)),
+    queryHigh := UInt64.ofNat (HDiv.hDiv.{0, 0, 0} query (HPow.hPow.{0, 0, 0} 2 64)),
+    storedLow := UInt64.ofNat (HMod.hMod.{0, 0, 0} stored (HPow.hPow.{0, 0, 0} 2 64)),
+    queryLow := UInt64.ofNat (HMod.hMod.{0, 0, 0} query (HPow.hPow.{0, 0, 0} 2 64)), savedBx := s.regs.rbx,
+    savedBp := s.regs.rbp, savedR12 := s.regs.r12, savedR13 := s.regs.r13, returnAddress := returnPC.toUInt64 }
+def Binary.Pair.Common.callerCheck : Binary.CommonBits.Input →
+  Binary.CommonBitsCoverage.Context → MachineData → Int64 → Bool :=
+fun i c s returnPC =>
+  (Binary.Pair.Trie.frameCheck c s &&
+        (BEq.beq.{0} i.node s.regs.rdi && BEq.beq.{0} i.key s.regs.rsi &&
+                      BEq.beq.{0} i.stack (HSub.hSub.{0, 0, 0} s.regs.rsp 40) &&
+                    BEq.beq.{0} i.family (s.regs.get (Reg.low Reg64.rdx Width.W8)) &&
+                  BEq.beq.{0} i.savedBx s.regs.rbx &&
+                BEq.beq.{0} i.savedBp s.regs.rbp &&
+              BEq.beq.{0} i.savedR12 s.regs.r12 &&
+            BEq.beq.{0} i.savedR13 s.regs.r13 &&
+          BEq.beq.{0} i.returnAddress returnPC.toUInt64) &&
+      List.all.{0} i.keyWords fun word =>
+        BEq.beq.{0} (Mem.loadInt s.dmem word.address word.width) (some.{0} word.value)) &&
+    Binary.Pair.spansApart (List.map.{0, 0} (fun word => Prod.mk.{0, 0} word.address.toNat word.width) i.keyWords)
+      (HAppend.hAppend.{0, 0, 0}
+        (List.cons.{0} (Prod.mk.{0, 0} (HSub.hSub.{0, 0, 0} s.regs.rsp.toBitVec 48).toNat 48) List.nil.{0})
+        (Binary.Pair.Trie.writeSpans c))
+structure Binary.CommonBits.CallerAt (i : Binary.CommonBits.Input) (c : Binary.CommonBitsCoverage.Context)
+  (s : MachineData) (returnPC : Int64 := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsImage.Lookup.entry 234) : Prop
+number of parameters: 4
+fields:
+  Binary.CommonBits.CallerAt.node : Eq.{1} i.node s.regs.rdi
+  Binary.CommonBits.CallerAt.key : Eq.{1} i.key s.regs.rsi
+  Binary.CommonBits.CallerAt.stack : Eq.{1} i.stack (HSub.hSub.{0, 0, 0} s.regs.rsp 40)
+  Binary.CommonBits.CallerAt.family : Eq.{1} i.family (s.regs.get (Reg.low Reg64.rdx Width.W8))
+  Binary.CommonBits.CallerAt.savedBx : Eq.{1} i.savedBx s.regs.rbx
+  Binary.CommonBits.CallerAt.savedBp : Eq.{1} i.savedBp s.regs.rbp
+  Binary.CommonBits.CallerAt.savedR12 : Eq.{1} i.savedR12 s.regs.r12
+  Binary.CommonBits.CallerAt.savedR13 : Eq.{1} i.savedR13 s.regs.r13
+  Binary.CommonBits.CallerAt.returnAddress : Eq.{1} i.returnAddress returnPC.toUInt64
+  Binary.CommonBits.CallerAt.keys : Binary.CommonBits.ReadsAt i.keyWords s.dmem
+  Binary.CommonBits.CallerAt.keySeparate : ∀ (a : BitVec 64),
+      Binary.CommonBits.ReadBytes i.keyWords a → ¬(Binary.CommonBits.CallerScratch s a ∨ c.writes a)
+  Binary.CommonBits.CallerAt.coverage : c.At s.dmem
+  Binary.CommonBits.CallerAt.aligned : Eq.{1} (HMod.hMod.{0, 0, 0} s.regs.rsp.toNat 8) 0
+  Binary.CommonBits.CallerAt.mapped : ∀ (n : Nat),
+      LT.lt.{0} n 6 →
+        Eq.{1}
+          (Option.isSome.{0}
+            (Mem.loadInt s.dmem
+              (HSub.hSub.{0, 0, 0} s.regs.rsp.toBitVec
+                (BitVec.ofNat 64 (HMul.hMul.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} n 1) 8)))
+              8))
+          true
+  Binary.CommonBits.CallerAt.coverageSeparate : ∀ (a : BitVec 64), c.bytes a → ¬Binary.CommonBits.CallerScratch s a
+  Binary.CommonBits.CallerAt.metadataSeparate : ∀ (a : BitVec 64), c.writes a → ¬c.metadataBytes a
+  Binary.CommonBits.CallerAt.preemptSeparate : ∀ (a : BitVec 64),
+      c.writes a → ¬Binary.InRange Binary.TrustBase.preemptCountAddress 4 a
+constructor:
+  Binary.CommonBits.CallerAt.mk {i : Binary.CommonBits.Input} {c : Binary.CommonBitsCoverage.Context} {s : MachineData}
+    {returnPC : optParam.{1} Int64 (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsImage.Lookup.entry 234)}
+    (node : Eq.{1} i.node s.regs.rdi) (key : Eq.{1} i.key s.regs.rsi)
+    (stack : Eq.{1} i.stack (HSub.hSub.{0, 0, 0} s.regs.rsp 40))
+    (family : Eq.{1} i.family (s.regs.get (Reg.low Reg64.rdx Width.W8))) (savedBx : Eq.{1} i.savedBx s.regs.rbx)
+    (savedBp : Eq.{1} i.savedBp s.regs.rbp) (savedR12 : Eq.{1} i.savedR12 s.regs.r12)
+    (savedR13 : Eq.{1} i.savedR13 s.regs.r13) (returnAddress : Eq.{1} i.returnAddress returnPC.toUInt64)
+    (keys : Binary.CommonBits.ReadsAt i.keyWords s.dmem)
+    (keySeparate :
+      ∀ (a : BitVec 64), Binary.CommonBits.ReadBytes i.keyWords a → ¬(Binary.CommonBits.CallerScratch s a ∨ c.writes a))
+    (coverage : c.At s.dmem) (aligned : Eq.{1} (HMod.hMod.{0, 0, 0} s.regs.rsp.toNat 8) 0)
+    (mapped :
+      ∀ (n : Nat),
+        LT.lt.{0} n 6 →
+          Eq.{1}
+            (Option.isSome.{0}
+              (Mem.loadInt s.dmem
+                (HSub.hSub.{0, 0, 0} s.regs.rsp.toBitVec
+                  (BitVec.ofNat 64 (HMul.hMul.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} n 1) 8)))
+                8))
+            true)
+    (coverageSeparate : ∀ (a : BitVec 64), c.bytes a → ¬Binary.CommonBits.CallerScratch s a)
+    (metadataSeparate : ∀ (a : BitVec 64), c.writes a → ¬c.metadataBytes a)
+    (preemptSeparate : ∀ (a : BitVec 64), c.writes a → ¬Binary.InRange Binary.TrustBase.preemptCountAddress 4 a) :
+    Binary.CommonBits.CallerAt i c s returnPC
+structure Binary.CommonBits.Callbacks (fetch : Int64 → Option.{0} Binary.Decoded) : Prop
+number of parameters: 1
+fields:
+  Binary.CommonBits.Callbacks.pc : Binary.TrustBase.AllowedipsTracePcContract fetch
+  Binary.CommonBits.Callbacks.constCmp1 : Binary.TrustBase.AllowedipsTraceConstCmp1Contract fetch
+  Binary.CommonBits.Callbacks.cmp8 : Binary.TrustBase.AllowedipsTraceCmp8Contract fetch
+constructor:
+  Binary.CommonBits.Callbacks.mk {fetch : Int64 → Option.{0} Binary.Decoded}
+    (pc : Binary.TrustBase.AllowedipsTracePcContract fetch)
+    (constCmp1 : Binary.TrustBase.AllowedipsTraceConstCmp1Contract fetch)
+    (cmp8 : Binary.TrustBase.AllowedipsTraceCmp8Contract fetch) : Binary.CommonBits.Callbacks fetch
 @[reducible] def Binary.M : Type → Type :=
 Leanux.M
 @[reducible] def Binary.Source.indexLookup : List.{0} Leanux.WG.IndexKind →
@@ -1835,6 +2175,7 @@ import Image
 import IndexMutatorImage
 import IndexInsertImage
 import AllowedipsImage
+import AllowedipsMutationImage
 import ServiceImage
 import Memory
 import LookupProjection
@@ -2199,6 +2540,16 @@ def BhEnableContract (fetch : Int64 → Option Decoded) : Prop :=
     because peer-get is shared. The linked-label interpretation is unchanged. -/
 def AllowedipsDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
   ∀ pc instruction, AllowedipsImage.fetch pc = some instruction → fetch pc = some instruction
+
+/-- Additional literal image terms for both insertion wrappers and add.isra.0.
+The ELF decoder remains external; these premises contain no execution claim. -/
+structure AllowedipsMutationDecoderAgreement (fetch : Int64 → Option Decoded) : Prop where
+  insert4 : ∀ pc instruction, AllowedipsMutationImage.Insert4.fetch pc = some instruction →
+    fetch pc = some instruction
+  insert6 : ∀ pc instruction, AllowedipsMutationImage.Insert6.fetch pc = some instruction →
+    fetch pc = some instruction
+  add : ∀ pc instruction, AllowedipsMutationImage.Add.fetch pc = some instruction →
+    fetch pc = some instruction
 
 /-- A callback's interior is not another anchored M2 invocation. -/
 def NoAllowedipsReentry (history : List MachineState) : Prop :=

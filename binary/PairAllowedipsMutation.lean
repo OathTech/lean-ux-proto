@@ -120,7 +120,7 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   for _ in [:4] do
     r ← runUntil input.lookup.instructions input.lookup.labels input.lookup.hooks input.lookup.preempt
       r.state seed true input.lookup.budget input.lookup.entryPreempt #[input.alloc,input.free]
-      (some r) frame.returnPC (some #[input.add+0xf7,input.add+0x120,input.add+0x3ca])
+      (some r) frame.returnPC (some #[input.add+0xf7,input.add+0x9c,input.add+0x120,input.add+0x3ca])
       (some fun t => match TrustBase.KcovPlan .pc t with
         | none => .error "insert.coverage-inputs"
         | some writes => .ok (!writes.isEmpty))
@@ -131,7 +131,8 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
     r := after; names := next; released := freed; remaining := rest
     services := services.push (pc,ra)
   unless r.state.pc.toBitVec.toNat == frame.returnPC do throw "insert.service-budget"
-  let visits ← Placement.check s.names input.lookup.offsets input.add s.world family key cidr pid frame.stack r.history
+  let context ← Common.readContext initial.data.dmem
+  let visits ← Placement.check s.names input.lookup.offsets context input.add s.world family key cidr pid frame.stack r.history
   let ambient := {s.world.ambient with
     hidden := some records, allocArmed := ["allocNode190","allocNode205","allocNode234"]}
   let w := {s.world with ambient}

@@ -32,7 +32,7 @@ private theorem ofInt_bmod (w : Nat) (v : Int) :
     BitVec.ofInt w (v.bmod (2^w)) = BitVec.ofInt w v := by
   rw [← BitVec.toInt_ofInt, BitVec.ofInt_toInt]
 
-private theorem ofInt_bmod64 (v : Int) :
+theorem ofInt_bmod64 (v : Int) :
     BitVec.ofInt 64 (v.bmod 18446744073709551616) = BitVec.ofInt 64 v :=
   ofInt_bmod 64 v
 
@@ -44,9 +44,9 @@ private theorem extend_mask (v : BitVec 32) :
   rw [BitVec.setWidth_and]
   rfl
 
-private theorem castmod64 (n : Nat) : BitVec.ofInt 64 ((n : Int) % 2) = BitVec.ofNat 64 (n % 2) := rfl
+theorem castmod64 (n : Nat) : BitVec.ofInt 64 ((n : Int) % 2) = BitVec.ofNat 64 (n % 2) := rfl
 
-private theorem shift_mod (byte shift : Nat) (h : byte < 256) :
+theorem shift_mod (byte shift : Nat) (h : byte < 256) :
     ((BitVec.ofNat 32 byte).sshiftRight shift).toNat % 2 = selected byte shift := by
   have he := congrArg BitVec.toNat (sar_mask byte shift h)
   simp only [BitVec.toNat_and, BitVec.toNat_ofNat] at he
@@ -54,17 +54,17 @@ private theorem shift_mod (byte shift : Nat) (h : byte < 256) :
   rw [show (1 : Nat) = 2^1-1 from rfl, Nat.and_two_pow_sub_one_eq_mod] at he
   simpa [selected, Nat.mod_eq_of_lt (by omega : byte / 2^shift % 2 < 2^32)] using he
 
-private theorem extend8 (n : Nat) (h : n < 256) :
+theorem extend8 (n : Nat) (h : n < 256) :
     (BitVec.ofInt 8 (n : Int)).setWidth 64 = BitVec.ofNat 64 n := by
   change (BitVec.ofNat 8 n).setWidth 64 = _
   exact BitVec.setWidth_ofNat_of_le_of_lt (by decide) h
 
-private theorem extract32 (v : BitVec 32) :
+theorem extract32 (v : BitVec 32) :
     (v.setWidth 64).extractLsb' 0 32 = v := by
   rw [BitVec.extractLsb'_setWidth_of_le (by decide)]
   simp
 
-private theorem low32 (n : Nat) :
+theorem low32 (n : Nat) :
     (BitVec.ofNat 64 n).extractLsb' 0 32 = BitVec.ofNat 32 n := by
   apply BitVec.eq_of_toNat_eq
   simp [BitVec.extractLsb', Nat.mod_mod_of_dvd, show (2^32 : Nat) ∣ 2^64 by decide]

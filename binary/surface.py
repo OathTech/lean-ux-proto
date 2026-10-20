@@ -8,6 +8,8 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADLINES = [
+    'Binary.Pair.Allowedips.lookup_checked',
+    'Binary.Pair.Allowedips.common_checked',
     'Binary.Pair.Trie.findNode_checked',
     'Binary.Pair.Trie.lookup_checked',
     'Binary.Pair.Trie.CallWitness.pre',
@@ -59,10 +61,16 @@ HEADLINES = [
     'Binary.RandomService.return_recorded',
 ]
 IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'AllowedipsWitnessPre',
-           'PairCallbackSurface', 'PairCallWitness']
+           'PairCallbackSurface', 'PairCallWitness',
+           'PairAllowedipsLookupAdequacy', 'AllowedipsCommonChecked']
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
+    'Binary.Pair.Allowedips.lookupBoundary', 'Binary.Pair.Allowedips.Corresponds',
+    'Binary.Pair.Allowedips.reconstruct', 'Binary.Pair.Allowedips.target',
+    'Binary.Pair.Allowedips.heap', 'Binary.Pair.Allowedips.lookupWrites',
+    'Binary.Pair.Common.callInput', 'Binary.Pair.Common.callerCheck',
+    'Binary.CommonBits.CallerAt', 'Binary.CommonBits.Callbacks',
     'Binary.M',
     'Binary.Source.indexLookup', 'Binary.Source.indexRemove',
     'Binary.Source.indexReplaceHandshake', 'Binary.Source.indexInsert',

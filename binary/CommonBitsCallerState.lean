@@ -7,9 +7,10 @@ local instance : Labels := Image.linkedLabels
 
 def CallerScratch (s : MachineData) : BitVec 64 → Prop := InRange (s.regs.rsp.toBitVec-48) 48
 
-/-- Conditions at lookup's actual common_bits CALL. The conditional data reads
+/-- Conditions at a common_bits CALL, with its actual return address. The conditional data reads
 are the helper's reads; stack values are established by the CALL and prologue. -/
-structure CallerAt (i : Input) (c : CommonBitsCoverage.Context) (s : MachineData) : Prop where
+structure CallerAt (i : Input) (c : CommonBitsCoverage.Context) (s : MachineData)
+    (returnPC : Int64 := AllowedipsImage.Lookup.entry+0xea) : Prop where
   node : i.node = s.regs.rdi
   key : i.key = s.regs.rsi
   stack : i.stack = s.regs.rsp-40
@@ -18,7 +19,7 @@ structure CallerAt (i : Input) (c : CommonBitsCoverage.Context) (s : MachineData
   savedBp : i.savedBp = s.regs.rbp
   savedR12 : i.savedR12 = s.regs.r12
   savedR13 : i.savedR13 = s.regs.r13
-  returnAddress : i.returnAddress = (AllowedipsImage.Lookup.entry+0xea).toUInt64
+  returnAddress : i.returnAddress = returnPC.toUInt64
   keys : ReadsAt i.keyWords s.dmem
   keySeparate : ∀ a, ReadBytes i.keyWords a → ¬(CallerScratch s a ∨ c.writes a)
   coverage : c.At s.dmem
@@ -28,8 +29,8 @@ structure CallerAt (i : Input) (c : CommonBitsCoverage.Context) (s : MachineData
   metadataSeparate : ∀ a, c.writes a → ¬c.metadataBytes a
   preemptSeparate : ∀ a, c.writes a → ¬InRange preemptCountAddress 4 a
 
-def helperEntry (s : MachineData) : MachineState :=
-  calledState s (AllowedipsImage.Lookup.entry+0xea) AllowedipsImage.CommonBits.entry
+def helperEntry (s : MachineData) (returnPC : Int64 := AllowedipsImage.Lookup.entry+0xea) : MachineState :=
+  calledState s returnPC AllowedipsImage.CommonBits.entry
 
 private theorem push_inside (s : MachineData) (a : BitVec 64)
     (inside : InRange (s.regs.rsp.toBitVec-8) 8 a) : CallerScratch s a := by
@@ -40,8 +41,8 @@ private theorem push_inside (s : MachineData) (a : BitVec 64)
     rw [← BitVec.sub_sub,BitVec.sub_add_cancel]
   simpa only [base,BitVec.ofNat_add,BitVec.add_assoc,show (40 : BitVec 64) = 40#64 from rfl] using eq
 
-private theorem helper_scratch (s : MachineData) :
-    (helperEntry s).data.regs.rsp.toBitVec-40 = s.regs.rsp.toBitVec-48 := by
+private theorem helper_scratch (s : MachineData) (returnPC : Int64) :
+    (helperEntry s returnPC).data.regs.rsp.toBitVec-40 = s.regs.rsp.toBitVec-48 := by
   change (s.regs.rsp-8).toBitVec-40 = _
   simp only [UInt64.toBitVec_sub,BitVec.sub_sub]
   rfl
@@ -54,13 +55,13 @@ private theorem smaller_inside (base a : BitVec 64) (inside : InRange base 40 a)
 private theorem writes_bytes {c : CommonBitsCoverage.Context} {a : BitVec 64}
     (write : c.writes a) : c.bytes a := .inr (.inr ⟨write.1,.inr write.2⟩)
 
-private theorem stack_base {i c s} (caller : CallerAt i c s) :
+private theorem stack_base {i c s returnPC} (caller : CallerAt i c s returnPC) :
     i.stack.toBitVec = s.regs.rsp.toBitVec-48+8 := by
   rw [caller.stack,UInt64.toBitVec_sub]
   change s.regs.rsp.toBitVec-40 = s.regs.rsp.toBitVec-(40+8)+8
   rw [← BitVec.sub_sub,BitVec.sub_add_cancel]
 
-private theorem stack_word {i c s} (caller : CallerAt i c s) (j : Nat) (bound : j < 5)
+private theorem stack_word {i c s returnPC} (caller : CallerAt i c s returnPC) (j : Nat) (bound : j < 5)
     (a : BitVec 64) (inside : InRange (i.stack.toBitVec+.ofNat 64 (8*j)) 8 a) :
     ¬i.Writes c a := by
   have base : i.stack.toBitVec+.ofNat 64 (8*j) =
@@ -82,7 +83,7 @@ private theorem stack_word {i c s} (caller : CallerAt i c s) (j : Nat) (bound : 
     refine ⟨8*(j+1)+n,by omega,?_⟩
     simpa only [BitVec.ofNat_add,BitVec.add_assoc] using eq
 
-theorem CallerAt.bodySeparate {i c s} (caller : CallerAt i c s) : i.Separated c := by
+theorem CallerAt.bodySeparate {i c s returnPC} (caller : CallerAt i c s returnPC) : i.Separated c := by
   intro a read
   obtain ⟨word,member,inside⟩ := read
   have words : i.words = [⟨i.stack.toBitVec,8,i.savedBx.toNat⟩,
@@ -108,10 +109,10 @@ theorem CallerAt.bodySeparate {i c s} (caller : CallerAt i c s) : i.Separated c 
     · exact .inr coverage
 
 /-- The CALL's concrete memory store establishes the helper return word. -/
-theorem CallerAt.entry {i c s} (caller : CallerAt i c s) : EntryAt i c (helperEntry s).data := by
-  have frame : EqualOutside (InRange (s.regs.rsp.toBitVec-8) 8) s.dmem (helperEntry s).data.dmem :=
+theorem CallerAt.entry {i c s returnPC} (caller : CallerAt i c s returnPC) : EntryAt i c (helperEntry s returnPC).data := by
+  have frame : EqualOutside (InRange (s.regs.rsp.toBitVec-8) 8) s.dmem (helperEntry s returnPC).data.dmem :=
     storeInt_frame _ _ _ _
-  have helperSubset : ∀ a, InRange ((helperEntry s).data.regs.rsp.toBitVec-40) 40 a → CallerScratch s a := by
+  have helperSubset : ∀ a, InRange ((helperEntry s returnPC).data.regs.rsp.toBitVec-40) 40 a → CallerScratch s a := by
     intro a inside
     rw [helper_scratch] at inside
     exact smaller_inside _ _ inside
@@ -135,9 +136,9 @@ theorem CallerAt.entry {i c s} (caller : CallerAt i c s) : EntryAt i c (helperEn
     exact aligned_sub _ 8 caller.aligned (by decide)
   · intro n hn
     have mapped := storeInt_defined s.dmem (s.regs.rsp.toBitVec-.ofNat 64 ((n+2)*8))
-      (s.regs.rsp.toBitVec-8) 8 8 (AllowedipsImage.Lookup.entry+0xea).toBitVec.toInt
+      (s.regs.rsp.toBitVec-8) 8 8 returnPC.toBitVec.toInt
       (caller.mapped (n+1) (by omega))
-    change ((helperEntry s).data.dmem.loadInt ((s.regs.rsp-8).toBitVec-.ofNat 64 ((n+1)*8)) 8).isSome = true
+    change ((helperEntry s returnPC).data.dmem.loadInt ((s.regs.rsp-8).toBitVec-.ofNat 64 ((n+1)*8)) 8).isSome = true
     have address : (s.regs.rsp-8).toBitVec-.ofNat 64 ((n+1)*8) =
         s.regs.rsp.toBitVec-.ofNat 64 ((n+2)*8) := by
       rw [UInt64.toBitVec_sub,BitVec.sub_sub]
@@ -148,17 +149,17 @@ theorem CallerAt.entry {i c s} (caller : CallerAt i c s) : EntryAt i c (helperEn
   · intro a byte inside
     exact caller.coverageSeparate a byte (helperSubset a inside)
 
-theorem CallerAt.callMapped {i c s} (caller : CallerAt i c s) :
+theorem CallerAt.callMapped {i c s returnPC} (caller : CallerAt i c s returnPC) :
     (s.dmem.loadInt (s.regs.rsp.toBitVec-8) 8).isSome = true := by
   simpa using caller.mapped 0 (by decide)
 
-theorem CallerAt.returnTarget {i c s} (caller : CallerAt i c s) :
-    Int64.ofBitVec i.returnAddress.toBitVec = AllowedipsImage.Lookup.entry+0xea := by
+theorem CallerAt.returnTarget {i c s returnPC} (caller : CallerAt i c s returnPC) :
+    Int64.ofBitVec i.returnAddress.toBitVec = returnPC := by
   rw [caller.returnAddress]
   rfl
 
-theorem CallerAt.entryWrites_subset {i c s} (_caller : CallerAt i c s) :
-    ∀ a, EntryWrites c (helperEntry s).data a → CallerScratch s a ∨ c.writes a := by
+theorem CallerAt.entryWrites_subset {i c s returnPC} (_caller : CallerAt i c s returnPC) :
+    ∀ a, EntryWrites c (helperEntry s returnPC).data a → CallerScratch s a ∨ c.writes a := by
   intro a written
   rcases written with scratch | coverage
   · left
@@ -168,8 +169,8 @@ theorem CallerAt.entryWrites_subset {i c s} (_caller : CallerAt i c s) :
 
 /-- Readability of every scratch word survives the helper. The lowest word
 comes from the actual callback push; the other five come from saved-word reads. -/
-theorem CallerAt.finalMapped {i c s answer final} (caller : CallerAt i c s)
-    (post : ReturnPost i c (prologueData (helperEntry s).data 8) answer final) :
+theorem CallerAt.finalMapped {i c s returnPC answer final} (caller : CallerAt i c s returnPC)
+    (post : ReturnPost i c (prologueData (helperEntry s returnPC).data 8) answer final) :
     ∀ n < 6, (final.data.dmem.loadInt (s.regs.rsp.toBitVec-.ofNat 64 ((n+1)*8)) 8).isSome = true := by
   have reads := caller.entry.body.reads.frame post.frame caller.bodySeparate
   have word (j : Nat) (bound : j < 5) :
