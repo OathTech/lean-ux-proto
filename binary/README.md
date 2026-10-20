@@ -709,3 +709,41 @@ recorded in the increment report. `scripts/proof-gate
 TrustBase specification and requires the pinned clean Kraken tree. The service
 runner distinguishes generated cases from the recorded-prefix and captured
 workload checks in the report. Tests do not discharge a universal contract.
+
+## Allowed-IPs mutation scaling
+
+Work in progress: [charter](../docs/2026-10-20-charter-binary-allowedips.md) and
+[report](../docs/2026-10-20-binary-allowedips.md). No insertion function theorem
+is claimed yet. Run these from the worktree root, using system Python with
+pyelftools (the QEMU command uses the project bundle when needed):
+
+```sh
+capped python3 -B binary/allowedips_mutation.py
+LEANUX_QEMU_SLOTS=16 capped python3 -B - <<'PY'
+import subprocess, sys
+sys.path.insert(0, 'binary')
+from target import ROOT, kernel_environment
+subprocess.run([str(ROOT / 'scripts/in-bundle'), 'python3', '-B', '-m',
+    'evaluator.check', '--suite', 'wireguard', '--no-build', '--binary-coverage',
+    '--binary-profile', 'allowedips-insert', '--trace', 'b1_trie_routing',
+    '--out', str(ROOT / '.artifacts/check/allowedips-insert-armed')],
+    cwd=ROOT, env=kernel_environment(), check=True)
+PY
+capped python3 -B binary/allowedips_insert_check.py --check .artifacts/check/allowedips-insert-armed
+LEANUX_QEMU_SLOTS=16 capped python3 -B binary/capture_allowedips_insert.py \
+  --input .tmp/allowedips/mutation.json \
+  --check .artifacts/check/allowedips-insert-armed \
+  --out .tmp/allowedips/capture-first
+capped lake -d binary build binary-allowedips-insert-capture
+capped binary/.lake/build/bin/binary-allowedips-insert-capture \
+  .tmp/allowedips/mutation.json .tmp/allowedips/capture-first/snapshot.json
+```
+
+Use unoccupied output directories for new recordings/captures. Build the mirror
+first if it is not already built. The three-way comparison uses recorded calls
+and outcomes with constructed entry memory. The separate capture replay uses
+actual entry bytes, interprets WireGuard and coverage bodies, and supplies the
+captured generic allocator transition under an explicit checked frame. Neither
+test discharges a universal service premise. The sequence-counter reproducer
+`capped python3 -B binary/allowedips_seq_wrap.py` remains a failing Rule Zero
+witness until the separately owned mirror correction lands.

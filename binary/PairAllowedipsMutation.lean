@@ -66,7 +66,7 @@ def suppliedService (input : Input) (r : Run) (names : Names) (released : List N
     unless r.state.data.regs.rsi.toNat == 0xdc0 do throw "service.allocation-flags"
     let some (_,site) := input.allocationReturns.find? (·.1 == ra) | throw "service.allocation-return-site"
     let next::rest := records | throw "service.allocation-record-missing"
-    unless next.site == 70+site && next.bytes.length == 40 && next.bytes.drop 1 == List.replicate 39 0 &&
+    unless next.site == 70+site && next.bytes.length == 40 &&
         (next.bytes.headD 2 == 0 || next.bytes.headD 2 == 1) do throw "service.allocation-record-shape"
     records := rest
     if next.bytes.headD 0 == 1 then
@@ -92,19 +92,23 @@ def suppliedService (input : Input) (r : Run) (names : Names) (released : List N
     r.state.data.regs with rax := .ofNat answer,rsp := r.state.data.regs.rsp+8}},.ofNat ra⟩
   return ({r with state},names,released,records)
 
-def invoke (input : Input) (seed : UInt64) (s : Session)
-    (family key cidr pid : Nat) (records : List HiddenRecord) : Except String (Session × Json) := do
+def invokeFrom (input : Input) (seed : UInt64) (s : Session)
+    (family key cidr pid : Nat) (records : List HiddenRecord)
+    (initial : MachineState) (frame : CallFrame)
+    (service : Run → Names → List Nat → List HiddenRecord →
+      Except String (Run × Names × List Nat × List HiddenRecord)) : Except String (Session × Json) := do
   let width := if family == 4 then 32 else 128
   unless (family == 4 || family == 6) && key < 2^width && cidr < 256 do throw "insert.argument-width"
-  assertAt s.names input.lookup.offsets s.binary.state.data.dmem s.world
+  assertAt s.names input.lookup.offsets initial.data.dmem s.world
   let peer ← Trie.address s.names.trie.peers (some pid)
-  let mut memory := put s.binary.state.data.dmem stackAddr 8 stopAddr
-  let network := (List.range (width/8)).map fun i => UInt8.ofNat (key / 256^(width/8-1-i) % 256)
-  memory := memory.storeBytes (.ofNat 64 AllowedipsProbe.keyAddr) network
-  let initial : MachineState := ⟨{dmem := memory,regs := {
-    rdi := .ofNat s.names.table,rsi := .ofNat AllowedipsProbe.keyAddr,rdx := .ofNat cidr,
-    rcx := .ofNat peer,rsp := .ofNat stackAddr,rbx := 17,rbp := 34,r12 := 51,r13 := 68,r14 := 85,r15 := 102}},
-    .ofNat (if family == 4 then input.insert4 else input.insert6)⟩
+  unless initial.pc.toBitVec.toNat == (if family == 4 then input.insert4 else input.insert6) &&
+      initial.data.regs.rdi.toNat == s.names.table && initial.data.regs.rcx.toNat == peer &&
+      initial.data.regs.rdx.toNat % 256 == cidr && initial.data.regs.rsp.toNat == frame.stack do
+    throw "insert.entry-abi"
+  unless (← readNat initial frame.stack 8) == frame.returnPC do throw "insert.entry-return-word"
+  let some bytes := initial.data.dmem.loadBytes initial.data.regs.rsi.toBitVec (width/8)
+    | throw "insert.query-unmapped"
+  unless bytes.foldl (fun a b => a*256+b.toNat) 0 == key do throw "insert.query-value"
   let mut r := {s.binary with state := initial,pcs := #[],reads := #[],writes := #[],history := #[]}
   let mut names := s.names
   let mut released := s.released
@@ -115,23 +119,22 @@ def invoke (input : Input) (seed : UInt64) (s : Session)
   for _ in [:4] do
     r ← runUntil input.lookup.instructions input.lookup.labels input.lookup.hooks input.lookup.preempt
       r.state seed true input.lookup.budget input.lookup.entryPreempt #[input.alloc,input.free]
-      (some r) stopAddr (some #[])
+      (some r) frame.returnPC (some #[])
       (some fun t => match TrustBase.KcovPlan .pc t with
         | none => .error "insert.coverage-inputs"
         | some writes => .ok (!writes.isEmpty))
-    if r.state.pc.toBitVec.toNat == stopAddr then break
+    if r.state.pc.toBitVec.toNat == frame.returnPC then break
     let pc := r.state.pc.toBitVec.toNat
     let ra ← readNat r.state r.state.data.regs.rsp.toNat 8
-    let (after,next,freed,rest) ← suppliedService input r names released remaining
+    let (after,next,freed,rest) ← service r names released remaining
     r := after; names := next; released := freed; remaining := rest
     services := services.push (pc,ra)
-  unless r.state.pc.toBitVec.toNat == stopAddr do throw "insert.service-budget"
-  unless remaining.isEmpty do throw "insert.unconsumed-allocation-record"
+  unless r.state.pc.toBitVec.toNat == frame.returnPC do throw "insert.service-budget"
   let ambient := {s.world.ambient with
     hidden := some records, allocArmed := ["allocNode190","allocNode205","allocNode234"]}
   let w := {s.world with ambient}
   let (answer,world) ← (liftWG (insert family key cidr pid)).run w |>.mapError Stop.message
-  unless world.hidden == some [] do throw "insert.mirror-input-cursor"
+  unless world.hidden == some remaining do throw "insert.mirror-input-cursor"
   unless r.state.data.regs.rax.toNat % 2^32 == (answer % (2^32 : Int)).toNat do throw "insert.result"
   unless r.state.data.regs.rsp == initial.data.regs.rsp+8 do throw "insert.return-stack"
   for reg in [Reg64.rbx,.rbp,.r12,.r13,.r14,.r15] do
@@ -139,13 +142,28 @@ def invoke (input : Input) (seed : UInt64) (s : Session)
   unless (← readNat r.state input.lookup.preempt 4) == input.lookup.entryPreempt do throw "insert.preempt"
   unless (← readNat r.state TrustBase.softirqPendingAddress.toNat 2) ==
       (← readNat initial TrustBase.softirqPendingAddress.toNat 2) do throw "insert.pending"
-  unless (← readNat r.state coverageAddr 8) == r.coverage.size do throw "insert.coverage-count"
+  unless (← readNat r.state frame.coverage 8) == r.coverage.size do throw "insert.coverage-count"
   for i in [:r.coverage.size] do
-    unless (← readNat r.state (coverageAddr+8*(i+1)) 8) == r.coverage[i]! do throw "insert.coverage-word"
+    unless (← readNat r.state (frame.coverage+8*(i+1)) 8) == r.coverage[i]! do throw "insert.coverage-word"
   assertAt names input.lookup.offsets r.state.data.dmem world
   return (⟨names,world,r,released⟩,Json.mkObj [("family",toJson family),("cidr",toJson cidr),
     ("result",toJson answer),("instructions",toJson r.pcs.size),("services",toJson services),
+    ("coverage",toJson (r.coverage.toList.drop s.binary.coverage.size)),
+    ("comparisons",toJson (r.comparisons.toList.drop s.binary.comparisons.size)),
     ("decisions",toJson ((world.steps.toList.drop s.world.steps.size).map Step.label))])
+
+def invoke (input : Input) (seed : UInt64) (s : Session)
+    (family key cidr pid : Nat) (records : List HiddenRecord) : Except String (Session × Json) := do
+  let width := if family == 4 then 32 else 128
+  let peer ← Trie.address s.names.trie.peers (some pid)
+  let mut memory := put s.binary.state.data.dmem stackAddr 8 stopAddr
+  let network := (List.range (width/8)).map fun i => UInt8.ofNat (key / 256^(width/8-1-i) % 256)
+  memory := memory.storeBytes (.ofNat 64 AllowedipsProbe.keyAddr) network
+  let initial : MachineState := ⟨{dmem := memory,regs := {
+    rdi := .ofNat s.names.table,rsi := .ofNat AllowedipsProbe.keyAddr,rdx := .ofNat cidr,
+    rcx := .ofNat peer,rsp := .ofNat stackAddr,rbx := 17,rbp := 34,r12 := 51,r13 := 68,r14 := 85,r15 := 102}},
+    .ofNat (if family == 4 then input.insert4 else input.insert6)⟩
+  invokeFrom input seed s family key cidr pid records initial {} (suppliedService input)
 
 def lookup (input : Input) (seed : UInt64) (s : Session) (family key : Nat) : Except String (Session × Json) := do
   let some d := s.world.wg.dev | throw "lookup.device"

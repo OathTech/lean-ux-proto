@@ -150,9 +150,79 @@ capped lake -d binary build AllowedipsMutationCodeLayout PairAllowedipsState
 ```
 
 Fast tier passes: 136 unit tests, one skip. The independent s5 recording for
-`b1_trie_routing` is running with the new `allowedips-insert` coverage profile;
-three-way comparison is still pending. Profile ranges come from ELF symbols,
+`b1_trie_routing` uses the new `allowedips-insert` coverage profile.
+Profile ranges come from ELF symbols,
 with source attribution for local symbols; no guest or kernel change is needed.
 Additional development failures were record-layout indentation, an image/layout
 output-name collision, ambiguous local `lookup` extraction, and a check output
 path outside the checker's required `.artifacts` tree. These were corrected.
+
+## Recorded comparison and actual-entry capture
+
+The full differential recording passes: one trace, 12 operations, 396 compared
+pairs, 244 distinct pairs. The paired insertion comparison then passes eight
+mixed-family calls under both undefined-value seeds: 170 stored coverage points,
+64 comparison records and 117 mirror decisions, in 0.214 seconds of execution.
+The initial comparison failed because allocator records were not armed; the
+profile now arms the three existing allocation sites without steering them.
+Another corrected assumption was that all 39 bytes after the allocation outcome
+were zero: actual records carry unwind metadata, which the source does not use.
+These calls retain the physical heap, but their entry is constructed from the
+recorded arguments and outcomes, not a captured kernel entry.
+
+The first IPv4 insertion also has an actual stopped-QEMU entry, allocator
+boundary and ABI-return capture. It records 254 WireGuard/coverage instructions
+and 8,274 native steps including the generic allocator, in 35.732 seconds.
+The capture carries 33,558,136 actual entry bytes, including the complete KCOV
+allocation. The allocator body is executed by QEMU and supplied as an external
+transition in Kraken; it is not interpreted or proved here. Its replay validates
+arguments, fresh zeroed allocation, ABI restoration and the protected bytes;
+only its declared stack, coverage and new allocation bytes may change.
+
+Kraken replay passes for both undefined-value seeds, comparing every general
+register, represented status/system flags, the interpreted instruction sequence,
+and 822,856 captured bytes at return. The shared full reconstruction is checked
+at entry and return. Loading the actual memory and both replays take 79.124
+seconds. This is a concrete witness and an independent endpoint comparison,
+not a universal refinement theorem or a caller-reachability proof.
+
+The first replay correctly failed on the source fixture's peer count: the
+captured count is two, because `setPeerCmd` takes a temporary reference after
+creation. The repaired setup executes the mirror's `peerGet` from a freshly
+created peer; it does not copy the captured count into the source. The assertion
+is unchanged. Public-key identity and the query are checked independently by the
+capturer. Placeholder cryptographic fields are outside this projection.
+
+Reproduction commands, including recording and capture, are in
+[binary/README.md](../binary/README.md#allowed-ips-mutation-scaling).
+The three-way check fails if outcomes are absent or any coverage, comparison or
+decision sequence differs. No guest or kernel edit was needed. Capture launch
+failures exposed bundle Python's absent pyelftools and host PATH's absent QEMU;
+host Python now drives the bundled QEMU when necessary. The first capture Lean
+build also failed on an ambiguous type name and record syntax before correction.
+No capture snapshot is committed; these files are reconstructible in `.tmp`.
+
+## Proof work and measured friction
+
+`PairAllowedipsFrame` proves that the exact executable reconstruction survives
+an arbitrary write footprint disjoint from its reads. Its peer-list traversal
+checks that a link is an owned node or the head before reading through it.
+`AllowedipsCounterRegion` proves the actual u64 increment and write frame at
+both wrapper locations, for every old word including the wrapping case.
+Both modules report only `propext`, `Quot.sound` and `Classical.choice`.
+They are supporting lemmas; no insertion function is counted as proved.
+
+One frame-proof attempt spent 70 seconds in reduction after the decoder's
+monadic `unless` expanded a large continuation. I terminated that specific
+Lean process; exit 143 is a failed build. Rewriting the same fail-closed link
+test as an explicit outer conditional made the proof check in about one second
+at the default limits. This changed the binary-side decoder's expression shape,
+not the mirror or the accepted heap invariant. It is a concrete instance where
+small executable-definition choices affect proof cost substantially.
+
+The next composition obligation is the old lookup theorem lifted to roots,
+counter, parents and ordered ownership lists using its existing write frame.
+Insertion's placement loop and mutation regions, then the function theorem,
+remain open. F1 is independently confirmed; the coordinator's `task/seq-wrap`
+correction is pending its claim point and landing notice. The failing witness,
+exact target and unrestricted wrapping case remain unchanged on this branch.

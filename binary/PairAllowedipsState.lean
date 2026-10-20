@@ -40,19 +40,22 @@ def parent (names : Names) (a : Nat) : Decode Slot := do
 def peerList (names : Names) (m : DataMem) (head : Nat) :
     Nat → Nat → Nat → List Nat → Decode (List NodeId)
   | 0, _, _, _ => .error ⟨"peer.list", head, "traversal exhausted"⟩
-  | fuel+1, link, previous, seen => do
-    let back ← word m "peer.list.prev" (link+8) 8
-    unless back == previous do throw ⟨"peer.list.prev",link,"broken backlink"⟩
-    if link == head then return []
-    if seen.contains link then throw ⟨"peer.list",link,"cycle"⟩
-    unless link ≥ AllowedipsMutationLayout.peer_list do
-      throw ⟨"peer.list",link,"invalid embedded link"⟩
-    let some id ← Trie.pointer names.trie.nodes "peer.list.node"
-        (link-AllowedipsMutationLayout.peer_list)
-      | throw ⟨"peer.list.node",link,"NULL owner"⟩
-    let next ← word m "peer.list.next" link 8
-    let tail ← peerList names m head fuel next link (link::seen)
-    return id::tail
+  | fuel+1, link, previous, seen =>
+    if !(link == head || names.trie.nodes.any (fun (_,a) => link == a+AllowedipsMutationLayout.peer_list)) then
+      .error ⟨"peer.list",link,"unregistered embedded link"⟩
+    else do
+      let back ← word m "peer.list.prev" (link+8) 8
+      unless back == previous do throw ⟨"peer.list.prev",link,"broken backlink"⟩
+      if link == head then return []
+      if seen.contains link then throw ⟨"peer.list",link,"cycle"⟩
+      unless link ≥ AllowedipsMutationLayout.peer_list do
+        throw ⟨"peer.list",link,"invalid embedded link"⟩
+      let some id ← Trie.pointer names.trie.nodes "peer.list.node"
+          (link-AllowedipsMutationLayout.peer_list)
+        | throw ⟨"peer.list.node",link,"NULL owner"⟩
+      let next ← word m "peer.list.next" link 8
+      let tail ← peerList names m head fuel next link (link::seen)
+      return id::tail
 
 def validate (names : Names) (o : AllowedipsProbe.Offsets) : Decode Unit := do
   Trie.validate names.trie o
@@ -68,6 +71,23 @@ def validate (names : Names) (o : AllowedipsProbe.Offsets) : Decode Unit := do
     unless disjointRanges a size names.table AllowedipsMutationLayout.tableSize do
       throw ⟨"table",a,"allocation overlaps table"⟩
 
+def decodeNode (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem)
+    (id : NodeId) (a : Nat) : Decode (NodeId × AipNode) := do
+  let n ← Trie.decodeNode names.trie o m a
+  let slot ← parent names (← word m "node.parent" (a+AllowedipsMutationLayout.parent_bit_packed) 8)
+  let node : AipNode := {
+    peer := n.peer, bit := n.children, cidr := n.cidr, bitlen := n.width,
+    bits := n.key, parent := slot}
+  return (id,node)
+
+def decodePeer (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem)
+    (id : PeerId) (a : Nat) : Decode (PeerId × Nat × List NodeId) := do
+  let count ← word m "peer.refcount" (a+o.peerRefcount) 4
+  let head := a+AllowedipsMutationLayout.allowedips_list
+  let first ← word m "peer.list.head" head 8
+  let list ← peerList names m head (names.trie.nodes.length+1) first head []
+  return (id,count,list)
+
 def reconstruct (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) : Decode State := do
   validate names o
   let root4 ← Trie.pointer names.trie.nodes "table.root4"
@@ -75,19 +95,8 @@ def reconstruct (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) : De
   let root6 ← Trie.pointer names.trie.nodes "table.root6"
     (← word m "table.root6" (names.table+AllowedipsMutationLayout.root6) 8)
   let seq ← word m "table.seq" (names.table+AllowedipsMutationLayout.seq) 8
-  let nodes ← names.trie.nodes.mapM fun (id,a) => do
-    let n ← Trie.decodeNode names.trie o m a
-    let slot ← parent names (← word m "node.parent" (a+AllowedipsMutationLayout.parent_bit_packed) 8)
-    let node : AipNode := {
-      peer := n.peer, bit := n.children, cidr := n.cidr, bitlen := n.width,
-      bits := n.key, parent := slot}
-    return (id,node)
-  let peers ← names.trie.peers.mapM fun (id,a) => do
-    let count ← word m "peer.refcount" (a+o.peerRefcount) 4
-    let head := a+AllowedipsMutationLayout.allowedips_list
-    let first ← word m "peer.list.head" head 8
-    let list ← peerList names m head (names.trie.nodes.length+1) first head []
-    return (id,count,list)
+  let nodes ← names.trie.nodes.mapM fun (id,a) => decodeNode names o m id a
+  let peers ← names.trie.peers.mapM fun (id,a) => decodePeer names o m id a
   return ⟨{root4,root6,seq},nodes,peers,names.nextNode⟩
 
 /-- Structural assertion, separate from the reconstruction equation. Every live

@@ -1607,7 +1607,10 @@ def run_chunk(traces, out, kcov, guest_variant=None, alloc_flags=0, arm=(), bina
     only for the control kernel's controls, which the oracle rejects. `arm`:
     allocation sites to arm without steering them (a control's armed run of
     an FS trace, which the guest cannot steer). Both are for
-    scripts/alloc-evaluator-controls.py only."""
+    scripts/alloc-evaluator-controls.py only. The binary insertion profile also
+    arms its three allocator sites for recorded (unsteered) service outcomes."""
+    if binary_coverage and binary_profile == "allowedips-insert":
+        arm = tuple(sorted(set(arm) | {"allocNode190", "allocNode205", "allocNode234"}))
     out.mkdir(parents=True)
     results, gaps = {}, Counter()
     outcomes = Counter()
