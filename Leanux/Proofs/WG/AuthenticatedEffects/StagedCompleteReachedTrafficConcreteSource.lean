@@ -1,8 +1,8 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedXmitConcreteComposition
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIngressPoints
 
 /-! Traffic dispatch follows its actual lists, worker sections and callbacks.
-The receive-entry native atom is explicit; its deeper RX intervals are not
-silently replaced by a whole-dispatch correctness premise. -/
+The receive token supplies normal endpoints; fixed ingress points expose
+its allocation, admission, cleanup and counted-release source paths. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.TrafficConcrete
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues TransmitSecurity CausalJournal Driver
 abbrev History := List Event

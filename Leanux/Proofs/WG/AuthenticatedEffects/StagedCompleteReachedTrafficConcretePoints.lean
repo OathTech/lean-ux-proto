@@ -10,6 +10,7 @@ inductive Site where
   | service (site : Service.Points.Site)
   | poll (site : Napi.Points.Site)
   | transmit
+  | ingress
   | left (site : Site) | right (site : Site)
 
 inductive Point (service : Service.Points.ChildPoints) (napi : Napi.Points.ChildPoints) :
@@ -24,6 +25,8 @@ inductive Point (service : Service.Points.ChildPoints) (napi : Napi.Points.Child
       Point service napi .poll w h (.poll site) u middle
   | transmit (point : Fixture.Point ⟨family,addr,packets,mtu⟩ w h u middle) :
       Point service napi (.transmit family addr packets mtu) w h .transmit u middle
+  | ingress (point : Ingress.RootPoint msg src w h u middle) :
+      Point service napi (.native (.receive msg src)) w h .ingress u middle
   | left {body : PrefixM Event α} {next : α → PrefixM Event β} {head : Shape body}
       (tail : ∀value,Shape (next value)) (point : Point service napi head w h site u middle) :
       Point service napi (.bind head tail) w h (.left site) u middle
@@ -47,6 +50,7 @@ theorem Point.coverage
   | service source point=>exact .service source (point.coverage services)
   | poll point=>exact .poll (point.coverage polls)
   | transmit point=>exact .transmit point
+  | ingress point=>exact .ingress point
   | left tail point ih=>exact .left tail ih
   | right head tail leading point ih=>exact .right head tail leading ih
 
@@ -65,6 +69,7 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {source : Shape 
       obtain ⟨remaining,residual⟩:=point.residual polls
       exact ⟨remaining,residual.run⟩
   | transmit point=>exact point.remaining
+  | ingress point=>exact point.remaining
   | left tail point ih=>
       obtain ⟨remaining,continued⟩:=ih
       exact ⟨remaining >>= _,Scheduler.bind_run_equal _ continued⟩
@@ -73,8 +78,8 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {source : Shape 
       exact ⟨remaining,by rw [runPrefix_bind,leading];exact continued⟩
 
 /-- Security: actual receive/flood/batch source cuts retain the packet
-account through canonical scheduling, polling and fixture transmit. The
-receive-entry atom and other deeper native interiors remain explicit. -/
+account through canonical scheduling, polling, fixture transmit and the
+fixed ingress source. Finer native access intervals remain explicit. -/
 theorem Point.safe
     (accountGood : ∀h w,Lifecycle.Points.Account h w → Good h w)
     (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
@@ -89,6 +94,7 @@ theorem Point.safe
   | service source point=>exact point.safe (fun _ _ account=>accountGood _ _ account.1) services before
   | poll point=>exact point.safe accountGood polls before.1
   | transmit point=>exact point.safe accountGood acceptStaging acceptPeer before
+  | ingress point=>exact point.safe accountGood acceptPeer before
   | left tail point ih=>exact ih before
   | right head tail leading point ih=>exact ih (head.normal before leading)
 
