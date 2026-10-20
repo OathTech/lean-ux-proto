@@ -17,6 +17,12 @@ inductive Residual (children : ChildContracts native inside Good) :
   | stored (point : PrefixStore.Point source w h u middle) :
       Residual children (.native (.stored index w source)) h .stored u middle
         (runAtPrefix index u (PrefixStore.remainder point))
+  | prefill (point : PrefixStore.Point (PrefixStore.prefillShape count) w h u middle) :
+      Residual children (.native (.prefill count w)) h .prefill u middle
+        (do let out ← runAtPrefix 0 u (PrefixStore.remainder point);pure out.2)
+  | boot (point : PrefixStore.Point (PrefixStore.bootShape net foreign) w h u middle) :
+      Residual children (.native (.boot net foreign w)) h .boot u middle
+        (do let out ← runAtPrefix 0 u (PrefixStore.remainder point);pure out.2)
   | childEntry (token : Child action) :
       Residual children (.child index w token) h .entry w h (runAtPrefix index w action)
   | childReturn (token : Child action)
@@ -46,6 +52,8 @@ theorem Point.residual (children : ChildContracts native inside Good)
   | nativeEntry token => exact ⟨_,.nativeEntry token⟩
   | nativeReturn token performed => exact ⟨_,.nativeReturn token performed⟩
   | stored point => exact ⟨_,.stored point⟩
+  | prefill point => exact ⟨_,.prefill point⟩
+  | boot point => exact ⟨_,.boot point⟩
   | childEntry token => exact ⟨_,.childEntry token⟩
   | childReturn token performed => exact ⟨_,.childReturn token performed⟩
   | interior token point => exact ⟨_,.interior token point⟩
@@ -60,6 +68,10 @@ theorem Residual.run {shape : Shape action} (path : Residual children shape h si
   | nativeEntry => rfl
   | nativeReturn _ performed => exact performed
   | stored point => simp only [runAtPrefix_run,PrefixStore.remainder_run point]
+  | prefill point =>
+      simp only [PrefixStore.prefill_source,runPrefixOuter_bind,runAtPrefix_run,PrefixStore.remainder_run point]
+  | boot point =>
+      simp only [PrefixStore.boot_source,runPrefixOuter_bind,runAtPrefix_run,PrefixStore.remainder_run point]
   | childEntry => rfl
   | childReturn _ performed => exact performed
   | interior token point =>
@@ -75,6 +87,8 @@ theorem Residual.point {children : ChildContracts native inside Good} (path : Re
   | nativeEntry token => exact .nativeEntry token
   | nativeReturn token performed => exact .nativeReturn token performed
   | stored point => exact .stored point
+  | prefill point => exact .prefill point
+  | boot point => exact .boot point
   | childEntry token => exact .childEntry token
   | childReturn token performed => exact .childReturn token performed
   | interior token point => exact .interior token point
