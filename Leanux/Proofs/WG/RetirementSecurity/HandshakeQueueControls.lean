@@ -9,7 +9,6 @@ creation and destruction have separate invariant contracts because their ring
 can disappear or be freshly initialized. -/
 namespace Leanux.Proofs.WG.RetirementSecurity.HandshakeLengths.Control
 open Leanux Leanux.WG Leanux.Proofs.Framing Leanux.Proofs.Logged Lifetimes Queues
-set_option maxHeartbeats 600000
 
 theorem store {a : Leanux.M α} (same : SameProductStore a) : SameView productView a :=
   same.of_factor (fun s : ProductStore43=>s.2.2.2.dev.map (·.handshakeQueue)) productView (fun _=>rfl)
@@ -62,7 +61,7 @@ theorem pre_exit : SameView view WG.netnsPreExit := by
 
 theorem cleanup : SameView productView Env.netnsCleanup := by
   have routing {α : Type} (a : Net.M α) := route a
-  handshake_poll_source [Env.netnsCleanup,Env.runWorker,peekUnit,resolveUnit,skipCut,unsupported]
+  handshake_poll_source [Env.netnsCleanup,Env.runWorker,Env.pendingDevice,peekUnit,resolveUnit,skipCut,unsupported]
     using [routing,readRoute,env] with [pre_exit]
 
 theorem mtu (n : Nat) : SameView productView (Env.setMtu n) := by

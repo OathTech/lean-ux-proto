@@ -26,7 +26,7 @@ theorem env_cleanup : Framing.Preserves (fun w : World => Inv w.wg) Env.netnsCle
     unfold modifyEnv
     apply hoare_modify
     exact fun _ hi => hi
-  routing_tx_source [Env.netnsCleanup,Env.runWorker,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
+  routing_tx_source [Env.netnsCleanup,Env.runWorker,Env.pendingDevice,getAmbient,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
     using [preExit,effect,route,env]
 
 end Leanux.Proofs.WG.HandshakeSecurity.PeerReference

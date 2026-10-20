@@ -78,8 +78,9 @@ private theorem cleanup_source (confirmed : List Nat) :
   have effect {α : Type} (a : AmbientM α) := ambient a confirmed
   have route {α : Type} (a : Net.M α) := routing a confirmed
   have env (f : EnvWorld → EnvWorld) := modifyEnv_spec f confirmed
+  have pending := store _ (pendingDevice_sameKernel .netnsCleanup false) confirmed
   routing_tx_source [Env.netnsCleanup,Env.runWorker,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
-    using [preExit,effect,route,env]
+    using [preExit,effect,route,env,pending]
 
 theorem up : Joint.Preserves (RxHistory.audit envWgUpAudit) :=
   Joint.from_global _ PublicationControls.up (Global.audited _ _ envWgUpAudit_erases up_source)

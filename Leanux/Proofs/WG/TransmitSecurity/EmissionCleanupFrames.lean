@@ -34,7 +34,7 @@ theorem env_cleanup : SameView EmissionOuter.Sent Env.netnsCleanup := by
       (monadLift a : Leanux.M α) := EmissionOuter.routing a initial
   have env (f : EnvWorld → EnvWorld) : Preserves (fun w : World => EmissionOuter.Sent w = initial)
       (modifyEnv f) := EmissionOuter.env f initial
-  routing_tx_source [Env.netnsCleanup,Env.runWorker,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
+  routing_tx_source [Env.netnsCleanup,Env.runWorker,Env.pendingDevice,getAmbient,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
     using [pre,effects,routes,env]
 
 end Leanux.Proofs.WG.TransmitSecurity.EmissionCleanup

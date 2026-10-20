@@ -85,7 +85,7 @@ theorem env_cleanup (past : List (Option Nat × SkbId)) :
   have effects {α : Type} (a : AmbientM α) := effect a past
   have routes {α : Type} (a : Net.M α) := route a past
   have env (f : EnvWorld → EnvWorld) := editEnv f past
-  routing_tx_source [Env.netnsCleanup,Env.runWorker,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
+  routing_tx_source [Env.netnsCleanup,Env.runWorker,Env.pendingDevice,getAmbient,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
     using [preExit,effects,routes,env]
 
 theorem env_mtu (n : Nat) : Preserves (fun w : World => Ready past [] w.wg) (Env.setMtu n) := by

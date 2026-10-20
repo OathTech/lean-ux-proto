@@ -65,6 +65,7 @@ private theorem edit_env (f : EnvWorld→EnvWorld) :
   exact entry
 
 macro "holder_control_step" : tactic => `(tactic| first
+  | (rx_retention_head Env.pendingDevice; exact product_store (pendingDevice_sameKernel _ _))
   | (rx_retention_head getWG; exact product_store (fun initial=>productGetWG_spec (fun s=>s=initial)))
   | (rx_retention_head modifyEnv; exact edit_env _)
   | (rx_retention_head getRouting
@@ -103,7 +104,7 @@ theorem worker (kind : Worker) (body : Leanux.M Unit)
 
 theorem env_cleanup : Preserves (fun w : World=>HolderBoundary.Entry temporary carriers loans w.wg) Env.netnsCleanup := by
   unfold Env.netnsCleanup
-  simp (config:={zeta:=false}) only [unsupported,peekUnit,resolveUnit,skipCut]
+  simp (config:={zeta:=false}) only [unsupported,invariant,peekUnit,resolveUnit,skipCut]
   repeat' first
     | (rx_retention_head Env.runWorker; apply worker)
     | (allocation_release_lift_from WG.M; exact PublicationPoll.native_product _ _ pre_exit)

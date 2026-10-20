@@ -21,7 +21,7 @@ theorem after_call_framed (op : Operation) (state : State) (ret : Int) (w : Worl
   rcases wg with ⟨_,_,_,_,_,_,_,_,_,_,_,_,raised,_,_,_,_,_,_,_⟩
   cases hidden with
   | none =>
-    cases suspended <;> cases raised
+    cases suspended <;> cases pending <;> cases raised
     all_goals repeat' first
       | runner_frame_uncast
       | exact Framed.pure _

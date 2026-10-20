@@ -73,7 +73,7 @@ theorem env_cleanup (confirmed : List TimestampReceipt) :
   have effect {α : Type} (a : AmbientM α) := native_ambient a confirmed
   have route {α : Type} (a : Net.M α) := routing a confirmed
   have env (f : EnvWorld → EnvWorld) := modifyEnv_spec f confirmed
-  routing_tx_source [Env.netnsCleanup,Env.runWorker,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
+  routing_tx_source [Env.netnsCleanup,Env.runWorker,Env.pendingDevice,getAmbient,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
     using [preExit,effect,route,env]
 
 end Leanux.Proofs.WG.HandshakeSecurity.TimestampArchive

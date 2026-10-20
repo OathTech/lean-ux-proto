@@ -62,6 +62,7 @@ theorem preExit : Preserves (ExactBoundary cs loans) WG.netnsPreExit := by
     | retired_control_native
 
 macro "retired_control_product" : tactic => `(tactic| first
+  | (rx_retention_head Env.pendingDevice; exact product _ (pendingDevice_sameKernel _ _))
   | (rx_retention_head getWG; exact product _ (fun initial => productGetWG_spec (fun s => s=initial)))
   | (rx_retention_head modifyEnv; exact editEnv _)
   | (rx_retention_head getRouting
@@ -80,7 +81,7 @@ theorem env_up : Preserves (fun w : World => ExactBoundary cs loans w.wg) Env.wg
 
 theorem cleanup : Preserves (fun w : World => ExactBoundary cs loans w.wg) Env.netnsCleanup := by
   unfold Env.netnsCleanup
-  simp (config := {zeta := false}) only [unsupported,peekUnit,resolveUnit,skipCut]
+  simp (config := {zeta := false}) only [unsupported,invariant,peekUnit,resolveUnit,skipCut]
   repeat' first
     | (rx_retention_head Env.runWorker; apply TimerEnvironment.worker)
     | (allocation_release_lift_from WG.M; exact ExactBoundary.lift _ preExit)

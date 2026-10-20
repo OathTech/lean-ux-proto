@@ -79,7 +79,7 @@ noncomputable def advanceCallShape (ticks : Nat) : Shape (Leanux.dispatch (.wgAd
   repeat' first | exact advanceShape _ | control_store_step
 
 noncomputable def netnsCloseShape : Shape Leanux.netnsClose := by
-  unfold Leanux.netnsClose
+  unfold Leanux.netnsClose Env.pendingDevice
   repeat' control_store_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ProductStore

@@ -108,7 +108,7 @@ theorem env_cleanup (h : List AuthenticatedEffects.CausalJournal.Event) :
   have env (f : EnvWorld → EnvWorld) : Preserves (fun w : World => Inv h w.wg) (modifyEnv f) := by
     unfold modifyEnv
     exact hoare_modify _ (fun _ hi => hi)
-  routing_tx_source [Env.netnsCleanup,Env.runWorker,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
+  routing_tx_source [Env.netnsCleanup,Env.runWorker,Env.pendingDevice,getAmbient,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
     using [preExit,effects,routes,env]
 
 theorem env_mtu (n : Nat) (h : List AuthenticatedEffects.CausalJournal.Event) :
@@ -128,6 +128,7 @@ theorem env_mtu (n : Nat) (h : List AuthenticatedEffects.CausalJournal.Event) :
         productStoreView,wgStoreView,Option.bind_map,Function.comp_def] using field
     exact queues ▸ found
 
+-- Existing budget for the exhaustive syscall split and its lifted queue frames.
 set_option maxHeartbeats 600000 in
 theorem quiet_dispatch (call : Syscall) (h : List AuthenticatedEffects.CausalJournal.Event)
     (retained : DispatchRetained call) (notUp : call ≠ .wgUp) (notDown : call ≠ .wgDown) :

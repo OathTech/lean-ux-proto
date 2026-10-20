@@ -75,7 +75,7 @@ theorem env_cleanup (h : List WorkerEncryption.Receipt) :
   have effects {α : Type} (a : AmbientM α) := effect a h
   have routes {α : Type} (a : Net.M α) := route a h
   have env (f : EnvWorld → EnvWorld) := editEnv f h
-  routing_tx_source [Env.netnsCleanup,Env.runWorker,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
+  routing_tx_source [Env.netnsCleanup,Env.runWorker,Env.pendingDevice,getAmbient,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
     using [preExit,effects,routes,env]
 
 theorem env_mtu (n : Nat) (h : List WorkerEncryption.Receipt) :

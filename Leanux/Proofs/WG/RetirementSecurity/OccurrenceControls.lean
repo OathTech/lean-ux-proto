@@ -33,6 +33,7 @@ private theorem inet_destroy : Preserves (fun w : World => Ready [] [] w.wg) Env
   product_store (pinned_const _private.Leanux.Proofs.WG.Origins.OwnerControlCalls.«0».Leanux.Proofs.WG.OwnerControlCalls.inetdevDestroy_store)
 
 macro "occurrence_control_step" : tactic => `(tactic| first
+  | (rx_retention_head Env.pendingDevice; exact product_store (pendingDevice_sameKernel _ _))
   | (rx_retention_head getWG; exact product_store (fun initial => productGetWG_spec (fun s => s = initial)))
   | (rx_retention_head getRouting
      exact product_store (by apply (ProjectedAction.iff_run _ _ _).mpr; intro w result v run; cases run; rfl))
@@ -106,7 +107,7 @@ theorem worker_control (kind : Worker) (body : Leanux.M Unit)
 
 theorem env_cleanup : Preserves (fun w : World => Ready [] [] w.wg) Env.netnsCleanup := by
   unfold Env.netnsCleanup
-  simp (config := {zeta := false}) only [unsupported,peekUnit,resolveUnit,skipCut]
+  simp (config := {zeta := false}) only [unsupported,invariant,peekUnit,resolveUnit,skipCut]
   repeat' first
     | (rx_retention_head Env.runWorker; apply worker_control)
     | (allocation_release_lift_from WG.M; exact PublicationPoll.native_product (Ready [] []) _ pre_exit)

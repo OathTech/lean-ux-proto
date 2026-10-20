@@ -78,8 +78,9 @@ theorem env_cleanup (h : List Allocation) :
   have effects {α : Type} (a : AmbientM α) := effect a h
   have routes {α : Type} (a : Net.M α) := route a h
   have env (f : EnvWorld → EnvWorld) := editEnv f h
+  have pending := product_store_frame _ (pendingDevice_sameKernel .netnsCleanup false) h
   routing_tx_source [Env.netnsCleanup,Env.runWorker,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
-    using [preExit,effects,routes,env]
+    using [preExit,effects,routes,env,pending]
 
 theorem env_mtu (n : Nat) (h : List Allocation) :
     Preserves (fun w : World => Inv (view w.wg) h) (Env.setMtu n) := by

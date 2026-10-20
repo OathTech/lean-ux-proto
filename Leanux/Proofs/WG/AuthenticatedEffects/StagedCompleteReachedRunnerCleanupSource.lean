@@ -1,8 +1,8 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedProductMetadataFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCleanupMetadataCanonical
 
-/-! The original cleanup callback includes the namespace guard, holder
-write, unit resolution, worker section, WG metadata and routing teardown. -/
+/-! The original cleanup callback includes the namespace guard, pending-unit
+check, unit resolution, worker section, WG metadata and routing teardown. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ProductMetadata
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 
@@ -16,6 +16,7 @@ macro "cleanup_product_step" : tactic => `(tactic| first
   | exact Shape.stored (.ambient (AmbientM.hidden _))
   | exact Shape.stored (.ambient (AmbientM.skipCut _))
   | exact Shape.stored (.ambient (AmbientM.unsupported _))
+  | exact Shape.stored (.ambient (AmbientM.invariant _))
   | exact Shape.stored (.ambient _)
   | exact Shape.stored (.write _ (fun _=>rfl))
   | apply Shape.bind
@@ -24,7 +25,7 @@ macro "cleanup_product_step" : tactic => `(tactic| first
   | split)
 
 noncomputable def cleanupShape : Shape Env.netnsCleanup := by
-  unfold Env.netnsCleanup Env.runWorker
+  unfold Env.netnsCleanup Env.runWorker Env.pendingDevice
   repeat' cleanup_product_step
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ProductMetadata

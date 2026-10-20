@@ -5,8 +5,8 @@ and endpoint changes preserve the existing delayed-effect carrier. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Delayed
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Std.Do
 open Queues
-set_option maxHeartbeats 600000
-
+-- Retain the existing budget only for the native cleanup loop and lifted frame elaboration.
+set_option maxHeartbeats 600000 in
 theorem pre_exit : StateSafe (liftWGPrefix netnsPreExit) := by
   apply state_native
   intro h
@@ -38,7 +38,7 @@ theorem env_cleanup (h : List Event) : Preserves (fun w : World => Inv h w.wg) E
   have env (f : EnvWorld → EnvWorld) : Preserves (fun w : World => Inv h w.wg) (modifyEnv f) := by
     unfold modifyEnv
     exact hoare_modify _ (fun _ hi => hi)
-  routing_tx_source [Env.netnsCleanup,Env.runWorker,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
+  routing_tx_source [Env.netnsCleanup,Env.runWorker,Env.pendingDevice,getAmbient,getRouting,peekUnit,resolveUnit,skipCut,unsupported,modifyAmbient,hidden]
     using [pre,effects,routes,env]
 
 end Leanux.Proofs.WG.AuthenticatedEffects.CausalJournal.Delayed

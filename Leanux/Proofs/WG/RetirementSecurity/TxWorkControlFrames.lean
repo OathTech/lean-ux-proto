@@ -69,6 +69,7 @@ theorem actor_sleep : Preserves (At (Covered locals crypt) crypt active) (liftWG
   At.native (fun _=>serving_store mayHaveSlept_sameWGStore) TxSuspension.slept
 
 macro "actor_control_step" : tactic => `(tactic| first
+  | (rx_retention_head Env.pendingDevice; exact at_world (TxActorFrames.pending_device _ _))
   | (rx_retention_head getRouting; exact actor_get_routing)
   | (rx_retention_head modifyRouting; exact actor_modify_routing _)
   | (rx_retention_head skipCut; exact actor_cut _)
