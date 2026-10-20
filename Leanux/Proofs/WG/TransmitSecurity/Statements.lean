@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeInitialized
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeInterpretation
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTrafficConcreteInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedXmitConcreteComposition
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTxRepaymentWorker
@@ -2705,6 +2705,21 @@ theorem initialized_source_points_have_native_accounting
       (fun h w=>NativeAccounting.Evidence h w.wg)
       (Reached.Runner.Points.executeShape trace placeholders) [] :=
   NativeAccounting.initialized trace placeholders
+
+/-- Security: every declared initialized source point has one current
+same-ledger ticket partition or a fixed mutation interval retaining the
+original cohort, allocation aliases or pending receipt. Interpretation of
+phase families is derived; finer native coverage remains explicit. -/
+theorem initialized_source_points_have_current_account_or_interval
+    (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    {nativeConsume : Consume.Points.ChildPoints} {nativeNapi : Napi.Points.ChildPoints}
+    {nativeWorker : Iteration.Points.ChildPoints} {nativeWork : WorkService.Points.ChildPoints}
+    {nativeDispatch : Dispatch.Points.ChildPoints} :
+    Reached.Runner.Points.Covered
+      (NativeAccounting.children nativeConsume nativeNapi nativeWorker nativeWork nativeDispatch)
+      (fun h w=>NativeAccounting.Classified h w.wg)
+      (Reached.Runner.Points.executeShape trace placeholders) [] :=
+  NativeAccounting.initialized_classification trace placeholders
 
 end
 
