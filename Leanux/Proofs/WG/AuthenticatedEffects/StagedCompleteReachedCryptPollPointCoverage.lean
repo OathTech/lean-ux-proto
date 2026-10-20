@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.CryptPoll.Po
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal CompleteCarrier
 
 inductive Site where
-  | entry | returned
+  | entry | returned | device
   | left (site : Site)
   | right (site : Site)
 
@@ -16,6 +16,8 @@ inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action �
   | entry (shape : Shape action) : Point shape w h .entry w h
   | returned (shape : Shape action) (performed : runPrefix action w h = (.ok (value,u),middle)) :
       Point shape w h .returned u middle
+  | device {w : World} (point : ReadAccess.Point ReadAccess.deviceShape w.wg w.ambient v b) :
+      Point (.native .device) w h .device {w with wg:=v,ambient:=b} h
   | left {body : PrefixM Event α} {next : α → PrefixM Event β} {head : Shape body}
       (tail : ∀value,Shape (next value)) (point : Point head w h site u middle) :
       Point (.bind head tail) w h (.left site) u middle
@@ -29,6 +31,7 @@ theorem Point.accounted (point : Point shape w h site u middle)
     (before : Accounted h ledger debts locals w.wg) : Accounted middle ledger debts locals u.wg := by
   induction point with
   | entry shape => exact before
+  | device point => exact before.same_view point.frame
   | returned shape performed => exact shape.accounted before performed
   | left tail point ih => exact ih before
   | right head tail leading point ih => exact ih (head.accounted before leading)
@@ -38,6 +41,7 @@ theorem Point.remaining {action : PrefixM Event α} {shape : Shape action}
     ∃remaining,runPrefix action w h = runPrefix remaining u middle := by
   induction point with
   | entry shape => exact ⟨_,rfl⟩
+  | device point => exact ⟨_,ProductRead.remainder_run _ (.wg point)⟩
   | returned shape performed => exact ⟨pure _,performed.trans (runPrefix_pure _ _ _).symm⟩
   | left tail point ih =>
       rename_i body next head

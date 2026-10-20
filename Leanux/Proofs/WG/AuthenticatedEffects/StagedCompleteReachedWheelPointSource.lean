@@ -1,5 +1,7 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConsumeLeafPointArmJoin
 
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedProductReadFrames
+
 /-! Canonical wheel source. The saved peer is the value of the original first
 read; every write and every later check remains in its original position. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Wheel.Points
@@ -35,6 +37,17 @@ def body (pid : PeerId) (t : PeerTimer) (expires clk : UInt64) (unit? : Option N
 
 theorem source_factor (pid : PeerId) (timer : PeerTimer) (expires clock : UInt64) (unit : Option Nat) :
     placeOnWheel pid timer expires clock unit = (getPeer pid >>= body pid timer expires clock unit) := rfl
+
+noncomputable def readRemainder {w : World} {id : PeerId} (h : History)
+    (point : ReadAccess.Point (ReadAccess.peerShape id) w.wg w.ambient v b) : PrefixM Event Peer :=
+  ProductRead.remainder h (ProductRead.Point.wg point)
+
+theorem readRemainder_run {w : World} {id : PeerId} (h : History)
+    (point : ReadAccess.Point (ReadAccess.peerShape id) w.wg w.ambient v b) :
+    runPrefix (wg (getPeer id)) w h=runPrefix (readRemainder h point) {w with wg:=v,ambient:=b} h := by
+  change runPrefix (liftWGObserver (liftWGPrefix (getPeer id))) w h=_
+  rw [liftWGObserver_lift]
+  exact ProductRead.remainder_run h (.wg point)
 
 inductive Native (pid : PeerId) (saved : Peer) where
   | ambient {α : Type} (action : AmbientM α)

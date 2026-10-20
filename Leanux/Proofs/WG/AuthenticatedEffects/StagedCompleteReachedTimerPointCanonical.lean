@@ -17,7 +17,7 @@ noncomputable def updateThenShape (pid : PeerId) (f : Peer → Peer)
     (tail : ∀ value, Shape (liftWGObserver (next value))) :
     Shape (liftWGObserver (liftWGPrefix (getPeer pid) >>= fun p => liftWGPrefix (setPeer pid (f p)) >>= next)) := by
   rw [← bind_assoc,← Queued.lift_bind,liftWGObserver_bind]
-  exact .bind (.work (.leaf (.native (.base (.update pid f fields))))) tail
+  exact .bind (.work (.leaf (.native (.metadata _ (PeerMetadata.updateShape pid f fields))))) tail
 
 noncomputable def clearEndpoint (pid : PeerId) : Consume.Leaf.Shape (Consume.Leaf.wg (clearPeerEndpointSrc pid)) := by
   unfold clearPeerEndpointSrc dstCacheResetNow
@@ -35,7 +35,7 @@ noncomputable def newShape (pid : PeerId) : Shape (liftWGObserver (HandshakeSecu
 noncomputable def retransmitShape (pid : PeerId) :
     Shape (liftWGObserver (HandshakeSecurity.StagedDisposal.Effects.retransmitWith effects peerRelease stagedPurge pid)) := by
   unfold HandshakeSecurity.StagedDisposal.Effects.retransmitWith
-  apply stateBindShape _ _ (.work (.leaf (.native (.base (.basic (.peer pid))))))
+  apply stateBindShape _ _ (.work (.leaf (.native (.metadata _ (PeerMetadata.peerReadShape pid)))))
   intro peer
   apply stateBindShape _ _ (.work (.leaf (.native (.base (.ambient (AmbientM.branchCmp
     .retransmitGiveUp (peer.timerHandshakeAttempts > MAX_TIMER_HANDSHAKES) peer.timerHandshakeAttempts MAX_TIMER_HANDSHAKES))))))
@@ -45,7 +45,7 @@ noncomputable def retransmitShape (pid : PeerId) :
     intro ignored
     apply stateBindShape _ _ (.child (.purge pid))
     intro ignored
-    apply stateBindShape _ _ (.work (.leaf (.native (.base (.basic (.peer pid))))))
+    apply stateBindShape _ _ (.work (.leaf (.native (.metadata _ (PeerMetadata.peerReadShape pid)))))
     intro peer
     apply stateBindShape _ _ (.work (.leaf (.native (.base (.basic (.branch
       .retransmitZeroKeyNotPending !(peer.timerPending .zeroKeyMaterial)))))))
@@ -64,7 +64,7 @@ noncomputable def keepaliveShape (pid : PeerId) :
   unfold TimerEffects.expiredKeepaliveWith
   apply stateBindShape _ _ (.child (.keepalive pid))
   intro ignored
-  apply stateBindShape _ _ (.work (.leaf (.native (.base (.basic (.peer pid))))))
+  apply stateBindShape _ _ (.work (.leaf (.native (.metadata _ (PeerMetadata.peerReadShape pid)))))
   intro peer
   apply stateBindShape _ _ (.work (.leaf (.native (.base (.basic (.branch .keepaliveNeedAnother peer.timerNeedAnotherKeepalive))))))
   intro needed
@@ -78,7 +78,7 @@ noncomputable def keepaliveShape (pid : PeerId) :
 noncomputable def persistentShape (pid : PeerId) :
     Shape (liftWGObserver (TimerEffects.persistentWith effects (Driver.keepaliveObserved hooks) pid)) := by
   unfold TimerEffects.persistentWith
-  apply stateBindShape _ _ (.work (.leaf (.native (.base (.basic (.peer pid))))))
+  apply stateBindShape _ _ (.work (.leaf (.native (.metadata _ (PeerMetadata.peerReadShape pid)))))
   intro peer
   apply stateBindShape _ _ (.work (.leaf (.native (.base (.basic (.branch
     .persistentKeepaliveInterval (peer.persistentKeepaliveInterval != 0)))))))

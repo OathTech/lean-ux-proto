@@ -47,7 +47,7 @@ macro "traffic_shape_step" : tactic => `(tactic| first
   | (traffic_shape_head Hooks.deliver; exact .service Service.Points.deliveryShape)
   | (traffic_shape_head liftWGObserver; exact .transmit _ _ _ _)
   | (traffic_native_head getWG; exact .native (.base .wg))
-  | (traffic_native_head getDev; exact .native (.base .device))
+  | (traffic_native_head getDev; exact .service (.native (.reading (.wg ReadAccess.deviceShape))))
   | (traffic_native_head getEnv; exact .native (.base .env))
   | (traffic_native_head getRouting; exact .native (.base .routing))
   | (traffic_native_head getAmbient; exact .native (.base (.ambient (get : AmbientM Ambient))))

@@ -64,7 +64,7 @@ noncomputable def updateThenShape (pid : PeerId) (f : Peer → Peer)
     (tail : ∀value,Shape (liftWGObserver (next value))) :
     Shape (liftWGObserver (liftWGPrefix (getPeer pid) >>= fun p=>liftWGPrefix (setPeer pid (f p)) >>= next)) := by
   rw [←bind_assoc,←Queued.lift_bind,liftWGObserver_bind]
-  exact .bind (.leaf (.native (.base (.update pid f fields)))) tail
+  exact .bind (.leaf (.native (.metadata _ (PeerMetadata.updateShape pid f fields)))) tail
 
 
 noncomputable def createShape (pid : PeerId) : Shape

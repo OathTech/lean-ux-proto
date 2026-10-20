@@ -30,11 +30,14 @@ theorem read_normal (run : runPrefix (wg (getPeer pid)) w h = (.ok (saved,u),mid
 
 inductive SourceSite where
   | entry
+  | reading
   | body (site : Site)
 
 inductive SourcePoint (pid : PeerId) (timer : PeerTimer) (expires clock : UInt64) (unit : Option Nat) :
     World → History → SourceSite → World → History → Prop where
   | entry : SourcePoint pid timer expires clock unit w h .entry w h
+  | reading {w : World} (point : ReadAccess.Point (ReadAccess.peerShape pid) w.wg w.ambient v b) :
+      SourcePoint pid timer expires clock unit w h .reading {w with wg:=v,ambient:=b} h
   | body (read : runPrefix (wg (getPeer pid)) w h = (.ok (saved,v),before))
       (point : Point (bodyShape pid timer expires clock unit saved) v before site u middle) :
       SourcePoint pid timer expires clock unit w h (.body site) u middle
@@ -43,6 +46,7 @@ theorem SourcePoint.frame (point : SourcePoint pid timer expires clock unit w h 
     middle = h ∧ StagedEntry.view u.wg = StagedEntry.view w.wg := by
   cases point with
   | entry => exact ⟨rfl,rfl⟩
+  | reading point => exact ⟨rfl,point.frame⟩
   | body read point =>
     have first := read_normal read
     have rest := point.frame first.2.2
@@ -63,6 +67,10 @@ theorem SourcePoint.carrier (point : SourcePoint pid timer expires clock unit w 
 inductive SourceResidual (pid : PeerId) (timer : PeerTimer) (expires clock : UInt64) (unit : Option Nat) :
     World → History → SourceSite → World → History → PrefixM Event Unit → Prop where
   | entry : SourceResidual pid timer expires clock unit w h .entry w h (source pid timer expires clock unit)
+  | reading {w : World} (point : ReadAccess.Point (ReadAccess.peerShape pid) w.wg w.ambient v b) :
+      SourceResidual pid timer expires clock unit w h .reading {w with wg:=v,ambient:=b} h
+        (readRemainder h point >>= fun saved=>wg (body pid timer expires clock unit saved))
+
   | body (read : runPrefix (wg (getPeer pid)) w h = (.ok (saved,v),before))
       (remaining : Residual (bodyShape pid timer expires clock unit saved) v before site u middle remainder) :
       SourceResidual pid timer expires clock unit w h (.body site) u middle remainder
@@ -71,18 +79,21 @@ theorem SourceResidual.run (cut : SourceResidual pid timer expires clock unit w 
     runPrefix (source pid timer expires clock unit) w h = runPrefix remainder u middle := by
   cases cut with
   | entry => rfl
+  | reading point => rw [source_bind,runPrefix_bind,runPrefix_bind,readRemainder_run h point]
   | body read remaining => rw [source_bind,runPrefix_bind,read]; exact remaining.run
 
 theorem SourcePoint.residual (point : SourcePoint pid timer expires clock unit w h site u middle) :
     ∃ remainder, SourceResidual pid timer expires clock unit w h site u middle remainder := by
   cases point with
   | entry => exact ⟨_,.entry⟩
+  | reading point => exact ⟨_,.reading point⟩
   | body read point => obtain ⟨remaining,source⟩ := point.residual; exact ⟨_,.body read source⟩
 
 theorem SourceResidual.point (cut : SourceResidual pid timer expires clock unit w h site u middle remainder) :
     SourcePoint pid timer expires clock unit w h site u middle := by
   cases cut with
   | entry => exact .entry
+  | reading point => exact .reading point
   | body read remaining => exact .body read remaining.point
 
 inductive SourceExecution (pid : PeerId) (timer : PeerTimer) (expires clock : UInt64) (unit : Option Nat) :

@@ -11,6 +11,7 @@ variable {pid : PeerId} {saved : Peer}
 inductive Site where
   | entry
   | returned
+  | reading
   | left (site : Site)
   | right (site : Site)
 
@@ -19,6 +20,8 @@ inductive Point : {α : Type} → {action : PrefixM Event α} →
   | entry (shape : Shape pid saved action) : Point shape w h .entry w h
   | returned (shape : Shape pid saved action)
       (run : runPrefix action w h = (.ok (value,u),middle)) : Point shape w h .returned u middle
+  | reading {w : World} {id : PeerId} (point : ReadAccess.Point (ReadAccess.peerShape id) w.wg w.ambient v b) :
+      Point (.native (.peer id)) w h .reading {w with wg:=v,ambient:=b} h
   | left {action : PrefixM Event α} {next : α → PrefixM Event β} {head : Shape pid saved action}
       (tail : ∀ value, Shape pid saved (next value)) (point : Point head w h site u middle) :
       Point (.bind head tail) w h (.left site) u middle
@@ -32,6 +35,7 @@ theorem Point.frame {shape : Shape pid saved action} (point : Point shape w h si
     middle = h ∧ StagedEntry.view u.wg = StagedEntry.view w.wg ∧ Cache pid saved u.wg := by
   induction point with
   | entry shape => exact ⟨rfl,rfl,cache⟩
+  | reading point => exact ⟨rfl,point.frame,by rw [point.world];exact cache⟩
   | returned shape run => exact shape.normal cache run
   | left tail point ih => exact ih cache
   | right head tail leading point ih =>
@@ -51,6 +55,8 @@ inductive Residual : {α : Type} → {action : PrefixM Event α} → Shape pid s
   | entry (shape : Shape pid saved action) : Residual shape w h .entry w h action
   | returned (shape : Shape pid saved action)
       (run : runPrefix action w h = (.ok (value,u),middle)) : Residual shape w h .returned u middle (pure value)
+  | reading {w : World} {id : PeerId} (point : ReadAccess.Point (ReadAccess.peerShape id) w.wg w.ambient v b) :
+      Residual (.native (.peer id)) w h .reading {w with wg:=v,ambient:=b} h (readRemainder h point)
   | left {action : PrefixM Event α} {next : α → PrefixM Event β} {head : Shape pid saved action}
       (tail : ∀ value, Shape pid saved (next value))
       (remaining : Residual head w h site u middle remainder) :
@@ -65,6 +71,7 @@ theorem Residual.run {shape : Shape pid saved action} (cut : Residual shape w h 
     runPrefix action w h = runPrefix remainder u middle := by
   induction cut with
   | entry shape => rfl
+  | reading point => exact readRemainder_run _ point
   | returned shape performed => rw [performed,runPrefix_pure]
   | left tail remaining ih => rw [runPrefix_bind,runPrefix_bind,ih]
   | right head tail leading remaining ih => rw [runPrefix_bind,leading]; exact ih
@@ -73,6 +80,7 @@ theorem Point.residual {shape : Shape pid saved action} (point : Point shape w h
     ∃ remaining, Residual shape w h site u middle remaining := by
   induction point with
   | entry shape => exact ⟨_,.entry shape⟩
+  | reading point => exact ⟨_,.reading point⟩
   | returned shape performed => exact ⟨_,.returned shape performed⟩
   | left tail point ih => obtain ⟨remaining,source⟩ := ih; exact ⟨_,.left tail source⟩
   | right head tail leading point ih => obtain ⟨remaining,source⟩ := ih; exact ⟨_,.right head tail leading source⟩
@@ -81,6 +89,7 @@ theorem Residual.point {shape : Shape pid saved action} (cut : Residual shape w 
     Point shape w h site u middle := by
   induction cut with
   | entry shape => exact .entry shape
+  | reading point => exact .reading point
   | returned shape performed => exact .returned shape performed
   | left tail source ih => exact .left tail ih
   | right head tail leading source ih => exact .right head tail leading ih

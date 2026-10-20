@@ -54,8 +54,8 @@ noncomputable def beforeShape (pid : PeerId) : WorkService.Points.Shape (wg (bef
     | (work_wg_head modifyDev; refine .native (.change _ ?_); intro w;
         unfold StagedEntry.view Packets.epoch Staged.stagedAt PacketMaterial.view Packets.snapshot
           Packets.deviceStore TxDisposition.txPackets txQueueContents handoffTxView; cases w.dev <;> rfl)
-    | (work_wg_head getPeer; exact .leaf (.native (.base (.basic (.peer _)))))
-    | (work_wg_head getDev; exact .leaf (.native (.base .device)))
+    | (work_wg_head getPeer; exact .leaf (.native (.metadata _ (PeerMetadata.peerReadShape _))))
+    | (work_wg_head getDev; exact .leaf (.native (.metadata _ PeerMetadata.deviceReadShape)))
     | (work_wg_head branch; exact .leaf (.native (.base (.basic (.branch _ _)))))
     | (work_wg_head peekQueuedUnit; exact .leaf (.native (.base (.ambient _))))
     | (work_wg_head recordQueued; exact .leaf (.native (.base (.ambient _))))
