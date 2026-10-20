@@ -143,7 +143,7 @@ theorem deviceDumpTail_routing (d : Device) (ctx : DumpCtx) (skb : NlSkb)
       | (split; all_goals try contradiction)
   exact hoare_consequence hp (fun _ he => he ▸ RetainsRouting.refl _) (fun _ _ h => h)
 
-theorem wgGetDeviceDump_routing (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem wgGetDeviceDump_routing (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     RetainsRoutingCall (wgGetDeviceDump ctx prevSeq skb) := by
   intro s
   have hp : Preserves (fun w : WGWorld => RetainsRouting s (routingView w)) (wgGetDeviceDump ctx prevSeq skb) := by

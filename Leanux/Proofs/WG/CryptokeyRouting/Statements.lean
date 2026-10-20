@@ -2444,7 +2444,7 @@ is added. Silent lifts leave the journal unchanged on every outcome, preserve
 optional state only normally, and retain prior history safety on Stop. This is
 a local frame; initialized syscall/Runner composition is supplied below,
 while packet authorization remains separate. -/
-theorem original_dump_routing (initial : FlatTable × FlatTable) (fd seq : Nat)
+theorem original_dump_routing (initial : FlatTable × FlatTable) (fd : Nat) (seq : UInt32)
     (ref : WG.DeviceRef) (ctx : WG.DumpCtx) (skb : WG.NlSkb) :
     RetainsRoutingCall (WG.wgGetDeviceDone ctx) ∧
     RetainsRoutingCall (WG.wgGetDeviceDump ctx seq skb) ∧

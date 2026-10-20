@@ -1916,7 +1916,7 @@ theorem original_peer_dump_fixed_room (pid : PeerId) (d : Device) (p : Peer)
 No initial capacity, reference bound, live flag, cursor membership or sequence
 consistency is assumed. Last-reference Stops remain outside normal completion. -/
 theorem original_cursor_callback_normal (d : Device) (peers : PeerId → Peer) (ctx : DumpCtx)
-    (prev : Nat) (skb : NlSkb)
+    (prev : UInt32) (skb : NlSkb)
     (residents : ∀ pid ∈ cursorSelected d ctx, d.peers[pid]? = some (peers pid))
     (empty : ∀ pid ∈ cursorSelected d ctx, (peers pid).allowedipsList = [])
     (fresh : ctx.nextAllowedip = none)

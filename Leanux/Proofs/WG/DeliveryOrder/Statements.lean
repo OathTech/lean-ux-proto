@@ -2499,7 +2499,7 @@ theorem original_timer_stop_holders (pid : PeerId) {holders : DurableHolders}
 
 open DumpReservation in
 /-- A full dump chunk derives cursor alignment from its actual serialization walk. -/
-theorem original_dump_serialization_funding (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) (old : Option Owner)
+theorem original_dump_serialization_funding (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) (old : Option Owner)
     (cursor : ctx.nextPeer=old.map Owner.slot)
     (hi : ClearWork.Inv cs (old.toList ++ loans) w) (a b : Ambient)
     (run : ((wgGetDeviceDump ctx prevSeq skb).run w).run a=.ok ((result,v),b)) :

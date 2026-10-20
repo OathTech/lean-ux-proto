@@ -37,7 +37,7 @@ private theorem replace (c : Contracts P) (ctx : DumpCtx)
   simp (config := {zeta := false}) only [branch,invariant]
   repeat' config_dump_invariant_step c
 
-private theorem finish (c : Contracts P) (seq : Nat) (ctx : DumpCtx)
+private theorem finish (c : Contracts P) (seq : UInt32) (ctx : DumpCtx)
     (next : Option PeerId) (skb : NlSkb) (flags : Nat)
     (attrs : List (String × Lean.Json)) (finished : Bool)
     (peers : Option (Array PeerDumpAttrs)) :
@@ -55,7 +55,7 @@ theorem tail (c : Contracts P) (d : Device) (ctx : DumpCtx)
   exact preserves_bind ((RxCredits.DumpReservation.walk_frame d ctx skb).wp P)
     (fun _ => finish c _ _ _ _ _ _ _ _)
 
-theorem chunk (c : Contracts P) (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem chunk (c : Contracts P) (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     Preserves P (wgGetDeviceDump ctx seq skb) := by
   rw [NetlinkDump.wgGetDeviceDump_source]
   exact preserves_bind (frame c _ (getDev_sameWGStore.factor dumpStore)) fun d =>

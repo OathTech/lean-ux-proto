@@ -26,7 +26,7 @@ theorem wgGetDeviceDone_material (ctx : DumpCtx) :
   try material_lower
   repeat' configuration_basic (fun t => t = initial)
 
-theorem deviceDumpHeader_material (d : Device) (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem deviceDumpHeader_material (d : Device) (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     SameView view (deviceDumpHeaderSource d ctx seq skb) :=
   sameView_of_sameWG (project := id) (deviceDumpHeader_sameWGStore d ctx seq skb)
 
@@ -41,7 +41,7 @@ theorem deviceDumpTail_material (d : Device) (ctx : DumpCtx) (skb : NlSkb)
        exact ((getPeerDump_sameWGWorld _ _ _).factor view).wp (fun t => t = initial))
     | configuration_basic (fun t => t = initial)
 
-theorem wgGetDeviceDump_material (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem wgGetDeviceDump_material (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     SameView view (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]
   intro initial

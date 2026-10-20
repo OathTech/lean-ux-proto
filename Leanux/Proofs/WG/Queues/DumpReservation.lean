@@ -164,7 +164,7 @@ def walkSource (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb) :
   return (ctx,nextCursor,skb,done,peers)
 
 /-- Literal remainder of the existing chunk source after its peer walk. -/
-def finishSource (seq : Nat) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb0 : NlSkb)
+def finishSource (seq : UInt32) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb0 : NlSkb)
     (flags : Nat) (device : List (String × Lean.Json)) (done : Bool)
     (peers : Option (Array PeerDumpAttrs)) : WG.M DumpCall := do
   replaceSource ctx nextCursor done
@@ -191,7 +191,7 @@ theorem tail_factor (d : Device) (ctx : DumpCtx) (skb : NlSkb)
 
 /-- The returned context names exactly the new funded cursor. The acquisition
 witness is from this source cut, before the old cursor's possible final release. -/
-theorem finish_normal (seq : Nat) (ctx : DumpCtx) (old : Option Owner)
+theorem finish_normal (seq : UInt32) (ctx : DumpCtx) (old : Option Owner)
     (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat)
     (device : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs))
     (cursor : ctx.nextPeer=old.map Owner.slot)

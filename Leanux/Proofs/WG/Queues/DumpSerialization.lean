@@ -221,7 +221,7 @@ theorem tail_normal (d : Device) (ctx : DumpCtx) (skb : NlSkb)
 /-- A full native dump chunk preserves RX funding and the stable boundary,
 replacing only the source cursor loan. It does not require an active-socket or
 hasWg premise; those belong to the enclosing socket accounting invariant. -/
-theorem dump_normal (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) (old : Option Owner)
+theorem dump_normal (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) (old : Option Owner)
     (cursor : ctx.nextPeer=old.map Owner.slot)
     (hi : ClearWork.Inv cs (old.toList ++ loans) w) (a b : Ambient)
     (run : ((wgGetDeviceDump ctx prevSeq skb).run w).run a=.ok ((result,v),b)) :
@@ -243,7 +243,7 @@ theorem dump_normal (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) (old : Option 
 
 /-- The same cut applies to the existing lifetime observer at every incoming
 journal and normal native/Ambient endpoint, without changing its Stop behavior. -/
-theorem dump_observed (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) (old : Option Owner)
+theorem dump_observed (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) (old : Option Owner)
     (cursor : ctx.nextPeer=old.map Owner.slot)
     (hi : ClearWork.Inv cs (old.toList ++ loans) w) (a b : Ambient)
     (history : List LifetimeEvent)

@@ -65,7 +65,7 @@ structure RemovedPeer (d out : WG.Device) (t4 t6 : Tree) (pid : Nat) (saved : Li
 theorem RemovedPeer.seq (h : RemovedPeer d out t4 t6 pid saved) :
     out.peerAllowedips.seq = d.peerAllowedips.seq + (if saved.isEmpty then 0 else 1) := by
   rw [h.loop.seq]
-  cases saved <;> rfl
+  cases saved <;> simp [removalStart]
 
 theorem RemovedPeer.peers (h : RemovedPeer d out t4 t6 pid saved) (q : Nat) :
     out.peers[q]? = (d.peers[q]?).map (unlistIds saved) := by

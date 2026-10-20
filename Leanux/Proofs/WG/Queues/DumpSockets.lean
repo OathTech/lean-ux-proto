@@ -108,7 +108,7 @@ private theorem dump_replace_frame (ctx : DumpCtx) (next : Option PeerId) (done 
     | (rx_retention_head peerPut; exact HolderWorkFrames.peerPut_frame _ initial)
     | holder_work_step initial
 
-private theorem dump_finish_frame (seq : Nat) (ctx : DumpCtx) (next : Option PeerId) (skb : NlSkb)
+private theorem dump_finish_frame (seq : UInt32) (ctx : DumpCtx) (next : Option PeerId) (skb : NlSkb)
     (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool)
     (peers : Option (Array PeerDumpAttrs)) (initial : WGWorld) :
     Preserves (Frame initial) (DumpReservation.finishSource seq ctx next skb flags attrs done peers) := by
@@ -125,7 +125,7 @@ private theorem dump_tail_frame (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   exact preserves_bind (identity_frame (DumpReservation.walk_frame _ _ _) initial)
     (fun r => dump_finish_frame _ _ _ _ _ _ _ _ initial)
 
-theorem dump_callback_frame (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) (initial : WGWorld) :
+theorem dump_callback_frame (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) (initial : WGWorld) :
     Preserves (Frame initial) (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]
   apply preserves_bind (store_frame getDev_sameWGStore initial)

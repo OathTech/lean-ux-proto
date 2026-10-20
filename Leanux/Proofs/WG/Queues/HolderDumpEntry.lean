@@ -80,7 +80,7 @@ private theorem tail_extra (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   simp (config := {zeta := false}) only [WG.orM,WG.andM,requireNotPending,branch,invariant,unsupported]
   repeat' dump_extra_step
 
-private theorem chunk_extra (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+private theorem chunk_extra (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     Preserves Extra (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]
   repeat' first

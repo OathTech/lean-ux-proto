@@ -549,7 +549,7 @@ theorem deviceDumpTail_preserves (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   simp (config := {zeta := false}) only [WG.orM,WG.andM,requireNotPending,branch,invariant,unsupported]
   repeat' owner_dump_step history
 
-theorem wgGetDeviceDump_preserves (ctx : DumpCtx) (seq : Nat) (skb : NlSkb)
+theorem wgGetDeviceDump_preserves (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb)
     (history : List SessionOrigin.Receipt) :
     Preserves (JointOwnerConfiguration.Inv history) (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]

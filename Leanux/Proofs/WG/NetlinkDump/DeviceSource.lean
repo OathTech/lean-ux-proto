@@ -6,14 +6,15 @@ namespace Leanux.Proofs.WG.NetlinkDump
 open Leanux Leanux.WG Lean
 set_option maxHeartbeats 1000000
 
-def deviceDumpHeaderSource (d : Device) (ctx : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) :
+def deviceDumpHeaderSource (d : Device) (ctx : DumpCtx) (prevSeq0 : UInt32) (skb0 : NlSkb) :
     WG.M (NlSkb × Nat × List (String × Json)) := do
   let seq := d.deviceUpdateGen
   let (fail, skb) := skb0.put (nlmsgTotal 4)   -- genlmsg_put: nlmsghdr + genlmsghdr
   if ← branch .dumpNoHdr fail then unsupported "a dump chunk without room for its header (unreachable: every chunk is fresh)"
   let mut skb := skb
-  -- genl_dump_check_consistent (:229): NLM_F_DUMP_INTR iff the device changed
-  -- between two dump calls (2.4); NLM_F_MULTI always
+  -- genl_dump_check_consistent (:229): NLM_F_DUMP_INTR when the saved
+  -- UInt32 generation is nonzero and differs from the current word;
+  -- wrap can alias generations. NLM_F_MULTI is always set.
   let flags := 2 + (if prevSeq0 != 0 && prevSeq0 != seq then 16 else 0)
   let mut device : List (String × Json) := []
   if ← branch .dumpFirst ctx.nextPeer.isNone then
@@ -114,7 +115,7 @@ private theorem source_unsupported_bind_wg (s : String) (f : α → WG.M β) :
 private theorem source_bind_congr {m : Type → Type} [Monad m] (a : m α) (f g : α → m β) (h : ∀ x, f x = g x) :
     (a >>= f) = (a >>= g) := congrArg (fun k => a >>= k) (funext h)
 
-theorem wgGetDeviceDump_source (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem wgGetDeviceDump_source (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     wgGetDeviceDump ctx prevSeq skb = (do
       let d ← getDev
       let (s, flags, attrs) ← deviceDumpHeaderSource d ctx prevSeq skb

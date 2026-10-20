@@ -530,7 +530,7 @@ theorem wgGetDeviceDone_spec (P : Snapshot → Prop) (ctx : DumpCtx) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ WG.wgGetDeviceDone ctx
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgGetDeviceDone_sameSnapshot ctx).wp P
 
-theorem wgGetDeviceDump_sameSnapshot (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem wgGetDeviceDump_sameSnapshot (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     SameSnapshot (WG.wgGetDeviceDump ctx prevSeq skb) := by
   unfold Leanux.WG.wgGetDeviceDump
   repeat' first
@@ -545,7 +545,7 @@ theorem wgGetDeviceDump_sameSnapshot (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSk
     | (snapshot_head Leanux.unsupported; intro initial; exact hoare_liftAmbient (AmbientM.unsupported _) (fun s => snapshot s = initial))
     | dump_snapshot_step
 
-theorem wgGetDeviceDump_spec (P : Snapshot → Prop) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem wgGetDeviceDump_spec (P : Snapshot → Prop) (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     ⦃fun w => ⌜P (snapshot w)⌝⦄ WG.wgGetDeviceDump ctx prevSeq skb
     ⦃⇓? _ w => ⌜P (snapshot w)⌝⦄ := (wgGetDeviceDump_sameSnapshot ctx prevSeq skb).wp P
 

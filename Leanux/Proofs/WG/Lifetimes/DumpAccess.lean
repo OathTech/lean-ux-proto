@@ -143,7 +143,7 @@ def deviceDumpTailPrefix (d : Device) (ctx0 : DumpCtx) (skb0 : NlSkb)
   -- data message is in; `netlink_dump` reads its sign (audit F2)
   return { ret := Int.ofNat (NLMSG_GOODSIZE - skb.room), skb, ctx := { ctx with nextPeer := nextCursor }, prevSeq := seq }
 
-def wgGetDeviceDumpPrefix (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) : MixedM DumpCall := do
+def wgGetDeviceDumpPrefix (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) : MixedM DumpCall := do
   let d ← liftWGPrefix getDev
   let (s, flags, attrs) ← liftWGPrefix (deviceDumpHeaderSource d ctx prevSeq skb)
   deviceDumpTailPrefix d ctx s flags attrs
@@ -207,7 +207,7 @@ def wgGetDevicePrefix (ref : DeviceRef) : MixedM (Except Int Json) := do
   if !finished then liftWGPrefix (invariant "op 9: the dump did not finish")
   liftWGPrefix (coalesce messages.toList)
 
-theorem deviceDumpHeader_sameWGStore (d : Device) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem deviceDumpHeader_sameWGStore (d : Device) (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     SameWGStore (deviceDumpHeaderSource d ctx prevSeq skb) := by
   change SameView wgStoreView _
   unfold deviceDumpHeaderSource
@@ -306,7 +306,7 @@ theorem deviceDumpTailPrefix_erases (d : Device) (ctx : DumpCtx) (skb : NlSkb) (
     | maintenance_intro
     | rfl
 
-theorem wgGetDeviceDumpPrefix_erases (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem wgGetDeviceDumpPrefix_erases (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     ErasesStatePrefix (wgGetDeviceDumpPrefix ctx prevSeq skb) (wgGetDeviceDump ctx prevSeq skb) := by
   rw [wgGetDeviceDump_source]
   exact erasesStatePrefix_bind (erasesStatePrefix_lift _) (fun d =>
@@ -549,7 +549,7 @@ theorem deviceDumpTailPrefix_preserves (c : AmbientContracts I) (d : Device) (ct
     | (maintenance_intro; try dsimp only)
     | contradiction
 
-theorem wgGetDeviceDumpPrefix_preserves (c : AmbientContracts I) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem wgGetDeviceDumpPrefix_preserves (c : AmbientContracts I) (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     StatePrefixPreserves (fun h w _ => I h w) LifetimeEvent.Safe (wgGetDeviceDumpPrefix ctx prevSeq skb) := by
   change StatePrefixEnsures _ _ _ _
   unfold wgGetDeviceDumpPrefix
@@ -849,7 +849,7 @@ theorem deviceDumpTailPrefix_preserves_product (c : ProductAmbientContracts I) (
     | (maintenance_intro; try dsimp only)
     | contradiction
 
-theorem wgGetDeviceDumpPrefix_preserves_product (c : ProductAmbientContracts I) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem wgGetDeviceDumpPrefix_preserves_product (c : ProductAmbientContracts I) (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     PrefixPreserves I LifetimeEvent.Safe (liftWGObserver (wgGetDeviceDumpPrefix ctx prevSeq skb)) := by
   change PrefixEnsures _ _ _ _
   unfold wgGetDeviceDumpPrefix
@@ -1052,7 +1052,7 @@ theorem wgGetDevicePrefix_preserves_product (c : ProductAmbientContracts I) (sta
 /-- The seven original dump result types remain distinct. -/
 inductive NetlinkDumpCall where
   | peer (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb)
-  | chunk (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb)
+  | chunk (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb)
   | done (ctx : DumpCtx)
   | dump (fd : Nat)
   | start (fd : Nat) (ref : DeviceRef)
