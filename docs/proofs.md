@@ -14,7 +14,12 @@ The [campaign-3 report](2026-10-18-proof-campaign-3.md) tracks `proofs/campaign-
 rebased onto the requested `eba3c2b6` base over mirror `1f766662`. C3's counter
 carry is `8ec35a98`, and its final source closure is `85d707da`. All four C3
 result directories match pre-rebase `efac7e0d`; inherited proof files match
-that base. No statement was weakened or limit raised. Full validation at
+that base. The rebase changed neither theorem types nor resource settings;
+the campaign itself carries grandfathered raises. At `7b8994b1`, the whole
+proof tree had `maxHeartbeats` settings in 1,337 files (1,314 file-wide) and
+file-wide `maxRecDepth` settings in 462 files; C3's four result directories
+accounted for 898 (879 file-wide) and 428 respectively. See the report's B1
+correction and the 2026-10-20 resource-limit rule. Full validation at
 `da621504` passes 6677 build jobs, 2448 standard-only terminal declarations
 across nineteen roots, all fifteen recipes and fresh full-root kernel replay;
 all processes returned zero and all 6738 frozen Lean hashes match.

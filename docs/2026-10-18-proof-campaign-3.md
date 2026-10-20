@@ -9,7 +9,22 @@ All four C3 result directories are byte-for-byte identical to pre-rebase
 `da621504` passes: 6677 build jobs, 2448 standard-only terminal declarations
 across nineteen roots, all fifteen counterexample recipes, and fresh full-root
 kernel replay. Every process returned zero; all 6738 frozen Lean hashes match.
-No statement was weakened and no resource limit was raised.
+That rebase changed neither theorem types nor resource settings. This is not
+a campaign-wide claim: the campaign carries resource raises, and the T1/T6
+targets were amended on 2026-10-18 (the amendment is recorded below).
+
+**Resource limits (B1, census at `7b8994b1`).** Across the whole proof tree,
+1,337 files contain `maxHeartbeats` directives and 462 contain `maxRecDepth`
+directives. Of those, 1,314 and 462 files respectively contain file-wide
+directives (1,320 and 467 directives; some files contain more than one).
+The four C3 result directories account for 898 heartbeat-setting files,
+879 with file-wide settings, and 428 recursion-setting files, all file-wide.
+The earlier assertion that the campaign raised no limits was false.
+These existing raises are grandfathered by the 2026-10-20 decision in
+[AGENTS.md](../AGENTS.md), landed at `25c89371`. Files touched for this review
+must put their existing raises on individual declarations with reasons;
+this repair introduces no higher limit. The counts distinguish files from
+directives and all settings from file-wide settings.
 
 **Newer-main lag:** main advanced during validation to `218d3ffd`, the
 namespace-pin mirror landing. All six C3 outcomes are validated over
