@@ -1125,3 +1125,45 @@ The before/after coverage calls, saved publication inputs and pending-node frame
 still need to join initialization to publication; the other insertion branches,
 entry establishment and function/sequence composition remain open. No external
 acceptance or completion of A/B is claimed.
+
+
+## Child saves and callback compose to publication (09:38 UTC)
+
+`ChildFinish.finish` joins the three argument-saving instructions, the actual
+PC coverage callback and publication, from `add+0x6e0` to the common success
+cut at `+0x549`. Its postcondition restores full allowed-IPs reconstruction
+and the unchanged heap assertion, preserves the stack pointer and callback
+readiness, and exports the combined byte-write footprint. The saved allocation
+and two direction copies follow from the actual stores and callback frame.
+Publication termination follows from those reads and mapped destinations; it
+is no longer an intermediate successful-execution hypothesis in this join.
+`ChildSetup.entry_checked` separately proves the three instructions saving the
+allocation and branching on the parent at `+0x1ff`.
+
+The local start still supplies the pending resources derived by initialization,
+the selector's direction/empty-slot facts, and caller stack/callback separation.
+This does not establish them at function entry, and does not assume future R.
+Joining the preceding initialization and selector, the other insertion paths,
+complete A and complete B remain open. Completed new-function coverage is zero.
+No Pre/R restriction or environment contract changed.
+
+Nine new modules add 543 lines, including six new physical instructions and
+composition across one existing callback proof. The concrete reuse is the
+pending-resource frame across saves/callbacks, callback readiness across byte
+writes, and saved-word decoding using the existing word-store lemmas. Ordinary
+elaboration failures and heartbeat timeouts were resolved by normalizing word
+addresses before composing equalities and by explicit intermediate types;
+no limits were raised, and no KILLED run occurred.
+
+The default package build passes 1,150 jobs without warnings. The fast tier
+passes 137 tests, one skipped (23.108 seconds). Generated execution passes the
+existing 66 retained-heap insertions/lookups and 24 isolated root cases, now
+including 30 setup entries and ten saved-publication-input checks (3.249
+seconds). Counts are compared against initialization and publication counts.
+
+The recorded three-way comparison passes eight calls under two seeds, 170
+coverage entries, 64 comparisons and 117 decisions (0.311 seconds). It still
+uses constructed entry memory and supplied allocation/free returns. Fresh
+kernel replay of `AllowedipsInsertionSurface` and the inspected printed-surface
+diff pass, with standard axioms. `TrustBase.lean` and the clean private Kraken
+pin are unchanged. No external gate acceptance is claimed.

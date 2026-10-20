@@ -274,6 +274,146 @@ Binary.Pair.Allowedips.Select.selection_checked : ∀ (fetch : Int64 → Option.
                                         2))
                                     (some.{0} none.{0})))
                 { data := s, pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 530 }
+Binary.Pair.Allowedips.ChildSetup.entry_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {s : MachineData} {memory : DataMem} {offset : Nat},
+      Eq.{1} (Binary.Pair.Allowedips.ChildSetup.entryEffect s) (Except.ok.{0, 0} (Prod.mk.{0, 0} memory offset)) →
+        Eventually (Binary.instructionStep fetch)
+          (fun t =>
+            Eq.{1} t.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry (Int64.ofNat offset)) ∧
+              Eq.{1} t.data.regs s.regs ∧
+                Eq.{1} t.data.dmem memory ∧
+                  Binary.EqualOutside (Binary.Pair.Allowedips.ChildSetup.Writes s.regs.rsp) s.dmem t.data.dmem ∧
+                    Binary.Pair.MappedLe s.dmem t.data.dmem)
+          { data := s, pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 511 }
+Binary.Pair.Allowedips.ChildFinish.finish : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      ∀ {names : Binary.Pair.Allowedips.Names} {world : Leanux.World} {entry : MachineState} {s : MachineData}
+        {key cidr pid base parentId direction : Nat} {memory : DataMem} {d : Leanux.WG.Device}
+        {parentNode : Leanux.WG.AipNode} {owner : Leanux.WG.Peer} (c : Binary.CommonBitsCoverage.Context),
+        Binary.Pair.Allowedips.NodeInit.BoundaryFields names Binary.Pair.Allowedips.Root.nodeOffsets world entry key
+            cidr pid base →
+          Binary.Pair.Allowedips.Corresponds names Binary.Pair.Allowedips.Root.nodeOffsets entry.data.dmem d →
+            Eq.{1} (Binary.Pair.Allowedips.heap names (Binary.Pair.Allowedips.target d) entry.data.dmem)
+                (Except.ok.{0, 0} ()) →
+              Binary.Pair.Allowedips.NodeInit.Pending names entry.data d key cidr pid base s.dmem →
+                Membership.mem.{0, 0} names.trie.nodes (Prod.mk.{0, 0} parentId s.regs.rbx.toNat) →
+                  Eq.{1} (Std.TreeMap.get?.{0, 0} d.nodes parentId) (some.{0} parentNode) →
+                    Eq.{1} (Std.TreeMap.get?.{0, 0} d.peers pid) (some.{0} owner) →
+                      LT.lt.{0} direction 2 →
+                        Eq.{1} (getElem?.{0, 0, 0} parentNode.bit direction) (some.{0} none.{0}) →
+                          Eq.{1} entry.data.regs.rbp.toNat parentNode.bitlen →
+                            LT.lt.{0} parentNode.cidr cidr →
+                              Eq.{1}
+                                  (HDiv.hDiv.{0, 0, 0} key
+                                    (HPow.hPow.{0, 0, 0} 2 (HSub.hSub.{0, 0, 0} parentNode.bitlen parentNode.cidr)))
+                                  (HDiv.hDiv.{0, 0, 0} parentNode.bits
+                                    (HPow.hPow.{0, 0, 0} 2 (HSub.hSub.{0, 0, 0} parentNode.bitlen parentNode.cidr))) →
+                                Eq.{1}
+                                    (HMod.hMod.{0, 0, 0}
+                                      (HDiv.hDiv.{0, 0, 0} key
+                                        (HPow.hPow.{0, 0, 0} 2
+                                          (HSub.hSub.{0, 0, 0} (HSub.hSub.{0, 0, 0} parentNode.bitlen 1)
+                                            parentNode.cidr)))
+                                      2)
+                                    direction →
+                                  Eq.{1} s.regs.r8.toNat base →
+                                    LE.le.{0} (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 24) (HPow.hPow.{0, 0, 0} 2 64) →
+                                      Eq.{1} s.regs.rax.toNat direction →
+                                        Eq.{1} s.regs.rdx.toNat direction →
+                                          Eq.{1} (Binary.Pair.Allowedips.ChildSetup.saveEffect s)
+                                              (Except.ok.{0, 0} memory) →
+                                            Eq.{1}
+                                                (Option.isSome.{0}
+                                                  (Mem.loadInt s.dmem (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} base 48))
+                                                    8))
+                                                true →
+                                              Eq.{1}
+                                                  (Option.isSome.{0}
+                                                    (Mem.loadInt s.dmem
+                                                      (BitVec.ofNat 64
+                                                        (HAdd.hAdd.{0, 0, 0}
+                                                          (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat
+                                                            (HMul.hMul.{0, 0, 0} direction 8))
+                                                          8))
+                                                      8))
+                                                  true →
+                                                Binary.CommonBitsCoverage.CallsReady c s →
+                                                  (∀ (a : BitVec 64),
+                                                      c.bytes a →
+                                                        ¬Binary.Pair.Allowedips.ChildSetup.Writes s.regs.rsp a) →
+                                                    (∀ (a : BitVec 64),
+                                                        c.bytes a →
+                                                          ¬Binary.Pair.Allowedips.ChildFinish.PublishWrites s.regs.rbx
+                                                              base direction a) →
+                                                      (∀ (a : BitVec 64),
+                                                          Binary.Pair.Allowedips.ChildSetup.Writes s.regs.rsp a →
+                                                            ¬Binary.Pair.Allowedips.ChildFinish.CallWrites s.regs.rsp c
+                                                                a) →
+                                                        (∀ (span : Binary.Pair.Span),
+                                                            Membership.mem.{0, 0}
+                                                                (Binary.Pair.Allowedips.readSpans (names.allocated base)
+                                                                  Binary.Pair.Allowedips.Root.nodeOffsets)
+                                                                span →
+                                                              ∀ (a : BitVec 64),
+                                                                span.contains a →
+                                                                  ¬Binary.Pair.Allowedips.ChildFinish.SetupWrites
+                                                                      s.regs.rsp c a) →
+                                                          (∀ (a : BitVec 64),
+                                                              Binary.InRange (BitVec.ofNat 64 names.table) 24 a →
+                                                                ¬Binary.Pair.Allowedips.ChildFinish.SetupWrites
+                                                                    s.regs.rsp c a) →
+                                                            (∀ (a : BitVec 64),
+                                                                Binary.Pair.Allowedips.ChildFinish.PublishWrites
+                                                                    s.regs.rbx base direction a →
+                                                                  ¬Binary.Pair.Allowedips.ChildFinish.CallWrites
+                                                                      s.regs.rsp c a) →
+                                                              (∀ (a : BitVec 64),
+                                                                  Binary.InRange
+                                                                      (BitVec.ofNat 64
+                                                                        (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 16))
+                                                                      8 a →
+                                                                    ¬Binary.InRange
+                                                                        (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} base 48))
+                                                                        8 a) →
+                                                                Eventually (Binary.instructionStep fetch)
+                                                                  (fun t =>
+                                                                    Eq.{1} t.pc
+                                                                        (HAdd.hAdd.{0, 0, 0}
+                                                                          Binary.AllowedipsMutationImage.Add.entry
+                                                                          1353) ∧
+                                                                      Eq.{1} t.data.regs.rsp s.regs.rsp ∧
+                                                                        Binary.CommonBitsCoverage.CallsReady c t.data ∧
+                                                                          Binary.EqualOutside
+                                                                              (fun a =>
+                                                                                Binary.Pair.Allowedips.ChildFinish.SetupWrites
+                                                                                    s.regs.rsp c a ∨
+                                                                                  Binary.Pair.Allowedips.ChildFinish.PublishWrites
+                                                                                    s.regs.rbx base direction a)
+                                                                              s.dmem t.data.dmem ∧
+                                                                            Binary.Pair.Allowedips.Corresponds
+                                                                                (names.allocated base)
+                                                                                Binary.Pair.Allowedips.Root.nodeOffsets
+                                                                                t.data.dmem
+                                                                                (Binary.Pair.Allowedips.childInstalled d
+                                                                                  parentId direction key cidr
+                                                                                  entry.data.regs.rbp.toNat pid
+                                                                                  parentNode owner) ∧
+                                                                              Eq.{1}
+                                                                                (Binary.Pair.Allowedips.heap
+                                                                                  (names.allocated base)
+                                                                                  (Binary.Pair.Allowedips.target
+                                                                                    (Binary.Pair.Allowedips.childInstalled
+                                                                                      d parentId direction key cidr
+                                                                                      entry.data.regs.rbp.toNat pid
+                                                                                      parentNode owner))
+                                                                                  t.data.dmem)
+                                                                                (Except.ok.{0, 0} ()))
+                                                                  { data := s,
+                                                                    pc :=
+                                                                      HAdd.hAdd.{0, 0, 0}
+                                                                        Binary.AllowedipsMutationImage.Add.entry 1760 }
 Binary.Pair.Allowedips.ChildPublish.publication_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
     ∀ {s : MachineData} {memory : DataMem} {registers : Reg64s},
@@ -1730,6 +1870,29 @@ fun s => do
             r9 := __src.r9, r10 := __src.r10, r11 := __src.r11, r12 := __src.r12, r13 := __src.r13, r14 := __src.r14,
             r15 := __src.r15 })
           (ite.{1} (Eq.{1} child 0) 1760 577)))
+def Binary.Pair.Allowedips.ChildSetup.entryEffect : MachineData → Except.{0, 0} String (Prod.{0, 0} DataMem Nat) :=
+fun s => do
+  let memory ← Binary.Pair.Allowedips.Root.store s.dmem (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 24) 8 s.regs.r8.toNat
+  pure.{0, 0} (Prod.mk.{0, 0} memory (ite.{1} (Eq.{1} (BEq.beq.{0} s.regs.rbx 0) true) 1537 525))
+def Binary.Pair.Allowedips.ChildSetup.saveEffect : MachineData → Except.{0, 0} String DataMem :=
+fun s => do
+  let memory ← Binary.Pair.Allowedips.Root.store s.dmem (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 16) 8 s.regs.rax.toNat
+  let memory ←
+    Binary.Pair.Allowedips.Root.store memory (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 8) 1
+        (HMod.hMod.{0, 0, 0} s.regs.rdx.toNat 256)
+  Binary.Pair.Allowedips.Root.store memory s.regs.rsp.toNat 8 s.regs.r8.toNat
+def Binary.Pair.Allowedips.ChildSetup.Writes : UInt64 → BitVec 64 → Prop :=
+fun stack => Binary.InRange stack.toBitVec 32
+def Binary.Pair.Allowedips.ChildFinish.SetupWrites : UInt64 → Binary.CommonBitsCoverage.Context → BitVec 64 → Prop :=
+fun stack c a =>
+  Binary.Pair.Allowedips.ChildSetup.Writes stack a ∨ Binary.Pair.Allowedips.ChildFinish.CallWrites stack c a
+def Binary.Pair.Allowedips.ChildFinish.CallWrites : UInt64 → Binary.CommonBitsCoverage.Context → BitVec 64 → Prop :=
+fun stack c a => Binary.InRange (HSub.hSub.{0, 0, 0} stack.toBitVec 8) 8 a ∨ c.writes a
+def Binary.Pair.Allowedips.ChildFinish.PublishWrites : UInt64 → Nat → Nat → BitVec 64 → Prop :=
+fun parent base direction a =>
+  Binary.InRange (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} base 48)) 8 a ∨
+    Binary.InRange
+      (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} parent.toNat (HMul.hMul.{0, 0, 0} direction 8)) 8)) 8 a
 def Binary.Pair.Allowedips.NodeInit.effect : MachineData → Except.{0, 0} String (Prod.{0, 0} DataMem Nat) :=
 fun s => do
   let __x ← Binary.Pair.Allowedips.NodeInit.attach s
