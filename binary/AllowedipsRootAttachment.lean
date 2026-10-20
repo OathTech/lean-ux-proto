@@ -3,6 +3,14 @@ import AllowedipsNamesExtension
 
 namespace Binary.Pair.Allowedips.Root
 
+/-- Common data effect of attaching an allocated record to its owner list.
+Each compiled path proves this from its own ordered reads and stores. -/
+def AppendEffect (s : MachineData) (memory : DataMem) : Prop :=
+  ∃ last, readNat ⟨{s with dmem:=write64 s.dmem s.regs.rbx.toNat s.regs.r14.toNat},0⟩
+      (s.regs.r14.toNat+1104) 8=.ok last ∧
+    memory=Ring.appendMemory (write64 s.dmem s.regs.rbx.toNat s.regs.r14.toNat)
+      (s.regs.r14.toNat+1096) last (s.regs.rbx.toNat+56)
+
 /-- Invert the tested attachment phase into the existing ordered list-splice
 effect. The tail is read after the owner store, as in the image. -/
 theorem attach_as_ring {s : MachineData} {memory cidr}
@@ -35,7 +43,7 @@ theorem attach_as_ring {s : MachineData} {memory cidr}
 /-- Attachment preserves the freshly zeroed child words and installs the
 owner. Tail membership and separation follow from the existing decoded peer
 list and allocation geometry; no independent tail-address premise is used. -/
-theorem attach_record_fields {names : Names} {o s memory cidr id pid entries}
+theorem append_record_fields {names : Names} {o} {s : MachineData} {memory last id pid entries}
     (g : Geometry names o) (layout : o.nodeSize=72)
     (named : (id,s.regs.rbx.toNat) ∈ names.trie.nodes)
     (peerNamed : (pid,s.regs.r14.toNat) ∈ names.trie.peers)
@@ -45,12 +53,14 @@ theorem attach_record_fields {names : Names} {o s memory cidr id pid entries}
         first (s.regs.r14.toNat+1096) [])=.ok entries)
     (left : word s.dmem "node.child[0]" (s.regs.rbx.toNat+8) 8=.ok 0)
     (right : word s.dmem "node.child[1]" (s.regs.rbx.toNat+16) 8=.ok 0)
-    (checked : attach s=.ok (memory,cidr)) :
+    (tailRead : readNat ⟨{s with dmem:=write64 s.dmem s.regs.rbx.toNat s.regs.r14.toNat},0⟩
+      (s.regs.r14.toNat+1104) 8=.ok last)
+    (memoryEq : memory=Ring.appendMemory (write64 s.dmem s.regs.rbx.toNat s.regs.r14.toNat)
+      (s.regs.r14.toNat+1096) last (s.regs.rbx.toNat+56)) :
     word memory "node.peer" s.regs.rbx.toNat 8=.ok s.regs.r14.toNat ∧
       word memory "node.child[0]" (s.regs.rbx.toNat+8) 8=.ok 0 ∧
       word memory "node.child[1]" (s.regs.rbx.toNat+16) 8=.ok 0 ∧
       EqualOutside (ListWrites names) (write64 s.dmem s.regs.rbx.toNat s.regs.r14.toNat) memory := by
-  obtain ⟨last,tailRead,memoryEq⟩ := attach_as_ring checked
   have nb := g.bounded _ (node_allocation named)
   have pb := g.bounded _ (peer_allocation peerNamed)
   change s.regs.rbx.toNat+o.nodeSize≤2^64 at nb
@@ -86,6 +96,25 @@ theorem attach_record_fields {names : Names} {o s memory cidr id pid entries}
     have framed := word_store_frame s.dmem "node.child[1]" s.regs.rbx.toNat 16 8 0 8 s.regs.r14.toNat
       (by decide) (by decide) (.inr (by decide))
     simpa only [Nat.add_zero,right] using framed
+
+
+theorem attach_record_fields {names : Names} {o s memory cidr id pid entries}
+    (g : Geometry names o) (layout : o.nodeSize=72)
+    (named : (id,s.regs.rbx.toNat) ∈ names.trie.nodes)
+    (peerNamed : (pid,s.regs.r14.toNat) ∈ names.trie.peers)
+    (decoded : (do
+      let first ← word s.dmem "peer.list.head" (s.regs.r14.toNat+1096) 8
+      peerList names s.dmem (s.regs.r14.toNat+1096) (names.trie.nodes.length+1)
+        first (s.regs.r14.toNat+1096) [])=.ok entries)
+    (left : word s.dmem "node.child[0]" (s.regs.rbx.toNat+8) 8=.ok 0)
+    (right : word s.dmem "node.child[1]" (s.regs.rbx.toNat+16) 8=.ok 0)
+    (checked : attach s=.ok (memory,cidr)) :
+    word memory "node.peer" s.regs.rbx.toNat 8=.ok s.regs.r14.toNat ∧
+      word memory "node.child[0]" (s.regs.rbx.toNat+8) 8=.ok 0 ∧
+      word memory "node.child[1]" (s.regs.rbx.toNat+16) 8=.ok 0 ∧
+      EqualOutside (ListWrites names) (write64 s.dmem s.regs.rbx.toNat s.regs.r14.toNat) memory := by
+  obtain ⟨last,tailRead,memoryEq⟩ := attach_as_ring checked
+  exact append_record_fields g layout named peerNamed decoded left right tailRead memoryEq
 
 #print axioms attach_record_fields
 end Binary.Pair.Allowedips.Root

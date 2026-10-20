@@ -971,3 +971,37 @@ No external export acceptance or nonempty capture is claimed; A/B remain open.
 Ordinary elaboration errors and a default recursion-depth failure in byte
 increment normalization were repaired with an isolated, kernel-evaluated
 finite arithmetic lemma. No limits were raised and no KILLED run occurred.
+
+## Nonempty initialization from its tested boundary (08:31 UTC)
+
+`NodeInit.initialization_executes` now derives the complete initialization
+execution from `NodeInit.boundary`, the same executable assertion run at the
+recorded correspondence point. The assertion checks the existing reconstruction
+and heap, actual saved arguments, zeroed fresh allocation, query bytes and the
+separation needed for three stack-byte stores. Its proof derives attachment,
+header and both-family key-copy reads; it exports exact memory, the tested
+register result and preserved readability. It does not yet export the whole
+updated trie relation: that requires structural publication. No future phase
+success or desired postcondition is an entry premise.
+
+The root and nonempty paths now share the ownership-list reconstruction
+lemmas through a proved append-memory interface. The C's differing store order
+is reconciled by disjoint-store commutation; the early tail read remains in its
+actual order. The nonempty list/internal-list wrappers together take 61 lines.
+This is concrete reuse, not a forecast of whole-function cost. A separate
+record lemma decodes a parent child-word update to the mirror's actual `set!`
+operation. The checkpoint adds ten modules (620 lines) and factors existing
+root proofs without changing their statements. It adds no trust premise.
+
+The generated run passes all 30 nonempty initialization boundaries and checks
+the decoded fresh core at the exit, as part of 66 retained-heap insertions and
+lookups plus 24 isolated root cases (3.235 seconds). The recorded three-way run
+passes eight calls under two seeds, 170 coverage entries, 64 comparisons and
+117 decisions (0.310 seconds). These are recorded arguments and outcomes with
+constructed entry memory and supplied services, not a nonempty kernel capture.
+The default package build passes 1,114 jobs without warnings; the fast tier
+passes 137 tests, one skipped (23.602 seconds). Fresh kernel replay of
+`AllowedipsInsertionSurface` passes. The reviewed surface adds the boundary
+execution theorem and its executable definitions; `TrustBase.lean` is unchanged
+and the new headline uses only the three standard axioms. No external export
+acceptance is claimed. A/B remain open; completed new-function coverage is zero.

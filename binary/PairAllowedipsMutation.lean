@@ -5,6 +5,7 @@ import PairAllowedipsRoot
 import PairAllowedipsRootBoundary
 import PairAllowedipsReturn
 import PairAllowedipsNodeInit
+import PairAllowedipsNodeBoundary
 import PairAllowedipsChildPublish
 import PairAllowedipsNames
 import PairAllowedips
@@ -144,6 +145,8 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   unless returnSegments==2 do throw "insert.return-segment-count"
   let exactSegments ← Exact.check r.history
   let nodeInitSegments ← NodeInit.check r.history
+  let nodeBoundaries ← NodeInit.checkBoundary s.names input.lookup.offsets s.world key cidr pid r.history
+  unless nodeBoundaries==nodeInitSegments do throw "insert.node-boundary-count"
   let childSegments ← ChildPublish.check r.history
   let rootSegments ← Root.check r.history
   let rootBoundaries ← Root.checkBoundary s.names input.lookup.offsets s.world key cidr pid r.history

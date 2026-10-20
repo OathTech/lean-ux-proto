@@ -41,13 +41,13 @@ theorem Ring.append_internal {names o m head last fresh id other current entries
 
 namespace Root
 
-theorem attach_internal {names o s attached cidr d pid owner current node}
+theorem append_internal {names o s attached d pid owner current node}
     (related : Corresponds names o s.dmem d) (shape : heap names (target d) s.dmem=.ok ())
     (g : Geometry (names.allocated s.regs.rbx.toNat) o)
     (fresh : ∀ p ∈ names.trie.nodes, p.2≠s.regs.rbx.toNat)
     (peerNamed : (pid,s.regs.r14.toNat) ∈ names.trie.peers)
     (hasPeer : d.peers.get? pid=some owner)
-    (checked : attach s=.ok (attached,cidr))
+    (appended : AppendEffect s attached)
     (member : (current,node) ∈ (target d).nodes) (internal : node.peer=none) :
     internalListCheck (names.allocated s.regs.rbx.toNat) attached current=.ok () := by
   let n := names.allocated s.regs.rbx.toNat
@@ -67,7 +67,7 @@ theorem attach_internal {names o s attached cidr d pid owner current node}
     obtain ⟨first,firstRead,run⟩ := bind_ok (Reconstructed.peer_at related peerNamed ownerMember)
     rw [firstRead]
     exact Ring.peerList_allocate run
-  obtain ⟨last,tailRead,memoryEq⟩ := attach_as_ring checked
+  obtain ⟨last,tailRead,memoryEq⟩ := appended
   have pb := g.bounded _ (peer_allocation (names:=n) peerNamed)
   change s.regs.r14.toNat+Layouts.peerSize≤2^64 at pb
   have enough : 1112≤Layouts.peerSize := by decide
@@ -80,6 +80,18 @@ theorem attach_internal {names o s attached cidr d pid owner current node}
   rw [memoryEq]
   exact internalListCheck_of_words (allocated_ids _ core.nodeIds (ids_below_counter full.valid))
     (List.mem_append_left _ oldNamed) words.1 (by simpa only [Nat.add_assoc] using words.2)
+
+
+theorem attach_internal {names o s attached cidr d pid owner current node}
+    (related : Corresponds names o s.dmem d) (shape : heap names (target d) s.dmem=.ok ())
+    (g : Geometry (names.allocated s.regs.rbx.toNat) o)
+    (fresh : ∀ p ∈ names.trie.nodes, p.2≠s.regs.rbx.toNat)
+    (peerNamed : (pid,s.regs.r14.toNat) ∈ names.trie.peers)
+    (hasPeer : d.peers.get? pid=some owner)
+    (checked : attach s=.ok (attached,cidr))
+    (member : (current,node) ∈ (target d).nodes) (internal : node.peer=none) :
+    internalListCheck (names.allocated s.regs.rbx.toNat) attached current=.ok () := by
+  exact append_internal related shape g fresh peerNamed hasPeer (attach_as_ring checked) member internal
 
 end Root
 #print axioms Root.attach_internal

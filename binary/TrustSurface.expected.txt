@@ -1,4 +1,20 @@
 HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
+Binary.Pair.Allowedips.NodeInit.initialization_executes : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {names : Binary.Pair.Allowedips.Names} {world : Leanux.World} {machine : MachineState} {key cidr pid base : Nat},
+      Eq.{1}
+          (Binary.Pair.Allowedips.NodeInit.boundary names Binary.Pair.Allowedips.Root.nodeOffsets world machine key cidr
+            pid)
+          (Except.ok.{0, 0} base) →
+        Exists.{1} fun memory =>
+          Eq.{1} (Binary.Pair.Allowedips.NodeInit.effect machine.data) (Except.ok.{0, 0} (Prod.mk.{0, 0} memory base)) ∧
+            Eventually (Binary.instructionStep fetch)
+              (fun t =>
+                Eq.{1} t.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 511) ∧
+                  Eq.{1} t.data.dmem memory ∧
+                    Eq.{1} (Binary.Pair.Allowedips.NodeInit.registers machine.data.regs t.data.regs base) true ∧
+                      Binary.Pair.MappedLe machine.data.dmem t.data.dmem)
+              machine
 Binary.Pair.Allowedips.ChildPublish.record_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
     ∀ {names : Binary.Pair.Allowedips.Names} {s : MachineData} {memory : DataMem} {registers : Reg64s}
@@ -1145,6 +1161,78 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                 Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
                   Eventually (Binary.instructionStep fetch)
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
+def Binary.Pair.Allowedips.NodeInit.boundary : Binary.Pair.Allowedips.Names →
+  AllowedipsProbe.Offsets → Leanux.World → MachineState → Nat → Nat → Nat → Except.{0, 0} String Nat :=
+fun names o world machine key cidr pid => do
+  Binary.Pair.Allowedips.assertAt names o machine.data.dmem world
+  have s : MachineData := machine.data
+  have bits : Nat := s.regs.rbp.toNat
+  let base ← readNat machine s.regs.rsp.toNat 8
+  Binary.Pair.require (BEq.beq.{0} machine.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 342))
+      "node-init.entry-pc"
+  Binary.Pair.require (BEq.beq.{0} bits 32 || BEq.beq.{0} bits 128) "node-init.family"
+  let __do_lift ← Binary.Pair.Trie.address names.trie.peers (some.{0} pid)
+  Binary.Pair.require (BEq.beq.{0} s.regs.r14.toNat __do_lift) "node-init.owner"
+  let __do_lift ← readNat machine (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 16) 4
+  Binary.Pair.require (BEq.beq.{0} __do_lift cidr && decide (LE.le.{0} cidr bits)) "node-init.saved-cidr"
+  Binary.Pair.require (BEq.beq.{0} s.regs.r12.toNat cidr && BEq.beq.{0} s.regs.r15.toNat bits)
+      "node-init.saved-registers"
+  have allocated : Binary.Pair.Allowedips.Names := names.allocated base
+  Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message (Binary.Pair.Allowedips.validate allocated o)
+  let __do_lift ← readNat machine base 72
+  Binary.Pair.require (BEq.beq.{0} __do_lift 0) "node-init.zero-allocation"
+  Binary.Pair.Allowedips.Placement.queryLocals machine key bits
+  forIn.{0, 0, 0, 0} (List.cons.{0} 36 (List.cons.{0} 43 (List.cons.{0} 44 List.nil.{0}))) PUnit.unit.{1}
+      fun offset __s => do
+      Binary.Pair.require
+          (Option.isSome.{0} (Mem.loadInt s.dmem (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat offset)) 1))
+          "node-init.stack-byte-unmapped"
+      pure.{0, 0} (ForInStep.yield.{0} PUnit.unit.{1})
+  Binary.Pair.require
+      (Binary.Pair.spansApart
+        (List.cons.{0} (Prod.mk.{0, 0} s.regs.r13.toNat (HDiv.hDiv.{0, 0, 0} bits 8)) List.nil.{0})
+        (Binary.Pair.Allowedips.NodeInit.writeSpans allocated s base))
+      "node-init.query-separation"
+  Binary.Pair.require
+      (Binary.Pair.spansApart
+        (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 36) 1)
+          (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 43) 1)
+            (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 44) 1) List.nil.{0})))
+        (HAppend.hAppend.{0, 0, 0}
+          (List.cons.{0} (Prod.mk.{0, 0} base 72) (List.cons.{0} (Prod.mk.{0, 0} names.table 24) List.nil.{0}))
+          (Binary.Pair.Allowedips.allocations names o)))
+      "node-init.stack-separation"
+  pure.{0, 0} base
+def Binary.Pair.Allowedips.NodeInit.writeSpans : Binary.Pair.Allowedips.Names →
+  MachineData → Nat → List.{0} Binary.Pair.Span :=
+fun names s base =>
+  HAppend.hAppend.{0, 0, 0}
+    (HAppend.hAppend.{0, 0, 0}
+      (List.cons.{0} (Prod.mk.{0, 0} base 72)
+        (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 36) 1)
+          (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 43) 1)
+            (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 44) 1) List.nil.{0}))))
+      (List.map.{0, 0} (fun p => Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} (Prod.snd.{0, 0} p) 56) 16) names.trie.nodes))
+    (List.map.{0, 0} (fun p => Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} (Prod.snd.{0, 0} p) 1096) 16) names.trie.peers)
+def Binary.Pair.Allowedips.allocations : Binary.Pair.Allowedips.Names →
+  AllowedipsProbe.Offsets → List.{0} Binary.Pair.Span :=
+fun names o =>
+  HAppend.hAppend.{0, 0, 0}
+    (List.map.{0, 0}
+      (fun x =>
+        match x with
+        | Prod.mk.{0, 0} fst a => Prod.mk.{0, 0} a o.nodeSize)
+      names.trie.nodes)
+    (List.map.{0, 0}
+      (fun x =>
+        match x with
+        | Prod.mk.{0, 0} fst a => Prod.mk.{0, 0} a Binary.Layouts.peerSize)
+      names.trie.peers)
+def Binary.Pair.MappedLe : DataMem → DataMem → Prop :=
+fun before after =>
+  ∀ (address : BitVec 64) (size : Nat),
+    Eq.{1} (Option.isSome.{0} (Mem.loadInt before address size)) true →
+      Eq.{1} (Option.isSome.{0} (Mem.loadInt after address size)) true
 def Binary.Pair.Allowedips.ChildPublish.effect : MachineData → Except.{0, 0} String (Prod.{0, 0} DataMem Reg64s) :=
 fun s => do
   let direction ← readNat { data := s, pc := 0 } (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 8) 1

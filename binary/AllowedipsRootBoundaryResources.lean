@@ -4,11 +4,10 @@ import AllowedipsRootAttachTotal
 namespace Binary.Pair.Allowedips.Root
 open Leanux Leanux.WG
 
-theorem BoundaryFields.peer {names o world machine key cidr pid d}
-    (fields : BoundaryFields names o world machine key cidr pid)
+theorem peer_of_address {names o pid d} {machine : MachineState}
+    (address : Trie.address names.trie.peers (some pid)=.ok machine.data.regs.r14.toNat)
     (related : Corresponds names o machine.data.dmem d) :
     ∃ owner, (pid,machine.data.regs.r14.toNat) ∈ names.trie.peers ∧ d.peers.get? pid=some owner := by
-  have address := fields.owner
   simp only [Trie.address] at address
   cases found : names.trie.peers.find? (·.1==pid) with
   | none => rw [found] at address; cases address
@@ -25,6 +24,12 @@ theorem BoundaryFields.peer {names o world machine key cidr pid d}
     refine ⟨peer,named,?_⟩
     have present := Std.TreeMap.mem_toList_iff_getElem?_eq_some.mp member
     simpa only [Std.TreeMap.get?_eq_getElem?,currentId,←sameId] using present
+
+theorem BoundaryFields.peer {names o world machine key cidr pid d}
+    (fields : BoundaryFields names o world machine key cidr pid)
+    (related : Corresponds names o machine.data.dmem d) :
+    ∃ owner, (pid,machine.data.regs.r14.toNat) ∈ names.trie.peers ∧ d.peers.get? pid=some owner := by
+  exact peer_of_address fields.owner related
 
 theorem BoundaryFields.zero_word {names o world machine key cidr pid}
     (fields : BoundaryFields names o world machine key cidr pid)

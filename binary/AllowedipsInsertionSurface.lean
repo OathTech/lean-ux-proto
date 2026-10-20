@@ -18,6 +18,9 @@ import AllowedipsRootChecked
 import AllowedipsReturnFrame
 import AllowedipsNodeEffect
 import AllowedipsChildPublishRecord
+import AllowedipsNodeBoundaryExec
+import AllowedipsNodeLists
+import AllowedipsChildRecordUpdate
 
 /-! Current insertion proof closure. This is a partial-work replay root,
 not a declaration of a completed insertion refinement theorem. -/

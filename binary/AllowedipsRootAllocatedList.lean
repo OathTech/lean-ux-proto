@@ -5,7 +5,7 @@ namespace Binary.Pair.Allowedips.Root
 /-- A zeroed fresh allocation is appended to its owner's actual list. The
 old decoder supplies both list freshness and the enlarged traversal budget;
 the fresh node need not be self-linked before Linux initializes its links. -/
-theorem attach_allocated_list {names : Names} {o s memory cidr pid entries}
+theorem append_allocated_list {names : Names} {o s memory pid entries}
     (g : Geometry (names.allocated s.regs.rbx.toNat) o) (layout : o.nodeSize=72)
     (unique : (names.trie.nodes.map Prod.fst).Nodup)
     (bounded : ∀ p ∈ names.trie.nodes, p.1<names.nextNode)
@@ -18,7 +18,7 @@ theorem attach_allocated_list {names : Names} {o s memory cidr pid entries}
         first (s.regs.r14.toNat+1096) [])=.ok entries)
     (zeroNext : word s.dmem "peer.list.next" (s.regs.rbx.toNat+56) 8=.ok 0)
     (zeroPrev : word s.dmem "peer.list.prev" (s.regs.rbx.toNat+64) 8=.ok 0)
-    (checked : attach s=.ok (memory,cidr)) :
+    (appended : AppendEffect s memory) :
     (do
       let first ← word memory "peer.list.head" (s.regs.r14.toNat+1096) 8
       peerList (names.allocated s.regs.rbx.toNat) memory (s.regs.r14.toNat+1096)
@@ -46,7 +46,7 @@ theorem attach_allocated_list {names : Names} {o s memory cidr pid entries}
   let ownerMemory := write64 s.dmem s.regs.rbx.toNat s.regs.r14.toNat
   have ownerList := Ring.owner_decodes g layout (.peer peerNew) named newList (value:=s.regs.r14.toNat)
   have ownerFocus := focus.owner_frame g layout named (value:=s.regs.r14.toNat)
-  obtain ⟨last,tailRead,memoryEq⟩ := attach_as_ring checked
+  obtain ⟨last,tailRead,memoryEq⟩ := appended
   have peerExtent := g.bounded _ (peer_allocation peerNew)
   change s.regs.r14.toNat+Layouts.peerSize≤2^64 at peerExtent
   have enough : 1112≤Layouts.peerSize := by decide
@@ -57,6 +57,28 @@ theorem attach_allocated_list {names : Names} {o s memory cidr pid entries}
   have budget := Ring.append_budget ownerFocus ids ownerList absent
   rw [memoryEq]
   exact Ring.append_decodes g layout (.peer peerNew) lastSlot ownerFocus back ownerList absent ids budget
+
+
+theorem attach_allocated_list {names : Names} {o s memory cidr pid entries}
+    (g : Geometry (names.allocated s.regs.rbx.toNat) o) (layout : o.nodeSize=72)
+    (unique : (names.trie.nodes.map Prod.fst).Nodup)
+    (bounded : ∀ p ∈ names.trie.nodes, p.1<names.nextNode)
+    (nonnull : s.regs.rbx.toNat≠0)
+    (fresh : ∀ p ∈ names.trie.nodes, p.2≠s.regs.rbx.toNat)
+    (peerNamed : (pid,s.regs.r14.toNat) ∈ names.trie.peers)
+    (decoded : (do
+      let first ← word s.dmem "peer.list.head" (s.regs.r14.toNat+1096) 8
+      peerList names s.dmem (s.regs.r14.toNat+1096) (names.trie.nodes.length+1)
+        first (s.regs.r14.toNat+1096) [])=.ok entries)
+    (zeroNext : word s.dmem "peer.list.next" (s.regs.rbx.toNat+56) 8=.ok 0)
+    (zeroPrev : word s.dmem "peer.list.prev" (s.regs.rbx.toNat+64) 8=.ok 0)
+    (checked : attach s=.ok (memory,cidr)) :
+    (do
+      let first ← word memory "peer.list.head" (s.regs.r14.toNat+1096) 8
+      peerList (names.allocated s.regs.rbx.toNat) memory (s.regs.r14.toNat+1096)
+        ((names.allocated s.regs.rbx.toNat).trie.nodes.length+1) first (s.regs.r14.toNat+1096) [])=
+      .ok (entries++[names.nextNode]) := by
+  exact append_allocated_list g layout unique bounded nonnull fresh peerNamed decoded zeroNext zeroPrev (attach_as_ring checked)
 
 #print axioms attach_allocated_list
 end Binary.Pair.Allowedips.Root
