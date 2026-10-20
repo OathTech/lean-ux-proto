@@ -49,4 +49,16 @@ theorem allocated_facts {names : Names} {o : AllowedipsProbe.Offsets} {address :
   · exact (Root.table_valid_geometry original).2 (address,o.nodeSize) (node_allocation named)
 
 #print axioms allocated_facts
+
+theorem validate_node_aligned {names : Names} {o : AllowedipsProbe.Offsets} {id address : Nat}
+    (valid : validate names o=.ok ()) (named : (id,address) ∈ names.trie.nodes) : address%8=0 := by
+  unfold validate at valid
+  obtain ⟨_,_,valid⟩ := bind_ok valid
+  obtain ⟨_,valid⟩ := check_ok _ _ _ _ valid
+  obtain ⟨_,aligns,_⟩ := bind_ok valid
+  have aligned := forIn_ok (P:=fun pair : Nat×Nat => pair.2%8=0)
+    (fun pair _ _ _ run => by
+      obtain ⟨checked,run⟩ := check_ok _ _ _ _ run
+      exact ⟨(),(Except.ok.inj run).symm,by simpa using checked⟩) aligns
+  exact aligned _ named
 end Binary.Pair.Allowedips

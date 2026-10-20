@@ -8,6 +8,9 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADLINES = [
+    'Binary.Pair.Allowedips.NodeInit.initialization_core_checked',
+    'Binary.Pair.Allowedips.child_connect_corresponds',
+    'Binary.Pair.Allowedips.install_child_run',
     'Binary.Pair.Allowedips.NodeInit.initialization_executes',
     'Binary.Pair.Allowedips.ChildPublish.record_checked',
     'Binary.Pair.Allowedips.ChildPublish.publication_checked',
@@ -79,6 +82,9 @@ IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'Allo
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
+    'Binary.Pair.Allowedips.NodeInit.EntryWrites', 'Binary.Pair.Allowedips.NodeInit.StackWrites',
+    'Binary.Pair.Allowedips.NodeInit.BoundaryFields', 'Binary.Pair.Allowedips.NodeInit.Pending',
+    'Binary.Pair.Allowedips.childInstalled', 'Binary.Pair.Allowedips.connectMemory',
     'Binary.Pair.Allowedips.NodeInit.boundary', 'Binary.Pair.Allowedips.NodeInit.writeSpans',
     'Binary.Pair.Allowedips.allocations', 'Binary.Pair.MappedLe',
     'Binary.Pair.Allowedips.ChildPublish.effect', 'Binary.Pair.Allowedips.ChildPublish.Writes',

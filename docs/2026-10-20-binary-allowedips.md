@@ -1005,3 +1005,51 @@ passes 137 tests, one skipped (23.602 seconds). Fresh kernel replay of
 execution theorem and its executable definitions; `TrustBase.lean` is unchanged
 and the new headline uses only the three standard axioms. No external export
 acceptance is claimed. A/B remain open; completed new-function coverage is zero.
+
+## Nonempty core and child-connection reconstruction (08:52 UTC)
+
+`NodeInit.initialization_core_checked` strengthens execution from the unchanged
+tested boundary: the fresh node's core now decodes to the actual mirror
+`newNode`, with the byte frame and preserved readability. The stack-byte stores
+are framed before reusing the root path's packed-header and key-copy decoder.
+The root and nonempty paths share their query-byte interpretation too.
+
+`pending_of_effect` derives the resources for publication: that fresh core,
+unchanged old node records and table words, appended owner lists, unchanged
+refcounts, and internal-node list validity. `Pending` packages these proved
+facts at the unpublished-node boundary; it is not a service contract or an
+assumed final relation. `child_connect_corresponds` uses them to reconstruct the
+whole allowed-IPs projection after the two child-connection stores. The old
+parent's child update preserves its own packed parent field. The target is
+`childInstalled`, whose ordered writes agree with actual mirror operations:
+`install_child_run` executes `listAddTail` and `connectNode` through the split
+mirror's adapter, and `target_childInstalled` proves its projection equation.
+
+This is still a **data-composition component**, not a completed insertion
+refinement. The executed publication summary is proved separately. The physical
+branch between initialization and publication, selection of the slot, restoration
+of the logical heap assertion, entry/allocator establishment, other insertion
+paths and entry-to-return composition remain open. No additional instructions
+or completed functions are counted for these strengthened postconditions.
+
+The package build passes 1,125 jobs without warnings. Generated execution passes
+66 retained-heap insertions/lookups, 24 isolated root cases, 28 root, 20 exact,
+30 node-initialization, ten child-publication and 180 return segments in 3.241
+seconds. The recorded check passes eight calls under two seeds, 170 coverage
+entries, 64 comparisons and 117 decisions in 0.309 seconds. Entry memory remains
+constructed and allocator/free services supplied. The fast tier passes 137 tests,
+one skipped, in 23.457 seconds. The new headline axiom sets are standard; the
+reviewed surface includes the intermediate resource structure and source endpoint.
+`TrustBase.lean`, the runtime assertions and the clean private Kraken pin are
+unchanged. Fresh `leanchecker --fresh AllowedipsInsertionSurface` replay passes;
+no external gate acceptance is claimed.
+
+The checkpoint adds eleven modules (966 lines), mostly decoder and frame
+composition rather than new symbolic instruction execution. Two costly
+elaboration patterns were exposed: reducing a whole memory-dependent decoder
+to prove a frame, and leaving the reconstruction target table implicit. A small
+decoder-congruence lemma, explicit error-bind rewriting and explicit type/target
+arguments resolve them. Ordinary elaboration failures, a recursion-depth failure
+and heartbeat timeouts occurred during development and were repaired; no resource
+limits were raised and no KILLED run occurred. The evidence still supports local
+reuse, not a viable whole-subsystem completion rate: A and B remain open.

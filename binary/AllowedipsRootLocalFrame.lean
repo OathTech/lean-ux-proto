@@ -1,4 +1,5 @@
 import AllowedipsRootBoundaryResources
+import AllowedipsQueryFrame
 
 namespace Binary.Pair.Allowedips.Root
 
@@ -55,33 +56,9 @@ theorem BoundaryFields.query_words {names o world machine key cidr pid after}
     if machine.data.regs.rbp.toNat=32 then word after "query" machine.data.regs.r13.toNat 4=.ok key else
       ∃ hi lo,word after "query.high" machine.data.regs.r13.toNat 8=.ok hi ∧
         word after "query.low" (machine.data.regs.r13.toNat+8) 8=.ok lo ∧ key=hi*2^64+lo := by
-  have input := Placement.queryLocals_fields fields.query
-  have extent := fields.local_bounds (machine.data.regs.r13.toNat,machine.data.regs.rbp.toNat/8) (by simp)
-  have keep := fields.local_word_frame frame (machine.data.regs.r13.toNat,machine.data.regs.rbp.toNat/8) (by simp)
-  have address : BitVec.ofNat 64 machine.data.regs.r13.toNat=machine.data.regs.r13.toBitVec :=
-    ofNat_uint64 _
-  rcases fields.family with four|six
-  · rw [ite_eq_left four]
-    have first := keep 0 4 (by simp [four]) "query"
-    simp only [Nat.add_zero] at first
-    rw [first]
-    apply Trie.word_of_loadInt _ (by simpa only [four,Nat.reduceDiv] using extent)
-    simpa only [AllowedipsChild.QueryWords,four,ite_true,address] using input
-  · have not4 : machine.data.regs.rbp.toNat≠32 := by omega
-    rw [ite_eq_right not4]
-    have input : machine.data.dmem.loadInt machine.data.regs.r13.toBitVec 8=some ((key/2^64 : Nat) : Int) ∧
-        machine.data.dmem.loadInt (machine.data.regs.r13.toBitVec+8) 8=some ((key%2^64 : Nat) : Int) := by
-      simpa only [AllowedipsChild.QueryWords,ite_eq_right not4] using input
-    have extent : machine.data.regs.r13.toNat+16≤2^64 := by simpa only [six,Nat.reduceDiv] using extent
-    refine ⟨key/2^64,key%2^64,?_,?_,by omega⟩
-    · have first := keep 0 8 (by simp [six]) "query.high"
-      simp only [Nat.add_zero] at first
-      rw [first]
-      apply Trie.word_of_loadInt _ (by omega)
-      simpa only [address] using input.1
-    · rw [keep 8 8 (by simp [six]) "query.low"]
-      apply Trie.word_of_loadInt _ (by omega)
-      simpa only [BitVec.ofNat_add,address,show BitVec.ofNat 64 8=(8 : BitVec 64) from rfl] using input.2
+  exact Placement.query_words_preserved fields.query fields.family
+    (fields.local_bounds (machine.data.regs.r13.toNat,machine.data.regs.rbp.toNat/8) (by simp))
+    (fields.local_word_frame frame (machine.data.regs.r13.toNat,machine.data.regs.rbp.toNat/8) (by simp))
 
 #print axioms BoundaryFields.query_words
 end Binary.Pair.Allowedips.Root

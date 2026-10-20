@@ -4,6 +4,9 @@ import AllowedipsConnectRecord
 namespace Binary.Pair.Allowedips
 open Root
 
+private theorem ok_bind (value : α) (f : α → Except ε β) :
+    ((Except.ok value : Except ε α) >>= f)=f value := rfl
+
 theorem core_child_write {names : Names} {m : DataMem} {base direction raw : Nat}
     {node : Trie.Node} {child : Option Nat}
     (bit : direction<2) (extent : base+56≤2^64) (small : raw<2^64)
@@ -67,4 +70,31 @@ theorem core_child_write {names : Names} {m : DataMem} {base direction raw : Nat
     simpa only [children] using changed.decode
 
 #print axioms core_child_write
+
+/-- Updating a child word also preserves the existing packed parent field.
+This is the complete parent record, not just the core used by lookup. -/
+theorem record_child_write {names : Names} {m : DataMem} {base direction raw id current : Nat}
+    {node : Leanux.WG.AipNode} {child : Option Nat}
+    (bit : direction<2) (extent : base+56≤2^64) (small : raw<2^64)
+    (read : decodeNode names nodeOffsets m id base=.ok (current,node))
+    (pointer : ∀ path, Trie.pointer names.trie.nodes path raw=.ok child) :
+    decodeNode names nodeOffsets (write64 m (base+8+direction*8) raw) id base=
+      .ok (current,{node with bit:=node.bit.set! direction child}) := by
+  unfold decodeNode at read
+  obtain ⟨core,coreRead,read⟩ := bind_ok read
+  obtain ⟨parentWord,parentRead,read⟩ := bind_ok read
+  obtain ⟨slot,slotRead,read⟩ := bind_ok read
+  cases Except.ok.inj read
+  have changed := core_child_write bit extent small coreRead pointer
+  have parentSame : word (write64 m (base+8+direction*8) raw) "node.parent" (base+48) 8=.ok parentWord := by
+    unfold write64
+    rw [←store_nat64,Nat.add_assoc]
+    rw [word_store_frame m _ base 48 8 (8+direction*8) 8 raw
+      (by decide) (by omega) (.inr (by omega))]
+    exact parentRead
+  simp only [decodeNode,changed,AllowedipsMutationLayout.parent_bit_packed,parentSame,slotRead,
+    ok_bind]
+  rfl
+
+#print axioms record_child_write
 end Binary.Pair.Allowedips

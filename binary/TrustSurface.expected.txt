@@ -1,4 +1,104 @@
 HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
+Binary.Pair.Allowedips.NodeInit.initialization_core_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {names : Binary.Pair.Allowedips.Names} {world : Leanux.World} {machine : MachineState} {key cidr pid base : Nat},
+      Eq.{1}
+          (Binary.Pair.Allowedips.NodeInit.boundary names Binary.Pair.Allowedips.Root.nodeOffsets world machine key cidr
+            pid)
+          (Except.ok.{0, 0} base) →
+        Eventually (Binary.instructionStep fetch)
+          (fun t =>
+            Eq.{1} t.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 511) ∧
+              Eq.{1} (Binary.Pair.Allowedips.NodeInit.registers machine.data.regs t.data.regs base) true ∧
+                Binary.Pair.MappedLe machine.data.dmem t.data.dmem ∧
+                  Eq.{1}
+                      (Binary.Pair.Trie.decodeNode (names.allocated base).trie Binary.Pair.Allowedips.Root.nodeOffsets
+                        t.data.dmem base)
+                      (Except.ok.{0, 0}
+                        (Binary.Pair.Trie.targetNode
+                          (Leanux.WG.newNode key cidr machine.data.regs.rbp.toNat (some.{0} pid)))) ∧
+                    Binary.EqualOutside (Binary.Pair.Allowedips.NodeInit.EntryWrites names machine.data base)
+                      machine.data.dmem t.data.dmem)
+          machine
+@Binary.Pair.Allowedips.child_connect_corresponds : ∀ {names : Binary.Pair.Allowedips.Names} {world : Leanux.World}
+  {machine : MachineState} {key cidr pid base parentId parentBase direction : Nat} {memory : DataMem}
+  {d : Leanux.WG.Device} {parentNode : Leanux.WG.AipNode} {owner : Leanux.WG.Peer},
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields names Binary.Pair.Allowedips.Root.nodeOffsets world machine key cidr
+      pid base →
+    Binary.Pair.Allowedips.Corresponds names Binary.Pair.Allowedips.Root.nodeOffsets machine.data.dmem d →
+      Binary.Pair.Allowedips.NodeInit.Pending names machine.data d key cidr pid base memory →
+        Membership.mem.{0, 0} names.trie.nodes (Prod.mk.{0, 0} parentId parentBase) →
+          LT.lt.{0} direction 2 →
+            Eq.{1} (Std.TreeMap.get?.{0, 0} d.nodes parentId) (some.{0} parentNode) →
+              Eq.{1} (Std.TreeMap.get?.{0, 0} d.peers pid) (some.{0} owner) →
+                Binary.Pair.Allowedips.Corresponds (names.allocated base) Binary.Pair.Allowedips.Root.nodeOffsets
+                  (Binary.Pair.Allowedips.connectMemory memory base
+                    (HAdd.hAdd.{0, 0, 0} parentBase (HMul.hMul.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} direction 1) 8))
+                    (HOr.hOr.{0, 0, 0}
+                      (HAdd.hAdd.{0, 0, 0} parentBase (HMul.hMul.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} direction 1) 8))
+                      direction))
+                  (Binary.Pair.Allowedips.childInstalled d parentId direction key cidr machine.data.regs.rbp.toNat pid
+                    parentNode owner)
+Binary.Pair.Allowedips.install_child_run : ∀ (w : Leanux.WGWorld) (ambient : Leanux.Ambient) (d : Leanux.WG.Device)
+  (parentId direction key cidr width pid : Nat) (parentNode : Leanux.WG.AipNode) (owner : Leanux.WG.Peer),
+  Eq.{1} (getElem?.{0, 0, 0} d.nodes parentId) (some.{0} parentNode) →
+    Eq.{1} (getElem?.{0, 0, 0} d.peers pid) (some.{0} owner) →
+      Ne.{1} d.nextNode parentId →
+        LT.lt.{0} direction 2 →
+          Eq.{1}
+            (StateT.run.{0, 0}
+              (StateT.run.{0, 0}
+                (do
+                  Leanux.WG.listAddTail pid d.nextNode
+                  Leanux.WG.liftAip (Leanux.WG.connectNode (Leanux.WG.Slot.child parentId direction) d.nextNode))
+                {
+                  dev :=
+                    some.{0}
+                      { ifindex := d.ifindex, ifname := d.ifname, running := d.running, sock4 := d.sock4,
+                        sock6 := d.sock6, creatingNet := d.creatingNet, carrier := d.carrier,
+                        cookieSecret := d.cookieSecret, cookieSecretBirthdate := d.cookieSecretBirthdate,
+                        cookieEncryptionKey := d.cookieEncryptionKey, pubkeyHashKey := d.pubkeyHashKey,
+                        rxPackets := d.rxPackets, rxBytes := d.rxBytes, txPackets := d.txPackets, txBytes := d.txBytes,
+                        mtu := d.mtu, inet4Dev := d.inet4Dev, inet6Dev := d.inet6Dev, txErrors := d.txErrors,
+                        txDropped := d.txDropped, rxErrors := d.rxErrors, rxFrameErrors := d.rxFrameErrors,
+                        rxLengthErrors := d.rxLengthErrors, mac1Key := d.mac1Key,
+                        handshakeLastCpu := d.handshakeLastCpu, handshakeQueue := d.handshakeQueue,
+                        handshakeQueueLen := d.handshakeQueueLen, staticIdentity := d.staticIdentity,
+                        incomingPort := d.incomingPort, fwmark := d.fwmark, deviceUpdateGen := d.deviceUpdateGen,
+                        numPeers := d.numPeers, peerList := d.peerList, peers := d.peers,
+                        peerHashtable := d.peerHashtable, peerAllowedips := d.peerAllowedips,
+                        nodes :=
+                          Std.TreeMap.insert.{0, 0} d.nodes d.nextNode
+                            (Leanux.WG.newNode key cidr width (some.{0} pid)),
+                        nextNode := HAdd.hAdd.{0, 0, 0} d.nextNode 1, nextPeer := d.nextPeer,
+                        indexTable := d.indexTable, sendWorkQueue := d.sendWorkQueue, keypairs := d.keypairs,
+                        nextKeypairId := d.nextKeypairId, encryptLastCpu := d.encryptLastCpu,
+                        encryptQueue := d.encryptQueue, txWorkQueue := d.txWorkQueue,
+                        decryptLastCpu := d.decryptLastCpu, decryptQueue := d.decryptQueue, txSkbs := d.txSkbs,
+                        rxSkbs := d.rxSkbs, nextSkb := d.nextSkb, clearWorkQueue := d.clearWorkQueue },
+                  nlSock7 := w.nlSock7, nlSock8 := w.nlSock8, peerCounter := w.peerCounter,
+                  keypairCounter := w.keypairCounter, netIfindexNext := w.netIfindexNext, ratelimiter := w.ratelimiter,
+                  timerClk := w.timerClk, timerEnqueues := w.timerEnqueues, sent := w.sent, timerUnits := w.timerUnits,
+                  timerPassStep := w.timerPassStep, netRxRaised := w.netRxRaised, queuedThisCall := w.queuedThisCall,
+                  jiffiesLast := w.jiffiesLast, dstCacheRecords := w.dstCacheRecords, portBound := w.portBound,
+                  fixtureNetDevices := w.fixtureNetDevices, lastUnderLoad := w.lastUnderLoad, routing := w.routing })
+              ambient)
+            (Except.ok.{0, 0}
+              (Prod.mk.{0, 0}
+                (Prod.mk.{0, 0} ()
+                  {
+                    dev :=
+                      some.{0}
+                        (Binary.Pair.Allowedips.childInstalled d parentId direction key cidr width pid parentNode
+                          owner),
+                    nlSock7 := w.nlSock7, nlSock8 := w.nlSock8, peerCounter := w.peerCounter,
+                    keypairCounter := w.keypairCounter, netIfindexNext := w.netIfindexNext,
+                    ratelimiter := w.ratelimiter, timerClk := w.timerClk, timerEnqueues := w.timerEnqueues,
+                    sent := w.sent, timerUnits := w.timerUnits, timerPassStep := w.timerPassStep,
+                    netRxRaised := w.netRxRaised, queuedThisCall := w.queuedThisCall, jiffiesLast := w.jiffiesLast,
+                    dstCacheRecords := w.dstCacheRecords, portBound := w.portBound,
+                    fixtureNetDevices := w.fixtureNetDevices, lastUnderLoad := w.lastUnderLoad, routing := w.routing })
+                ambient))
 Binary.Pair.Allowedips.NodeInit.initialization_executes : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
     ∀ {names : Binary.Pair.Allowedips.Names} {world : Leanux.World} {machine : MachineState} {key cidr pid base : Nat},
@@ -1161,6 +1261,248 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                 Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
                   Eventually (Binary.instructionStep fetch)
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
+def Binary.Pair.Allowedips.NodeInit.EntryWrites : Binary.Pair.Allowedips.Names → MachineData → Nat → BitVec 64 → Prop :=
+fun names s base a =>
+  Binary.InRange (BitVec.ofNat 64 base) 72 a ∨
+    Binary.Pair.Allowedips.ListWrites (names.allocated base) a ∨
+      Binary.Pair.Allowedips.NodeInit.StackWrites s.regs.rsp.toNat a
+def Binary.Pair.Allowedips.NodeInit.StackWrites : Nat → BitVec 64 → Prop :=
+fun stack a =>
+  Exists.{1} fun offset =>
+    Membership.mem.{0, 0} (List.cons.{0} 36 (List.cons.{0} 43 (List.cons.{0} 44 List.nil.{0}))) offset ∧
+      Binary.InRange (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} stack offset)) 1 a
+structure Binary.Pair.Allowedips.NodeInit.BoundaryFields (names : Binary.Pair.Allowedips.Names)
+  (o : AllowedipsProbe.Offsets) (world : Leanux.World) (machine : MachineState) (key cidr pid base : Nat) : Prop
+number of parameters: 8
+fields:
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.asserted : Eq.{1}
+      (Binary.Pair.Allowedips.assertAt names o machine.data.dmem world) (Except.ok.{0, 0} ())
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.baseRead : Eq.{1} (readNat machine machine.data.regs.rsp.toNat 8)
+      (Except.ok.{0, 0} base)
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.pc : Eq.{1} machine.pc
+      (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 342)
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.family : Eq.{1} machine.data.regs.rbp.toNat 32 ∨
+      Eq.{1} machine.data.regs.rbp.toNat 128
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.owner : Eq.{1}
+      (Binary.Pair.Trie.address names.trie.peers (some.{0} pid)) (Except.ok.{0, 0} machine.data.regs.r14.toNat)
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.cidrRead : Eq.{1}
+      (readNat machine (HAdd.hAdd.{0, 0, 0} machine.data.regs.rsp.toNat 16) 4) (Except.ok.{0, 0} cidr)
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.cidrBound : LE.le.{0} cidr machine.data.regs.rbp.toNat
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.original : Eq.{1} machine.data.regs.r12.toNat cidr
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.bits : Eq.{1} machine.data.regs.r15.toNat machine.data.regs.rbp.toNat
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.allocated : Eq.{1}
+      (Binary.Pair.Allowedips.validate (names.allocated base) o) (Except.ok.{0, 0} ())
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.zero : Eq.{1} (readNat machine base 72) (Except.ok.{0, 0} 0)
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.query : Eq.{1}
+      (Binary.Pair.Allowedips.Placement.queryLocals machine key machine.data.regs.rbp.toNat) (Except.ok.{0, 0} ())
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.stackMapped : ∀ (offset : Nat),
+      Membership.mem.{0, 0} (List.cons.{0} 36 (List.cons.{0} 43 (List.cons.{0} 44 List.nil.{0}))) offset →
+        Eq.{1}
+          (Option.isSome.{0}
+            (Mem.loadInt machine.data.dmem (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} machine.data.regs.rsp.toNat offset))
+              1))
+          true
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.queryApart : Eq.{1}
+      (Binary.Pair.spansApart
+        (List.cons.{0} (Prod.mk.{0, 0} machine.data.regs.r13.toNat (HDiv.hDiv.{0, 0, 0} machine.data.regs.rbp.toNat 8))
+          List.nil.{0})
+        (Binary.Pair.Allowedips.NodeInit.writeSpans (names.allocated base) machine.data base))
+      true
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.stackApart : Eq.{1}
+      (Binary.Pair.spansApart
+        (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} machine.data.regs.rsp.toNat 36) 1)
+          (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} machine.data.regs.rsp.toNat 43) 1)
+            (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} machine.data.regs.rsp.toNat 44) 1) List.nil.{0})))
+        (HAppend.hAppend.{0, 0, 0}
+          (List.cons.{0} (Prod.mk.{0, 0} base 72) (List.cons.{0} (Prod.mk.{0, 0} names.table 24) List.nil.{0}))
+          (Binary.Pair.Allowedips.allocations names o)))
+      true
+constructor:
+  Binary.Pair.Allowedips.NodeInit.BoundaryFields.mk {names : Binary.Pair.Allowedips.Names} {o : AllowedipsProbe.Offsets}
+    {world : Leanux.World} {machine : MachineState} {key cidr pid base : Nat}
+    (asserted : Eq.{1} (Binary.Pair.Allowedips.assertAt names o machine.data.dmem world) (Except.ok.{0, 0} ()))
+    (baseRead : Eq.{1} (readNat machine machine.data.regs.rsp.toNat 8) (Except.ok.{0, 0} base))
+    (pc : Eq.{1} machine.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 342))
+    (family : Eq.{1} machine.data.regs.rbp.toNat 32 ∨ Eq.{1} machine.data.regs.rbp.toNat 128)
+    (owner :
+      Eq.{1} (Binary.Pair.Trie.address names.trie.peers (some.{0} pid)) (Except.ok.{0, 0} machine.data.regs.r14.toNat))
+    (cidrRead : Eq.{1} (readNat machine (HAdd.hAdd.{0, 0, 0} machine.data.regs.rsp.toNat 16) 4) (Except.ok.{0, 0} cidr))
+    (cidrBound : LE.le.{0} cidr machine.data.regs.rbp.toNat) (original : Eq.{1} machine.data.regs.r12.toNat cidr)
+    (bits : Eq.{1} machine.data.regs.r15.toNat machine.data.regs.rbp.toNat)
+    (allocated : Eq.{1} (Binary.Pair.Allowedips.validate (names.allocated base) o) (Except.ok.{0, 0} ()))
+    (zero : Eq.{1} (readNat machine base 72) (Except.ok.{0, 0} 0))
+    (query :
+      Eq.{1} (Binary.Pair.Allowedips.Placement.queryLocals machine key machine.data.regs.rbp.toNat)
+        (Except.ok.{0, 0} ()))
+    (stackMapped :
+      ∀ (offset : Nat),
+        Membership.mem.{0, 0} (List.cons.{0} 36 (List.cons.{0} 43 (List.cons.{0} 44 List.nil.{0}))) offset →
+          Eq.{1}
+            (Option.isSome.{0}
+              (Mem.loadInt machine.data.dmem (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} machine.data.regs.rsp.toNat offset))
+                1))
+            true)
+    (queryApart :
+      Eq.{1}
+        (Binary.Pair.spansApart
+          (List.cons.{0}
+            (Prod.mk.{0, 0} machine.data.regs.r13.toNat (HDiv.hDiv.{0, 0, 0} machine.data.regs.rbp.toNat 8))
+            List.nil.{0})
+          (Binary.Pair.Allowedips.NodeInit.writeSpans (names.allocated base) machine.data base))
+        true)
+    (stackApart :
+      Eq.{1}
+        (Binary.Pair.spansApart
+          (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} machine.data.regs.rsp.toNat 36) 1)
+            (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} machine.data.regs.rsp.toNat 43) 1)
+              (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} machine.data.regs.rsp.toNat 44) 1) List.nil.{0})))
+          (HAppend.hAppend.{0, 0, 0}
+            (List.cons.{0} (Prod.mk.{0, 0} base 72) (List.cons.{0} (Prod.mk.{0, 0} names.table 24) List.nil.{0}))
+            (Binary.Pair.Allowedips.allocations names o)))
+        true) :
+    Binary.Pair.Allowedips.NodeInit.BoundaryFields names o world machine key cidr pid base
+structure Binary.Pair.Allowedips.NodeInit.Pending (names : Binary.Pair.Allowedips.Names) (before : MachineData)
+  (d : Leanux.WG.Device) (key cidr pid base : Nat) (memory : DataMem) : Prop
+number of parameters: 8
+fields:
+  Binary.Pair.Allowedips.NodeInit.Pending.core : Eq.{1}
+      (Binary.Pair.Trie.decodeNode (names.allocated base).trie Binary.Pair.Allowedips.Root.nodeOffsets memory base)
+      (Except.ok.{0, 0} (Binary.Pair.Trie.targetNode (Leanux.WG.newNode key cidr before.regs.rbp.toNat (some.{0} pid))))
+  Binary.Pair.Allowedips.NodeInit.Pending.nodes : ∀ (pair : Prod.{0, 0} Leanux.WG.NodeId Nat),
+      Membership.mem.{0, 0} names.trie.nodes pair →
+        ∀ (value : Prod.{0, 0} Leanux.WG.NodeId Leanux.WG.AipNode),
+          Eq.{1}
+              (Binary.Pair.Allowedips.decodeNode names Binary.Pair.Allowedips.Root.nodeOffsets before.dmem
+                (Prod.fst.{0, 0} pair) (Prod.snd.{0, 0} pair))
+              (Except.ok.{0, 0} value) →
+            Eq.{1}
+              (Binary.Pair.Allowedips.decodeNode (names.allocated base) Binary.Pair.Allowedips.Root.nodeOffsets memory
+                (Prod.fst.{0, 0} pair) (Prod.snd.{0, 0} pair))
+              (Except.ok.{0, 0} value)
+  Binary.Pair.Allowedips.NodeInit.Pending.peers : ∀ (pair : Prod.{0, 0} Leanux.WG.PeerId Nat),
+      Membership.mem.{0, 0} names.trie.peers pair →
+        ∀ (value : Prod.{0, 0} Leanux.WG.PeerId (Prod.{0, 0} Nat (List.{0} Leanux.WG.NodeId))),
+          Eq.{1}
+              (Binary.Pair.Allowedips.decodePeer names Binary.Pair.Allowedips.Root.nodeOffsets before.dmem
+                (Prod.fst.{0, 0} pair) (Prod.snd.{0, 0} pair))
+              (Except.ok.{0, 0} value) →
+            Eq.{1}
+              (Binary.Pair.Allowedips.decodePeer (names.allocated base) Binary.Pair.Allowedips.Root.nodeOffsets memory
+                (Prod.fst.{0, 0} pair) (Prod.snd.{0, 0} pair))
+              (Except.ok.{0, 0} (Binary.Pair.Allowedips.appendOwner names.nextNode pid value))
+  Binary.Pair.Allowedips.NodeInit.Pending.table : ∀ (offset size : Nat),
+      LE.le.{0} (HAdd.hAdd.{0, 0, 0} offset size) 24 →
+        ∀ (path : String),
+          Eq.{1} (Binary.Pair.word memory path (HAdd.hAdd.{0, 0, 0} names.table offset) size)
+            (Binary.Pair.word before.dmem path (HAdd.hAdd.{0, 0, 0} names.table offset) size)
+  Binary.Pair.Allowedips.NodeInit.Pending.internal : ∀ (current : Leanux.WG.NodeId) (node : Leanux.WG.AipNode),
+      Membership.mem.{0, 0} (Binary.Pair.Allowedips.target d).nodes (Prod.mk.{0, 0} current node) →
+        Eq.{1} node.peer none.{0} →
+          Eq.{1} (Binary.Pair.Allowedips.internalListCheck (names.allocated base) memory current) (Except.ok.{0, 0} ())
+constructor:
+  Binary.Pair.Allowedips.NodeInit.Pending.mk {names : Binary.Pair.Allowedips.Names} {before : MachineData}
+    {d : Leanux.WG.Device} {key cidr pid base : Nat} {memory : DataMem}
+    (core :
+      Eq.{1}
+        (Binary.Pair.Trie.decodeNode (names.allocated base).trie Binary.Pair.Allowedips.Root.nodeOffsets memory base)
+        (Except.ok.{0, 0}
+          (Binary.Pair.Trie.targetNode (Leanux.WG.newNode key cidr before.regs.rbp.toNat (some.{0} pid)))))
+    (nodes :
+      ∀ (pair : Prod.{0, 0} Leanux.WG.NodeId Nat),
+        Membership.mem.{0, 0} names.trie.nodes pair →
+          ∀ (value : Prod.{0, 0} Leanux.WG.NodeId Leanux.WG.AipNode),
+            Eq.{1}
+                (Binary.Pair.Allowedips.decodeNode names Binary.Pair.Allowedips.Root.nodeOffsets before.dmem
+                  (Prod.fst.{0, 0} pair) (Prod.snd.{0, 0} pair))
+                (Except.ok.{0, 0} value) →
+              Eq.{1}
+                (Binary.Pair.Allowedips.decodeNode (names.allocated base) Binary.Pair.Allowedips.Root.nodeOffsets memory
+                  (Prod.fst.{0, 0} pair) (Prod.snd.{0, 0} pair))
+                (Except.ok.{0, 0} value))
+    (peers :
+      ∀ (pair : Prod.{0, 0} Leanux.WG.PeerId Nat),
+        Membership.mem.{0, 0} names.trie.peers pair →
+          ∀ (value : Prod.{0, 0} Leanux.WG.PeerId (Prod.{0, 0} Nat (List.{0} Leanux.WG.NodeId))),
+            Eq.{1}
+                (Binary.Pair.Allowedips.decodePeer names Binary.Pair.Allowedips.Root.nodeOffsets before.dmem
+                  (Prod.fst.{0, 0} pair) (Prod.snd.{0, 0} pair))
+                (Except.ok.{0, 0} value) →
+              Eq.{1}
+                (Binary.Pair.Allowedips.decodePeer (names.allocated base) Binary.Pair.Allowedips.Root.nodeOffsets memory
+                  (Prod.fst.{0, 0} pair) (Prod.snd.{0, 0} pair))
+                (Except.ok.{0, 0} (Binary.Pair.Allowedips.appendOwner names.nextNode pid value)))
+    (table :
+      ∀ (offset size : Nat),
+        LE.le.{0} (HAdd.hAdd.{0, 0, 0} offset size) 24 →
+          ∀ (path : String),
+            Eq.{1} (Binary.Pair.word memory path (HAdd.hAdd.{0, 0, 0} names.table offset) size)
+              (Binary.Pair.word before.dmem path (HAdd.hAdd.{0, 0, 0} names.table offset) size))
+    (internal :
+      ∀ (current : Leanux.WG.NodeId) (node : Leanux.WG.AipNode),
+        Membership.mem.{0, 0} (Binary.Pair.Allowedips.target d).nodes (Prod.mk.{0, 0} current node) →
+          Eq.{1} node.peer none.{0} →
+            Eq.{1} (Binary.Pair.Allowedips.internalListCheck (names.allocated base) memory current)
+              (Except.ok.{0, 0} ())) :
+    Binary.Pair.Allowedips.NodeInit.Pending names before d key cidr pid base memory
+def Binary.Pair.Allowedips.childInstalled : Leanux.WG.Device →
+  Nat → Nat → Nat → Nat → Nat → Nat → Leanux.WG.AipNode → Leanux.WG.Peer → Leanux.WG.Device :=
+fun d parentId direction key cidr width pid parentNode owner =>
+  have fresh := Leanux.WG.newNode key cidr width (some.{0} pid);
+  { ifindex := d.ifindex, ifname := d.ifname, running := d.running, sock4 := d.sock4, sock6 := d.sock6,
+    creatingNet := d.creatingNet, carrier := d.carrier, cookieSecret := d.cookieSecret,
+    cookieSecretBirthdate := d.cookieSecretBirthdate, cookieEncryptionKey := d.cookieEncryptionKey,
+    pubkeyHashKey := d.pubkeyHashKey, rxPackets := d.rxPackets, rxBytes := d.rxBytes, txPackets := d.txPackets,
+    txBytes := d.txBytes, mtu := d.mtu, inet4Dev := d.inet4Dev, inet6Dev := d.inet6Dev, txErrors := d.txErrors,
+    txDropped := d.txDropped, rxErrors := d.rxErrors, rxFrameErrors := d.rxFrameErrors,
+    rxLengthErrors := d.rxLengthErrors, mac1Key := d.mac1Key, handshakeLastCpu := d.handshakeLastCpu,
+    handshakeQueue := d.handshakeQueue, handshakeQueueLen := d.handshakeQueueLen, staticIdentity := d.staticIdentity,
+    incomingPort := d.incomingPort, fwmark := d.fwmark, deviceUpdateGen := d.deviceUpdateGen, numPeers := d.numPeers,
+    peerList := d.peerList,
+    peers :=
+      Std.TreeMap.insert.{0, 0} d.peers pid
+        { remoteStatic := owner.remoteStatic, presharedKey := owner.presharedKey,
+          precomputedStaticStatic := owner.precomputedStaticStatic, endpoint := owner.endpoint,
+          dstCache := owner.dstCache, persistentKeepaliveInterval := owner.persistentKeepaliveInterval,
+          allowedipsList := HAppend.hAppend.{0, 0, 0} owner.allowedipsList (List.cons.{0} d.nextNode List.nil.{0}),
+          isDead := owner.isDead, refcount := owner.refcount, internalId := owner.internalId, staged := owner.staged,
+          handshakePending := owner.handshakePending, lastSentHandshake := owner.lastSentHandshake,
+          lastInitiationConsumption := owner.lastInitiationConsumption, txBytes := owner.txBytes,
+          handshakeEntryPeer := owner.handshakeEntryPeer, handshakeState := owner.handshakeState,
+          latestTimestamp := owner.latestTimestamp, remoteIndex := owner.remoteIndex,
+          keypairCurrent := owner.keypairCurrent, keypairPrevious := owner.keypairPrevious,
+          keypairNext := owner.keypairNext, walltimeLastHandshake := owner.walltimeLastHandshake,
+          serialWorkCpu := owner.serialWorkCpu, txQueue := owner.txQueue, rxQueue := owner.rxQueue,
+          napiScheduled := owner.napiScheduled, timerRetransmitHandshake := owner.timerRetransmitHandshake,
+          timerSendKeepalive := owner.timerSendKeepalive, timerNewHandshake := owner.timerNewHandshake,
+          timerZeroKeyMaterial := owner.timerZeroKeyMaterial,
+          timerPersistentKeepalive := owner.timerPersistentKeepalive,
+          wheelRetransmitHandshake := owner.wheelRetransmitHandshake, wheelSendKeepalive := owner.wheelSendKeepalive,
+          wheelNewHandshake := owner.wheelNewHandshake, wheelZeroKeyMaterial := owner.wheelZeroKeyMaterial,
+          wheelPersistentKeepalive := owner.wheelPersistentKeepalive,
+          timerHandshakeAttempts := owner.timerHandshakeAttempts,
+          timerNeedAnotherKeepalive := owner.timerNeedAnotherKeepalive,
+          sentLastminuteHandshake := owner.sentLastminuteHandshake, rxBytes := owner.rxBytes,
+          ephemeralPrivate := owner.ephemeralPrivate, remoteEphemeral := owner.remoteEphemeral,
+          chainingKey := owner.chainingKey, hash := owner.hash, cookieMac1Key := owner.cookieMac1Key,
+          lastMac1Sent := owner.lastMac1Sent, haveSentMac1 := owner.haveSentMac1,
+          cookieDecryptionKey := owner.cookieDecryptionKey, cookie := owner.cookie,
+          cookieBirthdate := owner.cookieBirthdate, cookieIsValid := owner.cookieIsValid },
+    peerHashtable := d.peerHashtable, peerAllowedips := d.peerAllowedips,
+    nodes :=
+      Std.TreeMap.insert.{0, 0}
+        (Std.TreeMap.insert.{0, 0} (Std.TreeMap.insert.{0, 0} d.nodes d.nextNode fresh) d.nextNode
+          { peer := fresh.peer, bit := fresh.bit, cidr := fresh.cidr, bitlen := fresh.bitlen, bits := fresh.bits,
+            parent := Leanux.WG.Slot.child parentId direction })
+        parentId
+        { peer := parentNode.peer, bit := Array.set!.{0} parentNode.bit direction (some.{0} d.nextNode),
+          cidr := parentNode.cidr, bitlen := parentNode.bitlen, bits := parentNode.bits, parent := parentNode.parent },
+    nextNode := HAdd.hAdd.{0, 0, 0} d.nextNode 1, nextPeer := d.nextPeer, indexTable := d.indexTable,
+    sendWorkQueue := d.sendWorkQueue, keypairs := d.keypairs, nextKeypairId := d.nextKeypairId,
+    encryptLastCpu := d.encryptLastCpu, encryptQueue := d.encryptQueue, txWorkQueue := d.txWorkQueue,
+    decryptLastCpu := d.decryptLastCpu, decryptQueue := d.decryptQueue, txSkbs := d.txSkbs, rxSkbs := d.rxSkbs,
+    nextSkb := d.nextSkb, clearWorkQueue := d.clearWorkQueue }
+def Binary.Pair.Allowedips.connectMemory : DataMem → Nat → Nat → Nat → DataMem :=
+fun m base slot packed => Binary.Pair.write64 (Binary.Pair.write64 m (HAdd.hAdd.{0, 0, 0} base 48) packed) slot base
 def Binary.Pair.Allowedips.NodeInit.boundary : Binary.Pair.Allowedips.Names →
   AllowedipsProbe.Offsets → Leanux.World → MachineState → Nat → Nat → Nat → Except.{0, 0} String Nat :=
 fun names o world machine key cidr pid => do
