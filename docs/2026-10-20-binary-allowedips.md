@@ -343,5 +343,48 @@ support checkpoint to the successful loop build at approximately 03:17 is about
 separation assertions: 54 insertions and 54 lookups in 2.225 seconds. The
 eight-call recorded comparison passes under both seeds in 0.269 seconds.
 All new declarations build with the standard axioms. Fresh kernel replay of
-`AllowedipsPlacementSimulation` is running; external acceptance is pending.
+`AllowedipsPlacementSimulation` passed; external acceptance is pending.
 The test counts and loop result add no completed-function coverage.
+
+
+## Checked placement boundary (03:34 UTC)
+
+`Placement.loop_checked` derives every placement-loop input and its initial
+invariant from the same executable `Placement.header` used by the runner.
+It then applies the complete loop proof. Reconstruction, structural heap,
+query bytes, saved inputs, callback readiness and separation are checked at
+entry; the theorem does not take a physical iteration or future relation as
+an assumption. It supports both families and every accepted placement exit,
+including internal-node traversal. Its boundary is the nonempty placement
+header, not the public insertion entry. Mutation and wrapper composition remain
+open, and there is no new completed-function coverage.
+
+The bridge adds 350 proof/support lines and factors the executable assertion
+into cursor, saved-input and family-specific query checks. From the earlier
+loop checkpoint at 03:17 to this checkpoint is about 17 elapsed minutes,
+including failed proof reductions and validation. Generated executions pass
+54 insertions and 54 retained-heap lookups in 2.248 seconds. The recorded
+three-way comparison passes eight calls under both seeds in 0.281 seconds,
+with 170 coverage points, 64 comparisons and 117 decisions. The printed surface
+now includes `loop_checked`, its entry assertion, frame and read/write covers;
+no environmental premise was added to `TrustBase.lean`. The new full-closure
+fresh replay is pending; external acceptance remains pending.
+
+Proof-development failures were real failures. Several large assertion-decoding
+attempts were stopped after excessive growth; one accidental overlap of two
+writer builds was detected and both owned processes were stopped. Other
+attempts failed kernel checking after about 80 seconds with a deep-recursion
+error. A profiled diagnostic localized the latter to the combined query proof:
+elaboration took about 0.07 seconds while kernel checking took about 77 seconds.
+Splitting the executable IPv4 and IPv6 checks and their lemmas eliminated that
+reduction, with the complete local-check proof module checking in under a
+second. The small `require` guard also separates a failing assertion from its
+continuation and has a proved equivalence to the prior `unless` idiom. No limit
+was raised, failure counted as a pass, or proof bypass introduced. This is a
+concrete example where executable/proof decomposition reduced tooling cost;
+it does not measure full mutation-proof cost.
+
+The coordinator's counter correction is still pending a landing notice. The
+wrap witness and its expected binary zero are unchanged. Neither this entry
+assertion nor reconstruction excludes wrapping sequence states or substitutes
+a modulo target. The mirror and main remain untouched.

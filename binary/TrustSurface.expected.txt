@@ -1,4 +1,43 @@
 HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
+Binary.Pair.Allowedips.Placement.loop_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsDecoderAgreement fetch →
+    Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+      Binary.CommonBits.Callbacks fetch →
+        Binary.TrustBase.AllowedipsTraceCmp1Contract fetch →
+          ∀ {names : Binary.Pair.Allowedips.Names} {o : AllowedipsProbe.Offsets} {c : Binary.CommonBitsCoverage.Context}
+            {w : Leanux.World} {d : Leanux.WG.Device} {s : MachineState} {root : Option.{0} Leanux.WG.NodeId}
+            {key cidr bits peer stack : Nat},
+            Eq.{1} w.wg.dev (some.{0} d) →
+              Eq.{1}
+                  (Binary.Pair.Allowedips.Placement.header names o c w s root key cidr bits peer stack
+                    (Prod.mk.{0, 0} none.{0} (Prod.mk.{0, 0} root none.{0})))
+                  (Except.ok.{0, 0} ()) →
+                ∀ (ambient finalAmbient : Leanux.Ambient) (finalStore : Leanux.WG.AipStore)
+                  (result : Prod.{0, 0} (Option.{0} Leanux.WG.NodeId) Bool),
+                  Eq.{1}
+                      (StateT.run.{0, 0}
+                        (StateT.run.{0, 0} (Leanux.WG.nodePlacement root key cidr bits) (Binary.Source.Aip.store d))
+                        ambient)
+                      (Except.ok.{0, 0} (Prod.mk.{0, 0} (Prod.mk.{0, 0} result finalStore) finalAmbient)) →
+                    Eventually (Binary.instructionStep fetch)
+                      (fun t =>
+                        Eq.{1} finalStore (Binary.Source.Aip.store d) ∧
+                          Binary.Pair.Allowedips.Placement.Frame s.data c t.data ∧
+                            Eq.{1} t.pc
+                                (ite.{1} (Eq.{1} (Prod.snd.{0, 0} result) true)
+                                  (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 970)
+                                  (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 288)) ∧
+                              Eq.{1} t.data.regs.rbx
+                                  (Binary.Pair.Allowedips.Placement.ptr
+                                    (Binary.Pair.Trie.interpretation names.trie.nodes) (Prod.fst.{0, 0} result)) ∧
+                                (Eq.{1} (Prod.snd.{0, 0} result) false →
+                                    Eq.{1} t.data.regs.rbp { toBitVec := BitVec.setWidth 64 (BitVec.ofNat 32 bits) } ∧
+                                      Eq.{1} t.data.regs.r14 (UInt64.ofNat peer)) ∧
+                                  Binary.Pair.Allowedips.Corresponds names o t.data.dmem d ∧
+                                    Eq.{1}
+                                      (Binary.Pair.Allowedips.heap names (Binary.Pair.Allowedips.target d) t.data.dmem)
+                                      (Except.ok.{0, 0} ()))
+                      s
 Binary.Pair.Allowedips.lookup_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsDecoderAgreement fetch →
     Binary.TrustBase.AnchoredDecoderAgreement fetch →
@@ -831,6 +870,197 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                 Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
                   Eventually (Binary.instructionStep fetch)
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
+def Binary.Pair.Allowedips.Placement.header : Binary.Pair.Allowedips.Names →
+  AllowedipsProbe.Offsets →
+    Binary.CommonBitsCoverage.Context →
+      Leanux.World →
+        MachineState →
+          Option.{0} Leanux.WG.NodeId →
+            Nat → Nat → Nat → Nat → Nat → Binary.Pair.Allowedips.Placement.Acc → Except.{0, 0} String Unit :=
+fun names o c world machine root key cidr bits peer stack acc => do
+  Binary.Pair.Allowedips.assertAt names o machine.data.dmem world
+  Binary.Pair.Trie.callInput names.trie o machine.data.dmem root bits key
+  Binary.Pair.Allowedips.Placement.locals names machine root key cidr bits peer stack acc
+  Binary.Pair.require (BEq.beq.{0} machine.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 247))
+      "placement.header-pc"
+  Binary.Pair.require (decide (LE.le.{0} cidr bits)) "placement.header-cidr"
+  Binary.Pair.require (Binary.Pair.Trie.frameCheck c machine.data) "placement.callback-frame"
+  Binary.Pair.require
+      (Binary.Pair.spansApart (Binary.Pair.Trie.readSpans c)
+        (List.cons.{0} (Prod.mk.{0, 0} (HSub.hSub.{0, 0, 0} machine.data.regs.rsp.toBitVec 48).toNat 56) List.nil.{0}))
+      "placement.service-separation"
+  Binary.Pair.require
+      (Binary.Pair.spansApart (Binary.Pair.Allowedips.readSpans names o)
+        (Binary.Pair.Allowedips.Placement.writes c machine))
+      "placement.heap-separation"
+  Binary.Pair.require
+      (Binary.Pair.spansApart
+        (List.cons.{0} (Prod.mk.{0, 0} machine.data.regs.r13.toNat (HDiv.hDiv.{0, 0, 0} bits 8)) List.nil.{0})
+        (Binary.Pair.Allowedips.Placement.writes c machine))
+      "placement.query-separation"
+  Binary.Pair.require
+      (Binary.Pair.spansApart
+        (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} stack 8) 8)
+          (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} stack 16) 4)
+            (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} stack 24) 8)
+              (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} stack 36) 4) List.nil.{0}))))
+        (Binary.Pair.Allowedips.Placement.writes c machine))
+      "placement.saved-input-separation"
+def Binary.Pair.Allowedips.Placement.locals : Binary.Pair.Allowedips.Names →
+  MachineState →
+    Option.{0} Leanux.WG.NodeId →
+      Nat → Nat → Nat → Nat → Nat → Binary.Pair.Allowedips.Placement.Acc → Except.{0, 0} String Unit :=
+fun names machine root key cidr bits peer stack acc => do
+  Binary.Pair.Allowedips.Placement.cursorLocals names machine acc
+  Binary.Pair.Allowedips.Placement.savedLocals names machine root cidr bits peer stack
+  Binary.Pair.Allowedips.Placement.queryLocals machine key bits
+def Binary.Pair.Allowedips.Placement.cursorLocals : Binary.Pair.Allowedips.Names →
+  MachineState → Binary.Pair.Allowedips.Placement.Acc → Except.{0, 0} String Unit :=
+fun names machine acc => do
+  Binary.Pair.require
+      (Option.isNone.{0} (Prod.fst.{0, 0} acc) && Option.isSome.{0} (Prod.fst.{0, 0} (Prod.snd.{0, 0} acc)))
+      "placement.header-source"
+  let __do_lift ← Binary.Pair.Trie.address names.trie.nodes (Prod.fst.{0, 0} (Prod.snd.{0, 0} acc))
+  let __do_lift_1 ← readNat machine machine.data.regs.rsp.toNat 8
+  let __do_lift_2 ← Binary.Pair.Trie.address names.trie.nodes (Prod.snd.{0, 0} (Prod.snd.{0, 0} acc))
+  Binary.Pair.require (BEq.beq.{0} machine.data.regs.rbx.toNat __do_lift && BEq.beq.{0} __do_lift_1 __do_lift_2)
+      "placement.cursor-parent"
+def Binary.Pair.Allowedips.Placement.savedLocals : Binary.Pair.Allowedips.Names →
+  MachineState → Option.{0} Leanux.WG.NodeId → Nat → Nat → Nat → Nat → Except.{0, 0} String Unit :=
+fun names machine root cidr bits peer stack => do
+  Binary.Pair.require
+      (BEq.beq.{0} machine.data.regs.rsp.toNat stack && BEq.beq.{0} machine.data.regs.r12.toNat cidr &&
+        BEq.beq.{0} machine.data.regs.r15.toNat bits)
+      "placement.stack-cidr-width"
+  let slot ← readNat machine (HAdd.hAdd.{0, 0, 0} stack 8) 8
+  let __do_lift ← readNat machine slot 8
+  let __do_lift_1 ← Binary.Pair.Trie.address names.trie.nodes root
+  let __do_lift_2 ← readNat machine (HAdd.hAdd.{0, 0, 0} stack 24) 8
+  let __do_lift_3 ← readNat machine (HAdd.hAdd.{0, 0, 0} stack 36) 4
+  let __do_lift_4 ← readNat machine (HAdd.hAdd.{0, 0, 0} stack 16) 4
+  Binary.Pair.require
+      (BEq.beq.{0} slot
+                (HAdd.hAdd.{0, 0, 0} names.table
+                  (ite.{1} (Eq.{1} (BEq.beq.{0} bits 32) true) Binary.AllowedipsMutationLayout.root4
+                    Binary.AllowedipsMutationLayout.root6)) &&
+              BEq.beq.{0} __do_lift __do_lift_1 &&
+            BEq.beq.{0} __do_lift_2 peer &&
+          BEq.beq.{0} __do_lift_3 bits &&
+        BEq.beq.{0} __do_lift_4 cidr)
+      "placement.saved-inputs"
+def Binary.Pair.Allowedips.Placement.queryLocals : MachineState → Nat → Nat → Except.{0, 0} String Unit :=
+fun machine key bits =>
+  ite.{1} (Eq.{1} (BEq.beq.{0} bits 32) true) (Binary.Pair.Allowedips.Placement.query4 machine key)
+    (Binary.Pair.Allowedips.Placement.query6 machine key)
+def Binary.Pair.Allowedips.Placement.query4 : MachineState → Nat → Except.{0, 0} String Unit :=
+fun machine key => do
+  let __do_lift ← readNat machine machine.data.regs.r13.toNat 4
+  Binary.Pair.require (BEq.beq.{0} __do_lift key) "placement.query"
+def Binary.Pair.Allowedips.Placement.query6 : MachineState → Nat → Except.{0, 0} String Unit :=
+fun machine key => do
+  let high ← readNat machine machine.data.regs.r13.toNat 8
+  let low ← readNat machine (HAdd.hAdd.{0, 0, 0} machine.data.regs.r13.toNat 8) 8
+  Binary.Pair.require (BEq.beq.{0} (HAdd.hAdd.{0, 0, 0} (HMul.hMul.{0, 0, 0} high (HPow.hPow.{0, 0, 0} 2 64)) low) key)
+      "placement.query"
+def Binary.Pair.Allowedips.Placement.writes : Binary.CommonBitsCoverage.Context →
+  MachineState → List.{0} Binary.Pair.Span :=
+fun c machine =>
+  HAppend.hAppend.{0, 0, 0}
+    (List.cons.{0} (Prod.mk.{0, 0} (HSub.hSub.{0, 0, 0} machine.data.regs.rsp.toBitVec 48).toNat 56) List.nil.{0})
+    (Binary.Pair.Trie.writeSpans c)
+def Binary.Pair.Allowedips.Placement.Writes : UInt64 → Binary.CommonBitsCoverage.Context → BitVec 64 → Prop :=
+fun stack c a => Binary.InRange (HSub.hSub.{0, 0, 0} stack.toBitVec 48) 56 a ∨ c.writes a
+structure Binary.Pair.Allowedips.Placement.Frame (base : MachineData) (c : Binary.CommonBitsCoverage.Context)
+  (s : MachineData) : Prop
+number of parameters: 3
+fields:
+  Binary.Pair.Allowedips.Placement.Frame.ready : Binary.CommonBitsCoverage.CallsReady c s
+  Binary.Pair.Allowedips.Placement.Frame.stack : Eq.{1} s.regs.rsp base.regs.rsp
+  Binary.Pair.Allowedips.Placement.Frame.key : Eq.{1} s.regs.r13 base.regs.r13
+  Binary.Pair.Allowedips.Placement.Frame.cidr : Eq.{1} s.regs.r12 base.regs.r12
+  Binary.Pair.Allowedips.Placement.Frame.bits : Eq.{1} s.regs.r15 base.regs.r15
+  Binary.Pair.Allowedips.Placement.Frame.mapped : ∀ (n : Nat),
+      LT.lt.{0} n 6 →
+        Eq.{1}
+          (Option.isSome.{0}
+            (Mem.loadInt s.dmem
+              (HSub.hSub.{0, 0, 0} base.regs.rsp.toBitVec
+                (BitVec.ofNat 64 (HMul.hMul.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} n 1) 8)))
+              8))
+          true
+  Binary.Pair.Allowedips.Placement.Frame.separate : ∀ (a : BitVec 64),
+      c.bytes a → ¬Binary.InRange (HSub.hSub.{0, 0, 0} base.regs.rsp.toBitVec 48) 56 a
+  Binary.Pair.Allowedips.Placement.Frame.memory : Binary.EqualOutside
+      (Binary.Pair.Allowedips.Placement.Writes base.regs.rsp c) base.dmem s.dmem
+constructor:
+  Binary.Pair.Allowedips.Placement.Frame.mk {base : MachineData} {c : Binary.CommonBitsCoverage.Context}
+    {s : MachineData} (ready : Binary.CommonBitsCoverage.CallsReady c s) (stack : Eq.{1} s.regs.rsp base.regs.rsp)
+    (key : Eq.{1} s.regs.r13 base.regs.r13) (cidr : Eq.{1} s.regs.r12 base.regs.r12)
+    (bits : Eq.{1} s.regs.r15 base.regs.r15)
+    (mapped :
+      ∀ (n : Nat),
+        LT.lt.{0} n 6 →
+          Eq.{1}
+            (Option.isSome.{0}
+              (Mem.loadInt s.dmem
+                (HSub.hSub.{0, 0, 0} base.regs.rsp.toBitVec
+                  (BitVec.ofNat 64 (HMul.hMul.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} n 1) 8)))
+                8))
+            true)
+    (separate : ∀ (a : BitVec 64), c.bytes a → ¬Binary.InRange (HSub.hSub.{0, 0, 0} base.regs.rsp.toBitVec 48) 56 a)
+    (memory : Binary.EqualOutside (Binary.Pair.Allowedips.Placement.Writes base.regs.rsp c) base.dmem s.dmem) :
+    Binary.Pair.Allowedips.Placement.Frame base c s
+def Binary.Pair.Allowedips.readSpans : Binary.Pair.Allowedips.Names →
+  AllowedipsProbe.Offsets → List.{0} Binary.Pair.Span :=
+fun names o =>
+  HAppend.hAppend.{0, 0, 0}
+    (List.map.{0, 0}
+      (fun x =>
+        match x with
+        | Prod.mk.{0, 0} offset size => Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} names.table offset) size)
+      Binary.Pair.Allowedips.tableFields)
+    (HAppend.hAppend.{0, 0, 0}
+      (List.flatMap.{0, 0}
+        (fun x =>
+          match x with
+          | Prod.mk.{0, 0} fst a =>
+            List.map.{0, 0}
+              (fun x =>
+                match x with
+                | Prod.mk.{0, 0} offset size => Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} a offset) size)
+              (Binary.Pair.Allowedips.nodeFields o))
+        names.trie.nodes)
+      (List.flatMap.{0, 0}
+        (fun x =>
+          match x with
+          | Prod.mk.{0, 0} fst a =>
+            List.map.{0, 0}
+              (fun x =>
+                match x with
+                | Prod.mk.{0, 0} offset size => Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} a offset) size)
+              (Binary.Pair.Allowedips.peerFields o))
+        names.trie.peers))
+def Binary.Pair.Allowedips.nodeFields : AllowedipsProbe.Offsets → List.{0} Binary.Pair.Span :=
+fun o =>
+  HAppend.hAppend.{0, 0, 0} (Binary.Pair.Trie.nodeSpans o)
+    (List.cons.{0} (Prod.mk.{0, 0} Binary.AllowedipsMutationLayout.parent_bit_packed 8)
+      (List.cons.{0} (Prod.mk.{0, 0} Binary.AllowedipsMutationLayout.peer_list 8)
+        (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationLayout.peer_list 8) 8)
+          List.nil.{0})))
+def Binary.Pair.Allowedips.peerFields : AllowedipsProbe.Offsets → List.{0} Binary.Pair.Span :=
+fun o =>
+  List.cons.{0} (Prod.mk.{0, 0} o.peerRefcount 4)
+    (List.cons.{0} (Prod.mk.{0, 0} Binary.AllowedipsMutationLayout.allowedips_list 8)
+      (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationLayout.allowedips_list 8) 8)
+        List.nil.{0}))
+def Binary.Pair.Allowedips.tableFields : List.{0} Binary.Pair.Span :=
+List.cons.{0} (Prod.mk.{0, 0} Binary.AllowedipsMutationLayout.root4 8)
+  (List.cons.{0} (Prod.mk.{0, 0} Binary.AllowedipsMutationLayout.root6 8)
+    (List.cons.{0} (Prod.mk.{0, 0} Binary.AllowedipsMutationLayout.seq 8) List.nil.{0}))
+def Binary.Source.Aip.store : Leanux.WG.Device → Leanux.WG.AipStore :=
+fun d => { nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips }
+def Binary.Pair.require : Bool → String → Except.{0, 0} String Unit :=
+fun condition error => ite.{1} (Eq.{1} condition true) (Except.ok.{0, 0} ()) (Except.error.{0, 0} error)
 def Binary.Pair.Allowedips.lookupBoundary : Binary.Pair.Allowedips.Names →
   AllowedipsProbe.Input →
     Binary.CommonBitsCoverage.Context → MachineState → Leanux.World → Nat → Nat → UInt64 → Except.{0, 0} String Unit :=

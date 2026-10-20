@@ -2,6 +2,8 @@ import PairAllowedipsState
 import SourceAip
 import CommonBitsCheck
 import PairAllowedipsReadSet
+import PairAllowedips
+import PairRequire
 
 namespace Binary.Pair.Allowedips.Placement
 open Leanux Leanux.WG
@@ -37,26 +39,59 @@ def run (root : Option NodeId) (key cidr bits : Nat) : AipM (Option NodeId × Bo
   | some result => return result
   | none => invariant "node_placement deeper than MAX_ALLOWEDIPS_DEPTH"
 
-def locals (names : Names) (machine : MachineState) (root : Option NodeId)
-    (key cidr bits peer stack : Nat) (acc : Acc) : Except String Unit := do
-  unless acc.1.isNone && acc.2.1.isSome do throw "placement.header-source"
-  unless machine.data.regs.rbx.toNat == (← Trie.address names.trie.nodes acc.2.1) &&
-      (← readNat machine stack 8) == (← Trie.address names.trie.nodes acc.2.2) do
-    throw "placement.cursor-parent"
-  unless machine.data.regs.rsp.toNat == stack && machine.data.regs.r12.toNat == cidr &&
-      machine.data.regs.r15.toNat == bits do throw "placement.stack-cidr-width"
+def cursorLocals (names : Names) (machine : MachineState) (acc : Acc) : Except String Unit := do
+  require (acc.1.isNone && acc.2.1.isSome) "placement.header-source"
+  require (machine.data.regs.rbx.toNat == (← Trie.address names.trie.nodes acc.2.1) &&
+      (← readNat machine machine.data.regs.rsp.toNat 8) ==
+        (← Trie.address names.trie.nodes acc.2.2)) "placement.cursor-parent"
+
+def savedLocals (names : Names) (machine : MachineState) (root : Option NodeId)
+    (cidr bits peer stack : Nat) : Except String Unit := do
+  require (machine.data.regs.rsp.toNat == stack && machine.data.regs.r12.toNat == cidr &&
+      machine.data.regs.r15.toNat == bits) "placement.stack-cidr-width"
   let slot ← readNat machine (stack+8) 8
-  unless slot == names.table+(if bits==32 then AllowedipsMutationLayout.root4 else AllowedipsMutationLayout.root6) &&
+  require (slot == names.table+(if bits==32 then AllowedipsMutationLayout.root4 else AllowedipsMutationLayout.root6) &&
       (← readNat machine slot 8) == (← Trie.address names.trie.nodes root) &&
       (← readNat machine (stack+0x18) 8) == peer &&
       (← readNat machine (stack+0x24) 4) == bits &&
-      (← readNat machine (stack+0x10) 4) == cidr do throw "placement.saved-inputs"
-  let query := machine.data.regs.r13.toNat
-  let actual ← if bits==32 then readNat machine query 4 else do
-    let high ← readNat machine query 8
-    let low ← readNat machine (query+8) 8
-    pure (high*2^64+low)
-  unless actual==key do throw "placement.query"
+      (← readNat machine (stack+0x10) 4) == cidr) "placement.saved-inputs"
+
+def query4 (machine : MachineState) (key : Nat) : Except String Unit := do
+  require ((← readNat machine machine.data.regs.r13.toNat 4)==key) "placement.query"
+
+def query6 (machine : MachineState) (key : Nat) : Except String Unit := do
+  let high ← readNat machine machine.data.regs.r13.toNat 8
+  let low ← readNat machine (machine.data.regs.r13.toNat+8) 8
+  require (high*2^64+low==key) "placement.query"
+
+def queryLocals (machine : MachineState) (key bits : Nat) : Except String Unit :=
+  if bits==32 then query4 machine key else query6 machine key
+
+def locals (names : Names) (machine : MachineState) (root : Option NodeId)
+    (key cidr bits peer stack : Nat) (acc : Acc) : Except String Unit := do
+  cursorLocals names machine acc
+  savedLocals names machine root cidr bits peer stack
+  queryLocals machine key bits
+
+def writes (c : CommonBitsCoverage.Context) (machine : MachineState) : List Span :=
+  [((machine.data.regs.rsp.toBitVec-48).toNat,56)]++Trie.writeSpans c
+
+/-- The executable boundary used by the loop proof. Memory assertions only:
+neither an execution nor a predicted postcondition is supplied. -/
+def header (names : Names) (o : AllowedipsProbe.Offsets) (c : CommonBitsCoverage.Context)
+    (world : World) (machine : MachineState) (root : Option NodeId)
+    (key cidr bits peer stack : Nat) (acc : Acc) : Except String Unit := do
+  assertAt names o machine.data.dmem world
+  Trie.callInput names.trie o machine.data.dmem root bits key
+  locals names machine root key cidr bits peer stack acc
+  require (machine.pc == AllowedipsMutationImage.Add.entry+0xf7) "placement.header-pc"
+  require (cidr≤bits) "placement.header-cidr"
+  require (Trie.frameCheck c machine.data) "placement.callback-frame"
+  require (spansApart (Trie.readSpans c) [((machine.data.regs.rsp.toBitVec-48).toNat,56)]) "placement.service-separation"
+  require (spansApart (readSpans names o) (writes c machine)) "placement.heap-separation"
+  require (spansApart [(machine.data.regs.r13.toNat,bits/8)] (writes c machine)) "placement.query-separation"
+  require (spansApart [(stack+8,8),(stack+0x10,4),(stack+0x18,8),(stack+0x24,4)]
+      (writes c machine)) "placement.saved-input-separation"
 
 /-- Validate the recorded correspondence points against independent execution
 of the mirror loop. Snapshots retain the machine heap; no state is rebuilt. -/
@@ -81,16 +116,7 @@ def check (names : Names) (o : AllowedipsProbe.Offsets) (c : CommonBitsCoverage.
     assertAt names o machine.data.dmem source
     let pc := machine.pc.toBitVec.toNat
     if pc==entry+0xf7 then
-      locals names machine root key cidr width peer stack acc
-      unless Trie.frameCheck c machine.data do throw "placement.callback-frame"
-      unless spansApart (Trie.readSpans c) [(stack-48,56)] do
-        throw "placement.service-separation"
-      unless spansApart (readSpans names o) ([(stack-48,56)]++Trie.writeSpans c) do
-        throw "placement.heap-separation"
-      unless spansApart [(machine.data.regs.r13.toNat,width/8)]
-          ([(stack-48,56)]++Trie.writeSpans c) do throw "placement.query-separation"
-      unless spansApart [(stack+8,8),(stack+0x10,4),(stack+0x18,8),(stack+0x24,4)]
-          (Trie.writeSpans c) do throw "placement.saved-input-separation"
+      header names o c source machine root key cidr width peer stack acc
       current := acc.2.1
       let ((step,next),nextAmbient) ← ((iteration key cidr width acc).run entries).run ambient |>.mapError Stop.message
       entries := next; ambient := nextAmbient
