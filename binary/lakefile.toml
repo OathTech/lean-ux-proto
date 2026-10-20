@@ -93,3 +93,7 @@ root = "PairInsertSequenceMain"
 [[lean_exe]]
 name = "binary-callbacks"
 root = "CallbackRunMain"
+
+[[lean_exe]]
+name = "binary-allowedips-seq-wrap"
+root = "AllowedipsSeqWrapMain"
