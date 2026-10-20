@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.HandshakeSecurity.LandedH1Exchange
+import Leanux.Proofs.WG.HandshakeSecurity.LandedH1PendingFrames
 import Leanux.Proofs.WG.HandshakeSecurity.EmissionLifecycle
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceCookieInitialized
 import Leanux.Proofs.WG.HandshakeSecurity.PeerReferenceResponseKeys
@@ -1579,11 +1581,9 @@ theorem initialized_responder_encryption_requires_confirmation (H1 : H1Responder
 
 /-- Security: a stale initiation in the initialized final journal is refused,
 restores all peer records and emits no packet. Staleness refers to the original
-parser's authenticated timestamp and actual retained-peer read; the named C2
-native exchange frame packages remain visible. -/
-theorem initialized_stale_initiation_refused (facts : H1DriverSourceFacts)
-    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
-    (trace : Runner.Trace) (placeholders : Bool)
+parser's authenticated timestamp and actual retained-peer read. The local
+native exchange/tag packages are constructed from landed H1. -/
+theorem initialized_stale_initiation_refused (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List AuthenticatedEffects.CausalJournal.Event) (msg : Key)
     (r : WGRunWitness (Option PeerId))
     (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
@@ -1591,15 +1591,13 @@ theorem initialized_stale_initiation_refused (facts : H1DriverSourceFacts)
     (stale : StaleInitiation.Stale msg r.before r.ambientBefore) :
     r.value = none ∧ Framing.PeerBorrow.view r.after = Framing.PeerBorrow.view r.before ∧
       r.after.sent = r.before.sent :=
-  StaleInitiation.initialized_refusal facts config traffic trace placeholders pre post msg r position stale
+  StaleInitiation.initialized_refusal LandedH1.driver LandedH1.configuration LandedH1.traffic trace placeholders pre post msg r position stale
 
 /-- Security: the initialized stale initiation returns at the original handler's
 refusal arm, before response creation or any session/timer suffix. The native
 load/MAC consumer-entry relation is explicit; no erased observer histories are
 identified to obtain that relation. -/
-theorem initialized_stale_initiation_no_response (facts : H1DriverSourceFacts)
-    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
-    (trace : Runner.Trace) (placeholders : Bool)
+theorem initialized_stale_initiation_no_response (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List AuthenticatedEffects.CausalJournal.Event) (msg : Key)
     (r : WGRunWitness (Option PeerId))
     (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
@@ -1611,16 +1609,14 @@ theorem initialized_stale_initiation_no_response (facts : H1DriverSourceFacts)
       .ok (((),r.after),CounterWindow.record r.ambientAfter .hsInitNoPeer true) ∧
       Framing.PeerBorrow.view r.after = Framing.PeerBorrow.view r.before ∧
       r.after.sent = r.before.sent :=
-  StaleInitiation.initialized_no_response facts config traffic trace placeholders pre post msg r
+  StaleInitiation.initialized_no_response LandedH1.driver LandedH1.configuration LandedH1.traffic trace placeholders pre post msg r
     position stale src loaded entry kind ambient
 
 /-- Security: the initialized stale initiation selects the exact native
 continuation that returns without response, session installation or timers.
 The continuation starts at this receipt's actual after-state and ambient;
 no earlier load/MAC ambient or reachability premise is needed. -/
-theorem initialized_stale_initiation_continuation (facts : H1DriverSourceFacts)
-    (config : H1ConfigurationTagFrames) (traffic : H1TrafficTagFrames)
-    (trace : Runner.Trace) (placeholders : Bool)
+theorem initialized_stale_initiation_continuation (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List AuthenticatedEffects.CausalJournal.Event) (msg : Key)
     (r : WGRunWitness (Option PeerId))
     (position : (runPrefixOuter (AuthenticatedEffects.CausalJournal.execute trace placeholders) []).2 =
@@ -1628,7 +1624,7 @@ theorem initialized_stale_initiation_continuation (facts : H1DriverSourceFacts)
     (stale : StaleInitiation.Stale msg r.before r.ambientBefore) (src : SkbSource) :
     ((StaleInitiation.afterConsumer msg src r.value).run r.after).run r.ambientAfter =
       .ok (((),r.after),CounterWindow.record r.ambientAfter .hsInitNoPeer true) :=
-  StaleInitiation.initialized_continuation facts config traffic trace placeholders
+  StaleInitiation.initialized_continuation LandedH1.driver LandedH1.configuration LandedH1.traffic trace placeholders
     pre post msg r position stale src
 
 /-- Security: the original inner confirmation consumes a pending allocation
@@ -1643,11 +1639,10 @@ theorem native_pending_confirmation_distinct (H1 : H1PendingPromotionEdges)
 
 open AuthenticatedEffects.CausalJournal ReplayOutcome in
 /-- Security: two accepted native responses for the same peer belong to strictly
-different created-initiation epochs in the final causal journal. Named C2
-source frame packages remain explicit; no reachability or history premise is
-assumed. -/
-theorem initialized_final_response_consumed_once (facts : H1DriverSourceFacts) (config : H1ConfigurationTagFrames)
-    (traffic : H1TrafficTagFrames) (trace : Runner.Trace) (placeholders : Bool)
+different created-initiation epochs in the final causal journal. The local C2
+tag and exchange packages are constructed from landed H1; no reachability or
+history premise is assumed. -/
+theorem initialized_final_response_consumed_once (trace : Runner.Trace) (placeholders : Bool)
     (pre between post : List Event) (first second : Key)
     (r s : WGRunWitness (Option PeerId)) (pid : PeerId)
     (position : journal trace placeholders = pre ++ Event.exchange (.consumeResponse first r) ::
@@ -1656,14 +1651,13 @@ theorem initialized_final_response_consumed_once (facts : H1DriverSourceFacts) (
     ∃ epoch₁ epoch₂, Exchange.ResponseAt (pre.filterMap exchange?) pid epoch₁ ∧
       Exchange.ResponseAt ((pre ++ Event.exchange (.consumeResponse first r) :: between).filterMap exchange?)
         pid epoch₂ ∧ epoch₁ < epoch₂ :=
-  ReplayOutcome.response_once facts config traffic trace placeholders pre between post first second r s pid position accepted₁ accepted₂
+  ReplayOutcome.response_once LandedH1.driver LandedH1.configuration LandedH1.traffic trace placeholders pre between post first second r s pid position accepted₁ accepted₂
 
 open AuthenticatedEffects.CausalJournal ReplayOutcome in
 /-- Security: a consumed native exchange cannot install a second session. Two
 successful final-journal session receipts for one peer have strictly different
 exchange epochs, including receipts before a later Stop. -/
-theorem initialized_final_exchange_installed_once (facts : H1DriverSourceFacts) (config : H1ConfigurationTagFrames)
-    (traffic : H1TrafficTagFrames) (trace : Runner.Trace) (placeholders : Bool)
+theorem initialized_final_exchange_installed_once (trace : Runner.Trace) (placeholders : Bool)
     (pre between post : List Event) (r s : WGRunWitness Bool) (pid : PeerId)
     (position : journal trace placeholders = pre ++ Event.exchange (.session pid r) ::
       between ++ Event.exchange (.session pid s) :: post)
@@ -1671,33 +1665,32 @@ theorem initialized_final_exchange_installed_once (facts : H1DriverSourceFacts) 
     ∃ epoch₁ epoch₂, Exchange.InstallAt (pre.filterMap exchange?) pid epoch₁ ∧
       Exchange.InstallAt ((pre ++ Event.exchange (.session pid r) :: between).filterMap exchange?)
         pid epoch₂ ∧ epoch₁ < epoch₂ :=
-  ReplayOutcome.installed_once facts config traffic trace placeholders pre between post r s pid position accepted₁ accepted₂
+  ReplayOutcome.installed_once LandedH1.driver LandedH1.configuration LandedH1.traffic trace placeholders pre between post r s pid position accepted₁ accepted₂
 
 open AuthenticatedEffects.CausalJournal ReplayOutcome in
 /-- Security: one successful session for an actual earlier exchange creates
 exactly one native allocation, installs it in the role-selected slot, and
 clears its handshake while preserving other peers' tags. All facts use the
-same initialized final-journal receipt; named C2 operational contracts remain
-visible. -/
-theorem initialized_final_session_allocation_and_exchange (facts : H1DriverSourceFacts) (config : H1ConfigurationTagFrames)
-    (traffic : H1TrafficTagFrames) (edges : H1ResponderCurrentEdges)
+same initialized final-journal receipt. `H1ResponderCurrentEdges` and
+`H1SessionPlacement` remain unconstructed premises; the tag/edge packages are
+instantiated from landed H1. This role-slot conclusion is conditional. -/
+theorem initialized_final_session_allocation_and_exchange (edges : H1ResponderCurrentEdges)
     (rotation : H1SessionPlacement) (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List Event) (pid : PeerId) (r : WGRunWitness Bool)
     (position : journal trace placeholders = pre ++ Event.exchange (.session pid r) :: post)
     (success : r.value = true) : Installed pre pid r :=
-  ReplayOutcome.session facts config traffic edges rotation trace placeholders pre post pid r position success
+  ReplayOutcome.session LandedH1.driver LandedH1.configuration LandedH1.traffic edges rotation trace placeholders pre post pid r position success
 
 open AuthenticatedEffects.CausalJournal ReplayOutcome in
 /-- Security: a failed native session allocation installs nothing and retains the
 handshake for retry because its complete WireGuard state is unchanged. The
 receipt belongs to the initialized final journal; observing an exchange does
 not assert successful installation. -/
-theorem initialized_final_session_failure_unchanged (facts : H1DriverSourceFacts) (config : H1ConfigurationTagFrames)
-    (traffic : H1TrafficTagFrames) (trace : Runner.Trace) (placeholders : Bool)
+theorem initialized_final_session_failure_unchanged (trace : Runner.Trace) (placeholders : Bool)
     (pre post : List Event) (pid : PeerId) (r : WGRunWitness Bool)
     (position : journal trace placeholders = pre ++ Event.exchange (.session pid r) :: post)
     (refused : r.value = false) : r.after = r.before :=
-  ReplayOutcome.refused_session facts config traffic trace placeholders pre post pid r position refused
+  ReplayOutcome.refused_session LandedH1.driver LandedH1.configuration LandedH1.traffic trace placeholders pre post pid r position refused
 
 /-- Security: the actual receive consumes its pending promotion ticket before
 its staging and delivery suffix; every later Stop retains the already distinct
@@ -1753,7 +1746,7 @@ execution, even when its receive later stops. Two successful native promotion
 receipts identify distinct allocation stamps. The local C2 source frames are
 named; no entry history, reachability, funding or callback premise is assumed. -/
 theorem initialized_responder_allocation_promoted_once
-    (facts : PendingPromotion.H1DriverFrames) (trace : Runner.Trace) (placeholders : Bool)
+    (edges : H1PendingPromotionEdges) (trace : Runner.Trace) (placeholders : Bool)
     (pre between post : List TransmitSecurity.Journal.Event)
     (pid other : PeerId) (kid next : KeypairId) (r s : WGRunWitness Bool) (first second : Nat)
     (position : PendingPromotion.finalHistory trace placeholders =
@@ -1762,19 +1755,21 @@ theorem initialized_responder_allocation_promoted_once
     (accepted₁ : r.value = true) (accepted₂ : s.value = true)
     (resident₁ : Lifetimes.keypairResidents r.before kid = some first)
     (resident₂ : Lifetimes.keypairResidents s.before next = some second) : first ≠ second :=
-  PendingPromotion.once facts trace placeholders pre between post pid other kid next r s first second
+  PendingPromotion.once (LandedH1.Pending.driver edges) trace placeholders pre between post pid other kid next r s first second
     position accepted₁ accepted₂ resident₁ resident₂
 
 /-- Security: every actual responder encryption follows authenticated
 confirmation of the same allocation, every resident allocation's confirmation
 has its own accepted transport cause, and no allocation is promoted twice.
 The same initialized final journal covers normal and stopped prefixes. Only
-the visible local C2 operational frame and rotation packages remain assumptions. -/
+the unconstructed `H1PendingPromotionEdges` and `H1ResponderCurrentEdges`
+packages remain assumptions. Direct frame fields are supplied by landed H1;
+this is a conditional security claim, not an unconditional completed outcome. -/
 theorem initialized_responder_confirmation_discipline
-    (facts : PendingPromotion.H1DriverFrames) (rotation : H1ResponderCurrentEdges)
+    (edges : H1PendingPromotionEdges) (rotation : H1ResponderCurrentEdges)
     (trace : Runner.Trace) (placeholders : Bool) :
     PendingPromotion.Discipline (PendingPromotion.finalHistory trace placeholders) :=
-  PendingPromotion.discipline facts rotation trace placeholders
+  PendingPromotion.discipline (LandedH1.Pending.driver edges) rotation trace placeholders
 
 
 /-- Security: each actual AEAD uses the allocation, role and sending key selected

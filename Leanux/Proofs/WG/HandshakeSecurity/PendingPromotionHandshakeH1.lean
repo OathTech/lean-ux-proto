@@ -4,7 +4,7 @@ namespace Leanux.Proofs.WG.HandshakeSecurity
 open Leanux Leanux.WG Leanux.Proofs.Framing Lifetimes
 
 /-- Single-call pending-slot frames at C2 pin
-`7ff94e48c2a3323ef29e6fb62f82a4a64d43f218`. Each citation is a native
+`be8c209c`. Each citation is a native
 projected-state fact. The initialized history and its distinctness are not
 assumptions of this package. -/
 structure H1PendingHandshakeFrames : Prop where

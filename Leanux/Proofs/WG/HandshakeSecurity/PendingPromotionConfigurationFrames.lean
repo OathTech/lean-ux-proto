@@ -7,7 +7,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues TransmitSecurity Configuration
 
 /-- Native configuration effects from C2 pin
-`7ff94e48c2a3323ef29e6fb62f82a4a64d43f218`. Each field names the corresponding
+`be8c209c`. Each field names the corresponding
 `Noise.PendingTickets` declaration and carries no initialized/history claim. -/
 structure H1ConfigurationFrames : Prop where
   /-- `setPeerCmd_retained`. -/

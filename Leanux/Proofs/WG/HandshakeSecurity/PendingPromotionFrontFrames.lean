@@ -5,7 +5,7 @@ namespace Leanux.Proofs.WG.HandshakeSecurity
 open Leanux Leanux.WG Leanux.Proofs.Framing Lifetimes Queues Queues.RxCredits Packets
 
 /-- C2 native destination and staged-queue frames at
-`7ff94e48c2a3323ef29e6fb62f82a4a64d43f218`. The facts preserve only the
+`be8c209c`. The facts preserve only the
 pending allocation projection, independently of any confirmation history. -/
 structure H1PendingStackFrames : Prop where
   /-- `Noise.PendingStack.lookupDst_frame`. -/

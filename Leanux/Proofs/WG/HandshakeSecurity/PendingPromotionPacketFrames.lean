@@ -9,7 +9,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues Queues.RxCredits Origins
 
 /-- Per-native-call TX publication retention. At C2 pin
-`7ff94e48c2a3323ef29e6fb62f82a4a64d43f218`, this is the operational component
+`be8c209c`, this is the operational component
 of `Noise.PendingCrypt.enqueue_native`: `PendingTickets.retained_of_staging_ordinary`
 with `Index.enqueuePerPeerTx_staging` and the unchanged C1 key snapshot.
 The statement has no confirmation-history argument. -/

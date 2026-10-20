@@ -6,7 +6,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues TransmitSecurity
 
 /-- Native index lookup frame from `Noise.PendingReception.indexLookup_pending_frame`
-at C2 pin `7ff94e48c2a3323ef29e6fb62f82a4a64d43f218`. It asserts only the
+at C2 pin `be8c209c`. It asserts only the
 one-call pending allocation projection, independently of history. -/
 structure H1IngressFrames : Prop where
   lookup : ∀ kinds index, SameView view (indexLookup kinds index)

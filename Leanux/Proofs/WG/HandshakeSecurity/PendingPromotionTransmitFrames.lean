@@ -6,7 +6,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing
 open Lifetimes Queues Queues.RxCredits Origins
 
 /-- Native pending projection facts at C2 pin
-`7ff94e48c2a3323ef29e6fb62f82a4a64d43f218`, with no history premise. -/
+`be8c209c`, with no history premise. -/
 structure H1TransmitFrames : Prop where
   /-- `Noise.PendingTickets.send4_cached_frame`. -/
   send4 : ∀ pid ep bytes ds exactRx, SameView view (WG.send4 ep (some pid) bytes ds exactRx)

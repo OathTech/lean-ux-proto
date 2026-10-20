@@ -1,8 +1,8 @@
 import Leanux.Proofs.WG.HandshakeSecurity.Projection
 
-/-! Visible campaign-2 dependencies, stated over original native runs. No
-campaign-2 file is imported. The contracts below are projections of H1's named
-source results, not assumptions about the cipher or freshly invented edges. -/
+/-! Local campaign-2 contracts over original native runs. Their inhabitants are
+constructed from landed H1 in LandedH1Exchange; this definition module keeps
+that import separate. These are native effects, not cipher assumptions. -/
 namespace Leanux.Proofs.WG.HandshakeSecurity
 open Leanux Leanux.WG
 
@@ -12,8 +12,8 @@ def handshakeTagAt (w : WGWorld) (pid : PeerId) : Option Nat :=
 /-- Native projection required from H1's
 `Noise.consumeResponse_tagMap_projected`: successful consumption requires a
 created initiation and changes only that peer's tag to consumed response;
-normal refusal preserves the complete optional tag map. The dependency stays
-an explicit hypothesis until campaign 2 is integrated. -/
+normal refusal preserves the complete optional tag map. The native
+contract is constructed by `LandedH1.consumeResponse` from landed campaign 2. -/
 def H1ResponseEdges : Prop :=
   ∀ (msg : List UInt8) (w v : WGWorld) (a b : Ambient) (result : Option PeerId),
     ((consumeResponse msg).run w).run a = .ok ((result, v), b) →

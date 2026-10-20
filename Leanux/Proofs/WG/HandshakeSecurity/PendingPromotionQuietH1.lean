@@ -4,7 +4,7 @@ namespace Leanux.Proofs.WG.HandshakeSecurity
 open Leanux Leanux.WG Leanux.Proofs.Framing Lifetimes
 
 /-- Local pending-slot frames from C2 H1 at
-`7ff94e48c2a3323ef29e6fb62f82a4a64d43f218`.
+`be8c209c`.
 
 The observation is the same `Noise.PendingTickets.view`, expanded through
 `PendingTickets.view_slot`. Each field below cites its native declaration.

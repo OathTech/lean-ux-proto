@@ -6,7 +6,7 @@ open Leanux Leanux.WG Leanux.Proofs.Framing Lifetimes
 
 /-- Native replay-counter retention, from
 `Noise.PendingSession.counter_pending` at C2 pin
-`7ff94e48c2a3323ef29e6fb62f82a4a64d43f218`. No execution history is assumed. -/
+`be8c209c`. No execution history is assumed. -/
 structure H1PendingPollFrames : Prop where
   counter : ∀ kid nonce, SameView PendingPromotion.view (counterValidate kid nonce)
 

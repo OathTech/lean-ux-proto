@@ -7,7 +7,7 @@ open Lifetimes Queues TransmitSecurity
 
 /-- One-call lifecycle retention from `Noise.PendingTickets.wgDown_retained`
 and `wgCreate_retained` at C2 pin
-`7ff94e48c2a3323ef29e6fb62f82a4a64d43f218`. No event-history premise occurs. -/
+`be8c209c`. No event-history premise occurs. -/
 structure H1LifecycleFrames : Prop where
   down : ProjectedAction view Retained wgDown
   create : ProjectedAction view Retained wgCreate

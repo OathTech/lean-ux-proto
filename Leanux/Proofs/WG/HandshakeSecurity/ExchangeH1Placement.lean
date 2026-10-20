@@ -36,7 +36,7 @@ def SessionPlaced (pid : PeerId) (r : WGRunWitness Bool) : Prop :=
 
 end Exchange
 
-/-- Required local consequence of C2 H1 at `5177bd9c`:
+/-- Required local consequence of C2 H1 at `be8c209c`:
 `Noise.beginSession_effect`, `Noise.rotationRun_excluded_key` and
 `Noise.rotationRun_peer`. `Index.sessionEffect_installed` uses these same facts
 for its resident key and role-selected slot; its additional final
@@ -44,8 +44,9 @@ for its resident key and role-selected slot; its additional final
 here. The guard below excludes the fresh slot from all three old slots and is
 stronger than C2's release-list-only `Index.SessionRotationFresh`.
 
-This is an explicit native-call hypothesis until C2 is imported. It does not
-assume an initialized installation, an exchange identity or an event history. -/
+This remains an unconstructed native-call hypothesis after C2 landed: its
+complete material and final role-slot projection still needs a bridge proof.
+It assumes no initialized installation, exchange identity or event history. -/
 structure H1SessionPlacement : Prop where
   session : ∀ (pid : PeerId) (r : WGRunWitness Bool) (device : Device) (peer : Peer),
     r.before.dev = some device → device.peers[pid]? = some peer →

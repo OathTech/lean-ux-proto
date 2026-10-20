@@ -7,7 +7,7 @@ open Lifetimes Queues TransmitSecurity
 open Responder.DriverCuts (hooks)
 
 /-- Single-call pending frames from C2 pin
-`7ff94e48c2a3323ef29e6fb62f82a4a64d43f218`. The source callback and all its
+`be8c209c`. The source callback and all its
 history transport are proved below, not supplied by this package. -/
 structure H1TimerFrames : Prop where
   /-- `Noise.PendingTickets.delTimer_frame`. -/
