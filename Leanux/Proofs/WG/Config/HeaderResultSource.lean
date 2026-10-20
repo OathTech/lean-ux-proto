@@ -5,7 +5,7 @@ set_option autoImplicit false
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Noise Lean Std.Do
 
-theorem cursorHeaderPrefix_normal (d : Device) (ctx : DumpCtx) (prev : Nat) (skb : NlSkb) :
+theorem cursorHeaderPrefix_normal (d : Device) (ctx : DumpCtx) (prev : UInt32) (skb : NlSkb) :
     Noise.Product.Ensures (cursorHeaderPrefix d ctx prev skb) (fun _ => True)
       (fun out _ => out = (2 + if prev != 0 && prev != d.deviceUpdateGen then 16 else 0,
         if ctx.nextPeer.isNone then deviceFixedAttrs d else [],cursorHeaderSkb d ctx skb)) := by

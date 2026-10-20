@@ -5,7 +5,7 @@ set_option autoImplicit false
 namespace Leanux.Proofs.WG.Config.RequestOrder.FinalHeader
 open Leanux Leanux.WG
 
-abbrev Header := String × Nat × Nat × Nat × Nat
+abbrev Header := String × Nat × Nat × Nat × UInt32
 
 def header (d : Device) : Header :=
   (d.ifname,d.ifindex,d.incomingPort,d.fwmark,d.deviceUpdateGen)

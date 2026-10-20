@@ -24,7 +24,7 @@ def cursorHeaderDevice (d : Device) (skb : NlSkb) : AmbientM (List (String × Js
       ("public_key",toJson (hexKey d.staticIdentity.staticPublic))],skb)
   return (attrs,skb)
 
-def cursorHeaderFactored (d : Device) (ctx : DumpCtx) (prev : Nat) (skb : NlSkb) :
+def cursorHeaderFactored (d : Device) (ctx : DumpCtx) (prev : UInt32) (skb : NlSkb) :
     AmbientM (Nat × List (String × Json) × NlSkb) := do
   let skb ← cursorHeaderPut .dumpNoHdr (nlmsgTotal 4)
     "a dump chunk without room for its header (unreachable: every chunk is fresh)" skb
@@ -34,7 +34,7 @@ def cursorHeaderFactored (d : Device) (ctx : DumpCtx) (prev : Nat) (skb : NlSkb)
     return (flags,attrs,skb)
   return (flags,[],skb)
 
-theorem cursorHeaderPrefix_factored (d : Device) (ctx : DumpCtx) (prev : Nat) (skb : NlSkb) :
+theorem cursorHeaderPrefix_factored (d : Device) (ctx : DumpCtx) (prev : UInt32) (skb : NlSkb) :
     cursorHeaderPrefix d ctx prev skb = cursorHeaderFactored d ctx prev skb := by
   have stopBind {α β : Type} (message : String) (next : α → AmbientM β) :
       (AmbientM.unsupported message >>= next) = (AmbientM.unsupported message : AmbientM β) := rfl

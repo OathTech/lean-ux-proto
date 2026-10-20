@@ -29,7 +29,7 @@ def sendWorkCell (p : Peer) : SendWorkCell :=
     p.refcount,p.handshakeEntryPeer,p.internalId,p.isDead,p.endpoint.map Roaming.destination,
     p.presharedKey,p.persistentKeepaliveInterval,p.endpoint.map socketEndpoint)
 /-- Device configuration fields unchanged by socket transmission. -/
-abbrev SendConfiguration := String × Nat × Nat × Nat × StaticIdentity × Nat
+abbrev SendConfiguration := String × Nat × Nat × Nat × StaticIdentity × UInt32
 def sendConfiguration (d : Device) : SendConfiguration :=
   (d.ifname,d.ifindex,d.incomingPort,d.fwmark,d.staticIdentity,d.deviceUpdateGen)
 abbrev SendSocketContext := NlSock × List (String × Nat × Option String)

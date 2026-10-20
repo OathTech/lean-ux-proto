@@ -48,7 +48,8 @@ theorem scalar_outer_get_after_set (d : Device) (key psk : Key) (interval : Nat)
   · change (((wgSetDevice (scalarDeviceAttrs d key psk interval bad)).run initial).run ambient >>= _) = _
     rw [setRun]
     change (((wgGetDevice (byIndex d)).run afterSet).run setAmbient >>= _) = _
-    have selector : byIndex d = byIndex updated := rfl
+    have selector : byIndex d = byIndex updated := by
+      simp only [byIndex, updated, scalarRequestDevice, scalarDevice, withPeer]
     rw [selector, getRun]
     rfl
   · exact ⟨by simp [hret, hresult, updated, configured], hfinal, hsocket⟩

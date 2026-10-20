@@ -28,7 +28,7 @@ theorem mixedPageHeader_exact (d : Device) (ctx : DumpCtx)
 /-- Static baseline data supplies the original mixed callback on its actual
 held-reference Device, without a successful callback premise. -/
 theorem mixedPage_held_returns (base current : Device) (peers : PeerId → Peer)
-    (nodes : NodeId → AipNode) (rows : List MixedPeerRow) (ctx : DumpCtx) (prev : Nat)
+    (nodes : NodeId → AipNode) (rows : List MixedPeerRow) (ctx : DumpCtx) (prev : UInt32)
     (held : CursorHeld base current ctx.nextPeer)
     (residents : ∀ row ∈ rows, base.peers[row.1]? = some (peers row.1))
     (readable : ∀ row ∈ rows, ∀ id ∈ row.2, base.nodes[id]? = some (nodes id))

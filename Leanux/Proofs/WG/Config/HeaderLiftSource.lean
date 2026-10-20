@@ -4,7 +4,7 @@ set_option autoImplicit false
 namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Noise Lean Std.Do
 
-theorem cursorHeader_normal (d : Device) (ctx : DumpCtx) (prev : Nat)
+theorem cursorHeader_normal (d : Device) (ctx : DumpCtx) (prev : UInt32)
     (skb : NlSkb) (finish : Nat → List (String × Json) → NlSkb → WG.M DumpCall)
     (P : WGWorld → Prop) (Q : DumpCall → WGWorld → Prop)
     (tail : Ensures (finish (2 + if prev != 0 && prev != d.deviceUpdateGen then 16 else 0)

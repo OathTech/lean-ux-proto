@@ -8,7 +8,7 @@ open Leanux Leanux.WG Noise Lean Std.Do
 No initial capacity, reference bound, live flag, cursor membership or sequence
 consistency is assumed. Last-reference Stops remain outside normal completion. -/
 theorem wgGetDeviceDump_cursor_normal (d : Device) (peers : PeerId → Peer) (ctx : DumpCtx)
-    (prev : Nat) (skb : NlSkb)
+    (prev : UInt32) (skb : NlSkb)
     (residents : ∀ pid ∈ cursorSelected d ctx, d.peers[pid]? = some (peers pid))
     (empty : ∀ pid ∈ cursorSelected d ctx, (peers pid).allowedipsList = [])
     (fresh : ctx.nextAllowedip = none)

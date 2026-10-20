@@ -121,7 +121,7 @@ theorem cursorLoopFinish_returns (d : Device) (peers : PeerId → Peer) (ids : L
 
 /-- The original fresh-buffer header has a normal run whenever its real device
 prefix fits; resumed headers need no device-attribute capacity. -/
-theorem cursorHeader_fresh_returns (d : Device) (ctx : DumpCtx) (prev : Nat)
+theorem cursorHeader_fresh_returns (d : Device) (ctx : DumpCtx) (prev : UInt32)
     (room : ctx.nextPeer.isNone = true → devicePrefixSpace d ≤ NLMSG_GOODSIZE)
     (finish : Nat → List (String × Json) → NlSkb → WG.M DumpCall)
     (P : WGWorld → Prop) (R : DumpCall → WGWorld → Prop)

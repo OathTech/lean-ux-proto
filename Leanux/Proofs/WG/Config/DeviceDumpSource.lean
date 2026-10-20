@@ -7,15 +7,16 @@ namespace Leanux.Proofs.WG.Config
 open Leanux Leanux.WG Leanux.Proofs.WG.Noise Lean Std.Do
 
 /-- Local exact source cut after the original initial device read. -/
-def deviceDumpSource (d : Device) (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) : WG.M DumpCall := do
+def deviceDumpSource (d : Device) (ctx0 : DumpCtx) (prevSeq0 : UInt32) (skb0 : NlSkb) : WG.M DumpCall := do
   let seq := d.deviceUpdateGen   -- cb->seq (:222)
   let mut ctx := ctx0
   let mut nextCursor := ctx.nextPeer
   let (fail, skb) := skb0.put (nlmsgTotal 4)   -- genlmsg_put: nlmsghdr + genlmsghdr
   if ← branch .dumpNoHdr fail then unsupported "a dump chunk without room for its header (unreachable: every chunk is fresh)"
   let mut skb := skb
-  -- genl_dump_check_consistent (:229): NLM_F_DUMP_INTR iff the device changed
-  -- between two dump calls (2.4); NLM_F_MULTI always
+  -- genl_dump_check_consistent (:229): NLM_F_DUMP_INTR when the saved
+  -- UInt32 generation is nonzero and differs from the current word;
+  -- wrap can alias generations. NLM_F_MULTI is always set.
   let flags := 2 + (if prevSeq0 != 0 && prevSeq0 != seq then 16 else 0)
   let mut device : List (String × Json) := []
   if ← branch .dumpFirst ctx.nextPeer.isNone then
@@ -97,7 +98,7 @@ def deviceDumpSource (d : Device) (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSk
   -- data message is in; `netlink_dump` reads its sign (audit F2)
   return { ret := Int.ofNat (NLMSG_GOODSIZE - skb.room), skb, ctx := { ctx with nextPeer := nextCursor }, prevSeq := seq }
 
-theorem wgGetDeviceDump_source (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem wgGetDeviceDump_source (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     wgGetDeviceDump ctx prevSeq skb = (do
       let d ← getDev
       deviceDumpSource d ctx prevSeq skb) := rfl

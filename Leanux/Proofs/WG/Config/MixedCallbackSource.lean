@@ -66,7 +66,7 @@ theorem mixedPeerLoopFinish_returns (d : Device) (peers : PeerId → Peer) (node
 AIP continuations still have no peer cursor and repeat the device header;
 held-cursor callbacks omit it. All split/cancel outcomes remain in the scan. -/
 theorem wgGetDeviceDump_mixed_returns (d : Device) (peers : PeerId → Peer) (nodes : NodeId → AipNode)
-    (rows : List MixedPeerRow) (ctx : DumpCtx) (prev : Nat)
+    (rows : List MixedPeerRow) (ctx : DumpCtx) (prev : UInt32)
     (residents : ∀ row ∈ rows, d.peers[row.1]? = some (peers row.1))
     (readable : ∀ row ∈ rows, ∀ id ∈ row.2, d.nodes[id]? = some (nodes id))
     (selected : MixedRowsSelected peers rows ctx)
@@ -128,7 +128,7 @@ theorem wgGetDeviceDump_mixed_returns (d : Device) (peers : PeerId → Peer) (no
 /-- The actual empty-list/dead-cursor guard cancels the peer nest and releases
 its held cursor. It needs no serializer or row assumptions and preserves the
 original header flags, repeated device attributes and pre-nest room. -/
-theorem wgGetDeviceDump_guard_returns (d : Device) (ctx : DumpCtx) (prev : Nat)
+theorem wgGetDeviceDump_guard_returns (d : Device) (ctx : DumpCtx) (prev : UInt32)
     (skip : cursorGuardValue d ctx = true)
     (headerFits : ctx.nextPeer.isNone = true → devicePrefixSpace d ≤ NLMSG_GOODSIZE)
     (releaseReady : ∀ id, ctx.nextPeer = some id →

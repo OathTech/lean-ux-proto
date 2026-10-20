@@ -60,7 +60,7 @@ theorem socketDumpPeer_cursor_factor (d : Device) (ctx : DumpCtx) (flags : Nat)
   simp only [socketDumpPeerSource,cursorDumpBody,cursorDumpGuard,cursorLoopFinish,cursorDumpFinish]
   rfl
 
-theorem wgGetDeviceDump_cursor_factor (ctx : DumpCtx) (prev : Nat) (skb : NlSkb) :
+theorem wgGetDeviceDump_cursor_factor (ctx : DumpCtx) (prev : UInt32) (skb : NlSkb) :
     wgGetDeviceDump ctx prev skb = (do
       let d ← getDev
       socketDumpHeaderSource d ctx prev skb (cursorDumpBody d ctx)) := by
