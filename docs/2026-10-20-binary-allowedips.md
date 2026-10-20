@@ -632,7 +632,8 @@ new-function completion rate. The strengthened existing lookup, placement
 loop, exact reassignment and empty-root physical tail are partial component
 results, not substitutes for that measure.
 
-At committed head `7b8b257c`, the increment adds 9,845 Lean lines and deletes
+The four-hour measurement recorded in reachable commit `2b049c9b`
+(describing its parent, before the subsequent record-decoding support) adds 9,845 Lean lines and deletes
 31 across 110 files. Excluding the three generated mutation image/layout
 modules gives 8,290 added lines across 107 files. Those figures include
 executable reconstruction, tests and supporting proofs; they are neither a
@@ -1256,10 +1257,14 @@ are not a measurement of uninterrupted proving time.
 
 | Committed checkpoint | Lean additions / deletions | Files | Without three generated image/layout modules | Newly completed functions |
 | --- | --- | --- | --- | --- |
-| Four-hour record, `7b8b257c` before rebase | 9,845 / 31 | 110 | 8,290 added lines in 107 files | 0 |
-| Final manual work, `e683be60` before rebase (`bf730baa` after rebase) | 18,529 / 31 | 221 | 16,974 added lines in 218 files | 0 |
+| Four-hour measurement recorded in `2b049c9b` (its parent tree) | 9,845 / 31 | 110 | 8,290 added lines in 107 files | 0 |
+| Final manual work, `bf730baa` | 18,529 / 31 | 221 | 16,974 added lines in 218 files | 0 |
 
-The final count is `git diff --numstat eba3c2b6..bf730baa -- 'binary/*.lean'`;
+The four-hour tree count is `git diff --numstat eba3c2b6..2b049c9b^ -- 'binary/*.lean'`;
+the final count is `git diff --numstat eba3c2b6..bf730baa -- 'binary/*.lean'`.
+The calibration-report commit `2b049c9b` itself also adds the later record-decoding
+support: its tree has 10,275 added Lean lines across 115 files. That later
+snapshot is not substituted for the four-hour measurement. In both counts,
 the exclusions are `AllowedipsMutationImage`, `AllowedipsMutationLayout` and
 `AllowedipsMutationCodeLayout`. Counts include executable reconstruction,
 assertions, tests and support lemmas, not just proofs. Zero completions is the
