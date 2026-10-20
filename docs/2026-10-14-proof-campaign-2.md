@@ -1,82 +1,38 @@
 # WireGuard proof campaign 2
 
-## Post-landing carry in progress, 2026-10-20
+## Namespace-pin closure, 2026-10-20
 
-Campaign 2 landed in main at `be8c209c`. The repair branch now includes
-`1f766662`, whose UInt64 allowed-IP sequence and UInt32 device/dump/FIB
-generations invalidate the Nat-typed source adapters. All six result rows
-retain their last validated pin `1a69cebb` and are marked lagging while
-shared dependencies and the owned Config contracts are carried. Existing
-shared lemmas remain campaign 1’s responsibility; no mirror changes are made.
-The namespace-pin fix through `task/netns-pin` at `3a4e62dd` is not yet on
-main. Request 5 records that implemented disposition while retaining the
-historical acceptance witness until the landing and regression carry.
+The branch is rebased onto namespace-pin landing `218d3ffd`. The earlier
+fixed-width carry is already on main with the shared repair at `eba3c2b6`;
+its former lag paragraph is superseded. No mirror change is made here.
 
-The owned carry changes dump-generation binders and saved header fields to
-UInt32, including the public `original_cursor_callback_normal` parameter,
-and retypes the timer send-configuration projection's generation field.
-Room, flags, lengths, identifiers and the IPv4 route-cache value after
-`rtGenid4.toNat` remain Nat. Existing field-typed allowed-IP expressions
-already follow UInt64. No premise, conclusion or modeled outcome is weakened;
-there is no no-wrap premise. Three dump comments now describe the exact
-nonzero-saved-word comparison, including possible generation aliasing at wrap.
+Request 5 is closed. Its original JSON is retained as a refusal regression:
+both parser and validator now exclude the fixture's literal pin descriptor.
+Direct typed execution, which bypasses parsing, and the exact boundary audit
+both refuse at operation 1 before teardown because no cleanup was queued.
+The recipe no longer exercises the later operation-end pending guard.
 
-Two scalar readback proofs previously discharged selector equality by `rfl`.
-After the word change they hit deterministic `whnf` heartbeat limits:
-`scalar_outer_get_after_set` at 1,000,000 and
-`scalarSocketReadback_source` at 800,000. A narrow simplification of `byIndex`
-and the nested device updates closes each in under a second, with unchanged
-statements and limits. No shared lemma or mirror file is edited.
+H5's `RunnerBoundaryClean` is strengthened to unconditional pending-unit
+emptiness. The existing `original_accepted_operation_boundaries` composition
+then covers every cut of every accepted typed trace in either record mode,
+including negative syscall returns. No parser-validity or entry-invariant
+premise is added. The theorem applies beyond the parser's stated domain;
+queue emptiness, scheduled NAPI and budget adequacy remain separate claims.
+The source equations preserve the native hidden-record and invariant Stops.
 
-Validation of the independent owned closure passes: 1,161 modules selected
-from H1–H6, 267 maximal targets and 1,372 Lake jobs. All 31 theorems in the
-15 changed modules within that closure have only the three permitted
-standard axioms; that checked carry is committed as `56d3fba1`. Two
-additional retyped owned files are preserved on a separate WIP commit: Config's
-`DumpInvariantSource.lean` and `Statements.lean`, still depend on the shared
-carry and are not claimed validated. The excluded shared failures are:
+The owned boundary/namespace build passes 93 jobs; all four checked boundary
+and audit theorems use only the three standard axioms. The three existing
+fixture-descriptor validator tests pass, and the namespace recipe checks its
+exact parser and native/audited refusals. Aggregate validation still needs
+the namespace carry of campaign 1's existing shared layers. Source inspection
+finds 14 runner-guard copies in seven shared modules, plus the namespace
+frames/observer and the parser's new validation loop. This exceeds the
+charter's small-local-variant allowance; none of those layers is copied or
+edited here. The initial whole-tree build is exposing that inherited carry.
 
-| Shared module under `Leanux/Proofs/WG/` | Remaining carry |
-| --- | --- |
-| `NetlinkDump/DeviceSource` | Dump prior-generation binders from Nat to UInt32. |
-| `AllowedIps/RemovalPeer` | The empty-removal sequence equality must use UInt64 addition by zero. |
-| `Keypairs/Frames/WGMore` | Dump frame generation binders from Nat to UInt32. |
-| `Lifetimes/SocketSend4` | Source factors must read the route generation through `UInt32.toNat`, as the mirror does. |
-
-The full gate was run with `LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped --
-scripts/in-bundle scripts/proof-gate`. It failed its build check (one gate
-finding), reporting those four shared modules and the subsequently repaired
-`ScalarSocketReadbackSource`. The forbidden-token and import/target checks
-completed without findings; the terminal axiom stage was skipped because the
-build failed. Initial scoped builds and an axiom attempt that still imported
-the blocked `DumpInvariantSource` also failed; the final scoped build and
-31-theorem axiom check above are the corrected, explicitly narrower checks.
-These are source/scope corrections, not infrastructure reruns. No KILLED
-banner, guest timeout, resource-limit increase or infrastructure rerun occurred.
-
-The requested `LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped --
-scripts/in-bundle scripts/proof-counterexamples` also fails: 13 recipes pass
-and two cannot import their missing shared build products (`w7-full-ring`
-needs `Lifetimes/SocketSend4`, and `h1-confirmation-incarnations` needs
-`Keypairs/Frames/WGMore`). This diagnostic run does not replace the required
-run after the full tree builds. The namespace-pin acceptance recipe still
-passes on `1f766662`, as expected before its mirror fix lands.
-
-| Result | Register status | Carry state |
-| --- | --- | --- |
-| H1 Noise | Lagging; last validated mirror `1a69cebb` | Owned independent closure passes; whole-run imports await the shared carry. |
-| H2 session indices | Lagging; last validated mirror `1a69cebb` | Owned independent closure passes; whole-run imports await the shared carry. |
-| H3 roaming | Lagging; last validated mirror `1a69cebb` | Owned independent closure passes; whole-run imports await the shared carry. |
-| H4 configuration | Lagging; last validated mirror `1a69cebb` | Word-typed interfaces and both selector proofs carried; the two dependent files above await validation. |
-| H5 progress | Lagging; last validated mirror `1a69cebb` | Finite evaluation is unchanged; shared carry and request 5's landed refusal regression remain outstanding. |
-| H6 timers | Lagging; last validated mirror `1a69cebb` | Send projection retyped and independently checked; whole-run imports await the shared carry. |
-
-The campaign has already landed. This follow-on cannot receive a full current
-pin until campaign 1's shared repair is available; no completion estimate is
-assigned to that external dependency. The validated landing summary follows.
-
-The six summaries below describe the landing scope over `1a69cebb` and
-supersede broader completion wording in the dated history. The
+The six summaries below describe the landing scope, with H5's pending-unit
+clause strengthened over `218d3ffd`, and supersede broader completion wording
+in the dated history. The
 [independent landing review](2026-10-20-review-campaign-2-landing.md) requires
 no new theorem. Claims use the campaign projection, frames are separate,
 and the mirror is unchanged. Observer erasure preserves original outcomes;
@@ -194,38 +150,44 @@ no open H4 request; rank 1 was restoring pre-header nest cancellation tailroom
 ([request 3](2026-10-14-campaign-2-mirror-requests.md#3-restore-pre-nest-tailroom-when-cancelling-the-device-peers-nest)),
 fixed at `3f3879e0`, altitude-preserving. No stronger readback is claimed here.
 
-## H5 summary — Finite evaluation, service and pending-work finding
+## H5 summary — Finite evaluation, service and pending-unit completion
 
 Architecture: finite replacements for nonstructural loops compose to exact
 `executeTrace` equality; committed dispatch/resume receipts preserve failures.
 Normal accepted runs have normal receipts, and a receipt with supplied records
 at its own entry strictly consumes them. The staged Prefill bridge solved the
 conversion blocker without increasing Lean limits on that finite-evaluation path.
+The exact operation-boundary audit now proves pending-unit emptiness in both
+record modes and accounts for every operation, in order.
 
 Wording pairs: “every operation terminates” is finite evaluation preserving
 all results and Stops, including exhausted budgets; it is not general fuel
 adequacy. “Dispatched/resumed work runs” has actual branch/source and receipt
 contracts; propagation of supplied mode to interior receipts remains unproved.
-“Every accepted operation ends without pending units” remains refuted without
-records; the positive boundary contract gives emptiness conditional on supplied
-mode at that boundary. No supplied-only whole-run replacement is claimed.
+“Every accepted operation ends without pending units” now holds for every
+typed trace accepted by the native runner, with no extra domain premise.
+The original informal “unsupported” refusal wording becomes the exact native
+Stop: hidden-record error with supplied records, invariant error without them.
+This does not assert empty packet queues or absence of scheduled NAPI.
 
-The [namespace-pin recipe](2026-10-20-proof-campaign-2-namespace-pin.md) accepts
-`dup(9); wg_netns_close; close(ref 0)`: teardown occurs prematurely at operation
-1 and pending cleanup remains at operation 2. This is an open environment
-defect; supplied-mode checking refuses the trace. Earlier backlog, nested-refill
-and supplied-pending defects are fixed and retained as refusal/pass regressions
-([requests 1, 2, 4](2026-10-14-campaign-2-mirror-requests.md)). The old placeholder
-pending witness now checks empty pending work. Historical “cookie count/class
-alone ensures draining and predicted yields” claims were refuted by bad-tail,
-extra physical-slot and hole witnesses; exact bounded outcomes replace two
-predictions, and five false supports remain retired, not silently strengthened
-([cookie findings](2026-10-17-proof-campaign-2-cookie-bound.md)).
+The [namespace-pin recipe](2026-10-20-proof-campaign-2-namespace-pin.md) retains
+`dup(9); wg_netns_close; close(ref 0)`. On the affected mirror, it exposed
+premature teardown at operation 1 and pending cleanup at operation 2. Main
+`218d3ffd` resolves the environment defect: parsing refuses the literal pin,
+and direct typed execution refuses at operation 1 before teardown. The
+recipe checks these refusals and native/audit agreement. Earlier backlog,
+nested-refill and supplied-pending defects are also fixed and retained as
+refusal/pass regressions ([requests 1, 2, 4](2026-10-14-campaign-2-mirror-requests.md)).
+Historical “cookie count/class alone ensures draining and predicted yields”
+claims were refuted by bad-tail, extra physical-slot and hole witnesses;
+exact bounded outcomes replace two predictions, and five false supports
+remain retired ([cookie findings](2026-10-17-proof-campaign-2-cookie-bound.md)).
 
-Effort: 1,742 theorems, 280 headlines, 373 modules. Ranked mirror changes:
-rank 1, open request 5, altitude-preserving: the mirror lane must settle retained
-pin aliases/last-release cleanup. The report records two fix shapes without
-choosing one. Requests 1, 2 and 4 were also altitude-preserving and are closed.
+Effort remains 1,742 theorems, 280 headlines and 373 modules: the existing
+boundary predicate and proofs are strengthened, with no new terminal theorem.
+Ranked mirror changes: no open H5 request. Request 5's fixture reservation,
+queued-cleanup and unconditional pending guards were altitude-preserving;
+requests 1, 2 and 4 were also altitude-preserving and are closed.
 
 ## H6 summary — Guarded timer effects and session-relative counting
 

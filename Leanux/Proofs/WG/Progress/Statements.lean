@@ -190,8 +190,9 @@ theorem original_pending_batch_state : backlog = none :=
 
 /-- Every accepted original trace supplies exactly its ordered operation
 boundaries after ambient stripping and the original four completion checks.
-Supplied-mode cuts have no pending identities; scheduled NAPI is not constrained
-by these Runner checks alone. -/
+Every cut has no pending identities in either record mode, including cuts with
+negative syscall returns. This holds for any typed trace, without parser or
+entry-invariant premises. Scheduled NAPI is not constrained by these checks. -/
 theorem original_accepted_operation_boundaries (trace : Runner.Trace)
     (placeholders : Bool) (output : Lean.Json)
     (acceptedRun : Runner.executeTrace trace placeholders = .ok output) :

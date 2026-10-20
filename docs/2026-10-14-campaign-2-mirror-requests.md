@@ -230,21 +230,27 @@ refuted pending disposition; the global termination obligation stays open.
 
 ## 5. Account for retained namespace-pin aliases at cleanup
 
-Current disposition (2026-10-20): the mirror lane has implemented explicit
-fixture-domain refusal on `task/netns-pin` through `3a4e62dd`; that branch is
-not yet included in main `1f766662` or this proof carry. The parser reserves
-literal descriptors 8 and 9 for the foreign-creator fixture, and 8 for a
-stepped dump. Namespace close requires that releasing the pin actually queued
-cleanup, and operation completion refuses a pending unit in both record
-modes. These changes address the early teardown as well as the later pending
-bit. Settlement and a corrected-refusal recipe await the landing and proof
-carry; the acceptance evidence below remains pinned to the earlier mirror.
+Current disposition (2026-10-20): **closed by main `218d3ffd`**, carrying
+`a665b2c1` through `b99a76e9`. The validator and parser reserve literal
+0–7 in every fixture, additionally 8 for a stepped dump or seccomp child,
+and 8–9 for foreign-creator. Namespace close and cleanup require that the
+pin's release actually queued cleanup; operation completion refuses pending
+work in both record modes. These altitude-preserving environment changes
+address the early teardown as well as the later pending bit.
 
-Status: open Rule Zero clause-1 mirror/environment defect over `1a69cebb`,
-with an accepted initialized placeholder counterexample. The foreign fixture
-permits `dup(9)`, its single `wg_netns_close`, then `close(ref 0)` at the
-default descriptor limit of 32. The original runner and exact boundary
-observer accept with pending worker 12 after the final close.
+The unchanged input is retained as a refusal regression: parsing rejects
+literal 9, and bypassing parsing with the original typed trace stops at
+operation 1 with the queued-cleanup invariant. Native execution and the exact
+boundary observer agree. The unrestricted operation-boundary clause now
+follows from the runner guards for all accepted typed traces, in both modes,
+without a parser-validity or entry-invariant premise. This is pending-unit
+emptiness, not a proof that all queues or scheduled NAPI are empty.
+
+Historical finding over `1a69cebb`: an initialized placeholder counterexample
+was accepted. The foreign fixture then permitted `dup(9)`, its single
+`wg_netns_close`, and `close(ref 0)` at the default descriptor limit of 32.
+The original runner and exact boundary observer accepted with pending worker
+12 after the final close. The following diagnosis describes that old mirror.
 
 [Finding and executable recipe](2026-10-20-proof-campaign-2-namespace-pin.md);
 [independent landing review, S3](2026-10-20-review-campaign-2-landing.md).
@@ -267,8 +273,9 @@ cut. The admitted path is the `--domain` placeholder filter, not the
 supplied-mode differential check. Request 4's lifecycle fix at `3f3879e0`
 did not close this path.
 
-Two possible mirror-lane dispositions are an explicit refusal of a retained
+The two proposed mirror-lane dispositions were explicit refusal of a retained
 pin alias, or cleanup queued and run at the actual last release with the C's
-asynchronous scheduling modeled. Both preserve the mirror's altitude; the
-mirror lane chooses and validates the fix. This campaign prescribes neither,
-makes no mirror change, and leaves unrestricted pending emptiness refuted.
+asynchronous scheduling modeled. The mirror lane chose the former, with the
+queued-cleanup and operation-end guards described above. This campaign made
+no mirror change; the old counterexample remains the record of the defect,
+while the current unrestricted pending-unit clause is proved.

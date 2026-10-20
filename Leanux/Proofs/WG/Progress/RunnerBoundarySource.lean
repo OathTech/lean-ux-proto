@@ -111,7 +111,7 @@ def runnerStep (trace : Trace) (op : Operation) (state : RunnerAccumulator) :
   return .yield (world, results, ends, observations, branches, fired)
 
 /-- The actual syscall and ambient strip, followed by the four original
-operation-completion checks, including supplied-mode pending work. A negative
+operation-completion checks, including pending work in both record modes. A negative
 syscall return still passes when these checks succeed. -/
 def runnerOperation (trace : Trace) (op : Operation) (state : RunnerAccumulator) :
     Except (Nat × Stop) (Int × World) := do

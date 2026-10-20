@@ -25,19 +25,12 @@ the per-result reports; historical commits are not current claim points.
 
 ## Current register
 
-The landed C1/C2 proof tree is current over the namespace-pin landing `218d3ffd`: after
-the fixed-width counter carries (campaign 2's owned carry and the shared
-carry, landed at `eba3c2b6`), the shared carry for the namespace-pin fix
-restates the runner's per-operation step in its seventeen source copies (the
-pending-unit refusal in both record modes), the namespace close's and
-cleanup's frames and sources (the holders cleared at the close; the teardown
-only behind the queued unit), and the parser's copy (the reserved-descriptor
-rule), and the gate passes. Request 5 is closed on the mirror side. One lag:
-H5's namespace-pin recipe (`Progress/NamespacePinPending.lean`, run by the
-counterexample speedbump, not by the gate) asserts the parser's former
-acceptance of its reproducer and fails by design until campaign 2's
-regression carry, which also owns the unrestricted pending-work clause over
-the now-stated domain.
+The shared namespace-pin carry is landed on main at `ac55c7d5` over mirror
+`218d3ffd`, following the fixed-width carries at `eba3c2b6`. Campaign 2's
+owned carry strengthens H5's pending-unit boundary clause to both record
+modes without additional premises, closes request 5, and retains the
+historical input as a refusal regression. Aggregate validation of the
+combined tree is pending; the other rows retain the landed carry's pins.
 
 The Results table is the current claim register; historical validation
 counts below it are not current pins. Campaign 1's [GRO report](2026-10-18-proof-gro-carry.md)
@@ -1068,7 +1061,7 @@ open. All earlier theorem bodies are unchanged. Gate: 918 jobs/834 declarations,
 | H2 Session index uniqueness | 162 terminal declarations: initialized endpoint index/owner coherence, lookup and local collision retry. | `Leanux/Proofs/WG/Index/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 218d3ffd | Current at normal initialized endpoints; stopped runs and intermediate boundaries are not covered. Lookup has an arbitrary-state contract; collision retry is local and supplied-record-mode only, without a runner-level insertion-draw theorem. |
 | H3 Endpoint roaming | 45 terminal declarations: final latest-setter provenance and authentication of observed handshake attempts/data checks. | `Leanux/Proofs/WG/Roaming/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 218d3ffd | Current for normal final provenance and observed attempts/checks, not every physical endpoint write. Packet provenance ties the endpoint to the same checked packet source; the outer address is copied, not AEAD-bound. Observer-site completeness rests on source construction and review. |
 | H4 Configuration semantics | 217 terminal declarations: mixed scalar readback, initialized getter, flag contracts and ordered configuration effects. | `Leanux/Proofs/WG/Config/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 218d3ffd | Current scoped contracts: mixed peer get-after-set is one-directional over internalId, PSK, keepalive and endpoint, under an entry invariant not derived at initialized endpoints; the initialized getter is separate. Replace-peers is flag-only. The charter’s allowed-IP removal flag is recast as peer REMOVE_ME/REPLACE_ALLOWEDIPS because Linux 6.12 has no per-allowed-IP flag. No mixed-request creation/removal completeness or full peer-field readback is claimed. |
-| H5 Termination and progress | 280 terminal declarations: finite trace evaluation, operation guards and committed activation receipts. | `Leanux/Proofs/WG/Progress/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 218d3ffd | Current finite evaluation preserves every Stop, including budget exhaustion; it is not general budget adequacy. Accepted supplied-mode operation boundaries have empty pending work, but propagation of supplied mode to interior receipts remains unproved. Unrestricted pending emptiness was refuted in placeholder mode by the namespace-pin reproducer; the environment defect is fixed at `218d3ffd` (request 5 closed on the mirror side: the fixture's holders are reserved descriptors, the close runs the teardown only because the pin's release queued it, a pending unit at an operation's end is refused in both modes). Lagging on that recipe: `NamespacePinPending.lean` asserts the parser's former acceptance and fails until campaign 2's regression carry, which also owns re-attempting the unrestricted clause over the now-stated domain. Receipt decrease retains its supplied-entry premise. |
+| H5 Termination and progress | 280 terminal declarations: finite trace evaluation, operation guards and committed activation receipts. | `Leanux/Proofs/WG/Progress/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 218d3ffd | Aggregate validation pending. Every operation boundary of an accepted typed trace has empty pending work in both record modes; request 5 is closed and its reproducer is a refusal regression. Finite evaluation preserves every Stop, including budget exhaustion; it is not general budget adequacy. Receipt decrease retains its supplied-entry premise, and propagation of supplied mode to interior receipts remains unproved. |
 | H6 Timer discipline | 100 terminal declarations: guarded arm effects, hook journals, qualifying retry blocks and session-relative counts. | `Leanux/Proofs/WG/TimerDiscipline/Statements.lean` | [charter](2026-10-14-charter-proof-campaign-2.md), [report](2026-10-14-proof-campaign-2.md) | [independent landing review](2026-10-20-review-campaign-2-landing.md) | 218d3ffd | Current guarded contracts, with no theorem that arming occurs only at the listed sites. Keepalive re-arms are conditional on reaching the hook; caller coverage rests on journal construction and review. Session counting proves at most one completed enqueue per stamp plus a separate give-up cause, not once per session. The bound 19 covers qualifying contiguous retry blocks in one normal timer episode, not arbitrary interleavings. |
 
 The gate for every row: `capped -- scripts/in-bundle scripts/proof-gate`

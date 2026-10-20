@@ -1,12 +1,28 @@
 # H5: namespace-pin alias tears down early and leaves cleanup pending
 
-Current disposition (2026-10-20): the mirror-lane fix on `task/netns-pin`
-through `3a4e62dd` rejects aliases of fixture-held literal descriptors,
-requires queued cleanup before namespace teardown, and checks pending work
-at operation completion in both record modes. It is not yet on main
-`1f766662`. The historical acceptance recipe remains applicable to that
-main revision; after landing it must become a checked refusal regression.
+Current disposition (2026-10-20): **resolved by main `218d3ffd`**. The
+validator and parser reject fixture-held literal descriptors: 0–7 always,
+8 for a stepped dump or seccomp child, and 8–9 for foreign-creator. Namespace
+close requires queued cleanup before teardown, and the runner refuses pending
+work at operation completion in both record modes. The unchanged input below
+is now a refusal regression, not an accepted-domain counterexample.
 See [request 5](2026-10-14-campaign-2-mirror-requests.md#5-account-for-retained-namespace-pin-aliases-at-cleanup).
+
+The current recipe checks the exact parser refusal for literal 9. Direct
+execution of the original typed trace, which bypasses parsing, and its exact
+boundary observer both stop at operation 1 with the invariant that the pin's
+close did not queue cleanup. Operation 2 is never reached. This checks the
+queued-cleanup guard independently of the fixture restriction; it no longer
+exercises the final operation's pending-work guard.
+
+The strengthened `RunnerBoundaryClean` and `runnerAudit_of_accepted` prove
+empty pending identities at every operation boundary of every accepted typed
+trace, including negative syscall returns and both record modes. There is
+no parser-validity or entry-invariant premise. The native Stop classifications
+are preserved: hidden-record error with records, invariant error without
+them. Scheduled NAPI and general queue emptiness are separate properties.
+
+## Historical finding, before `218d3ffd`
 
 Status: reproduced against main `3308c49a` and again after the carry to
 main `1a69cebb`. This is a Rule Zero clause-1 mirror/environment defect:
@@ -97,26 +113,30 @@ The corresponding harness input is:
 {"version":1,"id":"campaign2-namespace-pin-alias","net_fixture":"foreign-creator","ops":[{"op":"dup","fd":{"literal":9}},{"op":"wg_netns_close"},{"op":"close","fd":{"ref":0}}]}
 ```
 
-The Python `harness.trace.validate_trace` accepts this object. The Lean recipe
-also parses it with `Runner.parseTrace` and checks that its original output
-agrees with the typed trace and boundary observer. These remain interpreter
-checks, not parser-reduction theorems.
+On the affected mirror, Python `harness.trace.validate_trace` accepted this
+object, and the original Lean recipe parsed it and checked native/audited
+acceptance. Current parser and validator checks reject the same JSON; these
+are executable checks, not parser-reduction theorems. Main's
+`FixtureDescriptorTests` covers the validator's fixture-specific reservation.
 
-Reproducer:
+## Current regression
+
+Reproduce the corrected refusals with:
 
 ```sh
 LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle lake env lean Leanux/Proofs/WG/Progress/NamespacePinPending.lean
 ```
 
-The recipe fails explicitly if original acceptance, output agreement or any
-listed boundary changes. Its source is
+The recipe fails explicitly unless the parser refuses the reserved literal
+and native/audited typed execution agree on the exact operation-1 invariant.
+Its source is
 [NamespacePinPending.lean](../Leanux/Proofs/WG/Progress/NamespacePinPending.lean).
 Two attempted direct kernel reductions did not close through the native
 nonstructural dependencies; no proof declaration or resource-limit change was
 retained. An independent read-only review confirmed the domain and source
 chain. The mirror is unchanged by this campaign.
 
-[AGENT 2026-10-20] Preserve the unrestricted completion claim as refuted and
-request a fixture/environment disposition, while continuing independent
-termination and committed-service proofs. Do not impose an undocumented
-no-alias premise to report the original claim as proved.
+Historical decision [AGENT 2026-10-20]: retain the counterexample and request
+an environment disposition instead of adding an undocumented no-alias
+premise. The landed guards now support the unrestricted pending-unit clause;
+the current regression preserves the original trace and its resolved finding.
