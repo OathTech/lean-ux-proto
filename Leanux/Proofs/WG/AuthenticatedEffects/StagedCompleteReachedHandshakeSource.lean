@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedCookieMetadataCanonical
 import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalSessionSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSessionCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedProtocolPointFrames
@@ -15,6 +16,7 @@ abbrev History := List Event
 inductive Native : Type 1 where
   | quiet {α : Type} (body : WG.M α) (frame : SameView StagedEntry.view body)
   | metadata {α : Type} (body : WG.M α) (source : PeerMetadata.Shape body)
+  | capturedMetadata {α : Type} (body : WG.M α) (source : PeerMetadata.Shape body)
   | captured {α : Type} (body : WG.M α) (frame : SameView StagedEntry.view body)
   | session (pid : PeerId)
   | initiation (mac : HandshakeMac)
@@ -30,6 +32,7 @@ inductive Native : Type 1 where
 def Native.Result : Native → Type
   | @quiet α .. => α
   | @metadata α .. => α
+  | @capturedMetadata α .. => WGRunWitness α
   | @captured α .. => WGRunWitness α
   | .session _ => Bool
   | .initiation _ | .response _ => Option PeerId
@@ -38,6 +41,7 @@ def Native.Result : Native → Type
 def Native.action (token : Native) : PrefixM Event token.Result := match token with
   | .quiet body _ => liftWGObserver (liftWGPrefix body)
   | .metadata body _ => liftWGObserver (liftWGPrefix body)
+  | .capturedMetadata body _ => liftWGObserver (captureWGRun body)
   | .captured body _ => liftWGObserver (captureWGRun body)
   | .session pid => liftWGObserver (CausalJournal.session pid)
   | .initiation mac => liftWGObserver (NestedPeerRelease.admitInitiationWith
