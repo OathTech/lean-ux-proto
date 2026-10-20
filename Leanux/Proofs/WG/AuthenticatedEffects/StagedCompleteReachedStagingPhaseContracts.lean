@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingPointContract
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedReadGetterFrames
 
 /-! Semantic coverage follows the fixed staging tree, including the saved
 before-state at a completed receipt. The pre-emission point is covered by
@@ -65,6 +66,9 @@ theorem Covers.point {shape : Shape action} (safe : Covers E shape w a h)
   induction point with
   | entry=>exact safe.entry
   | returned shape performed=>exact safe.normal performed
+  | getter getter point=>
+      obtain ⟨rfl,rfl⟩ := point.state
+      exact safe.1
   | left tail point ih=>exact ih safe.1
   | right head tail leading point ih=>exact ih (safe.2 _ _ _ _ leading)
   | receiptBody record point ih=>exact ih safe.1

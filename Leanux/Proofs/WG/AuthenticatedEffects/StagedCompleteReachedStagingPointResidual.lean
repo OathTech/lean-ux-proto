@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingPointExecution
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedStagingAmbientSource
 
 /-! Points are positions in the fixed source witness, not arbitrary factors.
 A right bind point includes the successful original left run. Receipt-body
@@ -23,6 +24,9 @@ inductive Point : {α : Type} → {action : WGPrefix Event α} → Shape action 
   | returned (shape : Shape action)
       (performed : runWGPrefix action w a h=(.ok ((value,u),b),middle)) :
       Point shape w a h (pure value) u b middle (pure value)
+  | getter {α : Type} {token : Native α} (getter : Getter token)
+      (point : ReadGetter.Point getter.source w a v b) :
+      Point (.native token) w a h (ReadGetter.prefixRemainder point) v b h (ReadGetter.prefixRemainder point)
   | left {body : WGPrefix Event α} {next : α → WGPrefix Event β}
       {head : Shape body} (tail : ∀ value, Shape (next value)) (point : Point head w a h leaf u b middle remaining) :
       Point (.bind head tail) w a h leaf u b middle (remaining >>= next)
@@ -47,6 +51,7 @@ theorem Point.residual {shape : Shape action}
   induction point with
   | entry=>rfl
   | returned shape performed=>exact performed
+  | getter getter point=>exact ReadGetter.prefixRemainder_run _ point
   | left tail point ih=>
     rw [run_bind,run_bind,ih]
   | right head tail leading point ih=>
