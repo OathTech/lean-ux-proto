@@ -67,9 +67,10 @@ The optional pending-identity review above is not a second established defect.
 
 ## 2. Account for nested queue refill in activation budgets
 
-Current disposition (2026-10-19): confirmed mirror-lane defect, under repair
-on `task/env-requests`; not yet landed in this proof branch. See the campaign
-report's current checkpoint.
+Current disposition (2026-10-20): fixed on main `3f3879e0`, with the shared
+proof carry at `3308c49a`; both are incorporated in this branch. The evidence
+below describes the earlier mirror. Current regression checks retain the
+corrected budget, completion and cancellation outcomes.
 
 Status: reproduced by executable model evaluation on `ca6b22e`, independently
 reviewed against the mirror and pristine C. This is an environment-bound
@@ -141,9 +142,10 @@ explicit rather than counting it as a proved termination counterexample.
 
 ## 3. Restore pre-nest tailroom when cancelling the device peers nest
 
-Current disposition (2026-10-19): confirmed mirror-lane defect, under repair
-on `task/env-requests`; not yet landed in this proof branch. See the campaign
-report's current checkpoint.
+Current disposition (2026-10-20): fixed on main `3f3879e0`, with the shared
+proof carry at `3308c49a`; both are incorporated in this branch. The evidence
+below describes the earlier mirror. Current regression checks retain the
+corrected budget, completion and cancellation outcomes.
 
 Status: source correspondence error over `ca6b22e`, with a kernel-checked
 reachable model witness and two independent read-only source reviews. No
@@ -198,9 +200,10 @@ limit instead of claiming an output or kernel defect.
 
 ## 4. Reconcile supplied-record pending identities after nested requeue
 
-Current disposition (2026-10-19): confirmed mirror-lane defect, under repair
-on `task/env-requests`; not yet landed in this proof branch. See the campaign
-report's current checkpoint.
+Current disposition (2026-10-20): fixed on main `3f3879e0`, with the shared
+proof carry at `3308c49a`; both are incorporated in this branch. The evidence
+below describes the earlier mirror. Current regression checks retain the
+corrected budget, completion and cancellation outcomes.
 
 Status: new accepted initialized runtime counterexample over main 783510e8;
 [full report and reproducer](2026-10-19-proof-campaign-2-supplied-pending.md).
@@ -223,3 +226,23 @@ change is made by the proof campaign; differential validation belongs to the
 mirror follow-up. The counterexample is executable evidence, not a new
 kernel-reduction theorem. H5's literal pending-identity emptiness remains
 refuted pending disposition; the global termination obligation stays open.
+
+
+## 5. Account for retained namespace-pin aliases at cleanup
+
+Status: new accepted initialized placeholder counterexample, independently
+reviewed for fixture-domain validity. The foreign fixture permits `dup(9)`,
+then its single `wg_netns_close`, then `close(ref 0)`. The original runner and
+exact boundary observer accept with pending worker 12 (`netnsCleanup`) after
+the final close. The default descriptor limit is 32.
+
+[Finding and executable recipe](2026-10-20-proof-campaign-2-namespace-pin.md).
+The fixed-holder cleanup assumes the pin's last reference is gone; a retained
+alias violates that assumption without violating either parser's stated domain.
+The operation-end pending guard is restricted to supplied-record mode.
+
+Request: determine and enforce the actual fixture domain or account for cleanup
+at the last pin release, preserving the real scheduling behavior. This is an
+altitude-preserving environment request, not a kernel claim. The proof campaign
+makes no mirror change and continues the independent termination and service
+claims. The unrestricted placeholder pending-emptiness statement remains refuted.

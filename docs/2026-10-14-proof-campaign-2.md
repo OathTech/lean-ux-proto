@@ -2,6 +2,18 @@
 
 ## Current checkpoint
 
+Main `1a69cebb` is merged at `6e91c19a`; carry validation is running.
+Its sole mirror change replaces the deprecated observation string constructor;
+no proof body or shared layer changed. The complete finite evaluator is committed
+at `6531c47e`. New normal-completion composition is in progress.
+
+A new [namespace-pin alias finding](2026-10-20-proof-campaign-2-namespace-pin.md)
+refutes unrestricted placeholder pending-work emptiness. The harness accepts the
+three-operation trace; exact initialized runtime observation ends with pending
+cleanup 12. Request 5 is documented for the mirror lane; the native/audit recipe passes
+after the main merge and Python harness validation passes. This is an environment finding,
+not a kernel claim. Independent service proofs continue.
+
 **Current checkpoint: unconditional finite evaluation of the complete
 Runner now closes; H5 record-relative progress remains open.** The actual
 dispatch, syscall tail and trace loop are composed with concrete finite
@@ -170,7 +182,7 @@ The tranche adds 13 theorems, three headlines and four modules: H5
 801 and 807 jobs. An initial dispatch proof left a definitionally equal
 lift unresolved; an explicit reflexivity finish closes it. Full gate:
 3,129 jobs / 1,771 terminal statements, standard axioms only. Fresh
-whole-root replay is running. No limit increase or infrastructure rerun.
+whole-root replay exited zero. No limit increase or infrastructure rerun.
 
 ## Prefill, initialization and traffic integration, 2026-10-20
 
