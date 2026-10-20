@@ -1809,7 +1809,7 @@ def main(argv=None):
     parser.add_argument('--no-build', action='store_true', help='reuse the existing .lake build')
     parser.add_argument('--binary-coverage', action='store_true',
                         help='opt in to repeated binary-probe coverage at ELF-derived anchored ranges')
-    parser.add_argument('--binary-profile', choices=['index', 'allowedips', 'index-remove', 'index-replace', 'index-insert'], default='index',
+    parser.add_argument('--binary-profile', choices=['index', 'allowedips', 'allowedips-insert', 'index-remove', 'index-replace', 'index-insert'], default='index',
                         help='anchored function set for explicitly enabled binary coverage')
     parser.add_argument('--decision-census', action='store_true',
                         help='also write decision-census.json: one row per decision, its outcomes and witnesses')

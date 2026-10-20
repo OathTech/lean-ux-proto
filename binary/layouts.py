@@ -53,7 +53,7 @@ def layouts(kernel):
                         if 'DW_AT_name' in child.attributes:
                             field = child.attributes['DW_AT_name'].value.decode()
                             members[field] = base + offset
-                            if name in {'wg_peer', 'noise_handshake', 'cookie', 'wg_device', 'cookie_checker', 'noise_static_identity', 'crypt_queue', 'allowedips_node', 'list_head', 'endpoint', 'sockaddr_in', 'sockaddr_in6'}:
+                            if name in {'wg_peer', 'noise_handshake', 'cookie', 'wg_device', 'cookie_checker', 'noise_static_identity', 'crypt_queue', 'allowedips', 'allowedips_node', 'list_head', 'endpoint', 'sockaddr_in', 'sockaddr_in6'}:
                                 member_sizes[field] = type_bytes(child.get_DIE_from_attribute('DW_AT_type'))
                             if (name, field) in {('sockaddr', 'sa_family'), ('cookie_checker', 'secret'), ('cookie_checker', 'secret_birthdate'),
                                                  ('pubkey_hashtable', 'key'), ('wg_device', 'peer_hashtable')}:

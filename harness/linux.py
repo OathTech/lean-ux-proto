@@ -229,6 +229,11 @@ def binary_profile_ranges(profile):
     if profile == "allowedips":
         return binary_coverage_ranges(symbols=("lookup", "common_bits", "wg_peer_get_maybe_zero"),
                                       sources={"lookup": "drivers/net/wireguard/allowedips.c"})
+    if profile == "allowedips-insert":
+        return binary_coverage_ranges(symbols=("wg_allowedips_insert_v4", "wg_allowedips_insert_v6",
+                                              "add.isra.0", "common_bits"),
+                                      sources={"add.isra.0": "drivers/net/wireguard/allowedips.c",
+                                               "common_bits": "drivers/net/wireguard/allowedips.c"})
     if profile == "index-remove":
         return binary_coverage_ranges(symbols=("wg_index_hashtable_remove",))
     if profile == "index-replace":

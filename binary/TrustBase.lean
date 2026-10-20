@@ -33,7 +33,7 @@ import PairInsertInput
 -/
 namespace Binary.TrustBase
 
-def krakenCommit : String := "dc3824fd5ca36c28b11321b8e7f7e2389b6f6ec4"
+def krakenCommit : String := "907830a1fb207e86f7914764717e3995c1f0df2d"
 def kernelIdentity : String := "b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767"
 def elfSha256 : String := "06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"

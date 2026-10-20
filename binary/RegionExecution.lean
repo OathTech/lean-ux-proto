@@ -60,9 +60,9 @@ private theorem target_mono [Labels] [AddressSize]
 /-- Operations encountered in the two decoded functions. This is a proof
     convenience, not a change to the ISA or an entry-state restriction. -/
 def RegionOperation {w} : Operation w → Prop
-  | .mov .. | .movzx .. | .push .. | .pop .. | .setcc .. | .lea ..
+  | .mov .. | .movzx .. | .movsx .. | .push .. | .pop .. | .setcc .. | .lea ..
   | .add .. | .sub .. | .cmp .. | .cmpxchg .. | .test ..
-  | .and .. | .xor .. | .bsr .. | .bswap .. | .cmovcc .. | .sar .. | .jcc .. | .jmp .. | .call .. | .ret => True
+  | .and .. | .or .. | .not .. | .shr .. | .shl .. | .bt .. | .xor .. | .bsr .. | .bswap .. | .cmovcc .. | .sar .. | .jcc .. | .jmp .. | .call .. | .ret => True
   | _ => False
 
 theorem operation_mono [Labels] [AddressSize] {w} (i : Operation w)

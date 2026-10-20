@@ -1,0 +1,232 @@
+From 907830a1fb207e86f7914764717e3995c1f0df2d Mon Sep 17 00:00:00 2001
+From: Mike Dodds <mike@oath.tech>
+Date: Tue, 20 Oct 2026 01:40:13 +0000
+Subject: [PATCH] Support register BT with modulo offsets and undefined flags
+
+Add focused Lean checks, parser roundtrips and a native x86 comparison. Register operands only; unsupported memory and immediate forms fail closed. Supply the test runner Bool generator required by earlier consumer ISA extensions. All focused tests and native comparison pass.
+---
+ Kraken/X64/BtTests.lean       | 76 +++++++++++++++++++++++++++++++++++
+ Kraken/X64/Parser/Basic.lean  |  9 +++++
+ Kraken/X64/PrintATT.lean      |  1 +
+ Kraken/X64/PrintATTTests.lean |  1 +
+ Kraken/X64/PrintIntel.lean    |  1 +
+ Kraken/X64/Semantics.lean     |  7 ++++
+ Kraken/X64/Syntax.lean        |  1 +
+ Kraken/X64/Test/asm/test_bt.S | 22 ++++++++++
+ KrakenRunnerX64.lean          |  2 +
+ 9 files changed, 120 insertions(+)
+ create mode 100644 Kraken/X64/BtTests.lean
+ create mode 100644 Kraken/X64/Test/asm/test_bt.S
+
+diff --git a/Kraken/X64/BtTests.lean b/Kraken/X64/BtTests.lean
+new file mode 100644
+index 0000000..c844290
+--- /dev/null
++++ b/Kraken/X64/BtTests.lean
+@@ -0,0 +1,76 @@
++module
++
++import Kraken.X64.OmniSemantics
++import Kraken.X64.Parser
++import Kraken.X64.PrintATT
++import Kraken.X64.PrintIntel
++meta import Kraken.X64.PrintIntel
++meta import Kraken.X64.Semantics
++
++namespace Kraken.X64.BtTests
++
++private instance : Labels := ⟨fun _ => 0⟩
++
++private def execute (i : Instr) (s : MachineData) : Effects :=
++  i.interp s ⟨0, 3⟩ (fun d => .done ⟨d, 3⟩) (fun pc d => .done ⟨d, pc⟩)
++
++private def allFlags (post : MachineState → Bool) : Effects → Bool
++  | .done s => post s
++  | @Effects.undefined _ .bool next => allFlags post (next false) && allFlags post (next true)
++  | .require_exec_access _ next => allFlags post (next ())
++  | _ => false
++
++private def someFlags (post : MachineState → Bool) : Effects → Bool
++  | .done s => post s
++  | @Effects.undefined _ .bool next => someFlags post (next false) || someFlags post (next true)
++  | .require_exec_access _ next => someFlags post (next ())
++  | _ => false
++
++private def instruction (w : Width) : Instr :=
++  .regular .W64 w (.bt (.low .rax w) (.low .rcx w))
++
++private def check (w : Width) (value index : UInt64) (bit : Bool) : Bool :=
++  let state : MachineData := {regs := {rax := value,rcx := index,rbx := 99},status := {cf := false,pf := false,af := false,zf := true,sf := false,of := false}}
++  allFlags (fun t => t.pc == 3 && t.data.regs == state.regs &&
++    t.data.status.cf == bit && t.data.status.zf) (execute (instruction w) state)
++
++#guard check .W16 0x123456789abc8000 15 true
++#guard check .W16 0x123456789abc8000 31 true
++#guard check .W16 0xffff0000 16 false
++#guard check .W32 0xdeadbeef80000000 31 true
++#guard check .W32 0xdeadbeef80000000 63 true
++#guard check .W32 0xdeadbeef80000000 0xffffffffffffffff true
++#guard check .W32 0xffffffff00000000 32 false
++#guard check .W64 0x8000000000000000 63 true
++#guard check .W64 0x8000000000000000 127 true
++#guard check .W64 1 64 true
++#guard check .W64 1 65 false
++#guard allFlags (fun t => t.data.regs.rax == 0x100000001 && !t.data.status.cf && !t.data.status.zf)
++  (execute (.regular .W64 .W32 (.bt (.low .rax .W32) (.low .rax .W32)))
++    {regs := {rax := 0x100000001}})
++#guard someFlags (fun t => t.data.status.pf && t.data.status.af && t.data.status.sf && t.data.status.of)
++  (execute (instruction .W32) {})
++#guard someFlags (fun t => !t.data.status.pf && !t.data.status.af && !t.data.status.sf && !t.data.status.of)
++  (execute (instruction .W32) {})
++#guard !allFlags (fun _ => true) (execute (instruction .W8) {})
++#guard match Parser.parse "bt %ecx,%eax" with
++  | .ok p => p == [.instr (instruction .W32)]
++  | .error _ => false
++#guard match Parser.parse "btq %rcx,%rax" with
++  | .ok p => p == [.instr (instruction .W64)]
++  | .error _ => false
++#guard match Parser.parse "btw %cx,%ax" with
++  | .ok p => p == [.instr (instruction .W16)]
++  | .error _ => false
++#guard !(Parser.parse "bt %cl,%al").isOk
++#guard !(Parser.parse "btb %cl,%al").isOk
++#guard !(Parser.parse "bt %ecx,%rax").isOk
++#guard !(Parser.parse "btq %ecx,%eax").isOk
++#guard !(Parser.parse "bt %ecx,(%rax)").isOk
++#guard !(Parser.parse "bt $1,%eax").isOk
++#guard !(Parser.parse "lock bt %ecx,%eax").isOk
++
++#guard toString (instruction .W64) == "bt rax, rcx"
++#guard toString (instruction .W16) == "bt ax, cx"
++
++end Kraken.X64.BtTests
+diff --git a/Kraken/X64/Parser/Basic.lean b/Kraken/X64/Parser/Basic.lean
+index e2c2998..6e8dfd8 100644
+--- a/Kraken/X64/Parser/Basic.lean
++++ b/Kraken/X64/Parser/Basic.lean
+@@ -1058,6 +1058,15 @@ def parseInstr : Parser Instr := do
+     let ( addr_w, dst ) ← parseRegOrMemAO w
+     pure (toInstr addr_w (.rcr dst cnt))
+ 
++  -- Register/register BT is the form used by the allowed-IPs insertion image.
++  -- Memory/immediate operands are deliberately rejected until modeled.
++  | "bt" | "btw" | "btl" | "btq" => do
++    let width ← if mn == "bt" then pure none else some <$> instrWidth mn
++    let instruction ← commaSeparated width parseRegA parseRegA .bt
++    match instruction with
++    | .regular _ .W8 _ => fail "BT has no 8-bit form"
++    | _ => pure instruction
++
+   -- Byte swap
+   | "bsr" | "bsrw" | "bsrl" | "bsrq" => do
+     let width ← if mn == "bsr" then pure none else some <$> instrWidth mn
+diff --git a/Kraken/X64/PrintATT.lean b/Kraken/X64/PrintATT.lean
+index 9ca9aaa..729cb76 100644
+--- a/Kraken/X64/PrintATT.lean
++++ b/Kraken/X64/PrintATT.lean
+@@ -120,6 +120,7 @@ def operation {w} (aw : Width) (op : Operation w) : String :=
+   | .rcr d c => two "rcr" (count c) (rm aw d)
+   | .bswap d => s!"bswap {reg d}"
+   | .bsr d x => two "bsr" (rm aw x) (reg d)
++  | .bt b i => two "bt" (reg i) (reg b)
+   | .jcc cc l => s!"j{cc} {l}"
+   | .jmp t => s!"jmp {target aw t}"
+   | .call t => s!"call {target aw t}"
+diff --git a/Kraken/X64/PrintATTTests.lean b/Kraken/X64/PrintATTTests.lean
+index 98e69b7..45341e0 100644
+--- a/Kraken/X64/PrintATTTests.lean
++++ b/Kraken/X64/PrintATTTests.lean
+@@ -48,6 +48,7 @@ def corpus : List String := [
+   "shrw $2, %ax", "sarl %cl, %eax", "shldq $4, %rax, %rbx", "shrd %cl, %ax, (%rsp)",
+   "rolq $1, %rax", "rorb %cl, %al", "rclq $1, %rax", "rcrl %cl, (%rsp)",
+   "bswap %eax", "bswapq %rax",
++  "bt %ecx, %eax", "btw %cx, %ax", "btq %rcx, %rax",
+   "bsr %edx, %eax", "bsrw %ax, %r15w", "bsrl (%rax), %ecx", "bsrq 8(%r12), %rbx",
+   -- control flow
+   "foo:\n  jmp foo", "je foo", "jne .L1", "jb foo", "jae foo", "ja foo", "jbe foo",
+diff --git a/Kraken/X64/PrintIntel.lean b/Kraken/X64/PrintIntel.lean
+index aee052c..fd8e603 100644
+--- a/Kraken/X64/PrintIntel.lean
++++ b/Kraken/X64/PrintIntel.lean
+@@ -176,6 +176,7 @@ def Operation.toStr {w} (op : Operation w) (addr_w : Width := .W64) : String :=
+   | .rcr dst cnt => s!"rcr {dst.toStr addr_w}, {cnt}"
+   | .bswap dst => s!"bswap {dst}"
+   | .bsr dst src => s!"bsr {dst}, {src.toStr addr_w}"
++  | .bt base index => s!"bt {base}, {index}"
+   | .jcc cc l => s!"j{cc} {l}"
+   | .jmp tgt => s!"jmp {tgt.toStr addr_w}"
+   | .call tgt => s!"call {tgt.toStr addr_w}"
+diff --git a/Kraken/X64/Semantics.lean b/Kraken/X64/Semantics.lean
+index 86282a6..2f69d43 100644
+--- a/Kraken/X64/Semantics.lean
++++ b/Kraken/X64/Semantics.lean
+@@ -824,6 +824,13 @@ set_option maxHeartbeats 1000000
+     let (cf, v) := (t.msb, t.take w.bits)
+     (λ setof => if count == 1 then setof (v.msb != a.msb) else undefined setof) (λ of =>
+     { s with status := { s.status with cf, of } }.set dst v p next))
++  | .bt base index =>
++    if w == .W8 then unimplemented "BT has no 8-bit form" else
++    -- Intel SDM Vol. 2A, BT: register offsets are modulo operand width.
++    -- ZF is preserved; OF/SF/AF/PF are undefined. Neither register is written.
++    let cf := (s.regs.get base).getLsbD ((s.regs.get index).toNat % w.bits)
++    undefined (fun pf => undefined (fun af => undefined (fun sf => undefined (fun of =>
++      next {s with status := {s.status with cf, pf, af, sf, of}}))))
+   | .bsr dst src =>
+     if w == .W8 then unimplemented "BSR has no 8-bit form" else
+     src.interp s p (fun a s =>
+diff --git a/Kraken/X64/Syntax.lean b/Kraken/X64/Syntax.lean
+index b984e80..4fc9d7a 100644
+--- a/Kraken/X64/Syntax.lean
++++ b/Kraken/X64/Syntax.lean
+@@ -237,6 +237,7 @@ inductive Operation (w : Width)
+   | rcr  (_ : Dst w) (_ : ShiftCountExpr)
+   | bswap  (dst : Reg w) -- (_ : w = .W32 ∨ w = .W64)
+   | bsr (dst : Reg w) (src : RegOrMem w)
++  | bt (base : Reg w) (index : Reg w)
+   -- Control flow
+   | jcc (cc : CondCode) (target : Label)
+   | jmp (target : RelRegOrMem)
+diff --git a/Kraken/X64/Test/asm/test_bt.S b/Kraken/X64/Test/asm/test_bt.S
+new file mode 100644
+index 0000000..de8f2cf
+--- /dev/null
++++ b/Kraken/X64/Test/asm/test_bt.S
+@@ -0,0 +1,22 @@
++movq $0x123456789abc8000, %rax
++movq $31, %rcx
++cmpq %rcx, %rcx
++btw %cx, %ax
++setc %r8b
++setz %r9b
++movq $0xdeadbeef80000000, %rax
++movq $-1, %rcx
++btl %ecx, %eax
++setc %r10b
++movq $0x8000000000000000, %rax
++movq $127, %rcx
++btq %rcx, %rax
++setc %r11b
++movq $0x100000001, %rax
++btl %eax, %eax
++setc %r12b
++movq $1, %rax
++movq $64, %rcx
++btq %rcx, %rax
++setc %r13b
++addq $0, %r15
+diff --git a/KrakenRunnerX64.lean b/KrakenRunnerX64.lean
+index 7c10ff2..95addf2 100644
+--- a/KrakenRunnerX64.lean
++++ b/KrakenRunnerX64.lean
+@@ -106,6 +106,8 @@ instance : Gen CondCode := ⟨gen_ctors% CondCode⟩
+ instance : Gen AddrIndex := ⟨gen_ctors% AddrIndex⟩
+ 
+ -- No nop lengths or alignments; other control flow is rejected by `stepDeterministic`.
++-- Repetition/system flag fields introduced by the consumer ISA extensions.
++instance : Gen Bool := ⟨pick #[false, true]⟩
+ instance : Gen Nat := ⟨failure⟩
+ instance : Gen Int64 := ⟨genInt64 #[3, 8, 16, 32, 64]⟩
+ -- Code addresses differ between Kraken's layout and the hardware binary, so no labels, nor
+-- 
+2.43.0
+
