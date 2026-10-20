@@ -15,6 +15,11 @@ theorem NativeKind.checked (kind : NativeKind) : CompleteProduct.Checked kind.ac
   | access body source allocated=>
       exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
         CompleteProduct.account_safe body source.frame allocated)
+  | lookup kinds number=>
+      exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
+        CompleteProduct.account_safe (indexLookup kinds number) (HandshakeLookup.index_lookup kinds number)
+        (AllocatedFrames.observed (indexLookupPrefix_erases kinds number)
+          (indexLookupPrefix_preserves_ambient allocationAmbient kinds number)))
   | allocate packet=>
       exact CompleteProduct.state (CompleteProduct.pair
         (CompleteIngress.new_rx CompleteProduct.Safe CompleteProduct.account_safe packet)

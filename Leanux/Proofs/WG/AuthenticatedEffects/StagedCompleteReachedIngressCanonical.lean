@@ -57,6 +57,7 @@ macro "ingress_source_step" : tactic => `(tactic| first
   | (ingress_native_head freeRxSkb; exact .native (.free _))
   | (ingress_native_head modifyDev; exact handshakeAppend _ _)
   | (ingress_source_head Hooks.peerRelease; exact .release _)
+  | (ingress_native_head indexLookup; exact .native (.lookup _ _))
   | (ingress_native_head keypairGet; apply accessShape _ (Access.getShape _); solve | ingress_allocation_frame)
   | (ingress_native_head keypairGetNull; apply accessShape _ Access.nullShape; solve | ingress_allocation_frame)
   | (ingress_native_head keypairPut; apply accessShape _ (Access.putShape _ _); solve | ingress_allocation_frame)

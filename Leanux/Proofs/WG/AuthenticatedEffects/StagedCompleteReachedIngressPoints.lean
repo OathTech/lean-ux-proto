@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Ingress
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing TransmitSecurity CausalJournal RetirementSecurity
 
 inductive Site where
-  | entry | returned | release | access
+  | entry | returned | release | access | lookup
   | left (site : Site) | right (site : Site)
 
 inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action →
@@ -19,6 +19,8 @@ inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action �
       (allocated : Preserves StackOwnership.Allocated action)
       (point : Access.Point source w.wg w.ambient v b) :
       Point (.native (.access action source allocated)) w h .access {w with wg:=v,ambient:=b} h
+  | lookup {w : World} (point : Lookup.Point (Lookup.canonical kinds number) w.wg w.ambient v b) :
+      Point (.native (.lookup kinds number)) w h .lookup {w with wg:=v,ambient:=b} h
   | release (point : PeerRetirement.Points.NativePoints peer w h u middle) :
       Point (.release peer) w h .release u middle
   | left {body : PrefixM Event α} {next : α → PrefixM Event β} {head : Shape body}
@@ -36,6 +38,7 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {source : Shape 
   | entry source=>exact ⟨_,rfl⟩
   | returned source performed=>exact ⟨pure _,performed⟩
   | access allocated point=>exact point.observed_remaining _
+  | lookup point=>exact point.observed_remaining _
   | release point=>exact ⟨PeerRetirement.Points.continuation point,PeerRetirement.Points.continuation_run point⟩
   | left tail point ih=>
       obtain ⟨remaining,continued⟩:=ih
@@ -56,6 +59,9 @@ theorem Point.safe (accountGood : ∀h w,Lifecycle.Points.Account h w → Good h
   | entry source=>exact accountGood _ _ before.1
   | returned source performed=>exact accountGood _ _ (source.normal before performed).1
   | access allocated point=>
+      obtain ⟨ledger,account⟩:=before.1
+      exact accountGood _ _ ⟨ledger,account.entry.same_view point.frame,account.complete⟩
+  | lookup point=>
       obtain ⟨ledger,account⟩:=before.1
       exact accountGood _ _ ⟨ledger,account.entry.same_view point.frame,account.complete⟩
   | release point=>
