@@ -17,6 +17,7 @@ inductive Site where
   | stored
   | prefill
   | boot
+  | cleanup
   | left (site : Site)
   | right (site : Site)
   | marked (label : Label) (site : Site)
@@ -32,6 +33,8 @@ inductive Point (inside : ChildPoints) : {α : Type} → {action : PrefixOuter E
       Point inside (.native (.prefill count w)) h .prefill u middle
   | boot (point : PrefixStore.Point (PrefixStore.bootShape net foreign) w h u middle) :
       Point inside (.native (.boot net foreign w)) h .boot u middle
+  | cleanup (point : ProductMetadata.Point ProductMetadata.cleanupShape w u) :
+      Point inside (.native (.cleanup index w)) h .cleanup u h
   | childEntry (token : Child action) : Point inside (.child index w token) h .entry w h
   | childReturn (token : Child action)
       (performed : runPrefixOuter (runAtPrefix index w action) h=(.ok out,last)) :
@@ -110,6 +113,7 @@ theorem Point.coverage (children : ChildContracts native inside Good)
   | stored point => exact .stored point
   | prefill point => exact .prefill point
   | boot point => exact .boot point
+  | cleanup point => exact .cleanup point
   | childEntry token => exact .childEntry token
   | childReturn token performed => exact .childReturn token performed
   | interior token point => exact .interior token ((children.at token).coverage _ _ _ _ point)
@@ -127,6 +131,7 @@ theorem Point.safe (carrierGood : ∀h w,CompleteProduct.Carrier h w→Good h w)
   | stored point => exact carrierGood _ _ (point.carrier framed)
   | prefill point => exact carrierGood _ _ (point.carrier framed)
   | boot point => exact carrierGood _ _ (point.carrier framed)
+  | cleanup point => exact carrierGood _ _ (point.carrier framed)
   | childEntry token => exact carrierGood _ _ (token.entry_carrier framed)
   | childReturn token performed => exact carrierGood _ _ (token.normal framed performed)
   | interior token point => exact (children.at token).safe _ _ _ _ framed point

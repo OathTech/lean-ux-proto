@@ -23,6 +23,9 @@ inductive Residual (children : ChildContracts native inside Good) :
   | boot (point : PrefixStore.Point (PrefixStore.bootShape net foreign) w h u middle) :
       Residual children (.native (.boot net foreign w)) h .boot u middle
         (do let out ← runAtPrefix 0 u (PrefixStore.remainder point);pure out.2)
+  | cleanup (point : ProductMetadata.Point ProductMetadata.cleanupShape w u) :
+      Residual children (.native (.cleanup index w)) h .cleanup u h
+        (runAtPrefix index u (ProductMetadata.remainder h point))
   | childEntry (token : Child action) :
       Residual children (.child index w token) h .entry w h (runAtPrefix index w action)
   | childReturn (token : Child action)
@@ -54,6 +57,7 @@ theorem Point.residual (children : ChildContracts native inside Good)
   | stored point => exact ⟨_,.stored point⟩
   | prefill point => exact ⟨_,.prefill point⟩
   | boot point => exact ⟨_,.boot point⟩
+  | cleanup point => exact ⟨_,.cleanup point⟩
   | childEntry token => exact ⟨_,.childEntry token⟩
   | childReturn token performed => exact ⟨_,.childReturn token performed⟩
   | interior token point => exact ⟨_,.interior token point⟩
@@ -72,6 +76,8 @@ theorem Residual.run {shape : Shape action} (path : Residual children shape h si
       simp only [PrefixStore.prefill_source,runPrefixOuter_bind,runAtPrefix_run,PrefixStore.remainder_run point]
   | boot point =>
       simp only [PrefixStore.boot_source,runPrefixOuter_bind,runAtPrefix_run,PrefixStore.remainder_run point]
+  | @cleanup w u index history point =>
+      simp only [runAtPrefix_run,ProductMetadata.remainder_run history point]
   | childEntry => rfl
   | childReturn _ performed => exact performed
   | interior token point =>
@@ -89,6 +95,7 @@ theorem Residual.point {children : ChildContracts native inside Good} (path : Re
   | stored point => exact .stored point
   | prefill point => exact .prefill point
   | boot point => exact .boot point
+  | cleanup point => exact .cleanup point
   | childEntry token => exact .childEntry token
   | childReturn token performed => exact .childReturn token performed
   | interior token point => exact .interior token point

@@ -19,6 +19,7 @@ theorem boundary_carrier (framed : Framed shape h) (point : Point Boundary shape
   | stored point => exact point.carrier framed
   | prefill point => exact point.carrier framed
   | boot point => exact point.carrier framed
+  | cleanup point => exact point.carrier framed
   | childEntry token => exact token.entry_carrier framed
   | childReturn token performed => exact token.normal framed performed
   | interior token impossible => cases impossible
