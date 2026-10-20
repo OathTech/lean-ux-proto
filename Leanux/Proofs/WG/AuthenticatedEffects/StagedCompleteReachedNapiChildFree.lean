@@ -20,6 +20,9 @@ theorem Point.childFree (free : shape.ChildFree)
   | entry shape=>exact .entry shape
   | returned shape performed=>exact .returned shape performed
   | interior token point=>exact False.elim free
+  | metadata point => exact .metadata point
+  | rx point => exact .rx point
+  | free point => exact .free point
   | left tail point ih=>exact .left tail (ih free.1)
   | right head tail leading point ih=>exact .right head tail leading (ih (free.2 _))
   | marked label point ih=>exact .marked label (ih free)
@@ -31,6 +34,9 @@ theorem Point.childFree_remaining {α : Type} {action : PrefixM Event α} {shape
   | entry shape=>exact ⟨_,rfl⟩
   | returned shape performed=>exact ⟨pure _,performed⟩
   | interior token point=>exact False.elim free
+  | metadata point => exact ⟨_,metadataRemainder_run _ point⟩
+  | rx point => exact ⟨_,rxRemainder_run _ point⟩
+  | free point => exact ⟨_,freeRemainder_run _ point⟩
   | left tail point ih=>
     rename_i body next head
     obtain ⟨remaining,same⟩:=ih free.1

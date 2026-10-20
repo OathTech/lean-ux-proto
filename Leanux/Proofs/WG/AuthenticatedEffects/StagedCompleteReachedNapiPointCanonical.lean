@@ -7,8 +7,8 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues TransmitSecurity Cau
 
 macro "napi_dispatch_shape" : tactic => `(tactic| first
   | (napi_shape_head Driver.nativePollObserved; exact pollShape _ _)
-  | (napi_wg_head RxNapi.pendingSource; exact .native .pending)
-  | (napi_wg_head RxNapi.scheduledSource; exact .native .scheduled)
+  | (napi_wg_head RxNapi.pendingSource; exact .native (.metadata _ NapiMetadata.pendingShape))
+  | (napi_wg_head RxNapi.scheduledSource; exact .native (.metadata _ NapiMetadata.scheduledShape))
   | (napi_native_head getAmbient; exact .native .ambient)
   | (napi_native_head peekHiddenSite; exact .native .hiddenSite)
   | (napi_native_head chooseNapiHere; exact .native .choose)

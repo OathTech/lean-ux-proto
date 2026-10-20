@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIterationPointScheduler
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompletePollConcrete
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNapiMetadataCanonical
 
 /-! Fixed source atoms for NAPI, native RX polling, GRO and stack replies.
 The selected packet, GRO entry and peer are arguments of their literal actions. -/
@@ -11,6 +12,8 @@ abbrev Result (α : Type) := Except Stop (α × World)
 abbrev wg (action : WG.M α) : PrefixM Event α := liftWGObserver (liftWGPrefix action)
 
 inductive Native : {α : Type} → PrefixM Event α → Type 1 where
+  | metadata (body : WG.M α) (source : PeerMetadata.Shape body) : Native (wg body)
+  | rx (body : WG.M α) (source : RxAccess.Shape body) : Native (wg body)
   | ambient : Native (liftPrefix getAmbient)
   | hiddenSite : Native (liftPrefix peekHiddenSite)
   | choose : Native (liftPrefix chooseNapiHere)
@@ -54,6 +57,40 @@ inductive Native : {α : Type} → PrefixM Event α → Type 1 where
   | excluded (message : String) : Native (liftPrefix (Leanux.Env.Stack.excluded message))
   | wgInvariant (message : String) : Native (wg (invariant message : WG.M α))
   | wgUnsupported (message : String) : Native (wg (unsupported message : WG.M α))
+
+noncomputable def metadataRemainder {α : Type} {body : WG.M α} {source : PeerMetadata.Shape body}
+    {w : World} (h : History) (point : PeerMetadata.Point source w.wg w.ambient v b) : PrefixM Event α :=
+  Classical.choose (point.observed_remaining h)
+
+theorem metadataRemainder_run {α : Type} {body : WG.M α} {source : PeerMetadata.Shape body}
+    {w : World} (h : History) (point : PeerMetadata.Point source w.wg w.ambient v b) :
+    runPrefix (wg body) w h = runPrefix (metadataRemainder h point) {w with wg:=v,ambient:=b} h :=
+  Classical.choose_spec (point.observed_remaining h)
+
+theorem rx_observed_remaining {α : Type} {body : WG.M α} {source : RxAccess.Shape body}
+    {w : World} (h : History) (point : RxAccess.Point source w.wg w.ambient v b) :
+    ∃ rest : PrefixM Event α, runPrefix (wg body) w h = runPrefix rest {w with wg:=v,ambient:=b} h := by
+  obtain ⟨rest,same⟩ := point.remaining
+  refine ⟨liftWGObserver (liftWGPrefix rest),?_⟩
+  simp only [wg,liftWGObserver_run,runWGPrefix_lift,same]
+
+noncomputable def rxRemainder {α : Type} {body : WG.M α} {source : RxAccess.Shape body}
+    {w : World} (h : History) (point : RxAccess.Point source w.wg w.ambient v b) : PrefixM Event α :=
+  Classical.choose (rx_observed_remaining h point)
+
+theorem rxRemainder_run {α : Type} {body : WG.M α} {source : RxAccess.Shape body}
+    {w : World} (h : History) (point : RxAccess.Point source w.wg w.ambient v b) :
+    runPrefix (wg body) w h = runPrefix (rxRemainder h point) {w with wg:=v,ambient:=b} h :=
+  Classical.choose_spec (rx_observed_remaining h point)
+
+noncomputable def freeRemainder {w : World} (h : History)
+    (point : SkbAccess.Point (SkbStore.freeRx skb) w.wg w.ambient v b) : PrefixM Event Unit :=
+  Classical.choose (point.observed_remaining h)
+
+theorem freeRemainder_run {w : World} (h : History)
+    (point : SkbAccess.Point (SkbStore.freeRx skb) w.wg w.ambient v b) :
+    runPrefix (wg (freeRxSkb skb)) w h = runPrefix (freeRemainder h point) {w with wg:=v,ambient:=b} h :=
+  Classical.choose_spec (point.observed_remaining h)
 
 inductive Child where
   | counter (skb : SkbId) (packet : RxPacket)
@@ -104,6 +141,11 @@ inductive Shape : {α : Type} → PrefixM Event α → Type 1 where
   | bind {body : PrefixM Event α} {next : α → PrefixM Event β}
       (head : Shape body) (tail : ∀ value, Shape (next value)) : Shape (body >>= next)
   | marked (label : Label) (body : Shape action) : Shape action
+
+noncomputable def liftedMetadataShape (body : WG.M α) (source : PeerMetadata.Shape body) :
+    Shape (liftPrefix (liftWG body)) := by
+  rw [←liftWGObserver_lift]
+  exact .native (.metadata body source)
 
 noncomputable def conditionalShape (test : Prop) [Decidable test]
     {left right : PrefixM Event α} (yes : test → Shape left) (no : ¬test → Shape right) :

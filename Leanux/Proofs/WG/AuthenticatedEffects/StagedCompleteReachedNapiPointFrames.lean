@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNapiPointSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNapiFreeFrames
 
 /-! Native poll frames retain the actual full packet ledger. The stronger
 outer allocation companion is not assumed at every RX intermediate cut. -/
@@ -18,6 +19,8 @@ theorem ambient_checked (action : AmbientM α) : Checked (liftPrefix (liftAmbien
 
 theorem Native.checked (token : Native action) : Checked action := by
   cases token with
+  | metadata body source => exact CompletePoll.state _ (CompletePassive.native _ CompleteProduct.account_safe _ source.frame)
+  | rx body source => exact CompletePoll.state _ (CompletePassive.native _ CompleteProduct.account_safe _ source.frame)
   | ambient =>
     apply viewLiftPrefix_preserves productStoreView carrier_safe CompleteStack.stable
     apply (ProjectedAction.iff_run _ _ _).mpr

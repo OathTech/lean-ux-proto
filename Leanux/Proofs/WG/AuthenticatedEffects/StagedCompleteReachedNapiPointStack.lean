@@ -52,9 +52,8 @@ macro "napi_stack_shape" : tactic => `(tactic| first
   | (napi_failure_head unsupported; exact .failed (.unsupported _) _)
   | (napi_failure_head Stack.excluded; exact .failed (.excluded _) _)
   | (napi_native_head skipCut; exact .native .cut)
-  | (napi_native_head liftRouting; first
-      | exact .native (.routeOutput _ _) | exact .native (.routeInput _ _) | exact .native .neighbour)
-  | (napi_native_head getDev; exact .native .device)
+  | (napi_native_head liftRouting; exact liftedMetadataShape _ (PeerMetadata.routeAdapterShape _))
+  | (napi_native_head getDev; exact liftedMetadataShape _ PeerMetadata.deviceReadShape)
   | (napi_native_head getWG; exact .native .world)
   | (napi_native_head modifyEnv; exact .native (.inbox _))
   | (napi_native_head invariant; exact .native (.invariant _))
