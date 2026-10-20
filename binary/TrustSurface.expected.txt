@@ -1,92 +1,37 @@
 HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
-Binary.Pair.Allowedips.Root.initialization_segment : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+Binary.Pair.Allowedips.Root.initialization_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
-    ∀ {names : Binary.Pair.Allowedips.Names} {s : MachineData} {attached withHeader copied after : DataMem}
-      {d : Leanux.WG.Device} {pid : Leanux.WG.PeerId} {owner : Leanux.WG.Peer} {cidr key : Nat} {v4 : Bool},
-      Binary.Pair.Allowedips.Corresponds names Binary.Pair.Allowedips.Root.nodeOffsets s.dmem d →
-        Eq.{1} (Binary.Pair.Allowedips.heap names (Binary.Pair.Allowedips.target d) s.dmem) (Except.ok.{0, 0} ()) →
-          LT.lt.{0} 0 s.regs.rbx.toNat →
-            Eq.{1} (HMod.hMod.{0, 0, 0} s.regs.rbx.toNat 8) 0 →
-              LT.lt.{0} (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 72) (HPow.hPow.{0, 0, 0} 2 64) →
-                (∀ (span : Binary.Pair.Span),
-                    Membership.mem.{0, 0}
-                        (Binary.Pair.Allowedips.allocations names Binary.Pair.Allowedips.Root.nodeOffsets) span →
-                      Eq.{1}
-                        (Binary.Pair.disjointRanges s.regs.rbx.toNat 72 (Prod.fst.{0, 0} span) (Prod.snd.{0, 0} span))
-                        true) →
-                  Eq.{1} (Binary.Pair.disjointRanges s.regs.rbx.toNat 72 names.table 24) true →
-                    Membership.mem.{0, 0} names.trie.peers (Prod.mk.{0, 0} pid s.regs.r14.toNat) →
-                      Eq.{1} (Std.TreeMap.get?.{0, 0} d.peers pid) (some.{0} owner) →
-                        Eq.{1} s.regs.rbp.toNat (Leanux.Proofs.WG.AllowedIps.rootWidth v4) →
-                          LE.le.{0} cidr s.regs.rbp.toNat →
-                            Eq.{1} (Binary.Pair.word s.dmem "node.child[0]" (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 8) 8)
-                                (Except.ok.{0, 0} 0) →
-                              Eq.{1}
-                                  (Binary.Pair.word s.dmem "node.child[1]" (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 16) 8)
-                                  (Except.ok.{0, 0} 0) →
-                                Eq.{1}
-                                    (Binary.Pair.word s.dmem "peer.list.next" (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 56)
-                                      8)
-                                    (Except.ok.{0, 0} 0) →
-                                  Eq.{1}
-                                      (Binary.Pair.word s.dmem "peer.list.prev"
-                                        (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 64) 8)
-                                      (Except.ok.{0, 0} 0) →
-                                    Eq.{1} (Binary.Pair.Allowedips.Root.attach s)
-                                        (Except.ok.{0, 0} (Prod.mk.{0, 0} attached cidr)) →
-                                      Eq.{1}
-                                          (Binary.Pair.Allowedips.Root.store attached
-                                            (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 24) 4
-                                            (Binary.Pair.Allowedips.Root.headerWord s.regs.rbp.toNat cidr))
-                                          (Except.ok.{0, 0} withHeader) →
-                                        ite.{1} (Eq.{1} s.regs.rbp.toNat 32)
-                                            (Eq.{1} (Binary.Pair.word withHeader "query" s.regs.r13.toNat 4)
-                                              (Except.ok.{0, 0} key))
-                                            (Exists.{1} fun hi =>
-                                              Exists.{1} fun lo =>
-                                                Eq.{1} (Binary.Pair.word withHeader "query.high" s.regs.r13.toNat 8)
-                                                    (Except.ok.{0, 0} hi) ∧
-                                                  Eq.{1}
-                                                      (Binary.Pair.word withHeader "query.low"
-                                                        (HAdd.hAdd.{0, 0, 0} s.regs.r13.toNat 8) 8)
-                                                      (Except.ok.{0, 0} lo) ∧
-                                                    Eq.{1} key
-                                                      (HAdd.hAdd.{0, 0, 0}
-                                                        (HMul.hMul.{0, 0, 0} hi (HPow.hPow.{0, 0, 0} 2 64)) lo)) →
-                                          (∀ (a : BitVec 64),
-                                              Binary.InRange s.regs.r13.toBitVec 8 a →
-                                                ¬Binary.InRange
-                                                    (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} s.regs.rbx.toNat 32)) 16 a) →
-                                            Eq.{1} (Binary.Pair.Allowedips.Root.copy s withHeader)
-                                                (Except.ok.{0, 0} copied) →
-                                              Eq.{1}
-                                                  (Binary.Pair.word copied "root.slot"
-                                                    (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 8) 8)
-                                                  (Except.ok.{0, 0}
-                                                    (HAdd.hAdd.{0, 0, 0} names.table (ite.{1} (Eq.{1} v4 true) 0 8))) →
-                                                Eq.{1} (Binary.Pair.Allowedips.Root.publish s copied)
-                                                    (Except.ok.{0, 0} after) →
-                                                  Eventually (Binary.instructionStep fetch)
-                                                    (fun t =>
-                                                      Eq.{1} t.pc
-                                                          (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry
-                                                            1353) ∧
-                                                        Binary.Pair.Allowedips.Root.OutputRegisters s.regs t.data.regs ∧
-                                                          Binary.EqualOutside
-                                                              (Binary.Pair.Allowedips.Root.Writes
-                                                                (names.allocated s.regs.rbx.toNat) s.regs.rbx.toNat
-                                                                (HAdd.hAdd.{0, 0, 0} names.table
-                                                                  (ite.{1} (Eq.{1} v4 true) 0 8)))
-                                                              s.dmem t.data.dmem ∧
-                                                            Binary.Pair.Allowedips.Corresponds
-                                                              (names.allocated s.regs.rbx.toNat)
-                                                              Binary.Pair.Allowedips.Root.nodeOffsets t.data.dmem
-                                                              (Leanux.Proofs.WG.AllowedIps.emptyInstalled d v4 key cidr
-                                                                pid owner))
-                                                    { data := s,
-                                                      pc :=
-                                                        HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry
-                                                          1091 }
+    ∀ {names : Binary.Pair.Allowedips.Names} {world : Leanux.World} {machine : MachineState} {key cidr pid : Nat},
+      Eq.{1}
+          (Binary.Pair.Allowedips.Root.boundary names Binary.Pair.Allowedips.Root.nodeOffsets world machine key cidr
+            pid)
+          (Except.ok.{0, 0} ()) →
+        Exists.{1} fun d =>
+          Exists.{1} fun owner =>
+            Eq.{1} world.wg.dev (some.{0} d) ∧
+              Eq.{1} (Std.TreeMap.get?.{0, 0} d.peers pid) (some.{0} owner) ∧
+                Eventually (Binary.instructionStep fetch)
+                  (fun t =>
+                    Eq.{1} t.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1353) ∧
+                      Binary.Pair.Allowedips.Root.OutputRegisters machine.data.regs t.data.regs ∧
+                        Binary.EqualOutside
+                            (Binary.Pair.Allowedips.Root.Writes (names.allocated machine.data.regs.rbx.toNat)
+                              machine.data.regs.rbx.toNat
+                              (HAdd.hAdd.{0, 0, 0} names.table
+                                (ite.{1} (Eq.{1} (BEq.beq.{0} machine.data.regs.rbp.toNat 32) true) 0 8)))
+                            machine.data.dmem t.data.dmem ∧
+                          Binary.Pair.Allowedips.Corresponds (names.allocated machine.data.regs.rbx.toNat)
+                              Binary.Pair.Allowedips.Root.nodeOffsets t.data.dmem
+                              (Leanux.Proofs.WG.AllowedIps.emptyInstalled d (BEq.beq.{0} machine.data.regs.rbp.toNat 32)
+                                key cidr pid owner) ∧
+                            Eq.{1}
+                              (Binary.Pair.Allowedips.heap (names.allocated machine.data.regs.rbx.toNat)
+                                (Binary.Pair.Allowedips.target
+                                  (Leanux.Proofs.WG.AllowedIps.emptyInstalled d
+                                    (BEq.beq.{0} machine.data.regs.rbp.toNat 32) key cidr pid owner))
+                                t.data.dmem)
+                              (Except.ok.{0, 0} ()))
+                  machine
 Binary.Pair.Allowedips.Root.effect_segment : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
     ∀ {s : MachineData} {memory : DataMem},
@@ -1075,6 +1020,54 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
 def Binary.Pair.Allowedips.Root.Writes : Binary.Pair.Allowedips.Names → Nat → Nat → BitVec 64 → Prop :=
 fun names base slot a => Binary.Pair.Allowedips.ListWrites names a ∨ Binary.Pair.Allowedips.Root.InitWrites base slot a
+def Binary.Pair.Allowedips.Root.boundary : Binary.Pair.Allowedips.Names →
+  AllowedipsProbe.Offsets → Leanux.World → MachineState → Nat → Nat → Nat → Except.{0, 0} String Unit :=
+fun names o world machine key cidr pid => do
+  Binary.Pair.Allowedips.assertAt names o machine.data.dmem world
+  match world.wg.dev with
+    | some.{0} d =>
+      have s := machine.data;
+      have bits := s.regs.rbp.toNat;
+      do
+      Binary.Pair.require (BEq.beq.{0} machine.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1091))
+          "root.entry-pc"
+      Binary.Pair.require (BEq.beq.{0} bits 32 || BEq.beq.{0} bits 128) "root.family"
+      Binary.Pair.require
+          (Option.isNone.{0}
+            (ite.{1} (Eq.{1} (BEq.beq.{0} bits 32) true) d.peerAllowedips.root4 d.peerAllowedips.root6))
+          "root.nonempty"
+      let __do_lift ← Binary.Pair.Trie.address names.trie.peers (some.{0} pid)
+      Binary.Pair.require (BEq.beq.{0} s.regs.r14.toNat __do_lift) "root.owner"
+      let __do_lift ← readNat machine (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 16) 4
+      Binary.Pair.require (BEq.beq.{0} __do_lift cidr && decide (LE.le.{0} cidr bits)) "root.saved-cidr"
+      have allocated : Binary.Pair.Allowedips.Names := names.allocated s.regs.rbx.toNat
+      Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message (Binary.Pair.Allowedips.validate allocated o)
+      let __do_lift ← readNat machine s.regs.rbx.toNat 72
+      Binary.Pair.require (BEq.beq.{0} __do_lift 0) "root.zero-allocation"
+      Binary.Pair.Allowedips.Placement.queryLocals machine key bits
+      let __do_lift ← readNat machine (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 8) 8
+      Binary.Pair.require
+          (BEq.beq.{0} __do_lift (HAdd.hAdd.{0, 0, 0} names.table (ite.{1} (Eq.{1} (BEq.beq.{0} bits 32) true) 0 8)))
+          "root.saved-slot"
+      Binary.Pair.require
+          (Binary.Pair.spansApart
+            (List.cons.{0} (Prod.mk.{0, 0} s.regs.r13.toNat (HDiv.hDiv.{0, 0, 0} bits 8))
+              (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 8) 8)
+                (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 16) 4) List.nil.{0})))
+            (Binary.Pair.Allowedips.Root.writeSpans allocated s))
+          "root.local-separation"
+    | x => throw.{0, 0, 0} "root.device"
+def Binary.Pair.Allowedips.Root.writeSpans : Binary.Pair.Allowedips.Names → MachineData → List.{0} Binary.Pair.Span :=
+fun names s =>
+  HAppend.hAppend.{0, 0, 0}
+    (HAppend.hAppend.{0, 0, 0}
+      (List.cons.{0} (Prod.mk.{0, 0} s.regs.rbx.toNat 72)
+        (List.cons.{0}
+          (Prod.mk.{0, 0}
+            (HAdd.hAdd.{0, 0, 0} names.table (ite.{1} (Eq.{1} (BEq.beq.{0} s.regs.rbp.toNat 32) true) 0 8)) 8)
+          List.nil.{0}))
+      (List.map.{0, 0} (fun p => Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} (Prod.snd.{0, 0} p) 56) 16) names.trie.nodes))
+    (List.map.{0, 0} (fun p => Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} (Prod.snd.{0, 0} p) 1096) 16) names.trie.peers)
 def Binary.Pair.Allowedips.Root.InitWrites : Nat → Nat → BitVec 64 → Prop :=
 fun base slot a => Binary.InRange (BitVec.ofNat 64 base) 56 a ∨ Binary.InRange (BitVec.ofNat 64 slot) 8 a
 def Binary.Pair.Allowedips.Names.allocated : Binary.Pair.Allowedips.Names → Nat → Binary.Pair.Allowedips.Names :=

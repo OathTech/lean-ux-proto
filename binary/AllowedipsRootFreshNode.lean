@@ -21,7 +21,7 @@ theorem fresh_node {names s attached withHeader copied after d pid owner cidr ke
     (query : if s.regs.rbp.toNat=32 then word withHeader "query" s.regs.r13.toNat 4=.ok key else
       ∃ hi lo,word withHeader "query.high" s.regs.r13.toNat 8=.ok hi ∧
         word withHeader "query.low" (s.regs.r13.toNat+8) 8=.ok lo ∧ key=hi*2^64+lo)
-    (queryApart : ∀ a, InRange s.regs.r13.toBitVec 8 a →
+    (queryApart : ∀ a, InRange s.regs.r13.toBitVec (if s.regs.rbp.toNat=32 then 4 else 8) a →
       ¬InRange (.ofNat 64 (s.regs.rbx.toNat+32)) 16 a)
     (copy : Root.copy s withHeader=.ok copied)
     (saved : word copied "root.slot" (s.regs.rsp.toNat+8) 8=

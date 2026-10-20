@@ -1,6 +1,7 @@
 import AllowedipsRootFreshNode
 import AllowedipsRootMetadata
 import AllowedipsRootEffect
+import AllowedipsRootHeap
 
 namespace Binary.Pair.Allowedips.Root
 open Leanux Leanux.WG
@@ -33,7 +34,7 @@ theorem reconstruct_phases {names s attached withHeader copied after d pid owner
     (query : if s.regs.rbp.toNat=32 then word withHeader "query" s.regs.r13.toNat 4=.ok key else
       ∃ hi lo,word withHeader "query.high" s.regs.r13.toNat 8=.ok hi ∧
         word withHeader "query.low" (s.regs.r13.toNat+8) 8=.ok lo ∧ key=hi*2^64+lo)
-    (queryApart : ∀ a, InRange s.regs.r13.toBitVec 8 a →
+    (queryApart : ∀ a, InRange s.regs.r13.toBitVec (if s.regs.rbp.toNat=32 then 4 else 8) a →
       ¬InRange (.ofNat 64 (s.regs.rbx.toNat+32)) 16 a)
     (copy : Root.copy s withHeader=.ok copied)
     (saved : word copied "root.slot" (s.regs.rsp.toNat+8) 8=
@@ -50,7 +51,6 @@ theorem reconstruct_phases {names s attached withHeader copied after d pid owner
   have valid := validate_allocate related positive aligned extent freshAllocation tableApart
   have full := reconstruct_fields related
   have core := Trie.reconstruct_fields related.trie
-  have counter := ids_below_counter full.valid
   have fresh : ∀ pair ∈ names.trie.nodes, pair.2≠s.regs.rbx.toNat := by
     intro pair member same
     have separated := freshAllocation (pair.2,72) (node_allocation member)
@@ -80,14 +80,7 @@ theorem reconstruct_phases {names s attached withHeader copied after d pid owner
   have freshRead := fresh_node related g peerNamed hasPeer width prefixBound left right
     attachment header query queryApart copy saved tableApart publish
   have lists := attach_lists related heapOk g (Nat.ne_of_gt positive) fresh peerNamed hasPeer zeroNext zeroPrev attachment
-  have nodeBound : ∀ pair ∈ d.nodes.toList, pair.1<d.nextNode := by
-    rintro ⟨current,node⟩ member
-    obtain ⟨⟨id,base⟩,named,read⟩ := full.nodes.right (current,node) member
-    have equal := (decodeNode_fields read).1
-    have less := counter (id,base) named
-    dsimp only at equal less
-    rw [equal] at less
-    simpa only [←full.nextNode,target] using less
+  have nodeBound := target_nodes_below related
   refine ⟨?_,frame⟩
   rw [show Corresponds n nodeOffsets after (emptyInstalled d v4 key cidr pid owner) ↔
     reconstruct n nodeOffsets after=.ok (installedRoot v4 key cidr pid (target d)) from by
@@ -159,6 +152,7 @@ theorem initialization_segment (fetch : Int64 → Option Decoded)
     (decoder : TrustBase.AllowedipsMutationDecoderAgreement fetch) {names s attached withHeader copied after d pid owner cidr key v4}
     (related : Corresponds names nodeOffsets s.dmem d)
     (heapOk : heap names (target d) s.dmem=.ok ())
+    (empty : (if v4 then d.peerAllowedips.root4 else d.peerAllowedips.root6)=none)
     (positive : 0<s.regs.rbx.toNat) (aligned : s.regs.rbx.toNat%8=0)
     (extent : s.regs.rbx.toNat+72<2^64)
     (freshAllocation : ∀ span ∈ allocations names nodeOffsets,
@@ -176,7 +170,7 @@ theorem initialization_segment (fetch : Int64 → Option Decoded)
     (query : if s.regs.rbp.toNat=32 then word withHeader "query" s.regs.r13.toNat 4=.ok key else
       ∃ hi lo,word withHeader "query.high" s.regs.r13.toNat 8=.ok hi ∧
         word withHeader "query.low" (s.regs.r13.toNat+8) 8=.ok lo ∧ key=hi*2^64+lo)
-    (queryApart : ∀ a, InRange s.regs.r13.toBitVec 8 a →
+    (queryApart : ∀ a, InRange s.regs.r13.toBitVec (if s.regs.rbp.toNat=32 then 4 else 8) a →
       ¬InRange (.ofNat 64 (s.regs.rbx.toNat+32)) 16 a)
     (copy : Root.copy s withHeader=.ok copied)
     (saved : word copied "root.slot" (s.regs.rsp.toNat+8) 8=
@@ -187,15 +181,19 @@ theorem initialization_segment (fetch : Int64 → Option Decoded)
       EqualOutside (Writes (names.allocated s.regs.rbx.toNat) s.regs.rbx.toNat
         (names.table+(if v4 then 0 else 8))) s.dmem t.data.dmem ∧
       Corresponds (names.allocated s.regs.rbx.toNat) nodeOffsets t.data.dmem
-        (emptyInstalled d v4 key cidr pid owner))
+        (emptyInstalled d v4 key cidr pid owner) ∧
+      heap (names.allocated s.regs.rbx.toNat) (target (emptyInstalled d v4 key cidr pid owner)) t.data.dmem=.ok ())
       ⟨s,AllowedipsMutationImage.Add.entry+0x443⟩ := by
   have relation := reconstruct_phases related heapOk positive aligned extent freshAllocation tableApart
     peerNamed hasPeer width prefixBound left right zeroNext zeroPrev attachment header query queryApart copy saved publish
+  have shape := heap_phases (key:=key) related heapOk positive aligned extent freshAllocation tableApart
+    peerNamed hasPeer empty attachment header copy saved publish
   have checked : effect s=.ok after := by
     simp only [effect,attachment,header,copy,publish,ok_bind]
   apply eventually_weaken (instructionStep fetch) _ _ _ _ (effect_segment fetch decoder checked)
   rintro final ⟨pc,memory,registers⟩
-  exact ⟨pc,registers,by simpa only [memory] using relation.2,by simpa only [memory] using relation.1⟩
+  exact ⟨pc,registers,by simpa only [memory] using relation.2,by simpa only [memory] using relation.1,
+    by simpa only [memory] using shape⟩
 
 #print axioms initialization_segment
 end Binary.Pair.Allowedips.Root

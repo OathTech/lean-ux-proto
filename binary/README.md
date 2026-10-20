@@ -745,5 +745,6 @@ and outcomes with constructed entry memory. The separate capture replay uses
 actual entry bytes, interprets WireGuard and coverage bodies, and supplies the
 captured generic allocator transition under an explicit checked frame. Neither
 test discharges a universal service premise. The sequence-counter reproducer
-`capped python3 -B binary/allowedips_seq_wrap.py` remains a failing Rule Zero
-witness until the separately owned mirror correction lands.
+`capped python3 -B binary/allowedips_seq_wrap.py` preserves the Rule Zero
+regression witness. It passes against the UInt64 mirror correction carried
+from main `1f766662`, with the expected binary result unchanged.

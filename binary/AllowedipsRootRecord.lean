@@ -38,7 +38,7 @@ theorem header_copy_core {names : Names} {s : MachineData} {before after : DataM
           "query.high" s.regs.r13.toNat 8=.ok hi ∧
         word (before.storeInt (.ofNat 64 (s.regs.rbx.toNat+24)) 4 (headerWord s.regs.rbp.toNat cidr))
           "query.low" (s.regs.r13.toNat+8) 8=.ok lo ∧ key=hi*2^64+lo)
-    (queryApart : ∀ a, InRange s.regs.r13.toBitVec 8 a →
+    (queryApart : ∀ a, InRange s.regs.r13.toBitVec (if s.regs.rbp.toNat=32 then 4 else 8) a →
       ¬InRange (.ofNat 64 (s.regs.rbx.toNat+32)) 16 a)
     (checked : copy s (before.storeInt (.ofNat 64 (s.regs.rbx.toNat+24)) 4
         (headerWord s.regs.rbp.toNat cidr))=.ok after) :
@@ -51,7 +51,7 @@ theorem header_copy_core {names : Names} {s : MachineData} {before after : DataM
         word after "node.key128.low" (s.regs.rbx.toNat+40) 8=.ok lo ∧ key=hi*2^64+lo) ∧
       EqualOutside (InRange (.ofNat 64 (s.regs.rbx.toNat+32)) 16) h after := by
     rcases family with four|six
-    · rw [ite_eq_left four] at query ⊢
+    · rw [ite_eq_left four] at query queryApart ⊢
       have run := copy4_key four (by omega) query (by
         intro a read written
         rcases read with ⟨i,small,eq⟩
@@ -59,7 +59,7 @@ theorem header_copy_core {names : Names} {s : MachineData} {before after : DataM
         exact queryApart a ⟨i,by omega,eq⟩ ⟨j,by omega,same⟩) checked
       exact ⟨run.1,copy_frame_widen run.2⟩
     · have not4 : s.regs.rbp.toNat≠32 := by omega
-      rw [ite_eq_right not4] at query ⊢
+      rw [ite_eq_right not4] at query queryApart ⊢
       obtain ⟨hi,lo,high,low,keyEq⟩ := query
       have run := copy128_key six (by omega) high low (by
         intro a read written

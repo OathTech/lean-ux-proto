@@ -23,6 +23,18 @@ theorem allocated_node (names : Names) (address : Nat) :
     (names.nextNode,address) ∈ (names.allocated address).trie.nodes := by
   simp [Names.allocated]
 
+theorem target_nodes_below {names o m d} (related : Corresponds names o m d) :
+    ∀ pair ∈ (target d).nodes, pair.1<d.nextNode := by
+  have full := reconstruct_fields related
+  have counter := ids_below_counter full.valid
+  rintro ⟨current,node⟩ member
+  obtain ⟨⟨id,base⟩,named,read⟩ := full.nodes.right (current,node) member
+  have equal := (decodeNode_fields read).1
+  have less := counter (id,base) named
+  dsimp only at equal less
+  rw [equal] at less
+  simpa only [←full.nextNode,target] using less
+
 theorem allocated_ids {names : Names} (address : Nat)
     (unique : (names.trie.nodes.map Prod.fst).Nodup)
     (bounded : ∀ p ∈ names.trie.nodes, p.1<names.nextNode) :

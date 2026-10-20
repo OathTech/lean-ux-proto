@@ -764,3 +764,75 @@ Ordinary elaboration errors were repaired before validation. One recursion-depth
 failure came from an incorrectly inferred allocation-name argument and was fixed
 by supplying that argument explicitly; no resource limit was raised. No KILLED
 run or timeout occurred in this checkpoint.
+
+## Heap-preserving root segment and tested entry resources (07:21 UTC)
+
+The root segment now exports the executable heap assertion as well as full
+reconstruction and its byte frame. Its local path condition is that the selected
+root is empty; the other root and its trie remain arbitrary. The old nodes keep
+their incoming edges, ownership and self-links, and the fresh leaf acquires its
+unique root edge and owner membership. This condition identifies the existing
+empty-root path, not a restriction of the eventual insertion theorem to empty
+tables. The original reconstruction lemma remains available without that path
+condition. All other insertion paths remain required.
+
+The proof factors a successful trie traversal through an appended leaf, with
+root and child facts extracted from the actual executable heap check. Three
+small loop lemmas handle equality on visited elements and unchanged suffixes.
+The heap part adds seven modules, 554 lines, plus small shared frame and
+allocation-counter lemmas. It does not add an environmental assumption. The
+printed surface change was reviewed: the segment's empty-root path premise
+and heap postcondition are explicit. `TrustBase.lean` is unchanged.
+
+A new executable post-allocation boundary checks old-world reconstruction,
+the selected empty root, owner, saved prefix and root slot, the zeroed 72-byte
+allocation, the query, extended allocation validation and local-read/write
+separation. The runner evaluates it on actual segment entries, after accounting
+for the wrapper's sequence increment. It passes all 28 generated root segments
+within 66 insertions/66 retained-heap lookups and 24 isolated root cases, in
+3.185 seconds. The recorded three-way comparison passes eight calls under two
+seeds, with 170 coverage entries, 64 comparisons and 117 decisions, in 0.269
+seconds. The actual captured insertion also passes both seeds, 254 interpreted
+instructions and 822,856 compared endpoint bytes each. The allocator is still
+a supplied captured transition. These executions test the resource candidates;
+they do not prove all kernel callers establish them.
+
+`boundary_fields` extracts the exact checked facts; `allocated_facts` derives
+the allocation geometry without assuming a decoded fresh node. The attachment,
+copy and publication now each have totality lemmas. Readability persists through
+stores, including overlapping copy sources; value preservation remains a
+separate frame obligation. `Root.initialization_checked` now composes these
+phases directly from the tested boundary: it derives every intermediate read
+and successful phase execution, executes the actual Kraken instructions, and
+restores full reconstruction, the heap assertion and the byte-write frame. Its
+only environment premise is the named decoder agreement. No future phase or
+postcondition is assumed. The boundary is still an internal post-allocation cut;
+wrapper entry/return, nonempty structural paths, allocation failure/rollback,
+and checkpoints A/B remain open. Zero new complete functions are claimed.
+
+The heap segment's default build passes 1,074 jobs, its standard-axiom prints
+and fresh `AllowedipsInsertionSurface` kernel replay pass, and its reviewed
+printed-surface diff passes. The fast tier passes 137 tests, one skipped, in
+23.764 seconds. The copy/publication support also passes a separate fresh
+`AllowedipsRootTotalMemory` replay. The final enlarged closure passes the
+1,084-job default build without warnings, standard-axiom prints, fresh
+`leanchecker --fresh AllowedipsInsertionSurface`, and the reviewed printed
+surface diff. The fast tier passes 137 tests, one skipped, in 23.880 seconds.
+These last additions are proof-only; the runtime checks above exercised the
+same boundary. No external export acceptance is claimed.
+
+At 07:32 UTC, this checkpoint contains seventeen new support modules, 1,245
+lines, including the seven heap modules counted above. The source volume is
+recorded as a cost diagnostic, not new-function throughput. IPv4 query
+separation was corrected from an eight-byte read to the actual four-byte read;
+the executable boundary checks four bytes for IPv4 and sixteen for IPv6.
+`TrustBase.lean` remains unchanged. The printed headline now uses
+`Root.initialization_checked`, replacing the intermediate statement with its
+assumed phase executions. The complete function must still establish this
+boundary from entry and allocator resources.
+
+Development failures included ordinary syntax/type errors and a default-heartbeat
+timeout while Lean tried to infer a natural address from a UInt64 bit-vector
+expression. Using the explicit natural-address representation repaired that
+timeout without increasing any limit. No KILLED run occurred. The README's
+stale description of the wrap witness as still failing was corrected.

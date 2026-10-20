@@ -92,6 +92,33 @@ theorem list_read_frame {names before after writes head fuel}
     exact peerList_congr names before after head (words head headSlot)
       (fun id base named => words (base+56) (.node named)) fuel value head []
 
+/-- The physical part of the heap assertion reads only internal list words. -/
+theorem internal_list_frame {before after writes} (names : Names)
+    (frame : EqualOutside writes before after)
+    (apart : ∀ a, ListWrites names a → ¬writes a) (id : Nat) :
+    internalListCheck names before id=internalListCheck names after id := by
+  simp only [internalListCheck,Trie.address]
+  cases found : names.trie.nodes.find? (·.1==id) with
+  | none => rfl
+  | some pair =>
+    rcases pair with ⟨current,base⟩
+    dsimp only [Bind.bind,Except.bind,Pure.pure,Except.pure]
+    have named := List.mem_of_find?_eq_some found
+    have read (offset : Nat) (which : offset=0 ∨ offset=8) :
+        readNat ⟨{dmem:=before},0⟩ (base+56+offset) 8=
+          readNat ⟨{dmem:=after},0⟩ (base+56+offset) 8 := by
+      have bytes := frame.loadBytes (.ofNat 64 (base+56+offset)) 8 (by
+        intro i hi
+        exact apart _ ⟨base+56,.node named,offset,which,i,hi,rfl⟩)
+      simp only [readNat,bytes]
+    have first := read 0 (.inl rfl)
+    simp only [Nat.add_zero] at first
+    change (do
+      unless (← readNat ⟨{dmem:=before},0⟩ (base+56) 8)==base+56 &&
+          (← readNat ⟨{dmem:=before},0⟩ (base+56+8) 8)==base+56 do throw "heap.internal-list")=_
+    rw [first,read 8 (.inr rfl)]
+    rfl
+
 #print axioms initialization_frame
 #print axioms list_read_frame
 end Binary.Pair.Allowedips.Root

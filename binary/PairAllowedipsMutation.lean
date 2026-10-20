@@ -2,6 +2,7 @@ import PairAllowedipsLookupCheck
 import PairAllowedipsPlacement
 import PairAllowedipsExact
 import PairAllowedipsRoot
+import PairAllowedipsRootBoundary
 import PairAllowedipsNames
 import PairAllowedips
 
@@ -138,6 +139,8 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   let visits ← Placement.check s.names input.lookup.offsets context input.add s.world family key cidr pid frame.stack placementHistory
   let exactSegments ← Exact.check r.history
   let rootSegments ← Root.check r.history
+  let rootBoundaries ← Root.checkBoundary s.names input.lookup.offsets s.world key cidr pid r.history
+  unless rootBoundaries==rootSegments do throw "insert.root-boundary-count"
   let ambient := {s.world.ambient with
     hidden := some records, allocArmed := ["allocNode190","allocNode205","allocNode234"]}
   let w := {s.world with ambient}
