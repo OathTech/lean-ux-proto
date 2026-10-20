@@ -1,4 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConfigSavedSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerCreationPointFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPubkeyLookupSource
 
 /-! Configuration source witnesses expose creation, counted release, removal
 and fixture sends. Native frames describe the fixed projection and allocation
@@ -11,14 +13,18 @@ abbrev History := List Event
 inductive NativeKind : Type 1 where
   | quiet {α : Type} (action : WG.M α) (frame : SameView StagedEntry.view action)
       (allocated : Preserves StackOwnership.Allocated action)
+  | metadata {α : Type} (action : WG.M α) (source : PeerMetadata.Shape action)
+      (allocated : Preserves StackOwnership.Allocated action)
+  | lookup {α : Type} (action : WG.M α) (source : Lookup.Shape action)
+      (allocated : Preserves StackOwnership.Allocated action)
   | create (key : Key) (psk : Option Key)
 
 def NativeKind.Result : NativeKind → Type
-  | .quiet (α:=α) ..=>α
+  | .quiet (α:=α) .. | .metadata (α:=α) .. | .lookup (α:=α) ..=>α
   | .create ..=>Except Int PeerId
 
 def NativeKind.action (kind : NativeKind) : PrefixM Event kind.Result := match kind with
-  | .quiet action ..=>liftWGObserver (liftWGPrefix action)
+  | .quiet action .. | .metadata action .. | .lookup action ..=>liftWGObserver (liftWGPrefix action)
   | .create key psk=>liftWGObserver (liftWGPrefix (peerCreate key psk))
 
 def pskUpdate (pid : PeerId) (psk : Option Key) : WGPrefix Event Unit := do
@@ -72,5 +78,13 @@ def observerBindShape (body : WGPrefix Event α) (next : α → WGPrefix Event �
 def quietShape (action : WG.M α) (frame : SameView StagedEntry.view action)
     (allocated : Preserves StackOwnership.Allocated action) : Shape (liftWGObserver (liftWGPrefix action)) :=
   .native (.quiet action frame allocated)
+
+def metadataShape (action : WG.M α) (source : PeerMetadata.Shape action)
+    (allocated : Preserves StackOwnership.Allocated action) : Shape (liftWGObserver (liftWGPrefix action)) :=
+  .native (.metadata action source allocated)
+
+def lookupShape (action : WG.M α) (source : Lookup.Shape action)
+    (allocated : Preserves StackOwnership.Allocated action) : Shape (liftWGObserver (liftWGPrefix action)) :=
+  .native (.lookup action source allocated)
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ConfigConcrete

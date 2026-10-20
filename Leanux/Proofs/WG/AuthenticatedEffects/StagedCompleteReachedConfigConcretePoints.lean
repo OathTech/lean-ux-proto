@@ -3,10 +3,10 @@ import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConfigChildren
 /-! Configuration points are fixed-source constructors. Actual successful
 prefixes supply bind continuations and the saved-peer write's intermediate cuts. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ConfigConcrete
-open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
+open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing TransmitSecurity CausalJournal
 
 inductive Site where
-  | entry | returned | child | saved | pskRead
+  | entry | returned | child | saved | pskRead | metadata | lookup | creation
   | left (site : Site) | right (site : Site)
 
 inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action →
@@ -14,6 +14,14 @@ inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action �
   | entry (source : Shape action) : Point source w h .entry w h
   | returned (source : Shape action) (performed : runPrefix action w h=(.ok (value,u),middle)) :
       Point source w h .returned u middle
+  | creation {w : World} (point : PeerCreation.Point key psk w.wg w.ambient v b) :
+      Point (.native (.create key psk)) w h .creation {w with wg:=v,ambient:=b} h
+  | metadata {w : World} (allocated : Preserves RetirementSecurity.StackOwnership.Allocated action)
+      (point : PeerMetadata.Point source w.wg w.ambient v b) :
+      Point (.native (.metadata action source allocated)) w h .metadata {w with wg:=v,ambient:=b} h
+  | lookup {w : World} (allocated : Preserves RetirementSecurity.StackOwnership.Allocated action)
+      (point : Lookup.Point source w.wg w.ambient v b) :
+      Point (.native (.lookup action source allocated)) w h .lookup {w with wg:=v,ambient:=b} h
   | child (family : Family) (point : family.Point w h u middle) : Point (.child family) w h .child u middle
   | saved (point : ConfigSaved.Point pid running interval w h u middle) :
       Point (.saved pid running interval) w h .saved u middle
@@ -33,6 +41,9 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {source : Shape 
   induction point with
   | entry source=>exact ⟨_,rfl⟩
   | returned source performed=>exact ⟨pure _,performed⟩
+  | creation point=>exact point.observed_remaining _
+  | metadata allocated point=>exact point.observed_remaining _
+  | lookup allocated point=>exact point.observed_remaining _
   | child family point=>exact point.remaining
   | saved point=>exact point.remaining
   | pskRead performed=>exact ⟨_,by rw [psk_source,runPrefix_bind,performed]⟩
@@ -59,6 +70,15 @@ theorem Point.safe
   induction point with
   | entry source=>exact accountGood _ _ before.1
   | returned source performed=>exact accountGood _ _ (source.normal before performed).1
+  | creation point=>
+      obtain ⟨ledger,account⟩:=before.1
+      exact accountGood _ _ ⟨ledger,point.accounted account before.2.choose_spec.peerSlots⟩
+  | metadata allocated point=>
+      obtain ⟨ledger,account⟩:=before.1
+      exact accountGood _ _ ⟨ledger,account.same_view point.frame⟩
+  | lookup allocated point=>
+      obtain ⟨ledger,account⟩:=before.1
+      exact accountGood _ _ ⟨ledger,account.same_view point.frame⟩
   | child family point=>exact point.safe accountGood pendingGood acceptPeer acceptStaging acceptKeepalive before
   | saved point=>exact accountGood _ _ (point.normal before).1
   | pskRead performed=>exact accountGood _ _ (Xmit.normal (ConfigSaved.read_checked _) before performed).1

@@ -63,7 +63,7 @@ macro "config_shape_step" : tactic => `(tactic| first
   | (config_nested_head runWith keepaliveObserved; exact .child (.keepalive _ _))
   | (config_observer_head ConfigSaved.observer; exact .saved _ _ _)
   | (config_nested_head liftWGPrefix peerCreate; exact .native (.create _ _))
-  | (config_observer_head liftWGPrefix; solve | config_native_frames)
+  | (config_observer_head liftWGPrefix; solve | config_native_source)
   | (config_observer_head Bind.bind; apply observerBindShape)
   | (config_observer_head Pure.pure; rw [liftWGObserver_pure]; exact .pure _)
   | (config_observer_head ForIn.forIn; rw [Lifecycle.Points.observer_list]; apply listShape)

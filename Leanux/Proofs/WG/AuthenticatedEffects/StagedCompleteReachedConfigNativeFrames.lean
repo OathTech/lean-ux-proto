@@ -11,6 +11,12 @@ theorem NativeKind.checked (token : NativeKind) : CompleteProduct.Checked token.
   | quiet action frame allocated=>
       exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
         CompleteProduct.account_safe action frame allocated)
+  | metadata action source allocated=>
+      exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
+        CompleteProduct.account_safe action source.frame allocated)
+  | lookup action source allocated=>
+      exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
+        CompleteProduct.account_safe action source.frame allocated)
   | create key psk=>
       exact CompleteProduct.state
         (CompleteAllocated.create CompleteProduct.Safe CompleteProduct.account_safe key psk)
@@ -28,6 +34,44 @@ macro "config_native_frames" : tactic => `(tactic| (
     | (rx_retention_head removeByPeer; exact AllocatedFrames.observed (removeByPeerPrefix_erases _)
         (removeByPeerPrefix_preserves allocationAmbient allocationConfigurationPeer.removal.allowedIps.nodes _))
     | entry_device_allocation))
+
+macro "config_metadata_shape" : tactic => `(tactic| first
+  | (metadata_source_head precomputeStaticStatic; exact PeerMetadata.precomputeShape _)
+  | (metadata_source_head expireCurrentPeerKeypairs; exact PeerMetadata.expireShape _)
+  | (metadata_source_head clearPeerEndpointSrc; exact PeerMetadata.clearEndpointShape _)
+  | (metadata_source_head setPeerEndpoint; exact PeerMetadata.setEndpointShape _ _)
+  | (metadata_source_head setPort; exact PeerMetadata.setPortShape _)
+  | (metadata_source_head lookupInterface; exact PeerMetadata.interfaceShape _)
+  | (metadata_source_head setStaticIdentityPrivateKey; exact PeerMetadata.staticIdentityShape _)
+  | (metadata_source_head cookiePrecomputeDeviceKeys; exact PeerMetadata.deviceCookieShape)
+  | (metadata_source_head peerGet; exact PeerMetadata.peerGetShape _)
+  | metadata_source_step)
+
+open Lean Meta Elab Tactic in
+elab "config_native_head " expected:ident : tactic => withMainContext do
+  let target := (← instantiateMVars (← getMainTarget)).consumeMData
+  unless target.isAppOf ``Shape do throwError "not a configuration source"
+  let action := target.getAppArgs.back!.consumeMData
+  unless action.isAppOf ``liftWGObserver do throwError "not a WG observer"
+  let body := action.getAppArgs.back!.consumeMData
+  unless body.isAppOf ``liftWGPrefix do throwError "not a native lift"
+  let native := body.getAppArgs.back!.consumeMData.headBeta
+  let name ← realizeGlobalConstNoOverloadWithInfo expected
+  unless native.getAppFn.constName? == some name do throwError "different native source head"
+
+noncomputable def publicLookupShape (key : Key) : Shape (liftWGObserver (liftWGPrefix (pubkeyLookup key))) :=
+  lookupShape _ (Lookup.pubkeyShape key) (AllocatedFrames.public_lookup key)
+
+macro "config_native_source" : tactic => `(tactic| first
+  | (config_native_head setAllowedip; config_native_frames)
+  | (config_native_head removeByPeer; config_native_frames)
+  | (config_native_head Leanux.WG.pubkeyLookup; exact publicLookupShape _)
+  | (apply metadataShape
+     · repeat' config_metadata_shape
+     · first
+       | (rx_retention_head setPeerEndpoint; exact AllocatedFrames.observed (setPeerEndpointPrefix_erases _ _)
+           (AmbientContracts.drop (setPeerEndpointPrefix_spec allocationAmbient (fun _=>True) _ _)))
+       | entry_device_allocation))
 
 theorem psk_checked (pid : PeerId) (psk : Option Key) :
     CompleteProduct.Checked (liftWGObserver (pskUpdate pid psk)) := by

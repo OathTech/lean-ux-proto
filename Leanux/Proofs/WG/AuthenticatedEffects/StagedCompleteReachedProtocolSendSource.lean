@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSessionCanonical
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConfigMetadataCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedProtocolPointFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWorkServicePointPeerComposition
 

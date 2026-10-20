@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAccessCanonical
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSavedPeerSource
 
 /-! Metadata update points retain the actual peer read, its following write and the continuation using that saved peer. The fixed syntax permits no arbitrary action factorization. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.PeerMetadata
@@ -10,6 +10,8 @@ noncomputable def readShape (pid : PeerId) : Access.Shape (getPeer pid) := by
 
 inductive Shape : {α : Type} → WG.M α → Type 1 where
   | access (source : Access.Shape action) : Shape action
+  | saved (pid : PeerId) (next : Peer → WG.M α)
+      (tail : ∀p,SavedPeer.Shape pid p (next p)) : Shape (getPeer pid >>= next)
   | update (pid : PeerId) (f : Peer → Peer) (next : Peer → WG.M α)
       (same : ∀p,(f p).internalId=p.internalId ∧ (f p).staged=p.staged ∧ (f p).txQueue=p.txQueue)
       (tail : ∀p,Shape (next p)) :
@@ -21,6 +23,11 @@ inductive Point : {α : Type} → {action : WG.M α} → Shape action →
   | entry (source : Shape action) : Point source w a w a
   | returned (source : Shape action) (performed : ((action.run w).run a)=.ok ((value,v),b)) : Point source w a v b
   | access (point : Access.Point source w a v b) : Point (.access source) w a v b
+  | savedReading (tail : ∀p,SavedPeer.Shape pid p (next p))
+      (point : Access.Point (readShape pid) w a v b) : Point (.saved pid next tail) w a v b
+  | savedBody (tail : ∀p,SavedPeer.Shape pid p (next p))
+      (read : ((getPeer pid).run w).run a=.ok ((p,u),c))
+      (point : SavedPeer.Point (tail p) u c v b) : Point (.saved pid next tail) w a v b
   | reading (same : ∀p,(f p).internalId=p.internalId ∧ (f p).staged=p.staged ∧ (f p).txQueue=p.txQueue)
       (tail : ∀p,Shape (next p)) (point : Access.Point (readShape pid) w a v b) :
       Point (.update pid f next same tail) w a v b
@@ -52,6 +59,12 @@ theorem Point.remaining {α : Type} {action : WG.M α} {source : Shape action}
   | entry source=>exact ⟨_,rfl⟩
   | returned source performed=>exact ⟨pure _,performed⟩
   | access point=>exact point.remaining
+  | @savedReading α pid next w a v b tail point=>
+      obtain ⟨rest,same⟩:=point.remaining
+      exact ⟨rest >>= next,by simp only [StateT.run_bind,same]⟩
+  | savedBody tail read point=>
+      obtain ⟨rest,same⟩:=point.remaining
+      exact ⟨rest,by simp only [StateT.run_bind,read];exact same⟩
   | @reading α f next pid w a v b same tail point=>
       obtain ⟨rest,run⟩:=point.remaining
       refine ⟨rest >>= fun p=>setPeer pid (f p) >>= fun _=>next p,?_⟩

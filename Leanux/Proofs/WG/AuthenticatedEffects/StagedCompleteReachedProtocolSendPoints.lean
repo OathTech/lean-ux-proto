@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ProtocolSend
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
 
 inductive Site where
-  | entry | returned | release | creation | mac | socket
+  | entry | returned | release | creation | mac | socket | beforeWorker
   | leaf (site : Consume.Leaf.Site)
   | left (site : Site) | right (site : Site)
 
@@ -16,6 +16,8 @@ inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action �
   | entry (shape : Shape action) : Point shape w h .entry w h
   | returned (shape : Shape action) (performed : runPrefix action w h=(.ok (value,u),middle)) :
       Point shape w h .returned u middle
+  | beforeWorker {w : World} (point : PeerMetadata.Point (PeerMetadata.beforeWorkerShape pid) w.wg w.ambient v b) :
+      Point (.native (.before pid)) w h .beforeWorker {w with wg:=v,ambient:=b} h
   | creation {w : World} (point : PeerMetadata.Point (PeerMetadata.initiationShape pid) w.wg w.ambient v b) :
       Point (.native (.create pid)) w h .creation {w with wg:=v,ambient:=b} h
   | mac {w : World} (point : PeerMetadata.Point (PeerMetadata.addMacShape pid bytes) w.wg w.ambient v b) :
@@ -46,6 +48,9 @@ theorem Point.safe (carrierGood : ∀h w,Carrier h w → Good h w)
     exact carrierGood _ _ before
   | returned shape performed=>
     exact carrierGood _ _ (shape.normal before performed)
+  | beforeWorker point=>
+    obtain ⟨ledger,account⟩:=before
+    exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
   | creation point=>
     obtain ⟨ledger,account⟩:=before
     exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
@@ -72,6 +77,7 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {shape : Shape a
     exact ⟨_,rfl⟩
   | returned shape performed=>
     exact ⟨pure _,performed⟩
+  | beforeWorker point=>exact point.observed_remaining _
   | creation point=>exact point.observed_remaining _
   | mac point=>exact point.observed_remaining _
   | socket point=>exact ProtocolPoints.Point.remaining point
