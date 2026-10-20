@@ -1,5 +1,6 @@
 import PairAllowedipsLookupCheck
 import PairAllowedipsPlacement
+import PairAllowedipsExact
 import PairAllowedips
 
 namespace Binary.Pair.Allowedips
@@ -120,7 +121,7 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   for _ in [:4] do
     r ← runUntil input.lookup.instructions input.lookup.labels input.lookup.hooks input.lookup.preempt
       r.state seed true input.lookup.budget input.lookup.entryPreempt #[input.alloc,input.free]
-      (some r) frame.returnPC (some #[input.add+0xf7,input.add+0x9c,input.add+0x120,input.add+0x3ca])
+      (some r) frame.returnPC (some #[input.add+0xf7,input.add+0x9c,input.add+0x120,input.add+0x3ca,input.add+0x3e5,input.add+0x549])
       (some fun t => match TrustBase.KcovPlan .pc t with
         | none => .error "insert.coverage-inputs"
         | some writes => .ok (!writes.isEmpty))
@@ -132,11 +133,17 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
     services := services.push (pc,ra)
   unless r.state.pc.toBitVec.toNat == frame.returnPC do throw "insert.service-budget"
   let context ← Common.readContext initial.data.dmem
-  let visits ← Placement.check s.names input.lookup.offsets context input.add s.world family key cidr pid frame.stack r.history
+  let placementHistory := r.history.filter fun t =>
+    [input.add+0xf7,input.add+0x9c,input.add+0x120,input.add+0x3ca].contains t.pc.toBitVec.toNat
+  let visits ← Placement.check s.names input.lookup.offsets context input.add s.world family key cidr pid frame.stack placementHistory
+  let exactSegments ← Exact.check r.history
   let ambient := {s.world.ambient with
     hidden := some records, allocArmed := ["allocNode190","allocNode205","allocNode234"]}
   let w := {s.world with ambient}
   let (answer,world) ← (liftWG (insert family key cidr pid)).run w |>.mapError Stop.message
+  let expectedExact := (world.steps.toList.drop s.world.steps.size).countP fun step =>
+    step.decision==.addExact && step.outcome
+  unless exactSegments==expectedExact do throw "insert.exact-segment-count"
   unless world.hidden == some remaining do throw "insert.mirror-input-cursor"
   unless r.state.data.regs.rax.toNat % 2^32 == (answer % (2^32 : Int)).toNat do throw "insert.result"
   unless r.state.data.regs.rsp == initial.data.regs.rsp+8 do throw "insert.return-stack"
@@ -150,7 +157,7 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
     unless (← readNat r.state (frame.coverage+8*(i+1)) 8) == r.coverage[i]! do throw "insert.coverage-word"
   assertAt names input.lookup.offsets r.state.data.dmem world
   return (⟨names,world,r,released⟩,Json.mkObj [("family",toJson family),("cidr",toJson cidr),
-    ("result",toJson answer),("placementVisits",toJson visits),("instructions",toJson r.pcs.size),("services",toJson services),
+    ("result",toJson answer),("placementVisits",toJson visits),("exactSegments",toJson exactSegments),("instructions",toJson r.pcs.size),("services",toJson services),
     ("coverage",toJson (r.coverage.toList.drop s.binary.coverage.size)),
     ("comparisons",toJson (r.comparisons.toList.drop s.binary.comparisons.size)),
     ("decisions",toJson ((world.steps.toList.drop s.world.steps.size).map Step.label))])

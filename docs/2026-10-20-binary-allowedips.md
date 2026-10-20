@@ -368,7 +368,7 @@ three-way comparison passes eight calls under both seeds in 0.281 seconds,
 with 170 coverage points, 64 comparisons and 117 decisions. The printed surface
 now includes `loop_checked`, its entry assertion, frame and read/write covers;
 no environmental premise was added to `TrustBase.lean`. The new full-closure
-fresh replay is pending; external acceptance remains pending.
+fresh replay passed; external acceptance remains pending.
 
 Proof-development failures were real failures. Several large assertion-decoding
 attempts were stopped after excessive growth; one accidental overlap of two
@@ -388,3 +388,44 @@ The coordinator's counter correction is still pending a landing notice. The
 wrap witness and its expected binary zero are unchanged. Neither this entry
 assertion nor reconstruction excludes wrapping sequence states or substitutes
 a modulo target. The mirror and main remain untouched.
+
+
+## Exact-reassignment effect and list support (03:48 UTC)
+
+The 14-instruction callback-free reassignment segment now proves the same
+`Exact.effect` memory/register summary that the paired runner checks at its
+actual entry and exit cuts. The proof covers all mapped read/write cases; it
+does not assume a resulting list relation. The destination tail is read after
+unlinking, preserving same-peer moves, including a singleton, a move to the
+tail, an already-last node and an internal self-linked node acquiring a peer.
+The full-memory comparison includes unchanged bytes. The runner checks that
+the number of executed segments matches the source's exact-update branch count.
+
+Generated runs now pass 66 insertions and 66 retained-heap lookups in 2.574
+seconds, including 20 checked exact segments. The recorded three-way comparison
+still passes eight mixed-family calls under both seeds in 0.273 seconds, with
+the same coverage/comparison/decision counts. Generic allocator/free returns
+remain supplied. The source counter correction remains pending and the wrap
+witness remains a failure on this mirror pin.
+
+For reconstruction after writes, a finite circular-list presentation is proved
+necessary and sufficient for the existing executable list decoder, including
+fuel and cycle checks. Structural unlink and append lemmas retain the sentinel
+backlink and recover decoding after local word effects. Identity filtering is
+proved to equal source node-ID filtering. These adapt the earlier index-chain
+proof pattern. A small ordered-word-write lemma is used by both the actual
+unlink/owner stores and append stores; equal destinations are resolved in
+instruction order, while distinct word ranges require byte separation.
+Allocation geometry is derived from existing reconstruction validation,
+without imposing new base-alignment or relation clauses.
+
+This checkpoint adds 844 lines for the executable effect, physical proof and
+reconstruction support, approximately 14 minutes after the checked-loop
+checkpoint. The physical effect is complete; connecting its word equations to
+full reconstruction and the mirror's exact-update effect remains open. It is
+not an exact-path insertion theorem or completed-function coverage. All modules
+build with standard axioms. The first fresh-replay invocation incorrectly gave
+multiple roots with `--fresh` and failed; the corrected invocation uses the
+single partial-work root `AllowedipsInsertionSurface` and is pending. No
+external export acceptance is claimed. The complete insertion, allocation and
+rollback proofs, wrapper composition, and checkpoint B remain open.
