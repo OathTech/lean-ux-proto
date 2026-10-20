@@ -168,6 +168,73 @@ Binary.Pair.Allowedips.ChildPublish.record_checked : ∀ (fetch : Int64 → Opti
                                                 8)
                                               (Except.ok.{0, 0} base))
                                 { data := s, pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1778 }
+Binary.Pair.Allowedips.ChildPublish.publication_restores : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {names : Binary.Pair.Allowedips.Names} {world : Leanux.World} {entry : MachineState} {s : MachineData}
+      {key cidr pid base parentId direction : Nat} {memory : DataMem} {registers : Reg64s} {d : Leanux.WG.Device}
+      {parentNode : Leanux.WG.AipNode} {owner : Leanux.WG.Peer},
+      Binary.Pair.Allowedips.NodeInit.BoundaryFields names Binary.Pair.Allowedips.Root.nodeOffsets world entry key cidr
+          pid base →
+        Binary.Pair.Allowedips.Corresponds names Binary.Pair.Allowedips.Root.nodeOffsets entry.data.dmem d →
+          Eq.{1} (Binary.Pair.Allowedips.heap names (Binary.Pair.Allowedips.target d) entry.data.dmem)
+              (Except.ok.{0, 0} ()) →
+            Binary.Pair.Allowedips.NodeInit.Pending names entry.data d key cidr pid base s.dmem →
+              Membership.mem.{0, 0} names.trie.nodes (Prod.mk.{0, 0} parentId s.regs.rbx.toNat) →
+                Eq.{1} (Std.TreeMap.get?.{0, 0} d.nodes parentId) (some.{0} parentNode) →
+                  Eq.{1} (Std.TreeMap.get?.{0, 0} d.peers pid) (some.{0} owner) →
+                    LT.lt.{0} direction 2 →
+                      Eq.{1} (getElem?.{0, 0, 0} parentNode.bit direction) (some.{0} none.{0}) →
+                        Eq.{1} entry.data.regs.rbp.toNat parentNode.bitlen →
+                          LT.lt.{0} parentNode.cidr cidr →
+                            Eq.{1}
+                                (HDiv.hDiv.{0, 0, 0} key
+                                  (HPow.hPow.{0, 0, 0} 2 (HSub.hSub.{0, 0, 0} parentNode.bitlen parentNode.cidr)))
+                                (HDiv.hDiv.{0, 0, 0} parentNode.bits
+                                  (HPow.hPow.{0, 0, 0} 2 (HSub.hSub.{0, 0, 0} parentNode.bitlen parentNode.cidr))) →
+                              Eq.{1}
+                                  (HMod.hMod.{0, 0, 0}
+                                    (HDiv.hDiv.{0, 0, 0} key
+                                      (HPow.hPow.{0, 0, 0} 2
+                                        (HSub.hSub.{0, 0, 0} (HSub.hSub.{0, 0, 0} parentNode.bitlen 1)
+                                          parentNode.cidr)))
+                                    2)
+                                  direction →
+                                Eq.{1} (readNat { data := s, pc := 0 } s.regs.rsp.toNat 8) (Except.ok.{0, 0} base) →
+                                  Eq.{1} (readNat { data := s, pc := 0 } (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 8) 1)
+                                      (Except.ok.{0, 0} direction) →
+                                    Eq.{1}
+                                        (Binary.Pair.word s.dmem "saved.index" (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 16)
+                                          8)
+                                        (Except.ok.{0, 0} direction) →
+                                      (∀ (a : BitVec 64),
+                                          Binary.InRange (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 16)) 8
+                                              a →
+                                            ¬Binary.InRange (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} base 48)) 8 a) →
+                                        Eq.{1} (Binary.Pair.Allowedips.ChildPublish.effect s)
+                                            (Except.ok.{0, 0} (Prod.mk.{0, 0} memory registers)) →
+                                          Eventually (Binary.instructionStep fetch)
+                                            (fun t =>
+                                              Eq.{1} t.pc
+                                                  (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1353) ∧
+                                                Eq.{1} t.data.dmem memory ∧
+                                                  Eq.{1} t.data.regs registers ∧
+                                                    Binary.EqualOutside
+                                                        (Binary.Pair.Allowedips.ChildPublish.Writes s.regs t.data.regs)
+                                                        s.dmem t.data.dmem ∧
+                                                      Binary.Pair.Allowedips.Corresponds (names.allocated base)
+                                                          Binary.Pair.Allowedips.Root.nodeOffsets t.data.dmem
+                                                          (Binary.Pair.Allowedips.childInstalled d parentId direction
+                                                            key cidr entry.data.regs.rbp.toNat pid parentNode owner) ∧
+                                                        Eq.{1}
+                                                          (Binary.Pair.Allowedips.heap (names.allocated base)
+                                                            (Binary.Pair.Allowedips.target
+                                                              (Binary.Pair.Allowedips.childInstalled d parentId
+                                                                direction key cidr entry.data.regs.rbp.toNat pid
+                                                                parentNode owner))
+                                                            t.data.dmem)
+                                                          (Except.ok.{0, 0} ()))
+                                            { data := s,
+                                              pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1778 }
 Binary.Pair.Allowedips.ChildPublish.publication_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
     ∀ {s : MachineData} {memory : DataMem} {registers : Reg64s},

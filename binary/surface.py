@@ -13,6 +13,7 @@ HEADLINES = [
     'Binary.Pair.Allowedips.install_child_run',
     'Binary.Pair.Allowedips.NodeInit.initialization_executes',
     'Binary.Pair.Allowedips.ChildPublish.record_checked',
+    'Binary.Pair.Allowedips.ChildPublish.publication_restores',
     'Binary.Pair.Allowedips.ChildPublish.publication_checked',
     'Binary.Pair.Allowedips.NodeInit.effect_segment',
     'Binary.Pair.Allowedips.Return.finish_checked',

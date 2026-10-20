@@ -1053,3 +1053,37 @@ arguments resolve them. Ordinary elaboration failures, a recursion-depth failure
 and heartbeat timeouts occurred during development and were repaired; no resource
 limits were raised and no KILLED run occurred. The evidence still supports local
 reuse, not a viable whole-subsystem completion rate: A and B remain open.
+
+## Child publication restores the executable heap (09:09 UTC)
+
+`ChildPublish.publication_restores` now executes the publication stores and
+restores both the full allowed-IPs reconstruction and the unchanged executable
+heap assertion, with its byte frame. The graph proof preserves both roots,
+prefix/branch arithmetic and unique child ownership. The packed-parent proof
+keeps every old incoming slot and establishes the fresh node's unique incoming
+child slot. Ownership uses the already proved peer-list append and internal-list
+frame. No runtime assertion or environmental premise changed.
+
+The intervening selection path must still establish this segment's saved words
+and prefix/branch facts, and initialization must carry its derived `Pending`
+resources through that path. These are explicit intermediate hypotheses in the
+printed theorem, not a claim of function-entry adequacy. Complete insertion,
+retained-heap insertion-to-lookup composition, and checkpoint B remain open.
+Completed new-function coverage remains zero.
+
+This checkpoint adds eleven modules, 826 lines, mostly graph and incoming-slot
+reasoning. The old executable graph walk now has proved extraction/construction
+lemmas for edge facts and unique children; the child update uses them without
+replaying its traversal per path. That is local composition reuse; it does not
+yet establish the campaign's desired completion rate. Ordinary elaboration
+failures were repaired without raising resource limits. No KILLED run occurred.
+
+The default package build passes 1,136 jobs without warnings. The fast tier
+passes 137 tests, one skipped (23.789 seconds). Generated execution passes 66
+retained-heap insertions/lookups, 24 isolated root cases, and the existing segment
+checks in 3.293 seconds; the recorded three-way check passes eight calls under
+two seeds, 170 coverage entries, 64 comparisons and 117 decisions in 0.306
+seconds. Those entries remain constructed and allocation/free services supplied.
+Fresh kernel replay of `AllowedipsInsertionSurface` passes. The reviewed printed
+surface adds the publication theorem with standard axioms; `TrustBase.lean` and
+the clean private Kraken pin are unchanged. No external gate acceptance is claimed.
