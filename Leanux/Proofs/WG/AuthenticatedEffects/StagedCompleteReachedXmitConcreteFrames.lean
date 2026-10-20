@@ -47,12 +47,13 @@ continuation remain intact; deeper preparation/front atoms stay explicit. -/
 theorem Point.safe
     (accountGood : ∀h w,Account h w → Good h w)
     (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
+    (acceptFront : ∀ledger h w,FrontCuts.Evidence ledger [] [] h w.wg w.ambient → Good h w)
     (acceptPeer : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
     (before : CompleteProduct.Carrier h w) (point : Point input w h u middle) : Good middle u := by
   cases point with
   | entry=>exact accountGood _ _ before.1
   | leading performed=>exact accountGood _ _ (Xmit.normal (leading_checked input) before performed).1
-  | routed path point=>exact point.safe accountGood acceptStaging acceptPeer (path.entry before).1
+  | routed path point=>exact point.safe accountGood acceptStaging acceptFront acceptPeer (path.entry before).1
   | bodyReturned path performed=>exact accountGood _ _ (RoutedTransmit.normal (path.entry before).1 performed)
   | scopeLeft path performed left=>
       exact accountGood _ _ (leave_normal (RoutedTransmit.normal (path.entry before).1 performed) left)

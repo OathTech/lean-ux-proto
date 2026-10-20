@@ -1,10 +1,10 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDumpConcreteRunner
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTransmitSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedFrontCutsSource
 
-/-! Routed transmit's literal front, staging and repayment order. The front
-is an explicit compound atom here; its internal admission/receipt intervals
-are not supplied by this caller composition. Staging and repayment use their
-expanded fixed source points, not arbitrary factorization witnesses. -/
+/-! Routed transmit's literal front, staging and repayment order. Fixed front
+points include overflow mutations and pending birth receipts. Other front
+native atoms remain explicit; all children retain their original source. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.RoutedTransmit
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
 abbrev Input := Transmit.Input
@@ -44,6 +44,7 @@ theorem after_stage (admitted : runPrefix (front input) w h=(.ok (.ok pid,q),pri
 
 inductive Point (input : Input) (w : World) (h : History) : World → History → Prop where
   | entry : Point input w h w h
+  | frontCut (point : FrontCuts.RootPoint input w h u middle) : Point input w h u middle
   | frontReturned (performed : runPrefix (front input) w h=(.ok (result,u),middle)) :
       Point input w h u middle
   | staging (admitted : runPrefix (front input) w h=(.ok (.ok pid,q),prior))
@@ -59,6 +60,10 @@ theorem Point.remaining (point : Point input w h u middle) :
     ∃remaining,runPrefix (action input) w h=runPrefix remaining u middle := by
   cases point with
   | entry=>exact ⟨_,rfl⟩
+  | frontCut point=>
+      obtain ⟨remaining,continued⟩:=point.remaining
+      exact ⟨remaining >>= tail,(congrArg (fun action=>runPrefix action w h) (source input)).trans
+        (Scheduler.bind_run_equal tail continued)⟩
   | frontReturned performed=>exact ⟨_,after_front performed⟩
   | staging admitted point=>
     obtain ⟨remaining,continued⟩:=point.residual

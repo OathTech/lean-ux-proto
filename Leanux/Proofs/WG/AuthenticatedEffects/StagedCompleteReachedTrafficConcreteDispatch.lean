@@ -24,6 +24,7 @@ variable {nativeService insideService : Service.Points.ChildPoints}
 noncomputable def dispatchContracts
     (accountGood : ∀h w,Lifecycle.Points.Account h w → Good h w)
     (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
+    (acceptFront : ∀ledger h w,FrontCuts.Evidence ledger [] [] h w.wg w.ambient → Good h w)
     (acceptPeer : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
     (services : Service.Points.ChildContracts nativeService insideService Good)
     (polls : Napi.Points.ChildContracts nativeNapi insideNapi Good)
@@ -39,20 +40,20 @@ noncomputable def dispatchContracts
     coverage:=fun _ _ _ _ point=>by
       obtain ⟨site,point⟩:=point
       exact ⟨site,point.coverage services polls⟩
-    safe:=fun _ _ _ _ before point=>root_safe accountGood acceptStaging acceptPeer services polls before point}
+    safe:=fun _ _ _ _ before point=>root_safe accountGood acceptStaging acceptFront acceptPeer services polls before point}
   flood:=fun count port family messages=>{
     remainder:=fun _ _ _ _ point=>remainder (root:=.flood count port family messages) services polls point
     continuation:=fun _ _ _ _ point=>remainder_run services polls point
     coverage:=fun _ _ _ _ point=>by
       obtain ⟨site,point⟩:=point
       exact ⟨site,point.coverage services polls⟩
-    safe:=fun _ _ _ _ before point=>root_safe accountGood acceptStaging acceptPeer services polls before point}
+    safe:=fun _ _ _ _ before point=>root_safe accountGood acceptStaging acceptFront acceptPeer services polls before point}
   batch:=fun items=>{
     remainder:=fun _ _ _ _ point=>remainder (root:=.batch items) services polls point
     continuation:=fun _ _ _ _ point=>remainder_run services polls point
     coverage:=fun _ _ _ _ point=>by
       obtain ⟨site,point⟩:=point
       exact ⟨site,point.coverage services polls⟩
-    safe:=fun _ _ _ _ before point=>root_safe accountGood acceptStaging acceptPeer services polls before point}
+    safe:=fun _ _ _ _ before point=>root_safe accountGood acceptStaging acceptFront acceptPeer services polls before point}
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.TrafficConcrete

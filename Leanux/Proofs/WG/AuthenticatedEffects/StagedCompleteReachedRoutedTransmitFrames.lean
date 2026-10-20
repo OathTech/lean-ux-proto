@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRoutedTransmitSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedFrontCutsFrames
 
 /-! Concrete accounts at the original routed caller's phase boundaries.
 Expanded callback evidence preserves pending receipts instead of treating
@@ -36,15 +37,19 @@ theorem normal (before : Account h w)
 variable {Good : History → World → Prop}
 
 /-- Every declared routed-transmit cut retains its packet account or the
-actual staging/release pending-receipt evidence, derived from the original
-entry. Internal front admission/receipt intervals remain a separate boundary. -/
+actual front/staging/release pending-receipt evidence, derived from the original
+entry. The overflow and birth intervals keep their original receipt origins. -/
 theorem Point.safe
     (accountGood : ∀h w,Account h w → Good h w)
     (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
+    (acceptFront : ∀ledger h w,FrontCuts.Evidence ledger [] [] h w.wg w.ambient → Good h w)
     (acceptPeer : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
     (before : Account h w) (point : Point input w h u middle) : Good middle u := by
   cases point with
   | entry=>exact accountGood _ _ before
+  | frontCut point=>
+      obtain ⟨ledger,account⟩:=before
+      exact acceptFront ledger _ _ (point.evidence account)
   | frontReturned performed=>exact accountGood _ _ (front_normal before performed)
   | staging admitted point=>
     obtain ⟨ledger,account⟩:=front_normal before admitted

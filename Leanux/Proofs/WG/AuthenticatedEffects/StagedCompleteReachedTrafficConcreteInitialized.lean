@@ -21,6 +21,7 @@ theorem initialized (trace : Leanux.Runner.Trace) (placeholders : Bool)
     (pendingGood : ∀h w,Timer.Points.Purge.Awaiting h w → Good h w)
     (acceptPeer : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
     (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
+    (acceptFront : ∀ledger h w,FrontCuts.Evidence ledger [] [] h w.wg w.ambient → Good h w)
     (acceptEncryption : ∀ledger h w,EncryptionCallback.Evidence ledger [] [] h w → Good h w)
     (acceptKeepalive : ∀ledger pid (w : World) h (u : World) middle,
       KeepaliveExpanded.Evidence ledger [] [] pid w.wg w.ambient h middle u.wg u.ambient → Good middle u)
@@ -36,10 +37,10 @@ theorem initialized (trace : Leanux.Runner.Trace) (placeholders : Bool)
           (dispatchPoints (servicePoints nativeConsume nativeNapi nativeWorker nativeWork)
             (napiPoints nativeConsume nativeNapi) nativeDispatch)))))
       Good (Runner.Points.executeShape trace placeholders) [] :=
-  XmitConcrete.initialized trace placeholders carrierGood accountGood pendingGood acceptPeer acceptStaging
+  XmitConcrete.initialized trace placeholders carrierGood accountGood pendingGood acceptPeer acceptStaging acceptFront
     acceptEncryption acceptKeepalive acceptTx
-    (dispatchContracts accountGood acceptStaging acceptPeer
-      (serviceContracts carrierGood accountGood pendingGood acceptPeer acceptStaging acceptEncryption acceptKeepalive acceptTx)
-      (pollContracts accountGood acceptPeer acceptStaging) config)
+    (dispatchContracts accountGood acceptStaging acceptFront acceptPeer
+      (serviceContracts carrierGood accountGood pendingGood acceptPeer acceptStaging acceptFront acceptEncryption acceptKeepalive acceptTx)
+      (pollContracts accountGood acceptPeer acceptStaging acceptFront) config)
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.TrafficConcrete

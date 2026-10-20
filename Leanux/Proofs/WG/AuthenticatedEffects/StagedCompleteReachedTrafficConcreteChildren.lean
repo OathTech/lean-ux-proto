@@ -26,11 +26,12 @@ variable {nativeConsume insideConsume : Consume.Points.ChildPoints}
 noncomputable def pollContracts
     (accountGood : ∀h w,Lifecycle.Points.Account h w → Good h w)
     (acceptPeer : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
-    (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w) :
+    (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
+    (acceptFront : ∀ledger h w,FrontCuts.Evidence ledger [] [] h w.wg w.ambient → Good h w) :
     Napi.Points.ChildContracts (napiPoints nativeConsume nativeNapi) (napiPoints insideConsume insideNapi) Good :=
   ReceiveWorker.Composition.napiChildren accountGood acceptPeer
     (ReceiveWorker.Composition.stagedReceive acceptStaging
-      (IPv6.receiveContracts accountGood (RoutedTransmit.transmitContract accountGood acceptStaging acceptPeer)))
+      (IPv6.receiveContracts accountGood (RoutedTransmit.transmitContract accountGood acceptStaging acceptFront acceptPeer)))
 
 noncomputable def serviceContracts
     (carrierGood : ∀h w,CompleteProduct.Carrier h w → Good h w)
@@ -38,6 +39,7 @@ noncomputable def serviceContracts
     (pendingGood : ∀h w,Timer.Points.Purge.Awaiting h w → Good h w)
     (acceptPeer : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
     (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
+    (acceptFront : ∀ledger h w,FrontCuts.Evidence ledger [] [] h w.wg w.ambient → Good h w)
     (acceptEncryption : ∀ledger h w,EncryptionCallback.Evidence ledger [] [] h w → Good h w)
     (acceptKeepalive : ∀ledger pid (w : World) h (u : World) middle,
       KeepaliveExpanded.Evidence ledger [] [] pid w.wg w.ambient h middle u.wg u.ambient → Good middle u)
@@ -46,7 +48,7 @@ noncomputable def serviceContracts
       (servicePoints insideConsume insideNapi insideWorker insideWork) Good :=
   Service.Expanded.concreteChildren carrierGood accountGood pendingGood acceptPeer acceptKeepalive
     (Service.ReceiveComposition.schedulerChildren accountGood acceptPeer acceptStaging acceptEncryption
-      (IPv6.receiveContracts accountGood (RoutedTransmit.transmitContract accountGood acceptStaging acceptPeer))
+      (IPv6.receiveContracts accountGood (RoutedTransmit.transmitContract accountGood acceptStaging acceptFront acceptPeer))
       {transmit:=TxConcrete.transmitContract acceptTx,
        handshake:=HandshakeConcrete.handshakeContract accountGood acceptPeer acceptKeepalive})
     (ProtocolSend.senderContract accountGood acceptPeer)

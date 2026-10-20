@@ -83,6 +83,7 @@ fixed ingress source. Finer native access intervals remain explicit. -/
 theorem Point.safe
     (accountGood : ∀h w,Lifecycle.Points.Account h w → Good h w)
     (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
+    (acceptFront : ∀ledger h w,FrontCuts.Evidence ledger [] [] h w.wg w.ambient → Good h w)
     (acceptPeer : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
     (services : Service.Points.ChildContracts nativeService insideService Good)
     (polls : Napi.Points.ChildContracts nativeNapi insideNapi Good)
@@ -93,7 +94,7 @@ theorem Point.safe
   | returned source performed=>exact accountGood _ _ (source.normal before performed).1
   | service source point=>exact point.safe (fun _ _ account=>accountGood _ _ account.1) services before
   | poll point=>exact point.safe accountGood polls before.1
-  | transmit point=>exact point.safe accountGood acceptStaging acceptPeer before
+  | transmit point=>exact point.safe accountGood acceptStaging acceptFront acceptPeer before
   | ingress point=>exact point.safe accountGood acceptPeer before
   | left tail point ih=>exact ih before
   | right head tail leading point ih=>exact ih (head.normal before leading)
@@ -131,11 +132,12 @@ theorem remainder_run (services : Service.Points.ChildContracts nativeService in
 theorem root_safe
     (accountGood : ∀h w,Lifecycle.Points.Account h w → Good h w)
     (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
+    (acceptFront : ∀ledger h w,FrontCuts.Evidence ledger [] [] h w.wg w.ambient → Good h w)
     (acceptPeer : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
     (services : Service.Points.ChildContracts nativeService insideService Good)
     (polls : Napi.Points.ChildContracts nativeNapi insideNapi Good)
     (before : CompleteProduct.Carrier h w) (point : RootPoint insideService insideNapi root w h u middle) : Good middle u := by
   obtain ⟨site,point⟩:=point
-  exact point.safe accountGood acceptStaging acceptPeer services polls before
+  exact point.safe accountGood acceptStaging acceptFront acceptPeer services polls before
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.TrafficConcrete

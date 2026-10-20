@@ -15,6 +15,7 @@ noncomputable def transmitContract
     {nativeNapi insideNapi : Napi.Points.ChildPoints} {Good : History → World → Prop}
     (accountGood : ∀h w,Account h w → Good h w)
     (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
+    (acceptFront : ∀ledger h w,FrontCuts.Evidence ledger [] [] h w.wg w.ambient → Good h w)
     (acceptPeer : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
     (family addr : Nat) (packets : List Packet) (mtu : Nat) :
     Napi.Points.ChildSourceContract
@@ -24,7 +25,7 @@ noncomputable def transmitContract
   remainder:=fun _ _ _ _ point=>remainder point
   continuation:=fun _ _ _ _ point=>remainder_run point
   coverage:=fun _ _ _ _ point=>point
-  safe:=fun _ _ _ _ before point=>point.safe accountGood acceptStaging acceptPeer before
+  safe:=fun _ _ _ _ before point=>point.safe accountGood acceptStaging acceptFront acceptPeer before
 
 variable {nativeConsume insideConsume : Consume.Points.ChildPoints}
   {nativeNapi insideNapi : Napi.Points.ChildPoints}
@@ -41,6 +42,7 @@ theorem initialized (trace : Leanux.Runner.Trace) (placeholders : Bool)
     (pendingGood : ∀h w,Timer.Points.Purge.Awaiting h w → Good h w)
     (acceptPeer : ∀ledger h w,PeerRetirement.Points.Evidence ledger [] [] h w.wg → Good h w)
     (acceptStaging : ∀ledger h w,StagingExpanded.Evidence ledger [] [] h w.wg w.ambient → Good h w)
+    (acceptFront : ∀ledger h w,FrontCuts.Evidence ledger [] [] h w.wg w.ambient → Good h w)
     (acceptEncryption : ∀ledger h w,EncryptionCallback.Evidence ledger [] [] h w → Good h w)
     (acceptKeepalive : ∀ledger pid (w : World) h (u : World) middle,
       KeepaliveExpanded.Evidence ledger [] [] pid w.wg w.ambient h middle u.wg u.ambient → Good middle u)
@@ -55,6 +57,6 @@ theorem initialized (trace : Leanux.Runner.Trace) (placeholders : Bool)
         (Service.ReceiveComposition.servicePoints nativeConsume (IPv6.napiPoints (napiPoints nativeNapi)) nativeWorker (ProtocolSend.workPoints nativeWork))
         (Lifecycle.Concrete.dispatchPoints (DumpConcrete.dispatchPoints nativeDispatch))) Good (Runner.Points.executeShape trace placeholders) [] :=
   DumpConcrete.initialized trace placeholders carrierGood accountGood pendingGood acceptPeer acceptStaging
-    acceptEncryption acceptKeepalive (transmitContract accountGood acceptStaging acceptPeer) workers dispatch
+    acceptEncryption acceptKeepalive (transmitContract accountGood acceptStaging acceptFront acceptPeer) workers dispatch
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.RoutedTransmit
