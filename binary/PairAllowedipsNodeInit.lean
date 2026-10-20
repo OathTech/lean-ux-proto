@@ -5,7 +5,7 @@ namespace Binary.Pair.Allowedips.NodeInit
 /-- The nonempty-trie allocation tail before it chooses a publication slot.
 Unlike the empty-root tail, it reads the old owner tail before storing the
 owner and saves three selector bytes on the stack. Reads retain that order. -/
-def effect (s : MachineData) : Except String (DataMem × Nat) := do
+def attach (s : MachineData) : Except String (DataMem × Nat × Nat) := do
   let base ← readNat ⟨s,0⟩ s.regs.rsp.toNat 8
   let width := s.regs.rbp.toNat
   let cidr ← readNat ⟨s,0⟩ (s.regs.rsp.toNat+16) 4
@@ -19,12 +19,19 @@ def effect (s : MachineData) : Except String (DataMem × Nat) := do
   m ← Root.store m (base+64) 8 last
   m ← Root.store m (base+56) 8 (peer+1096)
   m ← Root.store m last 8 link
+  return (m,base,cidr)
+
+def header (stack width base cidr : Nat) (memory : DataMem) : Except String DataMem := do
   let mask := (width/8-1)%8
-  m ← Root.store m (s.regs.rsp.toNat+36) 1 mask
-  m ← Root.store m (s.regs.rsp.toNat+43) 1 ((cidr/8) ^^^ mask)
-  m ← Root.store m (s.regs.rsp.toNat+44) 1 (7-cidr%8)
-  m ← Root.store m (base+24) 4 (Root.headerWord width cidr)
-  m ← Root.copy {s with regs:={s.regs with rbx:=.ofNat base}} m
+  let mut m ← Root.store memory (stack+36) 1 mask
+  m ← Root.store m (stack+43) 1 ((cidr/8) ^^^ mask)
+  m ← Root.store m (stack+44) 1 (7-cidr%8)
+  Root.store m (base+24) 4 (Root.headerWord width cidr)
+
+def effect (s : MachineData) : Except String (DataMem × Nat) := do
+  let (attached,base,cidr) ← attach s
+  let initialized ← header s.regs.rsp.toNat s.regs.rbp.toNat base cidr attached
+  let m ← Root.copy {s with regs:={s.regs with rbx:=.ofNat base}} initialized
   return (m,base)
 
 def registers (before after : Reg64s) (base : Nat) : Bool :=

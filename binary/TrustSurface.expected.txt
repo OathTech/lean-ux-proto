@@ -1,4 +1,14 @@
 HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
+Binary.Pair.Allowedips.NodeInit.effect_segment : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {s : MachineData} {memory : DataMem} {base : Nat},
+      Eq.{1} (Binary.Pair.Allowedips.NodeInit.effect s) (Except.ok.{0, 0} (Prod.mk.{0, 0} memory base)) →
+        Eventually (Binary.instructionStep fetch)
+          (fun t =>
+            Eq.{1} t.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 511) ∧
+              Eq.{1} t.data.dmem memory ∧
+                Eq.{1} (Binary.Pair.Allowedips.NodeInit.registers s.regs t.data.regs base) true)
+          { data := s, pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 342 }
 Binary.Pair.Allowedips.Return.finish_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
     Binary.TrustBase.TracePcContract fetch →
@@ -1070,6 +1080,70 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                 Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
                   Eventually (Binary.instructionStep fetch)
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
+def Binary.Pair.Allowedips.NodeInit.effect : MachineData → Except.{0, 0} String (Prod.{0, 0} DataMem Nat) :=
+fun s => do
+  let __x ← Binary.Pair.Allowedips.NodeInit.attach s
+  match __x with
+    | Prod.mk.{0, 0} attached (Prod.mk.{0, 0} base cidr) => do
+      let initialized ← Binary.Pair.Allowedips.NodeInit.header s.regs.rsp.toNat s.regs.rbp.toNat base cidr attached
+      let m ←
+        Binary.Pair.Allowedips.Root.copy
+            {
+              regs :=
+                have __src := s.regs;
+                { rax := __src.rax, rbx := UInt64.ofNat base, rcx := __src.rcx, rdx := __src.rdx, rsi := __src.rsi,
+                  rdi := __src.rdi, rsp := __src.rsp, rbp := __src.rbp, r8 := __src.r8, r9 := __src.r9,
+                  r10 := __src.r10, r11 := __src.r11, r12 := __src.r12, r13 := __src.r13, r14 := __src.r14,
+                  r15 := __src.r15 },
+              zmms := s.zmms, status := s.status, system := s.system, dmem := s.dmem }
+            initialized
+      pure.{0, 0} (Prod.mk.{0, 0} m base)
+def Binary.Pair.Allowedips.NodeInit.attach : MachineData →
+  Except.{0, 0} String (Prod.{0, 0} DataMem (Prod.{0, 0} Nat Nat)) :=
+fun s => do
+  let base ← readNat { data := s, pc := 0 } s.regs.rsp.toNat 8
+  have width : Nat := s.regs.rbp.toNat
+  let cidr ← readNat { data := s, pc := 0 } (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toNat 16) 4
+  have peer : Nat := s.regs.r14.toNat
+  let last ← readNat { data := s, pc := 0 } (HAdd.hAdd.{0, 0, 0} peer 1104) 8
+  Binary.Pair.require (BEq.beq.{0} width 32 || BEq.beq.{0} width 128) "node-init.family"
+  Binary.Pair.require
+      (decide (LE.le.{0} cidr width) && BEq.beq.{0} s.regs.r12.toNat cidr && BEq.beq.{0} s.regs.r15.toNat width)
+      "node-init.locals"
+  have link : Nat := HAdd.hAdd.{0, 0, 0} base 56
+  let m ← Binary.Pair.Allowedips.Root.store s.dmem base 8 peer
+  let __x ← Binary.Pair.Allowedips.Root.store m (HAdd.hAdd.{0, 0, 0} peer 1104) 8 link
+  have m : DataMem := __x
+  let __x ← Binary.Pair.Allowedips.Root.store m (HAdd.hAdd.{0, 0, 0} base 64) 8 last
+  have m : DataMem := __x
+  let __x ← Binary.Pair.Allowedips.Root.store m (HAdd.hAdd.{0, 0, 0} base 56) 8 (HAdd.hAdd.{0, 0, 0} peer 1096)
+  have m : DataMem := __x
+  let __x ← Binary.Pair.Allowedips.Root.store m last 8 link
+  have m : DataMem := __x
+  pure.{0, 0} (Prod.mk.{0, 0} m (Prod.mk.{0, 0} base cidr))
+def Binary.Pair.Allowedips.NodeInit.header : Nat → Nat → Nat → Nat → DataMem → Except.{0, 0} String DataMem :=
+fun stack width base cidr memory =>
+  have mask := HMod.hMod.{0, 0, 0} (HSub.hSub.{0, 0, 0} (HDiv.hDiv.{0, 0, 0} width 8) 1) 8;
+  do
+  let m ← Binary.Pair.Allowedips.Root.store memory (HAdd.hAdd.{0, 0, 0} stack 36) 1 mask
+  let __x ←
+    Binary.Pair.Allowedips.Root.store m (HAdd.hAdd.{0, 0, 0} stack 43) 1
+        (HXor.hXor.{0, 0, 0} (HDiv.hDiv.{0, 0, 0} cidr 8) mask)
+  have m : DataMem := __x
+  let __x ←
+    Binary.Pair.Allowedips.Root.store m (HAdd.hAdd.{0, 0, 0} stack 44) 1
+        (HSub.hSub.{0, 0, 0} 7 (HMod.hMod.{0, 0, 0} cidr 8))
+  have m : DataMem := __x
+  Binary.Pair.Allowedips.Root.store m (HAdd.hAdd.{0, 0, 0} base 24) 4
+      (Binary.Pair.Allowedips.Root.headerWord width cidr)
+def Binary.Pair.Allowedips.NodeInit.registers : Reg64s → Reg64s → Nat → Bool :=
+fun before after base =>
+  BEq.beq.{0} after.rsp before.rsp && BEq.beq.{0} after.rbx before.rbx && BEq.beq.{0} after.r12 before.r12 &&
+            BEq.beq.{0} after.r13 before.r13 &&
+          BEq.beq.{0} after.r15 before.r15 &&
+        BEq.beq.{0} after.rbp (UInt64.ofNat (HDiv.hDiv.{0, 0, 0} before.rbp.toNat 8)) &&
+      BEq.beq.{0} after.r8 (UInt64.ofNat base) &&
+    BEq.beq.{0} after.r14 (UInt64.ofNat (HAdd.hAdd.{0, 0, 0} base 32))
 def Binary.Pair.Allowedips.Root.Writes : Binary.Pair.Allowedips.Names → Nat → Nat → BitVec 64 → Prop :=
 fun names base slot a => Binary.Pair.Allowedips.ListWrites names a ∨ Binary.Pair.Allowedips.Root.InitWrites base slot a
 def Binary.Pair.Allowedips.Return.saved : MachineData → Nat → Except.{0, 0} String UInt64 :=

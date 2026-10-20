@@ -8,6 +8,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADLINES = [
+    'Binary.Pair.Allowedips.NodeInit.effect_segment',
     'Binary.Pair.Allowedips.Return.finish_checked',
     'Binary.Pair.Allowedips.Return.add_checked',
     'Binary.Pair.Allowedips.Return.wrapper_checked',
@@ -75,6 +76,8 @@ IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'Allo
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
+    'Binary.Pair.Allowedips.NodeInit.effect', 'Binary.Pair.Allowedips.NodeInit.attach',
+    'Binary.Pair.Allowedips.NodeInit.header', 'Binary.Pair.Allowedips.NodeInit.registers',
     'Binary.Pair.Allowedips.Root.Writes',
     'Binary.Pair.Allowedips.Return.saved', 'Binary.Pair.Allowedips.Return.addEffect',
     'Binary.Pair.Allowedips.Return.wrapperEffect', 'Binary.Pair.Allowedips.Return.observed',

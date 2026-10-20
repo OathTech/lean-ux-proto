@@ -44,7 +44,7 @@ def first4Memory (s : MachineData) (word : BitVec 32) : DataMem :=
 def copied4Memory (s : MachineData) (first again : BitVec 32) : DataMem :=
   (first4Memory s first).storeInt (s.regs.rbx.toBitVec+32) 4 again.toInt
 
-private theorem stored32 (v : BitVec 32) :
+theorem stored32 (v : BitVec 32) :
     ((max ((v.toNat : Int)%4294967296) 0%18446744073709551616).bmod 4294967296)=v.toInt := by
   have small := v.isLt
   have mod32 : (v.toNat : Int)%4294967296=v.toNat :=

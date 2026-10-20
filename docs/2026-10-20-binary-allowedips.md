@@ -881,7 +881,7 @@ occurred.
 The next tested definition is `NodeInit.effect`, the nonempty-trie allocation
 tail from `Add+0x156` to `Add+0x1ff`. It follows the actual ordered list stores,
 three saved selector bytes, packed header and both key-copy paths. It passes
-30 generated segments, including insertions that later take rollback. The
+30 generated segments, including insertions that later take rollback.
 The updated recorded three-way check also passes eight calls and both seeds;
 the final default build passes 1,089 jobs without warnings. The proof closure
 is unchanged by this runtime-only addition. The summary checks physical memory
@@ -890,3 +890,44 @@ is not yet a proved segment, and no nonempty insertion capture is claimed.
 The physical proof and subsequent child/covering/intermediate-node linkage
 remain open, alongside entry setup, allocator contracts and failure/rollback
 composition. A and B remain open, with zero new completed functions.
+
+
+## Nonempty node initialization (08:07 UTC)
+
+`NodeInit.effect_segment` now proves the same nonempty allocation-tail
+summary exercised by the paired runner, from `Add+0x156` to `Add+0x1ff`.
+It composes the ordered owner/list stores, saved selector bytes, packed
+header and both key-copy paths. There are 61 distinct instructions in the
+union of these paths: 47 execute for IPv4 and 54 for IPv6. The effect retains
+actual read/store order, including repeated IPv4 reads and reads after
+potentially overlapping stores. Its output is exact memory plus the tested
+publication-register assertion. This is a local summary theorem, not yet a
+full-trie simulation: successful summary evaluation is the internal entry
+assertion, and deriving it from reconstruction and allocator resources remains
+open. Publication, rollback and complete function composition remain open.
+
+The eight new proof modules contain 697 lines. The arithmetic and checked
+store/copy infrastructure from the root tail is reused; its 32-bit stored-word
+lemma is made public without changing the proposition or proof. The executable
+summary is factored into attachment, header and copy phases without changing
+its store order or accepted inputs. `TrustBase.lean` is unchanged. The reviewed
+printed surface adds the segment headline and its effect, attachment, header
+and register definitions. No new environmental premise is introduced.
+
+The default build passes 1,097 jobs without warnings; the headline uses only
+`propext`, `Classical.choice` and `Quot.sound`. Generated execution passes 30
+nonempty initialization segments, 28 root segments, 20 exact assignments and
+180 return segments across 66 sequence insertions/lookups and 24 isolated
+root insertions/lookups, in 3.394 seconds. The recorded three-way check passes
+eight calls under two seeds, 170 coverage entries, 64 comparisons and 117
+decisions, in 0.324 seconds. The fast tier passes 137 tests, one skipped, in
+24.559 seconds. The printed-surface diff passes. Fresh `leanchecker --fresh AllowedipsInsertionSurface` kernel replay passes.
+No external export acceptance or nonempty capture is claimed.
+Zero new complete functions are counted; A and B remain open.
+
+Development failures were Lean elaboration errors, unused simp arguments,
+and a default recursion-depth failure while simplifying the selector-byte
+store. A separate low-byte lemma and explicit address normalization removed
+the failure without raising limits. No KILLED run occurred. Physical proof
+reuse is visible here, but the still-unfinished restoration of reconstruction
+after structural mutation remains the important scaling cost.
