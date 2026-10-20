@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.Progress.RunnerFiniteClaims
 import Leanux.Proofs.WG.Progress.TrafficFiniteClaims
 import Leanux.Proofs.WG.Progress.RunnerInitialFiniteClaims
 import Leanux.Proofs.WG.Progress.SeccompPrefillFiniteClaims
@@ -151,6 +152,25 @@ theorem original_traffic_flood_finite (count port family : Nat) (messages : List
 theorem original_traffic_batch_finite (items : List Env.BatchItem) :
     Campaign2.Product.AgreesOn (fun _ => True) (Env.batch items) (TrafficFinite.nativeBatch items) :=
   TrafficFinite.original_batch_finite items
+
+/-- Every dispatch constructor agrees with concrete finite evaluation on
+arbitrary projected entries, preserving every returned value and Stop. -/
+theorem original_dispatch_finite (call : Syscall) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Leanux.dispatch call)
+      (DispatchFinite.call call) := original_dispatch_finite_claim call
+
+/-- Complete syscalls include finite task-work and deferred callbacks, with
+exact outcomes for arbitrary entry states and record streams. -/
+theorem original_syscall_finite (call : Syscall) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Leanux.syscall call)
+      (SyscallFinite.call call) := original_syscall_finite_claim call
+
+/-- One whole typed trace has finite evaluation in both record modes.
+Its complete JSON or indexed Stop is unchanged, with no acceptance or
+callback-success premise and no increase to Lean resource limits. -/
+theorem original_executeTrace_finite (trace : Runner.Trace) (placeholders : Bool) :
+    Runner.executeTrace trace placeholders = RunnerFinite.executeTrace trace placeholders :=
+  original_executeTrace_finite_claim trace placeholders
 
 /-- The historical trace is rejected at the current batch-completion boundary. -/
 theorem original_pending_batch_accepted : accepted = false :=
