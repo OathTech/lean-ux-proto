@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Ingress
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing TransmitSecurity CausalJournal RetirementSecurity
 
 inductive Site where
-  | entry | returned | release | access | lookup
+  | entry | returned | release | access | lookup | rxQueue | allocate | free
   | left (site : Site) | right (site : Site)
 
 inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action →
@@ -21,6 +21,12 @@ inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action �
       Point (.native (.access action source allocated)) w h .access {w with wg:=v,ambient:=b} h
   | lookup {w : World} (point : Lookup.Point (Lookup.canonical kinds number) w.wg w.ambient v b) :
       Point (.native (.lookup kinds number)) w h .lookup {w with wg:=v,ambient:=b} h
+  | rxQueue {w : World} (point : RxQueueAccess.Point skb w.wg w.ambient v b) :
+      Point (.native (.rxQueue skb)) w h .rxQueue {w with wg:=v,ambient:=b} h
+  | allocate {w : World} (point : SkbAccess.Point (SkbStore.newRx packet) w.wg w.ambient v b) :
+      Point (.native (.allocate packet)) w h .allocate {w with wg:=v,ambient:=b} h
+  | free {w : World} (point : SkbAccess.Point (SkbStore.freeRx skb) w.wg w.ambient v b) :
+      Point (.native (.free skb)) w h .free {w with wg:=v,ambient:=b} h
   | release (point : PeerRetirement.Points.NativePoints peer w h u middle) :
       Point (.release peer) w h .release u middle
   | left {body : PrefixM Event α} {next : α → PrefixM Event β} {head : Shape body}
@@ -39,6 +45,9 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {source : Shape 
   | returned source performed=>exact ⟨pure _,performed⟩
   | access allocated point=>exact point.observed_remaining _
   | lookup point=>exact point.observed_remaining _
+  | rxQueue point=>exact point.observed_remaining _
+  | allocate point=>exact point.observed_remaining _
+  | free point=>exact point.observed_remaining _
   | release point=>exact ⟨PeerRetirement.Points.continuation point,PeerRetirement.Points.continuation_run point⟩
   | left tail point ih=>
       obtain ⟨remaining,continued⟩:=ih
@@ -64,6 +73,25 @@ theorem Point.safe (accountGood : ∀h w,Lifecycle.Points.Account h w → Good h
   | lookup point=>
       obtain ⟨ledger,account⟩:=before.1
       exact accountGood _ _ ⟨ledger,account.entry.same_view point.frame,account.complete⟩
+  | rxQueue point=>
+      obtain ⟨ledger,account⟩:=before.1
+      exact accountGood _ _ ⟨ledger,account.entry.same_view point.frame,account.complete⟩
+  | allocate point=>
+      rcases point.same_or_returned with same|⟨value,performed⟩
+      · obtain ⟨ledger,account⟩:=before.1
+        exact accountGood _ _ ⟨ledger,account.entry.same_view same,account.complete⟩
+      · obtain ⟨ledger,account⟩:=before.1
+        exact accountGood _ _ ⟨ledger,
+          (hoare_iff_run_ambient _ _ _).mp (CompleteIngress.new_rx_entry _) _ _ value _ _ account.entry performed,
+          account.complete⟩
+  | free point=>
+      rcases point.same_or_returned with same|⟨value,performed⟩
+      · obtain ⟨ledger,account⟩:=before.1
+        exact accountGood _ _ ⟨ledger,account.entry.same_view same,account.complete⟩
+      · obtain ⟨ledger,account⟩:=before.1
+        exact accountGood _ _ ⟨ledger,
+          (hoare_iff_run_ambient _ _ _).mp (CompletePollNative.free_rx_entry _) _ _ value _ _ account.entry performed,
+          account.complete⟩
   | release point=>
       obtain ⟨ledger,account⟩:=before.1
       exact acceptPeer ledger _ _ (PeerRetirement.Points.native_evidence account point)

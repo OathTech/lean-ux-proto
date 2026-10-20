@@ -20,6 +20,11 @@ theorem NativeKind.checked (kind : NativeKind) : CompleteProduct.Checked kind.ac
         CompleteProduct.account_safe (indexLookup kinds number) (HandshakeLookup.index_lookup kinds number)
         (AllocatedFrames.observed (indexLookupPrefix_erases kinds number)
           (indexLookupPrefix_preserves_ambient allocationAmbient kinds number)))
+  | rxQueue skb=>
+      exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
+        CompleteProduct.account_safe (enqueuePerDeviceAndPeerRx skb) (CompleteIngress.enqueue skb)
+        (AllocatedFrames.observed (enqueuePerDeviceAndPeerRxPrefix_erases skb)
+          (enqueuePerDeviceAndPeerRxPrefix_allocation skb)))
   | allocate packet=>
       exact CompleteProduct.state (CompleteProduct.pair
         (CompleteIngress.new_rx CompleteProduct.Safe CompleteProduct.account_safe packet)

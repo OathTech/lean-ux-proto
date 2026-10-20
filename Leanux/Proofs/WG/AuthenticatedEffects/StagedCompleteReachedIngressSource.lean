@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRxQueueFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedLookupFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAccessCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedXmitConcreteComposition
@@ -15,6 +16,7 @@ inductive NativeKind : Type 1 where
   | access {α : Type} (body : WG.M α) (source : Access.Shape body)
       (allocated : Preserves StackOwnership.Allocated body)
   | lookup (kinds : List IndexKind) (number : Nat)
+  | rxQueue (skb : SkbId)
   | allocate (packet : RxPacket)
   | free (skb : SkbId)
 
@@ -22,6 +24,7 @@ def NativeKind.Result : NativeKind → Type
   | @quiet α ..=>α
   | @access α ..=>α
   | .lookup _ _=>Option (IndexOwner × PeerId)
+  | .rxQueue _=>Int
   | .allocate _=>SkbId
   | .free _=>Unit
 
@@ -29,6 +32,7 @@ def NativeKind.action (kind : NativeKind) : PrefixM Event kind.Result := match k
   | .quiet body ..=>liftWGObserver (liftWGPrefix body)
   | .access body ..=>liftWGObserver (liftWGPrefix body)
   | .lookup kinds number=>liftWGObserver (liftWGPrefix (indexLookup kinds number))
+  | .rxQueue skb=>liftWGObserver (liftWGPrefix (enqueuePerDeviceAndPeerRx skb))
   | .allocate packet=>liftWGObserver (liftWGPrefix (newRxSkb packet))
   | .free skb=>liftWGObserver (liftWGPrefix (freeRxSkb skb))
 
