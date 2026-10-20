@@ -1,6 +1,12 @@
 # Campaign 2: accepted supplied records retain an encrypt pending identity
 
-Status: a new H5 runtime counterexample over main 783510e8. The actual
+Disposition: Rule Zero clause-1 mirror defect, fixed on main `3f3879e0`;
+the reproducer is retained in `Progress/RecordedPending.lean` as a regression
+checking the corrected refusal. The historical account and initial
+classification discussion below describe the pre-fix mirror, not its current
+behavior or an unresolved statement artefact.
+
+Historical status over main `783510e8`: the actual
 initialized runner accepts the constructed supplied-record execution, but
 its last operation retains the encrypt-worker pending identity. The enumerated
 worker queues drain. This refutes pending-identity emptiness;
