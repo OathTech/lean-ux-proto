@@ -1,5 +1,16 @@
 # WireGuard proof campaign 2
 
+## Post-landing carry in progress, 2026-10-20
+
+Campaign 2 landed in main at `be8c209c`. The repair branch now includes
+`1f766662`, whose UInt64 allowed-IP sequence and UInt32 device/dump/FIB
+generations invalidate the Nat-typed source adapters. All six result rows
+retain their last validated pin `1a69cebb` and are marked lagging while
+shared dependencies and the owned Config contracts are carried. Existing
+shared lemmas remain campaign 1’s responsibility; no mirror changes are made.
+The namespace-pin fix is still on `task/netns-pin`, not main, so request 5
+is not yet marked settled. The validated landing summary follows.
+
 The six summaries below describe the landing scope over `1a69cebb` and
 supersede broader completion wording in the dated history. The
 [independent landing review](2026-10-20-review-campaign-2-landing.md) requires
