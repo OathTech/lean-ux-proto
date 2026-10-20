@@ -2,24 +2,28 @@
 
 ## Progress
 
-Current source: `decb640d` over mirror `1f766662`. T2's concrete initialized
-conservation theorem now eliminates all five source-extension parameters. The
-final source audit dispositions the native-coverage review, including normal
-and stopped interiors. The thirteen C1/C3 roots pass 4509 build jobs and 2337
-standard-or-empty root/carry axiom queries, including all 1569 terminal
-declarations; 167 focused queries and token/import checks also pass. Fresh
-kernel replay and all twelve C1/C3 recipes pass (retrieved exit zero); all
-6738 frozen Lean source hashes match. The aggregate gate
-remains blocked by unchanged C2 generation types in `TimerDiscipline/SendView.lean`
-and `Config/DeviceDumpSource.lean`; the campaign is not ready to land.
+Review base: `eba3c2b6`, mirror `1f766662`. The campaign is rebased, with
+source closure at `85d707da` and the existing C3 counter carry at `8ec35a98`.
+All four C3 result directories are byte-for-byte identical to pre-rebase
+`efac7e0d`; inherited proof files match the review base. Full validation at
+`da621504` passes: 6677 build jobs, 2448 standard-only terminal declarations
+across nineteen roots, all fifteen counterexample recipes, and fresh full-root
+kernel replay. Every process returned zero; all 6738 frozen Lean hashes match.
+No statement was weakened and no resource limit was raised.
+
+**Newer-main lag:** main advanced during validation to `218d3ffd`, the
+namespace-pin mirror landing. All six C3 outcomes are validated over
+`1f766662` and remain uncarried to that newer mirror. The head is ready for the
+requested independent review on the `eba3c2b6` base; it is not a claim over
+`218d3ffd`, nor a merge-to-main or push.
 
 [AGENT 2026-10-18] Work begins on `proofs/campaign-3` at `783510e8`, under
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
 proof tree includes campaign 1's GRO carry. At campaign start, no mirror
 definition or landed proof had been changed. The source contracts now cover staged nonce allocation, encryption receipts,
-cookie egress, native handshake histories and session reference payments. T1, T3, T4, T5 and the amended T6 have scoped validation. T2's final source
-composition and audit are closed with scoped validation. Campaign landing
-remains blocked by the aggregate gate.
+cookie egress, native handshake histories and session reference payments. The six outcomes are closed at their stated boundaries. T2's source
+composition and audit are complete, and full validation passes on the
+review base. The newer-main lag is recorded above.
 
 **C3-F1 is dispositioned as a statement artefact.** The original T6 wording
 excluded behavior already represented by R5's coherent initialized replays.
@@ -31,14 +35,60 @@ stops the work. The last validated checkpoint and the current integration status
 
 | Outcome | Status and remaining obligation |
 | --- | --- |
-| T1 nonce safety | Complete and validated. `initialized_nonce_safety` joins unique native reservations, actual key-allocation/nonce pairs, bounded serialized AEAD nonces and exact packet/header encoding, including stopped prefixes. Universal native rejection contracts prove invalidation, whole-batch restoration and unchanged drop count; the native rekey contracts expose the guarded helper request. No incoming invariant or campaign-2 premise remains. |
-| T2 transmit authorization and conservation | Proof and source audit closed; scoped validation passes, aggregate gate blocked. `initialized_transmit_source_conservation` derives `AccountOrRecords` from the original initialized source point, without an incoming invariant, semantic certificate or child-family premise. `transmit_source_children_are_closed` eliminates all five extension parameters. Each admitted ticket has one pending or terminal status; resident cells have native ownership and unique recorded backing or selected-ticket allocation aliases. Terminal receipts have exact cardinality. Native mutation intervals retain only their original pending record suffix on the same WG state; no arbitrary future history is allowed. The fixed source composition covers setup, dispatch, traffic, timers, scheduling, receive, configuration, lifecycle, dump and cleanup, including successful interiors and prefixes before Stop. Existing socket claims bind admitted plaintext, historically selected key and peer, ciphertext and the endpoint actually read at send; T3 supplies converse append coverage. Successful splice or new keepalive is the admission boundary. `original_transmit_refusal_charged_once` separately preserves the named early errno and one charge per invocation, independent of GSO length. Pending work need not complete. The claim is over the mirror projection, not C memory or cryptographic correctness. Current at `1f766662` within the C1/C3 scope; the aggregate gate awaits the C2 carry. |
-| T3 authenticated effects and silence | Complete and validated. `AuthenticatedEffects.initialized_silence_security_outcome` combines every native append’s own authorization, rooted timer/work effects, latest own handshake admission, authenticated replay and packet-specific GRO delivery. The cookie exception uses actual load/MAC guards: at most one source-bound 64-byte reply per invocation, strictly smaller than its initialized input, without session effects. Refused initialized consumers preserve every WG field modulo map representation; MAC refusal masks only load/cookie-secret/rate-limit bookkeeping, and decryption names the exact pre-AEAD invalidation alternative. Consumer equality is at completed native cuts, retained through later outer Stop; internally stopped effects use prefix observations. No incoming invariant, funding, coherence or H1 premise remains. No global reply-rate, CPU, timing or cryptographic-unforgeability claim is made. |
-| T4 handshake replay resistance | Complete and validated. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Actual initialized stale initiation receipts are refused, restore all peer records and preserve sent data. The factored native continuation returns without a response from the exact receipt endpoint; it requires no separate ambient-history join. The final-journal exports also establish response-consumption and session-installation uniqueness by exchange epoch, and exactly one allocation from the same successful session receipt. Named C2 source assumptions stay visible. |
-| T5 responder confirmation | Complete and validated. `initialized_responder_confirmation_discipline` joins promotion-label uniqueness, each confirmation's own accepted transport cause and actual responder AEAD after confirmation of the same allocation. Initialized transport covers inner promotion receipts even when the enclosing receive later stops. `PendingPromotion.H1DriverFrames` and `H1ResponderCurrentEdges` remain named local C2 operational assumptions; no incoming carrier, reachability, funding or callback premise remains. |
-| T6 key retirement | Complete and validated. `reference_aware_retirement_outcome` packages unconditional native TX/RX checks, invalidation, exact age comparison, initialized R2 access and holder accounting, the session-derived zero timer, selected-arm provenance, actual dispatch and worker unpublication, retained material and final removal. Actual clock/worker runs and residual-reference conditions remain explicit. Universal native RX final release includes authenticated cleanup. No worker-latency or physical-zeroization claim is made. |
+| T1 nonce safety | **Validated over `1f766662`; lagging `218d3ffd`.** Complete and validated. `initialized_nonce_safety` joins unique native reservations, actual key-allocation/nonce pairs, bounded serialized AEAD nonces and exact packet/header encoding, including stopped prefixes. Universal native rejection contracts prove invalidation, whole-batch restoration and unchanged drop count; the native rekey contracts expose the guarded helper request. No incoming invariant or campaign-2 premise remains. |
+| T2 transmit authorization and conservation | **Validated over `1f766662`; lagging `218d3ffd`.** Proof and source audit closed; full validation passes on the review base. `initialized_transmit_source_conservation` derives `AccountOrRecords` from the original initialized source point, without an incoming invariant, semantic certificate or child-family premise. `transmit_source_children_are_closed` eliminates all five extension parameters. Each admitted ticket has one pending or terminal status; resident cells have native ownership and unique recorded backing or selected-ticket allocation aliases. Terminal receipts have exact cardinality. Native mutation intervals retain only their original pending record suffix on the same WG state; no arbitrary future history is allowed. The fixed source composition covers setup, dispatch, traffic, timers, scheduling, receive, configuration, lifecycle, dump and cleanup, including successful interiors and prefixes before Stop. Existing socket claims bind admitted plaintext, historically selected key and peer, ciphertext and the endpoint actually read at send; T3 supplies converse append coverage. Successful splice or new keepalive is the admission boundary. `original_transmit_refusal_charged_once` separately preserves the named early errno and one charge per invocation, independent of GSO length. Pending work need not complete. The claim is over the mirror projection, not C memory or cryptographic correctness. Validated mirror pin `1f766662` on base `eba3c2b6`; independent review and the separate `218d3ffd` mirror carry remain. |
+| T3 authenticated effects and silence | **Validated over `1f766662`; lagging `218d3ffd`.** Complete and validated. `AuthenticatedEffects.initialized_silence_security_outcome` combines every native append’s own authorization, rooted timer/work effects, latest own handshake admission, authenticated replay and packet-specific GRO delivery. The cookie exception uses actual load/MAC guards: at most one source-bound 64-byte reply per invocation, strictly smaller than its initialized input, without session effects. Refused initialized consumers preserve every WG field modulo map representation; MAC refusal masks only load/cookie-secret/rate-limit bookkeeping, and decryption names the exact pre-AEAD invalidation alternative. Consumer equality is at completed native cuts, retained through later outer Stop; internally stopped effects use prefix observations. No incoming invariant, funding, coherence or H1 premise remains. No global reply-rate, CPU, timing or cryptographic-unforgeability claim is made. |
+| T4 handshake replay resistance | **Validated over `1f766662`; lagging `218d3ffd`.** Complete and validated. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Actual initialized stale initiation receipts are refused, restore all peer records and preserve sent data. The factored native continuation returns without a response from the exact receipt endpoint; it requires no separate ambient-history join. The final-journal exports also establish response-consumption and session-installation uniqueness by exchange epoch, and exactly one allocation from the same successful session receipt. Named C2 source assumptions stay visible. |
+| T5 responder confirmation | **Validated over `1f766662`; lagging `218d3ffd`.** Complete and validated. `initialized_responder_confirmation_discipline` joins promotion-label uniqueness, each confirmation's own accepted transport cause and actual responder AEAD after confirmation of the same allocation. Initialized transport covers inner promotion receipts even when the enclosing receive later stops. `PendingPromotion.H1DriverFrames` and `H1ResponderCurrentEdges` remain named local C2 operational assumptions; no incoming carrier, reachability, funding or callback premise remains. |
+| T6 key retirement | **Validated over `1f766662`; lagging `218d3ffd`.** Complete and validated. `reference_aware_retirement_outcome` packages unconditional native TX/RX checks, invalidation, exact age comparison, initialized R2 access and holder accounting, the session-derived zero timer, selected-arm provenance, actual dispatch and worker unpublication, retained material and final removal. Actual clock/worker runs and residual-reference conditions remain explicit. Universal native RX final release includes authenticated cleanup. No worker-latency or physical-zeroization claim is made. |
 
-## T2 closure at `decb640d`
+## Rebase onto `eba3c2b6`
+
+The existing C3 carry replays as `8ec35a98`: thirty-nine modules, 58 lines
+retyped or adjusted on each side. Dump generation parameters use `UInt32`;
+route-generation reads use the word's numeric value, matching the mirror.
+No theorem or frame is added or removed by this carry, and no resource option
+changes. All four C3 result directories, including their terminal statements,
+match the pre-rebase head exactly. No additional C3 repair is needed.
+
+The earlier inherited-layer carry is subsumed by main's landed repair and
+is absent from the rebased commit series. All inherited proof files and the
+mirror match main. Register conflicts preserve main's current C1/C2 rows and
+C3's historical records. The old source pins remain available through
+`refs/archive/proofs-campaign-3-pre-eba3c2b6` for the historical recipes below.
+
+Validation at `da621504`: the full proof gate returned zero after 6677 build
+jobs and 2448 terminal declarations across nineteen roots. Axioms are limited
+to `propext`, `Classical.choice` and `Quot.sound`; token/import checks pass.
+All fifteen counterexample recipes returned zero, including the three C2
+recipes omitted from the earlier scoped run. No warning or error was emitted.
+Fresh full-root kernel replay returned zero. All 6738 frozen Lean source
+hashes match across replay. These are complete aggregate checks on the review
+base; the former fixed-width blocker is resolved.
+Reproduce these checks with:
+
+```sh
+capped -- scripts/in-bundle scripts/proof-gate
+capped -- scripts/in-bundle scripts/proof-counterexamples
+capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs
+```
+
+### Main advanced during validation
+
+[AGENT 2026-10-20] Keep this fixed-width handoff on its requested, fully
+validated `eba3c2b6` base. The concurrent `218d3ffd` landing changes the mirror's
+namespace-close and cleanup paths, parser domain and two-mode runner completion
+guard; carrying that change is a separate follow-on. Its integration record
+also assigns the now-refuted `NamespacePinPending` parser-acceptance recipe to
+campaign 2's follow-on. This report makes no passing-check claim for that newer
+mirror. All six C3 outcomes lag it until their source equations and frames are
+carried and the complete checks are repeated. No mirror finding is inferred
+from this unperformed carry.
+
+## Historical T2 closure at `decb640d`
+
+The following records the pre-rebase checkpoint. Its source is unchanged at
+rebased `85d707da`; the current aggregate status is recorded above.
 
 The final claim is
 [`initialized_transmit_source_conservation`](../Leanux/Proofs/WG/TransmitSecurity/Statements.lean),
@@ -96,14 +146,14 @@ raise SystemExit(replay['main']())
 PY_SCOPE
 ```
 
-These are scoped results, not an aggregate proof-gate pass. The known C2
-failures below still block the campaign's landing; C2 files and the mirror
-match main. All sixteen inherited carry files match `bc9f2dc5`. Two C3 carry
+These are scoped results, not an aggregate proof-gate pass. At that checkpoint the C2
+failures below blocked aggregate validation. Main `eba3c2b6` resolves them;
+current post-rebase validation is recorded above. All sixteen inherited carry files match `bc9f2dc5`. Two C3 carry
 files were subsequently extended for dump/socket source coverage, as recorded
 at source-130 and source-131. No new differential claim, mirror finding, merge
 to main or push accompanies this proof checkpoint.
 
-## Carry to main `1f766662`
+## Historical carry to main `1f766662`
 
 The inherited-layer carry is `bc9f2dc5`: sixteen C1 modules, with twenty-two
 repaired theorem declarations (twenty public, two private) and six source/data
@@ -125,7 +175,8 @@ This is **not an aggregate proof-gate pass**. The aggregate build exposed C2's
 `Config/DeviceDumpSource.lean:19,101` (`prevSeq0`/`prevSeq` still use `Nat`). The
 latter also produced downstream elaboration timeouts. That build was stopped
 after the failures; these are the known blockers, not an exhaustive C2 carry
-inventory. C2 remains untouched and its aggregate validation remains pending.
+inventory. C2 was untouched in this checkpoint. The subsequent carry landed on main
+at `eba3c2b6`; its current validation status is recorded above.
 
 The scoped build can be reproduced on this branch without selecting C2 roots:
 

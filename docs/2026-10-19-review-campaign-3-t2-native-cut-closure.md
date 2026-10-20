@@ -481,7 +481,9 @@ Source-146 `df291b67` joins the actual allocation adapter's getter, isolated com
 [AGENT 2026-10-20] The five proof-coverage findings are discharged by the
 fixed source composition and its native leaf refinements. The evidence below
 is a source/type audit, not a new independent review or a C simulation proof.
-The aggregate proof gate remains blocked by the separate C2 generation carry.
+The aggregate proof gate was blocked at this checkpoint by the separate C2
+generation carry. Main `eba3c2b6` subsequently supplied that carry; the rebased
+C3 source is unchanged. Current validation is in the campaign report.
 
 1. **Normal and stopped interiors — fixed.** `Runner.Points.Point` follows the
    literal `executeShape`. Its right-bind constructors require the actual

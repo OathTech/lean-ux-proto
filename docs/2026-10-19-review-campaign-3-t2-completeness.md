@@ -310,5 +310,6 @@ dispositions normal/Stop coverage, every caller family and the native mutation
 intervals separately; the parameter equality does not substitute for that
 audit. Existing socket binding and T3 append coverage join conservation to
 actual authorized egress. Pending ownership is retained, not a promise of
-future completion. The aggregate campaign gate still awaits the C2 carry;
-scoped validation is reported in the campaign report.
+future completion. The aggregate campaign gate awaited the C2 carry at this checkpoint. Main
+`eba3c2b6` supplies it without changing C3's proof sources; current post-rebase
+validation is reported in the campaign report.
