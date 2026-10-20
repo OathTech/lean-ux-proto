@@ -836,3 +836,57 @@ timeout while Lean tried to infer a natural address from a UInt64 bit-vector
 expression. Using the explicit natural-address representation repaired that
 timeout without increasing any limit. No KILLED run occurred. The README's
 stale description of the wrap witness as still failing was corrected.
+
+
+## Shared returns and the next tested segment (07:47 UTC)
+
+`Return.add_checked` and `Return.wrapper_checked` prove the compiled epilogues
+of `add` and both public insertion wrappers through their actual RET. The
+executable summaries read the current saved words and predict the complete
+register file, return PC and unchanged memory. This adds 21 epilogue
+instructions, with no new completed function. Both wrapper proofs share the
+four-pop suffix and the return instruction proof.
+
+`Return.finish_checked` composes the final coverage call with the `add`
+epilogue. Given the current saved-word reads, existing callback readiness and
+read/write separation, it preserves the completed mutation's full allowed-IPs
+reconstruction and heap assertion, exports the coverage context and byte
+frame, and returns the predicted result, stack and callee-saved registers.
+Caller scratch registers remain unconstrained across the callback. It reuses
+the named `TracePcContract`; `TrustBase.lean` is unchanged. The theorem does
+not yet show the complete insertion body establishes these resources.
+
+The runner now checks the same summaries before and after that callback and
+through both epilogues, on every insertion outcome. Generated execution passes
+180 return segments across 66 sequence insertions/66 retained-heap lookups and
+24 isolated root insertions/lookups. The final generated run takes 3.384
+seconds. The recorded three-way run with the return checks passes eight calls
+and two seeds, with 170 coverage entries, 64 comparisons and 117 decisions, in
+0.288 seconds. Actual captured first insertion passes both seeds, each with
+two checked return segments, 254 interpreted instructions and 822,856 compared
+endpoint bytes. Generic allocator execution is still a captured substitution.
+
+The return work adds four modules, 351 lines. Its 1,088-job default build is
+warning-free, explicit axiom prints use only the standard three axioms, fresh
+`leanchecker --fresh AllowedipsInsertionSurface` passes, and the reviewed
+printed-surface diff passes. The fast tier passes 137 tests, one skipped, in
+23.894 seconds. No external export acceptance is claimed.
+
+A symbolic simplification attempt timed out at Lean's default heartbeat limit.
+Splitting the wrapper stack adjustment from the common pop suffix eliminated
+that failure without a resource-limit increase. Syntax/type errors and unused
+simp arguments were repaired before the successful checks. No KILLED run
+occurred.
+
+The next tested definition is `NodeInit.effect`, the nonempty-trie allocation
+tail from `Add+0x156` to `Add+0x1ff`. It follows the actual ordered list stores,
+three saved selector bytes, packed header and both key-copy paths. It passes
+30 generated segments, including insertions that later take rollback. The
+The updated recorded three-way check also passes eight calls and both seeds;
+the final default build passes 1,089 jobs without warnings. The proof closure
+is unchanged by this runtime-only addition. The summary checks physical memory
+and the registers required by publication; it
+is not yet a proved segment, and no nonempty insertion capture is claimed.
+The physical proof and subsequent child/covering/intermediate-node linkage
+remain open, alongside entry setup, allocator contracts and failure/rollback
+composition. A and B remain open, with zero new completed functions.

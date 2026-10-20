@@ -8,6 +8,9 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 HEADLINES = [
+    'Binary.Pair.Allowedips.Return.finish_checked',
+    'Binary.Pair.Allowedips.Return.add_checked',
+    'Binary.Pair.Allowedips.Return.wrapper_checked',
     'Binary.Pair.Allowedips.Root.initialization_checked',
     'Binary.Pair.Allowedips.Root.effect_segment',
     'Binary.Pair.Allowedips.Exact.assignment_from_relation',
@@ -73,6 +76,9 @@ IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'Allo
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
     'Binary.Pair.Allowedips.Root.Writes',
+    'Binary.Pair.Allowedips.Return.saved', 'Binary.Pair.Allowedips.Return.addEffect',
+    'Binary.Pair.Allowedips.Return.wrapperEffect', 'Binary.Pair.Allowedips.Return.observed',
+    'Binary.Pair.Allowedips.Return.Writes',
     'Binary.Pair.Allowedips.Root.boundary', 'Binary.Pair.Allowedips.Root.writeSpans', 'Binary.Pair.Allowedips.Root.InitWrites',
     'Binary.Pair.Allowedips.Names.allocated', 'Binary.Pair.Allowedips.Root.nodeOffsets',
     'Leanux.Proofs.WG.AllowedIps.emptyInstalled',

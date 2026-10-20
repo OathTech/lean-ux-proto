@@ -1,4 +1,56 @@
 HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
+Binary.Pair.Allowedips.Return.finish_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      ∀ {names : Binary.Pair.Allowedips.Names} {o : AllowedipsProbe.Offsets} {d : Leanux.WG.Device} {s : MachineData}
+        {regs : Reg64s} {pc : Int64} (c : Binary.CommonBitsCoverage.Context),
+        Binary.CommonBitsCoverage.CallsReady c s →
+          Eq.{1} (Binary.Pair.Allowedips.Return.addEffect s) (Except.ok.{0, 0} (Prod.mk.{0, 0} regs pc)) →
+            (∀ (offset : Nat),
+                Membership.mem.{0, 0}
+                    (List.cons.{0} 48
+                      (List.cons.{0} 56
+                        (List.cons.{0} 64
+                          (List.cons.{0} 72 (List.cons.{0} 80 (List.cons.{0} 88 (List.cons.{0} 96 List.nil.{0})))))))
+                    offset →
+                  ∀ (a : BitVec 64),
+                    Binary.InRange (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toBitVec (BitVec.ofNat 64 offset)) 8 a →
+                      ¬Binary.Pair.Allowedips.Return.Writes s c a) →
+              Binary.Pair.Allowedips.Corresponds names o s.dmem d →
+                Eq.{1} (Binary.Pair.Allowedips.heap names (Binary.Pair.Allowedips.target d) s.dmem)
+                    (Except.ok.{0, 0} ()) →
+                  (∀ (span : Binary.Pair.Span),
+                      Membership.mem.{0, 0} (Binary.Pair.Allowedips.readSpans names o) span →
+                        ∀ (a : BitVec 64), span.contains a → ¬Binary.Pair.Allowedips.Return.Writes s c a) →
+                    Eventually (Binary.instructionStep fetch)
+                      (fun t =>
+                        Eq.{1} t.pc pc ∧
+                          Eq.{1} (Binary.Pair.Allowedips.Return.observed t.data.regs)
+                              (Binary.Pair.Allowedips.Return.observed regs) ∧
+                            c.At t.data.dmem ∧
+                              Binary.EqualOutside (Binary.Pair.Allowedips.Return.Writes s c) s.dmem t.data.dmem ∧
+                                Binary.Pair.Allowedips.Corresponds names o t.data.dmem d ∧
+                                  Eq.{1}
+                                    (Binary.Pair.Allowedips.heap names (Binary.Pair.Allowedips.target d) t.data.dmem)
+                                    (Except.ok.{0, 0} ()))
+                      { data := s, pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1353 }
+Binary.Pair.Allowedips.Return.add_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {s : MachineData} {regs : Reg64s} {pc : Int64},
+      Eq.{1} (Binary.Pair.Allowedips.Return.addEffect s) (Except.ok.{0, 0} (Prod.mk.{0, 0} regs pc)) →
+        Eventually (Binary.instructionStep fetch)
+          (fun t => Eq.{1} t.data.regs regs ∧ Eq.{1} t.data.dmem s.dmem ∧ Eq.{1} t.pc pc)
+          { data := s, pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1358 }
+Binary.Pair.Allowedips.Return.wrapper_checked : ∀ (v4 : Bool) (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {s : MachineData} {regs : Reg64s} {pc : Int64},
+      Eq.{1} (Binary.Pair.Allowedips.Return.wrapperEffect v4 s) (Except.ok.{0, 0} (Prod.mk.{0, 0} regs pc)) →
+        Eventually (Binary.instructionStep fetch)
+          (fun t => Eq.{1} t.data.regs regs ∧ Eq.{1} t.data.dmem s.dmem ∧ Eq.{1} t.pc pc)
+          { data := s,
+            pc :=
+              ite.{1} (Eq.{1} v4 true) (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Insert4.entry 66)
+                (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Insert6.entry 79) }
 Binary.Pair.Allowedips.Root.initialization_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
     ∀ {names : Binary.Pair.Allowedips.Names} {world : Leanux.World} {machine : MachineState} {key cidr pid : Nat},
@@ -1020,6 +1072,55 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
 def Binary.Pair.Allowedips.Root.Writes : Binary.Pair.Allowedips.Names → Nat → Nat → BitVec 64 → Prop :=
 fun names base slot a => Binary.Pair.Allowedips.ListWrites names a ∨ Binary.Pair.Allowedips.Root.InitWrites base slot a
+def Binary.Pair.Allowedips.Return.saved : MachineData → Nat → Except.{0, 0} String UInt64 :=
+fun s offset =>
+  Functor.map.{0, 0} UInt64.ofNat
+    (readNat { data := s, pc := 0 } (HAdd.hAdd.{0, 0, 0} s.regs.rsp.toBitVec (BitVec.ofNat 64 offset)).toNat 8)
+def Binary.Pair.Allowedips.Return.addEffect : MachineData → Except.{0, 0} String (Prod.{0, 0} Reg64s Int64) :=
+fun s => do
+  let bx ← Binary.Pair.Allowedips.Return.saved s 48
+  let bp ← Binary.Pair.Allowedips.Return.saved s 56
+  let r12 ← Binary.Pair.Allowedips.Return.saved s 64
+  let r13 ← Binary.Pair.Allowedips.Return.saved s 72
+  let r14 ← Binary.Pair.Allowedips.Return.saved s 80
+  let r15 ← Binary.Pair.Allowedips.Return.saved s 88
+  let ra ← Binary.Pair.Allowedips.Return.saved s 96
+  pure.{0, 0}
+      (Prod.mk.{0, 0}
+        (have __src := s.regs;
+        { rax := { toBitVec := BitVec.setWidth 64 (s.regs.get (Reg.low Reg64.rbx Width.W32)) }, rbx := bx,
+          rcx := __src.rcx, rdx := __src.rdx, rsi := __src.rsi, rdi := __src.rdi,
+          rsp := HAdd.hAdd.{0, 0, 0} s.regs.rsp 104, rbp := bp, r8 := __src.r8, r9 := __src.r9, r10 := __src.r10,
+          r11 := __src.r11, r12 := r12, r13 := r13, r14 := r14, r15 := r15 })
+        (Int64.ofBitVec ra.toBitVec))
+def Binary.Pair.Allowedips.Return.wrapperEffect : Bool →
+  MachineData → Except.{0, 0} String (Prod.{0, 0} Reg64s Int64) :=
+fun v4 s =>
+  have locals := ite.{1} (Eq.{1} v4 true) 8 16;
+  do
+  let bx ← Binary.Pair.Allowedips.Return.saved s locals
+  let bp ← Binary.Pair.Allowedips.Return.saved s (HAdd.hAdd.{0, 0, 0} locals 8)
+  let r12 ← Binary.Pair.Allowedips.Return.saved s (HAdd.hAdd.{0, 0, 0} locals 16)
+  let r13 ← Binary.Pair.Allowedips.Return.saved s (HAdd.hAdd.{0, 0, 0} locals 24)
+  let ra ← Binary.Pair.Allowedips.Return.saved s (HAdd.hAdd.{0, 0, 0} locals 32)
+  pure.{0, 0}
+      (Prod.mk.{0, 0}
+        (have __src := s.regs;
+        { rax := __src.rax, rbx := bx, rcx := __src.rcx, rdx := __src.rdx, rsi := __src.rsi, rdi := __src.rdi,
+          rsp := HAdd.hAdd.{0, 0, 0} s.regs.rsp (UInt64.ofNat (HAdd.hAdd.{0, 0, 0} locals 40)), rbp := bp,
+          r8 := __src.r8, r9 := __src.r9, r10 := __src.r10, r11 := __src.r11, r12 := r12, r13 := r13, r14 := __src.r14,
+          r15 := __src.r15 })
+        (Int64.ofBitVec ra.toBitVec))
+def Binary.Pair.Allowedips.Return.observed : Reg64s → List.{0} UInt64 :=
+fun regs =>
+  List.cons.{0} regs.rax
+    (List.cons.{0} regs.rsp
+      (List.cons.{0} regs.rbx
+        (List.cons.{0} regs.rbp
+          (List.cons.{0} regs.r12
+            (List.cons.{0} regs.r13 (List.cons.{0} regs.r14 (List.cons.{0} regs.r15 List.nil.{0})))))))
+def Binary.Pair.Allowedips.Return.Writes : MachineData → Binary.CommonBitsCoverage.Context → BitVec 64 → Prop :=
+fun s c a => Binary.InRange (HSub.hSub.{0, 0, 0} s.regs.rsp.toBitVec 8) 8 a ∨ c.writes a
 def Binary.Pair.Allowedips.Root.boundary : Binary.Pair.Allowedips.Names →
   AllowedipsProbe.Offsets → Leanux.World → MachineState → Nat → Nat → Nat → Except.{0, 0} String Unit :=
 fun names o world machine key cidr pid => do
