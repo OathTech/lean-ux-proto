@@ -230,6 +230,16 @@ refuted pending disposition; the global termination obligation stays open.
 
 ## 5. Account for retained namespace-pin aliases at cleanup
 
+Current disposition (2026-10-20): the mirror lane has implemented explicit
+fixture-domain refusal on `task/netns-pin` through `3a4e62dd`; that branch is
+not yet included in main `1f766662` or this proof carry. The parser reserves
+literal descriptors 8 and 9 for the foreign-creator fixture, and 8 for a
+stepped dump. Namespace close requires that releasing the pin actually queued
+cleanup, and operation completion refuses a pending unit in both record
+modes. These changes address the early teardown as well as the later pending
+bit. Settlement and a corrected-refusal recipe await the landing and proof
+carry; the acceptance evidence below remains pinned to the earlier mirror.
+
 Status: open Rule Zero clause-1 mirror/environment defect over `1a69cebb`,
 with an accepted initialized placeholder counterexample. The foreign fixture
 permits `dup(9)`, its single `wg_netns_close`, then `close(ref 0)` at the

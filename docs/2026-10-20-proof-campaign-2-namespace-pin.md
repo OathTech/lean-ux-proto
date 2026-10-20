@@ -1,5 +1,13 @@
 # H5: namespace-pin alias tears down early and leaves cleanup pending
 
+Current disposition (2026-10-20): the mirror-lane fix on `task/netns-pin`
+through `3a4e62dd` rejects aliases of fixture-held literal descriptors,
+requires queued cleanup before namespace teardown, and checks pending work
+at operation completion in both record modes. It is not yet on main
+`1f766662`. The historical acceptance recipe remains applicable to that
+main revision; after landing it must become a checked refusal regression.
+See [request 5](2026-10-14-campaign-2-mirror-requests.md#5-account-for-retained-namespace-pin-aliases-at-cleanup).
+
 Status: reproduced against main `3308c49a` and again after the carry to
 main `1a69cebb`. This is a Rule Zero clause-1 mirror/environment defect:
 premature teardown at operation 1, followed by unserviced pending cleanup at

@@ -8,8 +8,72 @@ generations invalidate the Nat-typed source adapters. All six result rows
 retain their last validated pin `1a69cebb` and are marked lagging while
 shared dependencies and the owned Config contracts are carried. Existing
 shared lemmas remain campaign 1’s responsibility; no mirror changes are made.
-The namespace-pin fix is still on `task/netns-pin`, not main, so request 5
-is not yet marked settled. The validated landing summary follows.
+The namespace-pin fix through `task/netns-pin` at `3a4e62dd` is not yet on
+main. Request 5 records that implemented disposition while retaining the
+historical acceptance witness until the landing and regression carry.
+
+The owned carry changes dump-generation binders and saved header fields to
+UInt32, including the public `original_cursor_callback_normal` parameter,
+and retypes the timer send-configuration projection's generation field.
+Room, flags, lengths, identifiers and the IPv4 route-cache value after
+`rtGenid4.toNat` remain Nat. Existing field-typed allowed-IP expressions
+already follow UInt64. No premise, conclusion or modeled outcome is weakened;
+there is no no-wrap premise. Three dump comments now describe the exact
+nonzero-saved-word comparison, including possible generation aliasing at wrap.
+
+Two scalar readback proofs previously discharged selector equality by `rfl`.
+After the word change they hit deterministic `whnf` heartbeat limits:
+`scalar_outer_get_after_set` at 1,000,000 and
+`scalarSocketReadback_source` at 800,000. A narrow simplification of `byIndex`
+and the nested device updates closes each in under a second, with unchanged
+statements and limits. No shared lemma or mirror file is edited.
+
+Validation of the independent owned closure passes: 1,161 modules selected
+from H1–H6, 267 maximal targets and 1,372 Lake jobs. All 31 theorems in the
+15 changed modules within that closure have only the three permitted
+standard axioms; that checked carry is committed as `56d3fba1`. Two
+additional retyped owned files are preserved on a separate WIP commit: Config's
+`DumpInvariantSource.lean` and `Statements.lean`, still depend on the shared
+carry and are not claimed validated. The excluded shared failures are:
+
+| Shared module under `Leanux/Proofs/WG/` | Remaining carry |
+| --- | --- |
+| `NetlinkDump/DeviceSource` | Dump prior-generation binders from Nat to UInt32. |
+| `AllowedIps/RemovalPeer` | The empty-removal sequence equality must use UInt64 addition by zero. |
+| `Keypairs/Frames/WGMore` | Dump frame generation binders from Nat to UInt32. |
+| `Lifetimes/SocketSend4` | Source factors must read the route generation through `UInt32.toNat`, as the mirror does. |
+
+The full gate was run with `LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped --
+scripts/in-bundle scripts/proof-gate`. It failed its build check (one gate
+finding), reporting those four shared modules and the subsequently repaired
+`ScalarSocketReadbackSource`. The forbidden-token and import/target checks
+completed without findings; the terminal axiom stage was skipped because the
+build failed. Initial scoped builds and an axiom attempt that still imported
+the blocked `DumpInvariantSource` also failed; the final scoped build and
+31-theorem axiom check above are the corrected, explicitly narrower checks.
+These are source/scope corrections, not infrastructure reruns. No KILLED
+banner, guest timeout, resource-limit increase or infrastructure rerun occurred.
+
+The requested `LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped --
+scripts/in-bundle scripts/proof-counterexamples` also fails: 13 recipes pass
+and two cannot import their missing shared build products (`w7-full-ring`
+needs `Lifetimes/SocketSend4`, and `h1-confirmation-incarnations` needs
+`Keypairs/Frames/WGMore`). This diagnostic run does not replace the required
+run after the full tree builds. The namespace-pin acceptance recipe still
+passes on `1f766662`, as expected before its mirror fix lands.
+
+| Result | Register status | Carry state |
+| --- | --- | --- |
+| H1 Noise | Lagging; last validated mirror `1a69cebb` | Owned independent closure passes; whole-run imports await the shared carry. |
+| H2 session indices | Lagging; last validated mirror `1a69cebb` | Owned independent closure passes; whole-run imports await the shared carry. |
+| H3 roaming | Lagging; last validated mirror `1a69cebb` | Owned independent closure passes; whole-run imports await the shared carry. |
+| H4 configuration | Lagging; last validated mirror `1a69cebb` | Word-typed interfaces and both selector proofs carried; the two dependent files above await validation. |
+| H5 progress | Lagging; last validated mirror `1a69cebb` | Finite evaluation is unchanged; shared carry and request 5's landed refusal regression remain outstanding. |
+| H6 timers | Lagging; last validated mirror `1a69cebb` | Send projection retyped and independently checked; whole-run imports await the shared carry. |
+
+The campaign has already landed. This follow-on cannot receive a full current
+pin until campaign 1's shared repair is available; no completion estimate is
+assigned to that external dependency. The validated landing summary follows.
 
 The six summaries below describe the landing scope over `1a69cebb` and
 supersede broader completion wording in the dated history. The
