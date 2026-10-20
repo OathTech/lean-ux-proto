@@ -15,6 +15,7 @@ inductive Site where
   | returned
   | interior
   | newlink
+  | metadata | routing | checkNative
   | left (site : Site)
   | right (site : Site)
   | marked (label : Label) (site : Site)
@@ -27,6 +28,14 @@ inductive Point (inside : ChildPoints) : {α : Type} → {action : PrefixM Event
       Point inside shape w h .returned u middle
   | newlink {w : World} (point : DeviceCreation.Point w.wg w.ambient v b) :
       Point inside (.native .newlink) w h .newlink {w with wg:=v,ambient:=b} h
+  | metadata {α : Type} {body : WG.M α} {source : PeerMetadata.Shape body}
+      {w : World} (point : PeerMetadata.Point source w.wg w.ambient v b) :
+      Point inside (.native (.metadata body source)) w h .metadata {w with wg:=v,ambient:=b} h
+  | routing {α : Type} {body : WG.M α} {source : Routing.Shape body}
+      {w : World} (point : Routing.Point source w.wg w.ambient v b) :
+      Point inside (.native (.routing body source)) w h .routing {w with wg:=v,ambient:=b} h
+  | checkNative {w : World} (point : PeerMetadata.Point PeerMetadata.checkDestructShape w.wg w.ambient v b) :
+      Point inside (.native .check) w h .checkNative {w with wg:=v,ambient:=b} h
   | interior (token : Child action) (point : inside _ _ token w h u middle) :
       Point inside (.child token) w h .interior u middle
   | left {body : PrefixM Event α} {next : α → PrefixM Event β}
@@ -79,6 +88,9 @@ theorem Point.coverage (contracts : ChildContracts native inside Good)
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
   | newlink point => exact .newlink point
+  | metadata point => exact .metadata point
+  | routing point => exact .routing point
+  | checkNative point => exact .checkNative point
   | interior token point => exact .interior token ((contracts.at token).coverage _ _ _ _ point)
   | left tail point ih => exact .left tail ih
   | right head tail leading point ih => exact .right head tail leading ih
@@ -95,6 +107,15 @@ theorem Point.safe (accountGood : ∀ h w, Account h w → Good h w)
   | newlink point =>
     obtain ⟨ledger,start,creating⟩:=before
     exact accountGood _ _ ⟨ledger,point.accounted creating⟩
+  | metadata point =>
+    obtain ⟨ledger,account⟩:=before
+    exact accountGood _ _ ⟨ledger,account.same_view point.frame⟩
+  | routing point =>
+    obtain ⟨ledger,account⟩:=before
+    exact accountGood _ _ ⟨ledger,account.same_view point.frame⟩
+  | checkNative point =>
+    obtain ⟨ledger,holders,entry⟩:=before
+    exact accountGood _ _ ⟨ledger,entry.accounted.same_view point.frame⟩
   | interior token point => exact (contracts.at token).safe _ _ _ _ before point
   | left tail point ih => exact ih before.1
   | right head tail leading point ih => exact ih (before.2 _ _ _ leading)

@@ -16,6 +16,17 @@ inductive Residual {native inside : ChildPoints} {Good : History → World → P
       Residual children shape w h .returned u middle (pure value)
   | newlink {w : World} (point : DeviceCreation.Point w.wg w.ambient v b) :
       Residual children (.native .newlink) w h .newlink {w with wg:=v,ambient:=b} h (DeviceCreation.remainder h point)
+  | metadata {α : Type} {body : WG.M α} {source : PeerMetadata.Shape body}
+      {w : World} (point : PeerMetadata.Point source w.wg w.ambient v b) :
+      Residual children (.native (.metadata body source)) w h .metadata {w with wg:=v,ambient:=b} h
+        (metadataRemainder h point)
+  | routing {α : Type} {body : WG.M α} {source : Routing.Shape body}
+      {w : World} (point : Routing.Point source w.wg w.ambient v b) :
+      Residual children (.native (.routing body source)) w h .routing {w with wg:=v,ambient:=b} h
+        (routingRemainder h point)
+  | checkNative {w : World} (point : PeerMetadata.Point PeerMetadata.checkDestructShape w.wg w.ambient v b) :
+      Residual children (.native .check) w h .checkNative {w with wg:=v,ambient:=b} h
+        (metadataRemainder h point)
   | interior (token : Child action) (point : native _ _ token w h u middle) :
       Residual children (.child token) w h .interior u middle
         ((children.at token).remainder w h u middle point)
@@ -41,6 +52,9 @@ theorem Point.residual (children : ChildContracts native inside Good)
   | entry shape => exact ⟨_,.entry shape⟩
   | returned shape performed => exact ⟨_,.returned shape performed⟩
   | newlink point => exact ⟨_,.newlink point⟩
+  | metadata point => exact ⟨_,.metadata point⟩
+  | routing point => exact ⟨_,.routing point⟩
+  | checkNative point => exact ⟨_,.checkNative point⟩
   | interior token point => exact ⟨_,.interior token point⟩
   | left tail point ih =>
       obtain ⟨remaining,residual⟩ := ih
@@ -58,6 +72,9 @@ theorem Residual.point (residual : Residual children shape w h site u middle rem
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
   | newlink point => exact .newlink point
+  | metadata point => exact .metadata point
+  | routing point => exact .routing point
+  | checkNative point => exact .checkNative point
   | interior token point => exact .interior token point
   | left tail remaining ih => exact .left tail ih
   | right head tail leading remaining ih => exact .right head tail leading ih
@@ -71,6 +88,9 @@ theorem Residual.run {α : Type} {action : PrefixM Event α} {shape : Shape acti
   | entry shape => rfl
   | returned shape performed => exact performed.trans (runPrefix_pure _ _ _).symm
   | newlink point => exact DeviceCreation.remainder_run _ point
+  | metadata point => exact metadataRemainder_run _ point
+  | routing point => exact routingRemainder_run _ point
+  | checkNative point => exact metadataRemainder_run _ point
   | interior token point => exact (children.at token).continuation _ _ _ _ point
   | left tail remaining ih => simp only [runPrefix_bind,ih]
   | right head tail leading remaining ih => rw [runPrefix_bind,leading]; exact ih

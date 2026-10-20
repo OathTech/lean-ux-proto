@@ -2,8 +2,8 @@ import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedLifecyclePoint
 
 /-! Canonical witnesses expand the original lifecycle binds and saved peer
 traversals. The five children are only the actual staging/keepalive, drain,
-purge and release callbacks. Newlink has a dedicated source-point relation. Other native atoms, including
-the destructor check, keep their finer coverage boundary explicit. -/
+purge and release callbacks. Newlink, ordinary WG metadata, routing cleanup
+and the destructor check retain their original native source interiors. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Lifecycle.Points
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open TransmitSecurity RetirementSecurity CausalJournal HandshakeSecurity Driver
@@ -68,6 +68,16 @@ theorem observer_list (xs : List ι) (initial : σ) (body : ι → σ → WGPref
     funext decision
     cases decision <;> simp only [liftWGObserver_pure,ih]
 
+macro "lifecycle_metadata_shape" : tactic => `(tactic| first
+  | (metadata_source_head socketInit; exact PeerMetadata.socketInitShape _)
+  | (metadata_source_head socketReinit; exact PeerMetadata.socketReinitShape _ _)
+  | (metadata_source_head handshakeClear; exact PeerMetadata.clearHandshakeShape _)
+  | (metadata_source_head keypairsClear; exact PeerMetadata.clearKeypairsShape _)
+  | (metadata_source_head resetLastSentHandshake; exact PeerMetadata.resetHandshakeShape _)
+  | (metadata_source_head TxWork.Destruct.settle; exact PeerMetadata.settleDestructShape)
+  | (metadata_source_head retireDeviceUnits; exact PeerMetadata.retireUnitsShape)
+  | lifecycle_metadata_step)
+
 macro "lifecycle_shape_step" : tactic => `(tactic| first
   | (lifecycle_shape_head Pure.pure; exact .pure _)
   | (lifecycle_shape_head Bind.bind; apply Shape.bind)
@@ -78,9 +88,9 @@ macro "lifecycle_shape_step" : tactic => `(tactic| first
   | (lifecycle_native_head wgNewlink; exact .native .newlink)
   | (lifecycle_native_head TxWork.Destruct.check; exact .native .check)
   | (lifecycle_native_head modify; exact .native .erase)
-  | (lifecycle_wg_atom; solve | (refine .native (.quiet _ (wg_frame _ ?_)); solve | entry_lifecycle_native))
-  | (lifecycle_wg_atom; solve | exact .native (.quiet _ (wg_frame _ RetiredFrames.settle)))
-  | (lifecycle_wg_atom; solve | exact .native (.quiet _ (wg_frame _ (TimerFrames.store retireDeviceUnits_sameWGStore))))
+  | (lifecycle_native_head peerMakeDead; exact .native (.routing _ (Routing.deadShape _)))
+  | (lifecycle_native_head WG.free; exact .native (.routing _ Routing.freeShape))
+  | (lifecycle_wg_atom; refine .native (.metadata _ ?_); repeat' lifecycle_metadata_shape)
   | (lifecycle_shape_head liftPrefix; solve | exact .native (.quiet _ (by
       apply (ProjectedAction.iff_run _ _ _).mpr
       intro w value v run
@@ -124,15 +134,15 @@ noncomputable def openedShape : Shape (liftWGObserver (openObserved hooks)) := b
   apply Shape.marked .opened
   unfold openObserved FixtureEffects.openObserved FixtureEffects.openWith
   simp only [liftWGObserver_bind,liftWGObserver_lift]
-  apply Shape.bind (.native (.quiet _ (wg_frame _ (TimerFrames.store getDev_sameWGStore))))
+  apply Shape.bind (.native (.metadata _ (by repeat' lifecycle_metadata_shape)))
   intro dev
   apply Shape.bind (.native (.quiet _ (wg_frame _ (TimerFrames.branch_frame _ _))))
   intro _
   apply Shape.bind (.native (.quiet _ (wg_frame _ (TimerFrames.branch_frame _ _))))
   intro _
-  apply Shape.bind (.native (.quiet _ (wg_frame _ (TimerFrames.store getDev_sameWGStore))))
+  apply Shape.bind (.native (.metadata _ (by repeat' lifecycle_metadata_shape)))
   intro d
-  apply Shape.bind (.native (.quiet _ (wg_frame _ (ControlFrames.socket (socketInit_sameSocket _)))))
+  apply Shape.bind (.native (.metadata _ (PeerMetadata.socketInitShape _)))
   intro ret
   apply Shape.bind (.native (.quiet _ (wg_frame _ (TimerFrames.branch_frame _ _))))
   intro failed
@@ -146,7 +156,7 @@ noncomputable def openedShape : Shape (liftWGObserver (openObserved hooks)) := b
       intro _
       apply Shape.bind (.child (.family (.staging pid)))
       intro _
-      apply Shape.bind (.native (.quiet _ (wg_frame _ (TimerFrames.store (CompleteProduct.peer_read_store pid)))))
+      apply Shape.bind (.native (.metadata _ (.access (PeerMetadata.readShape pid))))
       intro peer
       apply Shape.bind (.native (.quiet _ (wg_frame _ (TimerFrames.branch_frame _ _))))
       intro kept

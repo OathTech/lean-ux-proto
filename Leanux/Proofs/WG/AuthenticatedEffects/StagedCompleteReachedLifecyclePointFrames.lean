@@ -24,6 +24,8 @@ theorem wg_frame (body : WG.M α) (frame : WGFrame body) :
 
 def Native.Entry : {α : Type} → {body : PrefixM Event α} → Native body → History → World → Prop
   | _,_,.quiet ..,h,w => Account h w
+  | _,_,.metadata ..,h,w => Account h w
+  | _,_,.routing ..,h,w => Account h w
   | _,_,.setup,h,w => ∃ledger,CompleteCarrier.Accounted h ledger [] [] w.wg ∧ w.wg.dev=none
   | _,_,.newlink,h,w => ∃ledger start,Creating h ledger start w.wg
   | _,_,.erase,h,w => ∃ledger,CompleteCarrier.Accounted h ledger [] [] w.wg ∧ Retired.NoPending ledger
@@ -32,6 +34,8 @@ def Native.Entry : {α : Type} → {body : PrefixM Event α} → Native body →
 theorem Native.entry_account (token : Native body) (before : token.Entry h w) : Account h w := by
   cases token with
   | quiet => exact before
+  | metadata => exact before
+  | routing => exact before
   | setup => exact ⟨before.choose,before.choose_spec.1⟩
   | newlink => obtain ⟨ledger,start,creating⟩ := before; exact ⟨ledger,creating.account⟩
   | erase => exact ⟨before.choose,before.choose_spec.1⟩
@@ -64,6 +68,14 @@ theorem Native.normal (token : Native body) (before : token.Entry h w)
     obtain ⟨ledger,account⟩ := before
     exact ⟨ledger,account.same_view ((ProjectedAction.iff_run _ _ _).mp frame _ _ _
       (congrArg Prod.fst performed))⟩
+  | metadata action source =>
+    obtain ⟨ledger,account⟩ := before
+    exact lift_normal action (fun _ _ _ run=>⟨ledger,account.same_view
+      ((ProjectedAction.iff_run_ambient _ _ _).mp source.frame _ _ _ _ _ run)⟩) performed
+  | routing action source =>
+    obtain ⟨ledger,account⟩ := before
+    exact lift_normal action (fun _ _ _ run=>⟨ledger,account.same_view
+      ((ProjectedAction.iff_run_ambient _ _ _).mp source.frame _ _ _ _ _ run)⟩) performed
   | setup =>
     obtain ⟨ledger,account,absent⟩ := before
     apply lift_normal _ (fun result v a run=>?_) performed

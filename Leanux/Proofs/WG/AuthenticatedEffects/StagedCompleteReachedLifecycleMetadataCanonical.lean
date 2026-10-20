@@ -65,4 +65,8 @@ noncomputable def pubkeyAllocShape : Shape pubkeyHashtableAlloc := by
   unfold pubkeyHashtableAlloc
   repeat' lifecycle_metadata_step
 
+noncomputable def retireUnitsShape : Shape retireDeviceUnits := by
+  unfold retireDeviceUnits
+  repeat' lifecycle_metadata_step
+
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.PeerMetadata

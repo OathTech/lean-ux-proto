@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeviceCreationFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRoutingCanonical
 
 /-! A fixed source witness, not an existential factorization, determines
 lifecycle points. Native tokens carry concrete projection frames. Transition
@@ -12,10 +13,34 @@ abbrev Result (α : Type) := Except Stop (α × World)
 inductive Native : {α : Type} → PrefixM Event α → Type 1 where
   | quiet (action : Leanux.M α)
       (frame : SameView (fun w : World => StagedEntry.view w.wg) action) : Native (liftPrefix action)
+  | metadata (action : WG.M α) (source : PeerMetadata.Shape action) : Native (liftPrefix (liftWG action))
+  | routing (action : WG.M α) (source : Routing.Shape action) : Native (liftPrefix (liftWG action))
   | setup : Native (liftPrefix (liftWG wgSetup))
   | newlink : Native (liftPrefix (liftWG wgNewlink))
   | erase : Native (liftPrefix (liftWG (_root_.modify fun w : WGWorld => {w with dev:=none})))
   | check : Native (liftPrefix (liftWG TxWork.Destruct.check))
+
+noncomputable def metadataRemainder {α E : Type} {action : WG.M α} {source : PeerMetadata.Shape action}
+    {w : World} (h : List E) (point : PeerMetadata.Point source w.wg w.ambient v b) : PrefixM E α :=
+  Classical.choose (point.observed_remaining h)
+
+theorem metadataRemainder_run {α E : Type} {action : WG.M α} {source : PeerMetadata.Shape action}
+    {w : World} (h : List E) (point : PeerMetadata.Point source w.wg w.ambient v b) :
+    runPrefix (liftPrefix (liftWG action)) w h=
+      runPrefix (metadataRemainder h point) {w with wg:=v,ambient:=b} h := by
+  rw [←liftWGObserver_lift]
+  exact Classical.choose_spec (point.observed_remaining h)
+
+noncomputable def routingRemainder {α E : Type} {action : WG.M α} {source : Routing.Shape action}
+    {w : World} (h : List E) (point : Routing.Point source w.wg w.ambient v b) : PrefixM E α :=
+  Classical.choose (point.observed_remaining h)
+
+theorem routingRemainder_run {α E : Type} {action : WG.M α} {source : Routing.Shape action}
+    {w : World} (h : List E) (point : Routing.Point source w.wg w.ambient v b) :
+    runPrefix (liftPrefix (liftWG action)) w h=
+      runPrefix (routingRemainder h point) {w with wg:=v,ambient:=b} h := by
+  rw [←liftWGObserver_lift]
+  exact Classical.choose_spec (point.observed_remaining h)
 
 inductive Family where
   | staging (pid : PeerId)

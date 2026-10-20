@@ -10,6 +10,8 @@ open TransmitSecurity RetirementSecurity CausalJournal
 def Strong : {α : Type} → {action : PrefixM Event α} → Shape action → Prop
   | _,_,.pure _ => True
   | _,_,.native (.quiet body _) => CompleteProduct.Checked (liftPrefix body)
+  | _,_,.native (.metadata body _) => CompleteProduct.Checked (liftPrefix (liftWG body))
+  | _,_,.native (.routing body _) => CompleteProduct.Checked (liftPrefix (liftWG body))
   | _,_,.native _ => False
   | _,body,.child token => CompleteProduct.Checked body ∧ ∀ h w,CompleteProduct.Carrier h w → token.Entry h w
   | _,_,.bind head tail => Strong head ∧ ∀value,Strong (tail value)

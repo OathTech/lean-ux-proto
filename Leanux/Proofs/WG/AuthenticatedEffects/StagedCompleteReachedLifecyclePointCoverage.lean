@@ -7,7 +7,8 @@ import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedLifecyclePoint
 entry. Creation's temporary allocation metadata needs only the packet account;
 destruction retains the actual native reference/service companions until its check.
 Newlink includes its fixed native source interiors and epoch transition;
-other native atoms retain their explicit entry/returned boundary. Five deeper callback interiors remain explicit. The environment
+ordinary WG metadata, routing cleanup and the destructor check also retain
+their native interiors. Five deeper callback interiors remain explicit. The environment
 and descriptor-wrapper shapes are available separately, but their complete
 root phase certificates are not claimed by this core coverage theorem. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Lifecycle.Points
@@ -71,6 +72,15 @@ theorem boundary_carrier (before : Framed shape w h)
   | newlink point =>
     obtain ⟨ledger,start,creating⟩:=before
     exact ⟨ledger,point.accounted creating⟩
+  | metadata point =>
+    obtain ⟨ledger,account⟩:=before
+    exact ⟨ledger,account.same_view point.frame⟩
+  | routing point =>
+    obtain ⟨ledger,account⟩:=before
+    exact ⟨ledger,account.same_view point.frame⟩
+  | checkNative point =>
+    obtain ⟨ledger,holders,entry⟩:=before
+    exact ⟨ledger,entry.accounted.same_view point.frame⟩
   | interior _ impossible => cases impossible
   | left _ _ ih => exact ih before.1
   | right head _ leading _ ih => exact ih (before.2 _ _ _ leading)

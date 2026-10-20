@@ -41,6 +41,8 @@ theorem Framed.normal {shape : Shape action} (framed : Framed shape w h)
 def Ordinary : {α : Type} → {action : PrefixM Event α} → Shape action → Prop
   | _,_,.pure _ => True
   | _,_,.native (.quiet ..) => True
+  | _,_,.native (.metadata ..) => True
+  | _,_,.native (.routing ..) => True
   | _,_,.native _ => False
   | _,_,.child (.family (.staging _)) => False
   | _,_,.child (.family (.keepalive _)) => False
