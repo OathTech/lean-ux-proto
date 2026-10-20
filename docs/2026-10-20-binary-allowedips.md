@@ -40,8 +40,11 @@ and coordination; the later pause and landing preparation are excluded.
 | Four-hour measurement | Recorded by `2b049c9b`, measuring its parent tree | 9,845 / 31 | 110 | 8,290 additions in 107 files | 0 |
 | Final manual checkpoint | `bf730baa` | 18,529 / 31 | 221 | 16,974 additions in 218 files | 0 |
 
-Reproduce with `git diff --numstat eba3c2b6..2b049c9b^ -- 'binary/*.lean'`
-and `git diff --numstat eba3c2b6..bf730baa -- 'binary/*.lean'`. Exclude
+After the requested rebase onto `ac55c7d5`, those checkpoints are ancestors
+`07b28e62` (formerly `2b049c9b`) and `b8a76316` (formerly `bf730baa`).
+Reproduce from the landing history with
+`git diff --numstat ac55c7d5..07b28e62^ -- 'binary/*.lean'` and
+`git diff --numstat ac55c7d5..b8a76316 -- 'binary/*.lean'`. Exclude
 `AllowedipsMutationImage`, `AllowedipsMutationLayout` and
 `AllowedipsMutationCodeLayout` for the last size column. The record commit
 `2b049c9b` itself also includes 430 later support lines: its tree has 10,275
@@ -175,10 +178,28 @@ refinement follows from this landing.
 
 ## Validation and reproduction
 
-Review corrections are being validated on the requested rebase onto
-`ac55c7d5`; the closing handoff records the exact source commit and counts here.
-The mirror itself is not edited. The opt-in insertion coverage profile and
-allocator-site arming are the only runtime harness changes in this experiment.
+The branch rebased without conflicts onto the requested `ac55c7d5`. These
+checks pass over code commit `982c3efd`; subsequent handoff commits change only
+documentation. The mirror itself is not edited. The opt-in insertion coverage
+profile and allocator-site arming are the only runtime harness changes in this
+experiment.
+
+| Check | Result |
+| --- | --- |
+| Bootstrap | PASS; exact clean Kraken `43df9468`. Independently replaying all nine patches from upstream reproduces that same commit. |
+| Proof gate `check_imports` | PASS on the rebased tree; no binary imports of `Leanux.Proofs`. |
+| Standalone binary gate | PASS, 1,119 build jobs, 71 headline axiom checks within `propext`, `Quot.sound`, `Classical.choice`; printed surface matches, source escape scan clean, no warnings. |
+| Mirror and test executables | PASS: fixed-width test build first (130 jobs), then `Leanux`, model and remaining test executables (141 jobs). |
+| Five-module unit tier | PASS, 144 tests, one skipped, 26.352 seconds. |
+| Binary gate unit tests | PASS, 6 tests. |
+| Revised BT | Focused semantic/parser/printer build passes (33 jobs); native comparison passes 1/1. |
+| Sequence-wrap witnesses | PASS, all 8 cases, expected binary result unchanged. |
+| Mutation runner | PASS, 4 sequences: 66 retained-heap insertions and 66 lookups, plus 24 isolated root insertions/lookups (3.448 seconds). Assertions include 28 root, 20 exact, 10 child-publication, 10 child-resource, 18 selector, 30 setup-entry, 10 save, 30 initialization and 180 return segments. |
+| Generated image/layout checks | PASS, all three insertion image/layout modules match s5. |
+| Recorded comparison | PASS, 8 calls under 2 seeds, 170 coverage entries, 64 comparisons, 117 decisions (0.332 seconds). Reuses the recorded workload with constructed entry memory and supplied allocator/free returns; no new capture is claimed. |
+
+All heavy checks ran under `capped`. No closing-validation job was killed or
+timed out. No resource limits or warning suppressions were added.
 
 From the worktree root, with system Python and pyelftools installed:
 
@@ -186,7 +207,7 @@ From the worktree root, with system Python and pyelftools installed:
 capped python3 -B binary/run.py --bootstrap-only
 capped scripts/binary-proof-gate
 capped lake build leanux-fixed-width-tests
-capped lake build
+capped lake build Leanux leanux-model leanux-seccomp-tests leanux-timer-wheel-tests leanux-netlink-dump-tests
 capped -- scripts/in-bundle python3 -B -m unittest evaluator.test_evaluation evaluator.test_model_replay harness.test_trace harness.test_wg harness.test_linux
 capped python3 -B binary/allowedips_seq_wrap.py
 capped python3 -B binary/allowedips_mutation.py
