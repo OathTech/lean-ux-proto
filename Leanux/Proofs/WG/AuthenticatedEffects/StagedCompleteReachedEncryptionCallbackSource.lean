@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptInteriorInitialized
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerPointLifted
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptionCryptoPoints
 
 /-! The encryption callback's original head, loop and publication cuts.
 The retained return wrapper always uses the callback's original entry world;
@@ -52,6 +53,20 @@ theorem read_residual
   apply returned_congr
   simp only [loop_cons,iteration_factor,bind_assoc,runPrefix_bind,performed]
   rfl
+
+theorem crypt_residual
+    (captured : runPrefix (headPrefix items) w h=(.ok ((headId,head),u),middle))
+    (ordered : items=done++skb::rest)
+    (walk : Walk headId head done .crypted u middle packetState v last)
+    (performed : runPrefix (readPrefix skb) v last=(.ok (read,q),events))
+    (point : EncryptionCrypto.Point headId head skb read q events t after) :
+    runPrefix (CausalJournal.encrypt (some items)) w h=
+      runPrefix (packetTail w items headId head rest
+        (EncryptionCrypto.remainder point >>= afterCrypt skb packetState)) t after := by
+  rw [read_residual captured ordered walk performed]
+  apply returned_congr
+  apply Scheduler.bind_run_equal
+  exact Scheduler.bind_run_equal _ (EncryptionCrypto.remainder_run point)
 
 theorem write_residual
     (captured : runPrefix (headPrefix items) w h=(.ok ((headId,head),u),middle))

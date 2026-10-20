@@ -20,6 +20,12 @@ inductive Point : Option (List SkbId) → World → List Event → World → Lis
       (ordered : items=done++skb::rest)
       (walk : Walk headId head done .crypted u middle packetState v last)
       (performed : runPrefix (readPrefix skb) v last=(.ok (read,q),events)) : Point (some items) w h q events
+  | crypto {packetState : PacketState} {read : RunWitness DataPacket}
+      (captured : runPrefix (headPrefix items) w h=(.ok ((headId,head),u),middle))
+      (ordered : items=done++skb::rest)
+      (walk : Walk headId head done .crypted u middle packetState v last)
+      (performed : runPrefix (readPrefix skb) v last=(.ok (read,q),events))
+      (point : EncryptionCrypto.Point headId head skb read q events t after) : Point (some items) w h t after
   | write {packetState : PacketState} {read : RunWitness DataPacket} (captured : runPrefix (headPrefix items) w h=(.ok ((headId,head),u),middle))
       (ordered : items=done++skb::rest)
       (walk : Walk headId head done .crypted u middle packetState v last)
@@ -62,6 +68,9 @@ theorem Point.evidence (point : Point item w h v last)
   | read captured _ walk performed=>
     have atPacket:=walk.accounted (head_prefix_current before captured).2.2.2.2.1
     exact .accounted (read_current atPacket performed).2.2.2.2.2
+  | crypto captured _ walk performed point=>
+    have atPacket:=walk.accounted (head_prefix_current before captured).2.2.2.2.1
+    exact .accounted (point.accounted (read_current atPacket performed).2.2.2.2.2)
   | write captured _ walk performed=>
     exact .accounted (write_accounted (walk.accounted (head_prefix_current before captured).2.2.2.2.1) performed)
   | bytes captured _ walk prepared written=>
@@ -83,6 +92,7 @@ theorem Point.residual (point : Point item w h v last) :
   | head captured=>exact ⟨_,head_residual captured⟩
   | loop captured ordered walk=>exact ⟨_,loop_residual captured ordered walk⟩
   | read captured ordered walk performed=>exact ⟨_,read_residual captured ordered walk performed⟩
+  | crypto captured ordered walk performed point=>exact ⟨_,crypt_residual captured ordered walk performed point⟩
   | write captured ordered walk performed=>exact ⟨_,write_residual captured ordered walk performed⟩
   | bytes captured ordered walk prepared written=>exact ⟨_,byte_residual captured ordered walk prepared written⟩
   | publication entered=>exact ⟨_,publication_residual entered⟩

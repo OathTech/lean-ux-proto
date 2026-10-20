@@ -3,8 +3,8 @@ import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptionCall
 
 /-! The initialized receive scheduler supplies the fixed encryption callback
 family, including its pending return receipt. Routed transmit, IPv6 receive,
-peer transmit and handshake remain named contracts. Crypto primitive interiors
-and universal native coverage are not claimed by this composition. -/
+peer transmit and handshake remain named contracts. Preparation, key-read and
+scatter-check cuts are included; universal native coverage remains open. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ReceiveWorker.Composition
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
 
@@ -53,7 +53,7 @@ noncomputable def encryptionWorkers
 /-- Initialized scheduler encryption cuts retain the admitted packet ledger,
 the exact selected batch and its original continuation through byte writes,
 publication, native peer release and the pending return receipt. Four deeper
-packet contracts and finer primitive interiors remain explicit boundaries. -/
+packet contracts and universal caller coverage remain explicit boundaries. -/
 theorem initialized_encryption_scheduler
     (entry : ScheduledSource.Entry trace placeholders operationIndex world history)
     (carrierGood : ∀h w,Napi.Points.Carrier h w → Good h w)
