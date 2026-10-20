@@ -2381,13 +2381,15 @@ theorem initialized_conditional_rx_retirement (trace : Runner.Trace) (placeholde
     kind prior fired p found a cleared allocation old projected last receiver id pkt owner key dead
     b c d e f g peek test read drop stateCheck dispose
 
-/-- Reference-aware key retirement follows the original validity, age and
-counter check sites, rejection invalidation, timer arm/dispatch, slot/index
-unpublication and final release. Progress is conditional on the actual wheel,
-worker and source calls stated in Outcome, with no bounded latency. Initialized
-credit/access facts and universal local contracts retain their stated domains;
-retained packet work may finish before its final release. This does not claim
-physical memory zeroization. -/
+/-- Security: the eighteen `Outcome` fields prove TX admission and RX
+pre-decryption checks, local invalidation/age/release contracts, initialized
+access safety, final successful-run holder accounting, and the stated timer
+provenance and worker effects. Each field retains its own preconditions and
+scope. Conditional runner-level retirement is exported separately by
+`initialized_conditional_tx_retirement` and its RX companions. Previously
+admitted packets may encrypt after expiry or unpublication; no time or count
+bound on that work, future persistence of removal, or physical zeroization is
+proved. See each field's docstring for the exact domain. -/
 theorem reference_aware_retirement_outcome : Outcome := outcome
 
 /-- Authenticated receive cleanup pays the same final key reference as DEAD
