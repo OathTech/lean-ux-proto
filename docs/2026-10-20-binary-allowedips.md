@@ -214,8 +214,14 @@ capped python3 -B binary/allowedips_mutation.py
 ```
 
 The package [README](../binary/README.md#allowed-ips-mutation-scaling) gives the
-recorded/capture recipes and the nine-root export command. The external gate
-must run outside Nono from `binary/`:
+recorded/capture recipes and the nine-root export command. The fresh export
+from `b33a23c0253c0817719f11585618b8a2deba1131` completed under `capped` with
+exit zero (1,756,158,932 bytes). Its roots are `LookupSnapshotTransport`,
+`LookupWitness`, `LookupHitWitness`, `AllowedipsWitnessPre`,
+`PairCallbackSurface`, `PairCallWitness`, `PairAllowedipsLookupAdequacy`,
+`AllowedipsCommonChecked` and `AllowedipsInsertionSurface`. This export includes
+the review fixes; the subsequent export record is documentation only.
+The external gate must run outside Nono from `binary/`:
 
 ```sh
 capped lake check --from-export ../.tmp/binary-allowedips-landing.ndjson
