@@ -35,6 +35,9 @@ theorem Native.checked (token : Native) : Checked token.action := by
   | note kind pid=>
     exact CompletePoll.state _
       (CompletePassive.emit _ CompleteProduct.account_safe (.old (.handshake (.callback kind pid))) rfl (fun _=>rfl))
+  | oldSession pid run=>
+    exact CompletePoll.state _
+      (CompletePassive.emit _ CompleteProduct.account_safe (.old (.responder (.session pid run))) rfl (fun _=>rfl))
   | exchange event=>
     exact CompletePoll.state _
       (CompletePassive.emit _ CompleteProduct.account_safe (.exchange event) rfl (fun _=>rfl))

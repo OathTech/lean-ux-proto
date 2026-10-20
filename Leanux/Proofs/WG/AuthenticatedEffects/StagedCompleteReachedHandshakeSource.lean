@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.HandshakeSecurity.ExchangeCausalSessionSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSessionCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedProtocolPointFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerMetadataCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRoutedTransmitComposition
@@ -23,6 +25,7 @@ inductive Native : Type 1 where
   | scope (event : CausalScope.Event Cause)
   | note (kind : HandshakeCausal.Kind) (pid : PeerId)
   | exchange (event : Exchange.Event)
+  | oldSession (pid : PeerId) (run : WGRunWitness Bool)
 
 def Native.Result : Native → Type
   | @quiet α .. => α
@@ -48,6 +51,7 @@ def Native.action (token : Native) : PrefixM Event token.Result := match token w
   | .scope event => emitPrefix (.scope event)
   | .note kind pid => emitPrefix (.old (.handshake (.callback kind pid)))
   | .exchange event => emitPrefix (.exchange event)
+  | .oldSession pid run => emitPrefix (.old (.responder (.session pid run)))
 
 inductive Child where
   | keepalive (pid : PeerId)
@@ -149,5 +153,21 @@ noncomputable def oldMetadataShape (kind : HandshakeCausal.Kind) (pid : PeerId) 
       (HandshakeWorker.old (Event.old ∘ Journal.Event.handshake) handshake? (HandshakeCausal.call kind pid body))) := by
   rw [HandshakeEffects.old_call]
   exact callbackShape kind pid _ (.native (.metadata body source))
+
+theorem session_source (pid : PeerId) : CausalJournal.session pid =
+    receiptWGObserved
+      (receiptWGObserved (liftWGPrefix (beginSession pid)) (fun r=>Event.old (.responder (.session pid r))))
+      (fun r=>Event.exchange (.session pid r)) := by
+  unfold CausalJournal.session ExchangeJoint.session CausalJournal.state Journal.session Responder.DriverCuts.session
+  rw [ExchangeCausalSession.focus_receipt,ExchangeCausalSession.focus_receipt]
+  rfl
+
+noncomputable def sessionShape (pid : PeerId) : Shape (liftWGObserver (CausalJournal.session pid)) := by
+  rw [session_source]
+  apply receiptShape
+  · apply receiptShape
+    · exact .native (.metadata _ (PeerMetadata.sessionShape pid))
+    · exact fun _=>.native (.oldSession _ _)
+  · exact fun _=>.native (.exchange _)
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.HandshakeConcrete

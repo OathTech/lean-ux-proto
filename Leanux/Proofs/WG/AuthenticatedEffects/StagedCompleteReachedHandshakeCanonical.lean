@@ -35,7 +35,7 @@ macro "handshake_source_step" : tactic => `(tactic| first
        | (metadata_source_head timersHandshakeComplete; exact PeerMetadata.completeShape _ _)
        | (metadata_update_head; apply PeerMetadata.updateShape; intro p; exact ⟨rfl,rfl,rfl⟩))
   | (handshake_source_head HandshakeWorker.old; apply oldShape; entry_handshake_frame)
-  | (handshake_source_head CausalJournal.session; exact .native (.session _))
+  | (handshake_source_head CausalJournal.session; exact sessionShape _)
   | (handshake_source_head Driver.keepaliveObserved; exact .child (.keepalive _))
   | (handshake_source_head ProtocolSocket.observed; exact .native (.protocol _ _))
   | (handshake_source_head CookieSocket.observed; exact .native (.cookie _ _ _))

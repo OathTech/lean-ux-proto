@@ -1,6 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeSocketSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerMetadataCanonical
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRoutedTransmitComposition
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWorkServicePointPeerComposition
 
 /-! The protocol-buffer source exposes native reads, its actual socket calls and the saved-peer byte update. Socket continuations retain the causal context and original receipt entry. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ProtocolPoints

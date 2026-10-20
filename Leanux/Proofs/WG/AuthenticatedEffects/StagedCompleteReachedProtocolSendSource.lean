@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSessionCanonical
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedProtocolPointFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedWorkServicePointPeerComposition
 
 /-! Fixed flushed protocol-send source. Creation, MAC and socket atoms retain

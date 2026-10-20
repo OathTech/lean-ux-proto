@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ProtocolSend
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
 
 inductive Site where
-  | entry | returned | release
+  | entry | returned | release | creation | mac | socket
   | leaf (site : Consume.Leaf.Site)
   | left (site : Site) | right (site : Site)
 
@@ -16,6 +16,12 @@ inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action �
   | entry (shape : Shape action) : Point shape w h .entry w h
   | returned (shape : Shape action) (performed : runPrefix action w h=(.ok (value,u),middle)) :
       Point shape w h .returned u middle
+  | creation {w : World} (point : PeerMetadata.Point (PeerMetadata.initiationShape pid) w.wg w.ambient v b) :
+      Point (.native (.create pid)) w h .creation {w with wg:=v,ambient:=b} h
+  | mac {w : World} (point : PeerMetadata.Point (PeerMetadata.addMacShape pid bytes) w.wg w.ambient v b) :
+      Point (.native (.mac pid bytes)) w h .mac {w with wg:=v,ambient:=b} h
+  | socket (point : ProtocolPoints.RootPoint pid bytes w h u middle) :
+      Point (.native (.socket pid bytes)) w h .socket u middle
   | leaf (source : Consume.Leaf.Shape action)
       (point : Consume.Leaf.Point WorkService.Points.leafPoints source w h site u middle) :
       Point (.leaf source) w h (.leaf site) u middle
@@ -40,6 +46,13 @@ theorem Point.safe (carrierGood : ∀h w,Carrier h w → Good h w)
     exact carrierGood _ _ before
   | returned shape performed=>
     exact carrierGood _ _ (shape.normal before performed)
+  | creation point=>
+    obtain ⟨ledger,account⟩:=before
+    exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
+  | mac point=>
+    obtain ⟨ledger,account⟩:=before
+    exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
+  | socket point=>exact carrierGood _ _ (ProtocolPoints.Point.accounted before point)
   | leaf source point=>
     exact carrierGood _ _
       (point.safe (fun _ _ h=>h) WorkService.Points.leafContracts before)
@@ -59,6 +72,9 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {shape : Shape a
     exact ⟨_,rfl⟩
   | returned shape performed=>
     exact ⟨pure _,performed⟩
+  | creation point=>exact point.observed_remaining _
+  | mac point=>exact point.observed_remaining _
+  | socket point=>exact ProtocolPoints.Point.remaining point
   | leaf source point=>
       obtain ⟨remaining,residual⟩:=point.residual WorkService.Points.leafContracts
       exact ⟨remaining,residual.run⟩
