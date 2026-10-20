@@ -124,12 +124,17 @@ observations remain distinct in the statement types. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.WG.Cookies
 
-/-- Security: every initialized native transmission occurrence and protected
-protocol effect has its own accepted-input or fixture cause, including inherited
-delayed work. The qualifying cookie exception has at most one 64-byte reply to
-its actual source per invocation and is smaller than its initialized input.
-Handshake/replay/GRO acceptance and full refusal projections are named separately
-in `SecurityOutcome`; later Stop does not erase recorded effects. -/
+/-- Security: initialized native transmission occurrences and the named
+`Protected` effects have an accepted-input or fixture cause, including inherited
+work. A fixture root includes effects inside a fixture-initiated operation;
+this is not a separate noninterference theorem for each injected datagram.
+The cookie exception permits at most one source-bound 64-byte reply per
+invocation, smaller than its initialized input, without a run-wide rate bound.
+Refused-consumer WG equality is per completed native call, with the named
+maintenance exceptions; a later Stop retains its receipt. Transport endpoint
+learning is supplied separately by C2 H3's
+`Roaming.original_initialized_data_consumptions_authenticated_final` and is
+not a conjunct of this package. -/
 theorem initialized_silence_security_outcome (trace : Runner.Trace) (placeholders : Bool) :
     SecurityOutcome trace placeholders := initialized_authenticated_effects trace placeholders
 
