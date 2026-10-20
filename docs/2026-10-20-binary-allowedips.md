@@ -1344,6 +1344,34 @@ Validation after the rebase, over code commit `bf730baa`:
 - Patch nine's focused Lean/parser/printer targets and native comparison pass
   (33 build jobs and `test_bt.S` 1/1). The patch is byte-for-byte the exact
   format-patch for the locked clean dependency commit.
+- The insertion image and both generated layouts match the pinned s5 ELF.
+  Generated execution again passes 66 insertion/lookup pairs and 24 isolated
+  root insertion/lookup cases, with every listed segment assertion (3.336
+  seconds). All eight sequence-wrap regressions pass. The recorded three-way
+  check passes eight calls under two seeds, 170 coverage entries, 64 comparisons
+  and 117 decisions (0.355 seconds); this reuses the recorded workload and
+  constructs its entry memory, rather than making a new capture.
+
+The combined export completed successfully with exit zero from clean source
+commit `4e9b1f883ed387e2c456f7077246c6e25effae0d`, 1,780,495,634 bytes, at
+`.tmp/binary-allowedips-landing.ndjson`. Its roots are
+`LookupSnapshotTransport`, `LookupWitness`, `LookupHitWitness`,
+`AllowedipsWitnessPre`, `PairCallbackSurface`, `PairCallWitness`,
+`PairAllowedipsLookupAdequacy`, `AllowedipsCommonChecked` and
+`AllowedipsInsertionSurface`, including their full imported closure. Later
+landing-preparation changes affect documentation only, including replacement
+of the obsolete `scripts/proof-gate --binary` README command with the
+standalone `scripts/binary-proof-gate`. The export
+is disposable and should be removed after the external check; regenerate it
+with the README command if needed.
+
+The same export passes the inside-Nono local replay:
+`capped lake check --inadvisably-no-sandbox --from-export ../.tmp/binary-allowedips-landing.ndjson`
+from `binary/`, exit zero. The Lean default kernel accepts the solution with
+only `propext`, `Quot.sound` and `Classical.choice`. The checker explicitly
+warns that its own sandbox is disabled; under the repository's working rules,
+this is a speedbump, not the external trust gate. No KILLED run or timeout
+occurred in closing validation.
 
 These local checks are not external `lake check` acceptance. The
 [README export recipe](../binary/README.md#allowed-ips-mutation-scaling)

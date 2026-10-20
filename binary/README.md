@@ -722,8 +722,8 @@ index/insertion surfaces and witnesses. The prepared export is from code commit
 `86ea5488e288998ea4aa0b26335c64428ffeaf04` and exited zero (1,331,952,229 bytes).
 External acceptance was pending at that checkpoint; the current s5 carry is
 covered by the combined landing export accepted above. Local check status is
-recorded in the increment report. `scripts/proof-gate
---binary` prints and diffs the new statements and postcondition with the full
+recorded in the increment report. `scripts/binary-proof-gate`
+prints and diffs the new statements and postcondition with the full
 TrustBase specification and requires the pinned clean Kraken tree. The service
 runner distinguishes generated cases from the recorded-prefix and captured
 workload checks in the report. Tests do not discharge a universal contract.
