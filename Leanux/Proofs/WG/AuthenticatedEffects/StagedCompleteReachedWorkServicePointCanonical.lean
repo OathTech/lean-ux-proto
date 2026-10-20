@@ -17,7 +17,7 @@ noncomputable def updateThenShape (pid : PeerId) (f : Peer → Peer)
     (tail : ∀ value, Shape (liftWGObserver (next value))) :
     Shape (liftWGObserver (liftWGPrefix (getPeer pid) >>= fun p => liftWGPrefix (setPeer pid (f p)) >>= next)) := by
   rw [← bind_assoc,← Queued.lift_bind,liftWGObserver_bind]
-  exact .bind (.leaf (.native (.base (.update pid f fields)))) tail
+  exact .bind (.leaf (.native (.metadata _ (PeerMetadata.updateShape pid f fields)))) tail
 
 theorem append_factor (pid : PeerId) :
     liftWGObserver (effects.append pid) = (do
@@ -42,13 +42,17 @@ noncomputable def appendShape (pid : PeerId) : Shape (liftWGObserver (effects.ap
       .bind (.native (.queued ⟨CausalScope.current scope? h,pid,
         ⟨value,before.wg,after.wg,before.ambient,after.ambient⟩⟩)) (fun _ => .pure value)
 
+noncomputable def expiredTestShape (site : Decision) (birth : Int64) (limit : Nat) (test : Bool → Bool) :
+    PeerMetadata.Shape (branchExpired site birth limit test) := by
+  repeat' metadata_source_step
+
 noncomputable def handshakeClearLeaf (pid : PeerId) : Consume.Leaf.Shape (Consume.Leaf.wg (handshakeClear pid)) := by
   unfold handshakeClear handshakeZero
   repeat' first
     | consume_leaf_update
     | consume_leaf_update_then
-    | (consume_leaf_wg_head IndexOwner.peerDeref; exact .native (.base (.dereference _)))
-    | (consume_leaf_wg_head liftM; exact .native (.base (.unhash _)))
+    | (consume_leaf_wg_head IndexOwner.peerDeref; exact .native (.metadata _ (PeerMetadata.dereferenceShape _)))
+    | (consume_leaf_wg_head liftM; exact .native (.metadata _ (.access (PeerMetadata.indexShape _))))
     | consume_leaf_shape
 
 noncomputable def keysClearLeaf (pid : PeerId) : Consume.Leaf.Shape (Consume.Leaf.wg (keypairsClear pid)) := by

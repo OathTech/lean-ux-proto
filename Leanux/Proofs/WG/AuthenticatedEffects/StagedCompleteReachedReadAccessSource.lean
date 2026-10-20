@@ -53,4 +53,8 @@ noncomputable def peerShape (pid : PeerId) : Shape (getPeer pid) := by
   simp only [getPeer,getDev,invariant]
   repeat' readonly_source_step
 
+noncomputable def deviceShape : Shape getDev := by
+  simp only [getDev,invariant]
+  repeat' readonly_source_step
+
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ReadAccess

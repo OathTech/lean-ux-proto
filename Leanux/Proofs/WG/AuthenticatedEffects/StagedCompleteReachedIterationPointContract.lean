@@ -13,6 +13,8 @@ inductive Site where
   | entry
   | returned
   | interior
+  | peer
+  | packet
   | left (site : Site)
   | right (site : Site)
   | marked (label : Label) (site : Site)
@@ -25,6 +27,10 @@ inductive Point (inside : ChildPoints) : {α : Type} → {action : PrefixM Event
       Point inside shape w h .returned u middle
   | interior (token : Child) (point : inside token w h u middle) :
       Point inside (.child token) w h .interior u middle
+  | peer {w : World} (point : ReadAccess.Point (ReadAccess.peerShape pid) w.wg w.ambient v b) :
+      Point inside (.native (.peer pid)) w h .peer {w with wg:=v,ambient:=b} h
+  | packet {w : World} (point : SkbAccess.Point (SkbStore.getTx skb) w.wg w.ambient v b) :
+      Point inside (.native (.packet skb)) w h .packet {w with wg:=v,ambient:=b} h
   | left {body : PrefixM Event α} {next : α → PrefixM Event β}
       {head : Shape body} (tail : ∀ value, Shape (next value)) (point : Point inside head w h site u middle) :
       Point inside (.bind head tail) w h (.left site) u middle
@@ -79,6 +85,8 @@ theorem Point.coverage (contracts : ChildContracts native inside Good)
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
   | interior token point => exact .interior token ((contracts.at token).coverage _ _ _ _ point)
+  | peer point => exact .peer point
+  | packet point => exact .packet point
   | left tail point ih => exact .left tail ih
   | right head tail leading point ih => exact .right head tail leading ih
   | marked label point ih => exact .marked label ih
@@ -92,6 +100,8 @@ theorem Point.safe (carrierGood : ∀ h w, CompleteProduct.Carrier h w → Good 
   | entry shape => exact carrierGood _ _ before
   | returned shape performed => exact carrierGood _ _ (shape.normal before performed)
   | interior token point => exact (contracts.at token).safe _ _ _ _ before point
+  | peer point => exact carrierGood _ _ (Reads.peer_carrier point before)
+  | packet point => exact carrierGood _ _ (Reads.packet_carrier point before)
   | left tail point ih => exact ih before
   | right head tail leading point ih => exact ih (head.normal before leading)
   | marked label point ih => exact ih before

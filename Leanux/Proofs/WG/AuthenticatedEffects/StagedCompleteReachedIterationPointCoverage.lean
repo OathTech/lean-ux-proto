@@ -17,6 +17,8 @@ theorem boundary_carrier (point : Point Boundary shape w h site u middle)
   | entry shape => exact before
   | returned shape performed => exact shape.normal before performed
   | interior token point => exact False.elim point
+  | peer point => exact Reads.peer_carrier point before
+  | packet point => exact Reads.packet_carrier point before
   | left tail point ih => exact ih before
   | right head tail leading point ih => exact ih (head.normal before leading)
   | marked label point ih => exact ih before

@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIterationPointSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIterationReadFrames
 
 /-! Concrete normal-state frames for the finite source atoms. The interiors
 of the actual worker callbacks remain explicit; no error post-world is used. -/
@@ -8,6 +9,7 @@ open CompleteProduct
 
 theorem Native.checked (token : Native action) : Checked (liftPrefix action) := by
   cases token with
+  | ambientAction body => exact CompleteProduct.ambient _
   | ambient => exact CompleteProduct.ambient _
   | peer pid => exact wg _ (state_store _ (peer_read_store pid))
   | packet skb => exact wg _ (state_store _ (skb_read_store skb))

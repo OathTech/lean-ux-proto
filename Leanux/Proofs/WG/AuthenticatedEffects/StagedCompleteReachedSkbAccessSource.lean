@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAccessCanonical
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedReadAccessFrames
 
 /-! Packet-store adapter cuts follow its read, component execution, and single write-back. The component has only Ambient state until the adapter installs its result. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.SkbAccess
@@ -17,12 +18,10 @@ def afterRead (action : SkbM α) (device : Device) : WG.M α := do
 
 theorem source (action : SkbM α) : liftSkb action=(getDev >>= afterRead action) := rfl
 
-noncomputable def readShape : Access.Shape getDev := by
-  simp only [getDev,invariant]
-  repeat' access_source_step
+noncomputable def readShape : ReadAccess.Shape getDev := ReadAccess.deviceShape
 
 inductive Point (action : SkbM α) : WGWorld → Ambient → WGWorld → Ambient → Prop where
-  | read (point : Access.Point readShape w a v b) : Point action w a v b
+  | read (point : ReadAccess.Point readShape w a v b) : Point action w a v b
   | component (device : w.dev=some d)
       (performed : (action.run (input d)).run a=.ok ((value,store),b)) : Point action w a w b
   | returned (performed : ((liftSkb action).run w).run a=.ok ((value,v),b)) : Point action w a v b

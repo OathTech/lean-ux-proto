@@ -8,9 +8,9 @@ open HandshakeSecurity.StagedDisposal
 
 noncomputable def afterResetShape (pid : PeerId) : Shape (liftWGObserver (TimerQueue.afterReset pid)) := by
   unfold TimerQueue.afterReset
-  apply stateBindShape _ _ (.leaf (.native (.base (.basic (.peer pid)))))
+  apply stateBindShape _ _ (.leaf (.native (.metadata _ (PeerMetadata.peerReadShape pid))))
   intro peer
-  apply stateBindShape _ _ (.native (.expired .queuedNotExpired peer.lastSentHandshake REKEY_TIMEOUT (!·)))
+  apply stateBindShape _ _ (.leaf (.native (.metadata _ (expiredTestShape .queuedNotExpired peer.lastSentHandshake REKEY_TIMEOUT (!·)))))
   intro recent
   split
   · exact .pure ()
@@ -41,7 +41,7 @@ noncomputable def queuedShape (pid : PeerId) (retry : Bool) :
   split
   · have update : Shape (liftWGObserver (liftWGPrefix (do
         setPeer pid {(← getPeer pid) with timerHandshakeAttempts := 0}))) :=
-      .leaf (.native (.base (.update pid (fun p => {p with timerHandshakeAttempts := 0}) (fun _ => ⟨rfl,rfl,rfl⟩))))
+      .leaf (.native (.metadata _ (PeerMetadata.updateShape pid (fun p => {p with timerHandshakeAttempts := 0}) (fun _ => ⟨rfl,rfl,rfl⟩))))
     simpa only [TimerQueue.afterReset,bind_assoc,CausalJournal.effects,CausalEffects.ops,TimerEffects.observed,
       liftWGObserver_bind,Queued.lift_bind] using
       stateBindShape _ _ update (fun _ => afterResetShape pid)

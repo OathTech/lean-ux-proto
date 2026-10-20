@@ -17,6 +17,10 @@ inductive Residual {native inside : ChildPoints} {Good : History → World → P
   | interior (token : Child) (point : native token w h u middle) :
       Residual children (.child token) w h .interior u middle
         ((children.at token).remainder w h u middle point)
+  | peer {w : World} (point : ReadAccess.Point (ReadAccess.peerShape pid) w.wg w.ambient v b) :
+      Residual children (.native (.peer pid)) w h .peer {w with wg:=v,ambient:=b} h (Reads.peerRemainder h point)
+  | packet {w : World} (point : SkbAccess.Point (SkbStore.getTx skb) w.wg w.ambient v b) :
+      Residual children (.native (.packet skb)) w h .packet {w with wg:=v,ambient:=b} h (Reads.packetRemainder h point)
   | left {body : PrefixM Event α} {next : α → PrefixM Event β} {head : Shape body}
       (tail : ∀ value, Shape (next value))
       (remaining : Residual children head w h site u middle remainder) :
@@ -39,6 +43,8 @@ theorem Point.residual (children : ChildContracts native inside Good)
   | entry shape => exact ⟨_,.entry shape⟩
   | returned shape performed => exact ⟨_,.returned shape performed⟩
   | interior token point => exact ⟨_,.interior token point⟩
+  | peer point => exact ⟨_,.peer point⟩
+  | packet point => exact ⟨_,.packet point⟩
   | left tail point ih =>
       obtain ⟨remaining,residual⟩ := ih
       exact ⟨_,.left tail residual⟩
@@ -55,6 +61,8 @@ theorem Residual.point (residual : Residual children shape w h site u middle rem
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
   | interior token point => exact .interior token point
+  | peer point => exact .peer point
+  | packet point => exact .packet point
   | left tail remaining ih => exact .left tail ih
   | right head tail leading remaining ih => exact .right head tail leading ih
   | marked label remaining ih => exact .marked label ih
@@ -67,6 +75,8 @@ theorem Residual.run {α : Type} {action : PrefixM Event α} {shape : Shape acti
   | entry shape => rfl
   | returned shape performed => exact performed.trans (runPrefix_pure _ _ _).symm
   | interior token point => exact (children.at token).continuation _ _ _ _ point
+  | peer point => exact Reads.peerRemainder_run _ point
+  | packet point => exact Reads.packetRemainder_run _ point
   | left tail remaining ih => exact Scheduler.bind_run_equal _ ih
   | right head tail leading remaining ih => rw [runPrefix_bind,leading]; exact ih
   | marked label remaining ih => exact ih

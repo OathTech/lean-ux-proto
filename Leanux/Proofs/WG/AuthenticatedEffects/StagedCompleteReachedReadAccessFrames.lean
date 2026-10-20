@@ -19,4 +19,7 @@ theorem Point.world (point : Point source w a v b) : v=w := by
   | left tail point ih=>exact ih
   | right head tail leading point ih=>exact ih.trans ((ProjectedAction.iff_run_ambient _ _ _).mp head.frame _ _ _ _ _ leading)
 
+theorem Point.frame (point : Point source w a v b) : StagedEntry.view v=StagedEntry.view w := by
+  rw [point.world]
+
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ReadAccess

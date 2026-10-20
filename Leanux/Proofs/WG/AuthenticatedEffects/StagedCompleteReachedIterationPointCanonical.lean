@@ -5,9 +5,34 @@ including the nested encryption iteration and every crypt-ahead guard. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Iteration.Points
 open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues TransmitSecurity CausalJournal
 
+private noncomputable def nativeBindShape (body : Leanux.M α) (next : α → Leanux.M β)
+    (head : Shape (liftPrefix body)) (tail : ∀ value, Shape (liftPrefix (next value))) :
+    Shape (liftPrefix (body >>= next)) := by
+  have equation : (liftPrefix (body >>= next) : PrefixM Event β) =
+      (liftPrefix body >>= fun value => liftPrefix (next value)) := by
+    funext w h
+    change ((body >>= next).run w,h) = runPrefix (liftPrefix body >>= fun value => liftPrefix (next value)) w h
+    rw [runPrefix_bind,runPrefix_lift]
+    cases run : body.run w <;> simp only [StateT.run_bind,run,runPrefix_lift] <;> rfl
+  rw [equation]
+  exact .bind head tail
+
+noncomputable def condReschedShape (worker : Worker) : Shape (liftPrefix (Env.condResched worker)) := by
+  unfold Env.condResched
+  cases worker.resched? with
+  | none => exact .native (.invariant _)
+  | some site =>
+      apply nativeBindShape _ _ (.native .hiddenSite)
+      intro next
+      split
+      · exact .pure false
+      · apply nativeBindShape _ _ (.native (.ambientAction (AmbientM.hidden site)))
+        intro ignored
+        exact .pure true
+
 noncomputable def reschedShape (worker : Worker) (site : Decision) :
     Shape (Driver.reschedObserved worker site) :=
-  .marked (.resched worker site) (.bind (.native (.resched worker)) (fun yes => .native (.branch site yes)))
+  .marked (.resched worker site) (.bind (condReschedShape worker) (fun yes => .native (.branch site yes)))
 
 noncomputable def workerShape (worker : Worker) (pid : Option Nat)
     (step afterItem : PrefixM Event Bool) (before : Shape step) (after : Shape afterItem) :
@@ -43,7 +68,7 @@ noncomputable def decryptShape : Shape (Driver.decryptIterObserved hooks) :=
   .marked .decrypt (workerShape _ _ _ _ decryptStepShape (reschedShape _ _))
 
 noncomputable def receiveShape : Shape (Driver.receiveIterObserved hooks) :=
-  .marked .receive (workerShape _ _ _ _ (.child .handshake) (.native (.resched .receiveWorker)))
+  .marked .receive (workerShape _ _ _ _ (.child .handshake) (condReschedShape .receiveWorker))
 
 noncomputable def aheadPrefixShape (pid : PeerId) : Shape (EncryptionEntry.aheadPrefix pid) := by
   apply Shape.marked (.aheadPrefix pid)

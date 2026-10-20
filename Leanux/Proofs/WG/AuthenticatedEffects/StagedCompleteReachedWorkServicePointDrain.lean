@@ -78,7 +78,7 @@ noncomputable def stateIfShape (test : Prop) [Decidable test] (yes no : WGPrefix
 macro "work_drain_step" : tactic => `(tactic| first
   | (work_state_head Driver.Hooks.flushedSend; exact .child (.flushedSend _))
   | (work_state_head NestedPeerRelease.flushedClearWith; exact flushedClearShape _)
-  | (work_wg_head getDev; exact .leaf (.native (.base .device)))
+  | (work_wg_head getDev; exact .leaf (.native (.metadata _ PeerMetadata.deviceReadShape)))
   | (work_wg_head getAmbient; exact .leaf (.native (.base (.ambient _))))
   | (work_wg_head peekUnit; exact .leaf (.native (.base (.ambient _))))
   | (work_wg_head resolveUnit; exact .leaf (.native (.base (.ambient _))))

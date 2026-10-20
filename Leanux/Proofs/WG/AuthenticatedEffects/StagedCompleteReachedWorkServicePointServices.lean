@@ -51,7 +51,7 @@ noncomputable def flushedClearShape (pid : PeerId) :
 noncomputable def selectSendShape : Shape (liftPrefix SendWorkCauses.select) := by
   unfold SendWorkCauses.select
   apply nativeBindShape _ _
-    (by rw [← liftWGObserver_lift]; exact .leaf (.native (.base .device)))
+    (by rw [← liftWGObserver_lift]; exact .leaf (.native (.metadata _ PeerMetadata.deviceReadShape)))
   intro device
   split
   · apply nativeBindShape _ _ (.native (.ambient (AmbientM.peekUnit .sendWorker)))
@@ -78,7 +78,7 @@ noncomputable def scheduledClearShape : Shape (Driver.clearWorkerObserved hooks)
   apply Shape.marked .scheduledClear
   unfold Driver.clearWorkerObserved NestedPeerRelease.oneClearWith
   apply Shape.bind (body := liftPrefix (liftWG getDev))
-    (by rw [← liftWGObserver_lift]; exact .leaf (.native (.base .device)))
+    (by rw [← liftWGObserver_lift]; exact .leaf (.native (.metadata _ PeerMetadata.deviceReadShape)))
   intro device
   split
   · apply Shape.bind (.native (.ambient (AmbientM.peekUnit .clearPeerWorker)))

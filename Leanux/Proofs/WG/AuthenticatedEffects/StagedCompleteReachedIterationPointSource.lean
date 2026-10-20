@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSchedulerPointCoverage
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedEncryptionEntryAheadSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIterationReadSource
 
 /-! Fixed original iteration source shapes. Committed worker children remain
 finite explicit contracts; native copied-record guards are separate atoms.
@@ -11,6 +12,7 @@ abbrev History := List Event
 abbrev Result (α : Type) := Except Stop (α × World)
 
 inductive Native : {α : Type} → Leanux.M α → Type 1 where
+  | ambientAction (body : AmbientM α) : Native (Leanux.liftAmbient body)
   | ambient : Native getAmbient
   | peer (pid : PeerId) : Native (liftWG (getPeer pid))
   | packet (skb : SkbId) : Native (liftWG (getTxSkb skb))
