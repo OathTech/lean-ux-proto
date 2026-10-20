@@ -411,3 +411,6 @@ Source-117 `095e3aa7` joins actual saved-peer metadata points for response creat
 
 
 Source-118 `67607187` joins protocol socket interiors to initialized handshake accounting, preserving the original route/cache source, causal context and receipt entry. Other native families remain open. The campaign report records the passing aggregate gate, fresh replay and twelve recipes.
+
+
+Source-119 `e9f496fb` joins native session creation/rotation and outgoing initiation/MAC/socket points. The two session receipts retain their original run and order. Compound consumer, cookie, configuration and lifecycle interiors remain open; the campaign report records scoped validation and the latest aggregate checkpoint.
