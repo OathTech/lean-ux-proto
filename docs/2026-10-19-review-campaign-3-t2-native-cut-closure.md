@@ -398,3 +398,5 @@ Source-110 `77d0f2ab` derives the current semantic account after the original pe
 Source-111 `537c7dad` derives the initialized fixed-record completion disjunction without semantic-acceptance premises. Receipt intervals now restore current accounting using only the original records on the unchanged native world. Partial allocation, trim semantics and finer source coverage remain open; validation is recorded in the campaign report.
 
 Source-112 `cc4ef4fd` derives the remaining partial-allocation and trim semantic consequences and joins them into the initialized same-ledger account. Their source intervals no longer remain uninterpreted phase alternatives. The separate finer-native-coverage finding remains open; validation is recorded in the campaign report.
+
+Source-113 `79cd5525` expands the initialized relation through atomic access trees of six UDP-ingress helpers. This is a source-coverage improvement, not closure of the remaining index-lookup and RX queue/publication interiors. The campaign report records the intermediate build and axiom checks.
