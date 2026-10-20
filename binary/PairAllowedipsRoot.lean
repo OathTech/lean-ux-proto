@@ -9,10 +9,8 @@ def store (m : DataMem) (address size value : Nat) : Except String DataMem := do
 def headerWord (width cidr : Nat) : Nat :=
   cidr+((cidr/8) ^^^ ((width/8-1)%8))*256+(7-cidr%8)*65536+width*16777216
 
-/-- Executable memory effect of the successful empty-root allocation tail.
-Reads follow the image's store order, including the two IPv4 copy reads and
-the post-copy saved root slot. This does not supply an allocation outcome. -/
-def effect (s : MachineData) : Except String DataMem := do
+/-- Attachment phase after a successful allocation; no allocation outcome is supplied here. -/
+def attach (s : MachineData) : Except String (DataMem × Nat) := do
   let base := s.regs.rbx.toNat
   let peer := s.regs.r14.toNat
   let width := s.regs.rbp.toNat
@@ -26,8 +24,12 @@ def effect (s : MachineData) : Except String DataMem := do
   m ← store m (base+56) 8 (peer+1096)
   m ← store m (base+64) 8 last
   m ← store m last 8 link
-  m ← store m (base+24) 4 (headerWord width cidr)
-  if width==32 then
+  return (m,cidr)
+
+def copy (s : MachineData) (memory : DataMem) : Except String DataMem := do
+  let base := s.regs.rbx.toNat
+  let mut m := memory
+  if s.regs.rbp.toNat==32 then
     let first ← readNat ⟨{s with dmem:=m},0⟩ s.regs.r13.toNat 4
     m ← store m (base+32) 4 first
     let again ← readNat ⟨{s with dmem:=m},0⟩ s.regs.r13.toNat 4
@@ -37,9 +39,21 @@ def effect (s : MachineData) : Except String DataMem := do
     m ← store m (base+40) 8 last
     let first ← readNat ⟨{s with dmem:=m},0⟩ s.regs.r13.toNat 8
     m ← store m (base+32) 8 first
-  let slot ← readNat ⟨{s with dmem:=m},0⟩ (s.regs.rsp.toNat+8) 8
-  m ← store m (base+48) 8 (slot ||| 2)
-  store m slot 8 base
+  return m
+
+def publish (s : MachineData) (memory : DataMem) : Except String DataMem := do
+  let slot ← readNat ⟨{s with dmem:=memory},0⟩ (s.regs.rsp.toNat+8) 8
+  let m ← store memory (s.regs.rbx.toNat+48) 8 (slot ||| 2)
+  store m slot 8 s.regs.rbx.toNat
+
+/-- Executable memory effect of the successful empty-root allocation tail.
+Reads follow the image's store order, including the two IPv4 copy reads and
+the post-copy saved root slot. -/
+def effect (s : MachineData) : Except String DataMem := do
+  let (memory,cidr) ← attach s
+  let memory ← store memory (s.regs.rbx.toNat+24) 4 (headerWord s.regs.rbp.toNat cidr)
+  let memory ← copy s memory
+  publish s memory
 
 def check (states : Array MachineState) : Except String Nat := do
   let mut pending : Option DataMem := none

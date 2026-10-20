@@ -2,6 +2,7 @@ import PairAllowedipsLookupCheck
 import PairAllowedipsPlacement
 import PairAllowedipsExact
 import PairAllowedipsRoot
+import PairAllowedipsNames
 import PairAllowedips
 
 namespace Binary.Pair.Allowedips
@@ -79,9 +80,7 @@ def suppliedService (input : Input) (r : Run) (names : Names) (released : List N
       for i in [:input.lookup.offsets.nodeSize] do
         unless (m.get? (.ofNat 64 (a+i))).isNone do throw "service.allocation-not-fresh"
       m := m.storeBytes (.ofNat 64 a) (List.replicate input.lookup.offsets.nodeSize 0)
-      names := {names with
-        nextNode := names.nextNode+1,
-        trie := {names.trie with nodes := names.trie.nodes++[(names.nextNode,a)]}}
+      names := names.allocated a
       answer := a
   else if pc == input.free then
     unless ra == input.freeReturn do throw "service.free-return-site"

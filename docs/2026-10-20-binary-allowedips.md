@@ -542,3 +542,78 @@ acceptance; their intermediate `sorryAx` output was a failed build. The mirror
 counter correction remains unlanded, and the existing failing wrap witness and
 binary expected result are unchanged. Allocation, rollback, wrappers and
 checkpoint B remain open.
+
+## Complete empty-root tail effect (05:14 UTC)
+
+`Root.effect_segment` now realizes the same executable whole-memory effect
+checked by the paired runner, from `add+0x443` after allocation return to
+`add+0x549` after publication. It covers both address families: 47 instructions
+on the IPv4 path and 53 on IPv6, 60 distinct instructions in their union.
+Sixteen had physical proofs at the preceding checkpoint. The result includes
+exact final memory, the zero success register, the unchanged stack and saved
+registers, and the updated peer-list-head register. No allocator behavior,
+post-state correspondence or byte-separation contract is assumed by this local
+effect proof. Its premise is successful evaluation of the executable entry
+summary; deriving that from fresh-allocation resources and reconstructing the
+new mirror node remain open. This is not an insertion-function theorem.
+
+The summary is factored into attachment, copy and publication phases with the
+same read/write order. The proof uses these tested definitions and composes
+physical regions at proof-selected cuts. The root-slot load still follows the
+key copies, and the duplicate IPv4 copy still reads the first store's memory.
+There is no intermediate full-world correspondence requirement. Existing
+region composition and memory lemmas suffice; no new search tactic was added.
+
+An allocation-name helper is now shared with the supplied-service runner.
+Its body is the previous record update unchanged. Supporting lemmas preserve
+already resolved pointers and decoded peer lists when one identity is appended;
+the list budget increases with that same interpretation. Resolving the new
+pointer requires physical-address freshness. Validation of the extended
+allocation geometry and reconstruction of the newly initialized node remain
+separate obligations. These support lemmas build with standard axioms; the fresh
+replay below covers the insertion surface, not a completed allocation theorem.
+
+This checkpoint adds 828 lines in nine root-proof modules and two allocation-name
+modules, about 31 elapsed minutes beyond `fe591115`. That includes diagnosis,
+failed attempts and validation. The complete physical tail composes in 83 lines;
+this is a local composition cost, not a forecast for structural insertion or the
+campaign.
+
+Two proof-engineering costs were exposed. Expanding header arithmetic through
+memory cases made an initial symbolic block excessive; separating pure register
+arithmetic from the store avoids that expansion. Separately, assigning
+`Nat.mod_eq_of_lt` directly to a bit-vector-to-Nat equality caused expensive
+definitional conversion. An isolated reproducer located that step; explicitly
+rewriting with `BitVec.toNat_ofNat` makes the composed module elaborate in about
+a second. No statement, precondition or resource limit was weakened. Eight
+oversized build/probe attempts were intentionally terminated (failures), and
+one diagnostic capped at 8 GiB was KILLED with exit 137 (also a failure).
+One leaf build was inadvertently started while another was still running;
+subsequent serialized package validation passed. Ordinary elaboration errors
+were fixed before acceptance, with no remaining `sorryAx` in the headlines.
+
+Validation:
+
+- The default binary package build passes without warnings. Explicit axiom
+  prints for `Root.effect_segment`, `Exact.assignment_from_relation` and the
+  allocation-name lemmas contain only `propext`, `Classical.choice`, `Quot.sound`.
+- Fresh `capped lake -d binary env leanchecker --fresh
+  AllowedipsInsertionSurface` passes for the enlarged root-effect closure.
+  The expected printed statement/definition surface was reviewed and updated;
+  its diff check passes. `TrustBase.lean` is unchanged. External export
+  acceptance remains unclaimed.
+- Generated checks after the shared name-update refactoring pass 66 insertions
+  and 66 retained-heap lookups, plus 24 isolated root insertions/lookups, checking
+  20 exact and 28 root segments in 3.348 seconds.
+- After phase factoring, the recorded three-way comparison passes eight calls
+  under both seeds, with 170 coverage entries, 64 comparison entries and 117
+  decisions in 0.308 seconds. The actual captured first insertion also passes
+  under both seeds with 822,856 compared endpoint bytes per run. Generic
+  allocator behavior remains a supplied captured transition.
+- The fast unit tier passes 136 tests, one skipped, in 25.362 seconds.
+
+Checkpoint A remains open: fresh-allocation reconstruction, nonempty structural
+mutation, allocation failures/rollback, wrapper and return composition.
+Checkpoint B has not begun. The sequence-counter correction remains pending its
+landing notice; the failing witness and unrestricted intended Pre/R are
+unchanged. No completed-function coverage is added at this checkpoint.
