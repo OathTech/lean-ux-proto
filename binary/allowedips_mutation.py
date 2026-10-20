@@ -91,6 +91,11 @@ def main():
     print(json.dumps(dict(status='pass',sequences=len(rows),
                          insertions=sum(len(r['calls']) for r in rows),
                          lookups=sum(len(r['calls']) for r in rows),
+                         isolated_root_insertions=sum(len(r['isolatedRootCases']) for r in rows),
+                         isolated_root_lookups=sum(len(r['isolatedRootCases']) for r in rows),
+                         root_segments=sum(c['insert']['rootSegments'] for r in rows
+                                           for c in r['calls']+r['isolatedRootCases']),
+                         exact_segments=sum(c['insert']['exactSegments'] for r in rows for c in r['calls']),
                          seconds=round(time.monotonic()-started,3))))
     return 0
 

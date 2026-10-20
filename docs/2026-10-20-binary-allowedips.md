@@ -495,3 +495,50 @@ Post-mutation heap preservation, allocation/failure/rollback paths, wrapper
 composition and checkpoint B remain work to do. The counter correction is
 still awaiting its landing notice; the wrap witness and its expected binary
 result remain unchanged.
+
+## Reassignment closed at the tested segment; empty-root work (04:43 UTC)
+
+`Exact.assignment_from_relation` now derives successful execution of the tested
+memory effect from entry reconstruction and the existing heap assertion. Its
+14-instruction segment executes the actual mirror assignment fragment, exports
+an exact byte write frame and restores both full reconstruction and the tested
+heap invariant. Successful future execution, a successful effect computation,
+post-mutation correspondence and extra separation premises are not assumptions
+of this segment headline. Public entry/return and the other insertion paths
+remain open; this adds no completed function.
+
+The heap proof reuses the existing ownership and structural checks. Unlink and
+append preserve the self-linked lists of other internal nodes; distinctness of
+those nodes from the actual predecessor, successor and post-unlink tail follows
+from decoded words and ownership. Mapped writes are derived from those reads.
+The strengthened root has only the three standard axioms and passes fresh kernel
+replay. The printed trust-surface diff passes. No new environmental premise was
+added to `TrustBase.lean`, and no external acceptance is claimed.
+
+For empty-root insertion, the runner now checks an executable whole-memory
+summary from `add+0x443` to `add+0x549`. It follows actual read/store order,
+including the compiler's duplicate IPv4 copy and the saved root-slot read after
+the key copy. The first two physical blocks (sixteen instructions) and the
+packed-header arithmetic build with standard axioms, without raised resource
+limits. The finite header facts use kernel reduction, not native reduction.
+The copy, root connection and reconstruction composition remain open.
+
+Generated checks pass 66 insertions followed by 66 retained-heap lookups, plus
+24 separately labeled fresh-fixture root-prefix cases with immediate retained
+lookups (both families, both seeds, prefixes 0, 1, 7, 8, width-1 and width).
+They check 20 exact segments and 28 root segments, in 3.403 seconds. The recorded
+three-way run passes eight mixed-family calls under both seeds: 170 coverage
+entries, 64 comparison entries and 117 decisions, in 0.275 seconds. These
+recorded arguments still use constructed entry state. The actual captured first
+insertion also replays successfully under both seeds with the new root check:
+254 interpreted WireGuard/coverage instructions and 822,856 endpoint bytes per
+run. Its captured generic allocator transition remains supplied, not proved.
+The fast unit tier passes 136 tests, one skipped, in 24.786 seconds.
+
+This checkpoint is about 21 elapsed minutes after the source-fragment bridge.
+The eight new modules add 600 lines; the strongest reassignment segment uses
+the existing checked definitions. Proof elaboration failures in the new register arithmetic were repaired before
+acceptance; their intermediate `sorryAx` output was a failed build. The mirror
+counter correction remains unlanded, and the existing failing wrap witness and
+binary expected result are unchanged. Allocation, rollback, wrappers and
+checkpoint B remain open.

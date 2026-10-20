@@ -53,7 +53,16 @@ def runCase (input : Input) (seed : UInt64) (family : Nat) : Except String Json 
       let (afterLookup,look) ← lookup input seed after family address
       reports := reports.push (Json.mkObj [("case",toJson "ipv6-low-word"),("insert",report),("lookup",look)])
       s := afterLookup
-  return Json.mkObj [("family",toJson family),("seed",toJson seed.toNat),("calls",toJson reports)]
+  let mut rootCases := #[]
+  for cidr in [0,1,7,8,width-1,width] do
+    let initial ← fixture input initialWorld
+    let address := if family==4 then 0x81a2b3c4 else 0xfedcba98765432100123456789abcdef
+    let (after,report) ← (invoke input seed initial family address cidr 1 [yes 7]).mapError
+      (fun e => s!"root-boundary/{family}/{cidr}: {e}")
+    let (_,look) ← lookup input seed after family address
+    rootCases := rootCases.push (Json.mkObj [("insert",report),("lookup",look)])
+  return Json.mkObj [("family",toJson family),("seed",toJson seed.toNat),
+    ("calls",toJson reports),("isolatedRootCases",toJson rootCases)]
 
 structure Recorded where
   trace : Json

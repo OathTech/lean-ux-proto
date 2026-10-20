@@ -1,4 +1,81 @@
 HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
+Binary.Pair.Allowedips.Exact.assignment_from_relation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {names : Binary.Pair.Allowedips.Names} {o : AllowedipsProbe.Offsets} {s : MachineData} {k : Leanux.WGWorld}
+      {d : Leanux.WG.Device} {ambient : Leanux.Ambient} {id : Leanux.WG.NodeId} {base : Nat} {node : Leanux.WG.AipNode}
+      {pid : Leanux.WG.PeerId} {peer : Nat} {owner : Leanux.WG.Peer},
+      Eq.{1} k.dev (some.{0} d) →
+        Binary.Pair.Allowedips.Corresponds names o s.dmem d →
+          Eq.{1} (Binary.Pair.Allowedips.heap names (Binary.Pair.Allowedips.target d) s.dmem) (Except.ok.{0, 0} ()) →
+            Membership.mem.{0, 0} names.trie.nodes (Prod.mk.{0, 0} id base) →
+              Eq.{1} (Std.TreeMap.get?.{0, 0} d.nodes id) (some.{0} node) →
+                Membership.mem.{0, 0} names.trie.peers (Prod.mk.{0, 0} pid peer) →
+                  Eq.{1} (Std.TreeMap.get?.{0, 0} d.peers pid) (some.{0} owner) →
+                    Eq.{1} s.regs.rbx.toNat base →
+                      Eq.{1} s.regs.r14.toNat peer →
+                        Exists.{1} fun memory =>
+                          Exists.{1} fun regs =>
+                            Exists.{1} fun finalWG =>
+                              Exists.{1} fun finalAmbient =>
+                                Eq.{1} (Binary.Pair.Allowedips.Exact.effect s)
+                                    (Except.ok.{0, 0} (Prod.mk.{0, 0} memory regs)) ∧
+                                  Eq.{1}
+                                      (StateT.run.{0, 0}
+                                        (StateT.run.{0, 0} (Binary.Pair.Allowedips.Exact.assignment id pid) k) ambient)
+                                      (Except.ok.{0, 0} (Prod.mk.{0, 0} (Prod.mk.{0, 0} () finalWG) finalAmbient)) ∧
+                                    Eventually (Binary.instructionStep fetch)
+                                      (fun t =>
+                                        Eq.{1} t.pc
+                                            (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1353) ∧
+                                          Eq.{1} t.data.regs regs ∧
+                                            Eq.{1} t.data.dmem memory ∧
+                                              Binary.EqualOutside (Binary.Pair.Allowedips.Exact.Writes names base)
+                                                  s.dmem t.data.dmem ∧
+                                                Exists.{1} fun finalDevice =>
+                                                  Eq.{1} finalWG.dev (some.{0} finalDevice) ∧
+                                                    Binary.Pair.Allowedips.Corresponds names o t.data.dmem finalDevice ∧
+                                                      Eq.{1}
+                                                        (Binary.Pair.Allowedips.heap names
+                                                          (Binary.Pair.Allowedips.target finalDevice) t.data.dmem)
+                                                        (Except.ok.{0, 0} ()))
+                                      { data := s,
+                                        pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 997 }
+Binary.Pair.Allowedips.Exact.assignment_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
+    ∀ {names : Binary.Pair.Allowedips.Names} {o : AllowedipsProbe.Offsets} {s : MachineData} {memory : DataMem}
+      {regs : Reg64s} {k : Leanux.WGWorld} {d : Leanux.WG.Device} {ambient : Leanux.Ambient} {id : Leanux.WG.NodeId}
+      {base : Nat} {node : Leanux.WG.AipNode} {pid : Leanux.WG.PeerId} {peer : Nat} {owner : Leanux.WG.Peer},
+      Eq.{1} k.dev (some.{0} d) →
+        Binary.Pair.Allowedips.Corresponds names o s.dmem d →
+          Eq.{1} (Binary.Pair.Allowedips.heap names (Binary.Pair.Allowedips.target d) s.dmem) (Except.ok.{0, 0} ()) →
+            Membership.mem.{0, 0} names.trie.nodes (Prod.mk.{0, 0} id base) →
+              Eq.{1} (Std.TreeMap.get?.{0, 0} d.nodes id) (some.{0} node) →
+                Membership.mem.{0, 0} names.trie.peers (Prod.mk.{0, 0} pid peer) →
+                  Eq.{1} (Std.TreeMap.get?.{0, 0} d.peers pid) (some.{0} owner) →
+                    Eq.{1} s.regs.rbx.toNat base →
+                      Eq.{1} s.regs.r14.toNat peer →
+                        Eq.{1} (Binary.Pair.Allowedips.Exact.effect s) (Except.ok.{0, 0} (Prod.mk.{0, 0} memory regs)) →
+                          Exists.{1} fun finalWG =>
+                            Exists.{1} fun finalAmbient =>
+                              Eq.{1}
+                                  (StateT.run.{0, 0}
+                                    (StateT.run.{0, 0} (Binary.Pair.Allowedips.Exact.assignment id pid) k) ambient)
+                                  (Except.ok.{0, 0} (Prod.mk.{0, 0} (Prod.mk.{0, 0} () finalWG) finalAmbient)) ∧
+                                Eventually (Binary.instructionStep fetch)
+                                  (fun t =>
+                                    Eq.{1} t.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 1353) ∧
+                                      Eq.{1} t.data.regs regs ∧
+                                        Eq.{1} t.data.dmem memory ∧
+                                          Binary.EqualOutside (Binary.Pair.Allowedips.Exact.Writes names base) s.dmem
+                                              t.data.dmem ∧
+                                            Exists.{1} fun finalDevice =>
+                                              Eq.{1} finalWG.dev (some.{0} finalDevice) ∧
+                                                Binary.Pair.Allowedips.Corresponds names o t.data.dmem finalDevice ∧
+                                                  Eq.{1}
+                                                    (Binary.Pair.Allowedips.heap names
+                                                      (Binary.Pair.Allowedips.target finalDevice) t.data.dmem)
+                                                    (Except.ok.{0, 0} ()))
+                                  { data := s, pc := HAdd.hAdd.{0, 0, 0} Binary.AllowedipsMutationImage.Add.entry 997 }
 Binary.Pair.Allowedips.Exact.assignment_simulation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
   Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch →
     ∀ {names : Binary.Pair.Allowedips.Names} {o : AllowedipsProbe.Offsets} {s : MachineData} {memory : DataMem}
@@ -899,6 +976,14 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                 Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
                   Eventually (Binary.instructionStep fetch)
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
+def Binary.Pair.Allowedips.Exact.Writes : Binary.Pair.Allowedips.Names → Nat → BitVec 64 → Prop :=
+fun names base a => Binary.InRange (BitVec.ofNat 64 base) 8 a ∨ Binary.Pair.Allowedips.ListWrites names a
+def Binary.Pair.Allowedips.ListWrites : Binary.Pair.Allowedips.Names → BitVec 64 → Prop :=
+fun names a =>
+  Exists.{1} fun link =>
+    Binary.Pair.Allowedips.LinkSlot names link ∧
+      Exists.{1} fun offset =>
+        (Eq.{1} offset 0 ∨ Eq.{1} offset 8) ∧ Binary.InRange (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} link offset)) 8 a
 def Binary.Pair.Allowedips.Exact.assignment : Nat → Nat → Leanux.WG.M Unit :=
 fun id pid => do
   let __do_lift ← liftM.{0, 0, 0} (Leanux.WG.getNode id)
