@@ -294,7 +294,7 @@ With all new runtime separation assertions, the generated retained-heap suite
 passes 54 insertions and 54 lookups in 2.203 seconds. The recorded eight-call,
 two-seed three-way comparison passes in 0.271 seconds with the same 170 coverage
 points, 64 comparisons and 117 decisions. Local Lean builds pass with standard
-axioms; fresh replay of the new helper/segment closure is running, and external
+axioms; fresh replay of the new helper/segment closure passes, and external
 export acceptance remains pending. A first trust-surface print failed because
 this fresh worktree had not built the old headline roots; building those roots
 resolved it. No failed print was treated as acceptance.
@@ -306,3 +306,42 @@ instruction terms for the two insertion wrappers and `add`. It contains no
 execution or desired postcondition premise. The existing explicit coverage
 callback contracts are retained. Full insertion's allocator contracts and
 function postcondition are still to be implemented and proved.
+
+## Placement-loop composition (03:17 UTC)
+
+`Placement.loop` now proves the complete physical placement loop against the
+actual accepted `WG.nodePlacement` run. It uses the shared `compose_loop` and
+`Sequential.forIn_execution` lemmas, with a proved physical iteration. Its
+invariant includes the full executable reconstruction and heap assertion; these
+are reestablished by the physical frame, without assuming future correspondence.
+The source component store is unchanged. The endpoint exports the selected
+parent, exact/nonexact exit PC, callback readiness, scratch/parent write frame,
+and the restored width and peer registers on nonexact exits.
+
+This is still a loop-boundary result under explicit entry-byte `Inputs`, not
+an insertion function result. Deriving those read facts from the runner's
+executable boundary is the next obligation, followed by mutation and wrapper
+composition. The conditional hypotheses are named decoder and coverage
+callback contracts; no binary step or postcondition is assumed. The original
+source body supplies its accumulator result and unchanged store through
+`iteration_accepted`, with source records remaining in Ambient.
+
+Composition exposed two missing facts in the initial support. Callback/helper
+contracts discarded preservation of the saved-parent word; they now export it
+from their smaller proved write footprints. The generic loop lemma initially
+asked for an iteration proof even for an already-completed accumulator; it now
+uses an explicit continuing-accumulator predicate, proved for every yielded
+source step. These were proof-interface defects, not changes to the mirror or
+to the counter abstraction. Reachability restricts node input facts to the
+selected family/path, so a mixed-family heap is not required to give every
+node the current call's width.
+
+The new source projection, physical composition and loop files add about 770
+lines, plus small changes to the shared frame and loop lemmas. From the 03:00
+support checkpoint to the successful loop build at approximately 03:17 is about
+17 elapsed minutes. Generated executions pass with added query/saved-input
+separation assertions: 54 insertions and 54 lookups in 2.225 seconds. The
+eight-call recorded comparison passes under both seeds in 0.269 seconds.
+All new declarations build with the standard axioms. Fresh kernel replay of
+`AllowedipsPlacementSimulation` is running; external acceptance is pending.
+The test counts and loop result add no completed-function coverage.

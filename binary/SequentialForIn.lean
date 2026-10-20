@@ -10,15 +10,18 @@ theorem forIn_execution [Labels] (fetch : Int64 → Option Decoded)
     {Item Acc Store Ambient Error : Type}
     (body : Item → Acc → StateT Store (StateT Ambient (Except Error)) (ForInStep Acc))
     (R : Acc → Store → Ambient → MachineState → Prop)
+    (Open : Acc → Prop)
+    (continues : ∀ item acc store ambient next nextStore nextAmbient,
+      ((body item acc).run store).run ambient = .ok ((.yield next,nextStore),nextAmbient) → Open next)
     (iteration : ∀ item acc store ambient next nextStore nextAmbient machine,
       ((body item acc).run store).run ambient = .ok ((next,nextStore),nextAmbient) →
-      R acc store ambient machine →
+      Open acc → R acc store ambient machine →
       Eventually (instructionStep fetch)
         (R (match next with | .done a => a | .yield a => a) nextStore nextAmbient) machine)
     (items : List Item) (acc final : Acc) (store finalStore : Store)
     (ambient finalAmbient : Ambient) (machine : MachineState)
     (accepted : ((forIn items acc body).run store).run ambient = .ok ((final,finalStore),finalAmbient))
-    (initial : R acc store ambient machine) :
+    (openLoop : Open acc) (initial : R acc store ambient machine) :
     Eventually (instructionStep fetch) (R final finalStore finalAmbient) machine := by
   induction items generalizing acc store ambient machine with
   | nil =>
@@ -34,7 +37,7 @@ theorem forIn_execution [Labels] (fetch : Int64 → Option Decoded)
     | ok out =>
       rcases out with ⟨⟨next,nextStore⟩,nextAmbient⟩
       simp only [first] at accepted
-      have one := iteration item acc store ambient next nextStore nextAmbient machine first initial
+      have one := iteration item acc store ambient next nextStore nextAmbient machine first openLoop initial
       cases next with
       | done result =>
         change Except.ok ((result,nextStore),nextAmbient) = .ok ((final,finalStore),finalAmbient) at accepted
@@ -43,7 +46,7 @@ theorem forIn_execution [Labels] (fetch : Int64 → Option Decoded)
       | yield result =>
         apply eventually_trans (instructionStep fetch) _ _ _ one
         intro nextMachine related
-        exact ih result nextStore nextAmbient nextMachine accepted related
+        exact ih result nextStore nextAmbient nextMachine accepted (continues item acc store ambient result nextStore nextAmbient first) related
 
 #print axioms forIn_execution
 end Binary.Sequential

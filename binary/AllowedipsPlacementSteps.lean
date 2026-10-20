@@ -13,7 +13,8 @@ theorem Frame.call (fetch : Int64 → Option Decoded) (pc : Int64) (target : Lab
     {base c s} (frame : Frame base c s) :
     Eventually (instructionStep fetch) (fun t =>
       t.pc=pc+5 ∧ Frame base c t.data ∧ t.data.regs.rbx=s.regs.rbx ∧
-      t.data.regs.rbp=s.regs.rbp ∧ t.data.regs.r14=s.regs.r14) ⟨s,pc⟩ := by
+      t.data.regs.rbp=s.regs.rbp ∧ t.data.regs.r14=s.regs.r14 ∧
+      t.data.dmem.loadInt base.regs.rsp.toBitVec 8=s.dmem.loadInt base.regs.rsp.toBitVec 8) ⟨s,pc⟩ := by
   apply frame.region_callback fetch (label target) (pc+5) kind contract _ s.regs rfl rfl rfl
   apply Sequential.forget
     (historySteps_eventually fetch 1 _ _
@@ -27,7 +28,8 @@ theorem Frame.cidr_arguments (fetch : Int64 → Option Decoded)
     (read : s.dmem.loadInt (s.regs.rbx.toBitVec+24) 1=some cidr.toNat) :
     Eventually (instructionStep fetch) (fun t =>
       t.pc=Add.entry+0x10a ∧ Frame base c t.data ∧ t.data.regs.rbx=s.regs.rbx ∧
-      t.data.regs.rbp=.ofBitVec (cidr.setWidth 64) ∧ t.data.regs.r14=s.regs.r14)
+      t.data.regs.rbp=.ofBitVec (cidr.setWidth 64) ∧ t.data.regs.r14=s.regs.r14 ∧
+      t.data.dmem.loadInt base.regs.rsp.toBitVec 8=s.dmem.loadInt base.regs.rsp.toBitVec 8)
       ⟨s,Add.entry+0xfc⟩ := by
   obtain ⟨old,mapped⟩ := Option.isSome_iff_exists.mp frame.ready.mapped
   apply frame.region_callback fetch (.ofNat 0xffffffff810f4040) (Add.entry+0x10a) .cmp1 cmp _
@@ -43,7 +45,8 @@ theorem Frame.prefix_arguments (fetch : Int64 → Option Decoded)
     Eventually (instructionStep fetch) (fun t =>
       t.pc=Add.entry+0xad ∧ Frame base c t.data ∧ t.data.regs.rbx=s.regs.rbx ∧
       t.data.regs.rbp=s.regs.rbp ∧
-      t.data.regs.r14=.ofBitVec ((s.regs.get (.low .rax .W32)).setWidth 64)) ⟨s,Add.entry+0xa1⟩ := by
+      t.data.regs.r14=.ofBitVec ((s.regs.get (.low .rax .W32)).setWidth 64) ∧
+      t.data.dmem.loadInt base.regs.rsp.toBitVec 8=s.dmem.loadInt base.regs.rsp.toBitVec 8) ⟨s,Add.entry+0xa1⟩ := by
   obtain ⟨old,mapped⟩ := Option.isSome_iff_exists.mp frame.ready.mapped
   apply frame.region_callback fetch (.ofNat 0xffffffff810f4040) (Add.entry+0xad) .cmp1 cmp _
     {s.regs with
@@ -57,7 +60,8 @@ theorem Frame.exact_arguments (fetch : Int64 → Option Decoded)
     {base c s} (frame : Frame base c s) :
     Eventually (instructionStep fetch) (fun t =>
       t.pc=Add.entry+0xc1 ∧ Frame base c t.data ∧ t.data.regs.rbx=s.regs.rbx ∧
-      t.data.regs.rbp=s.regs.rbp ∧ t.data.regs.r14=s.regs.r14) ⟨s,Add.entry+0xb7⟩ := by
+      t.data.regs.rbp=s.regs.rbp ∧ t.data.regs.r14=s.regs.r14 ∧
+      t.data.dmem.loadInt base.regs.rsp.toBitVec 8=s.dmem.loadInt base.regs.rsp.toBitVec 8) ⟨s,Add.entry+0xb7⟩ := by
   obtain ⟨old,mapped⟩ := Option.isSome_iff_exists.mp frame.ready.mapped
   apply frame.region_callback fetch (.ofNat 0xffffffff810f4040) (Add.entry+0xc1) .cmp1 cmp _
     {s.regs with
@@ -72,11 +76,12 @@ theorem Frame.common (fetch : Int64 → Option Decoded)
     (caller : CommonBits.CallerAt i c s (pc+5)) :
     Eventually (instructionStep fetch) (fun t =>
       t.pc=pc+5 ∧ Frame base c t.data ∧ t.data.regs.rbx=s.regs.rbx ∧
-      t.data.regs.rbp=s.regs.rbp ∧ (t.data.regs.get (.low .rax .W8)).toNat=i.result) ⟨s,pc⟩ := by
+      t.data.regs.rbp=s.regs.rbp ∧ (t.data.regs.get (.low .rax .W8)).toNat=i.result ∧
+      t.data.dmem.loadInt base.regs.rsp.toBitVec 8=s.dmem.loadInt base.regs.rsp.toBitVec 8) ⟨s,pc⟩ := by
   have executed := CommonBits.Sequential.call_run fetch decoder callbacks pc here i c s caller
   apply eventually_weaken (instructionStep fetch) _ _ _ _ executed
   rintro t ⟨pc,sp,bx,bp,r12,r13,_,r15,answer,covered,written,mapped⟩
-  refine ⟨pc,?_,bx,bp,answer⟩
+  refine ⟨pc,?_,bx,bp,answer,frame.parent_preserved written⟩
   apply frame.after sp r13 r12 r15 covered
   · simpa only [frame.stack] using mapped
   · intro a outside

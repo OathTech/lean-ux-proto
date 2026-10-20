@@ -110,6 +110,25 @@ theorem Frame.after_parent {base c s t} (frame : Frame base c s) (value : BitVec
     intro a outside
     exact stored a (fun h => outside (.inl (parent_subset (by simpa only [frame.stack] using h))))
 
+/-- Retain the saved-parent word through the smaller helper/callback footprint. -/
+theorem Frame.parent_preserved {base c s} {t : MachineData} (frame : Frame base c s)
+    (memory : EqualOutside (fun a => CommonBits.CallerScratch s a ∨ c.writes a) s.dmem t.dmem) :
+    t.dmem.loadInt base.regs.rsp.toBitVec 8=s.dmem.loadInt base.regs.rsp.toBitVec 8 := by
+  symm
+  apply memory.loadInt
+  intro n bound written
+  rcases written with scratch | buffer
+  · have parentAt : InRange (base.regs.rsp.toBitVec-48+.ofNat 64 48) 8
+        (base.regs.rsp.toBitVec+.ofNat 64 n) := by
+      change InRange (base.regs.rsp.toBitVec-48#64+48#64) 8 _
+      rw [BitVec.sub_add_cancel]
+      exact ⟨n,bound,rfl⟩
+    have apart := InRange.offset_disjoint (base.regs.rsp.toBitVec-48) 48 8 0 48
+      (by decide) (by decide) (.inr (by decide)) _ parentAt
+    apply apart
+    simpa only [CommonBits.CallerScratch,frame.stack,BitVec.add_zero,show BitVec.ofNat 64 0=0#64 from rfl] using scratch
+  · exact frame.separate _ (.inr (.inr ⟨buffer.1,.inr buffer.2⟩)) (parent_subset ⟨n,bound,rfl⟩)
+
 /-- Shared physical continuation for the PC and comparison callbacks. -/
 theorem Frame.region_callback (fetch : Int64 → Option Decoded) (address returnPC : Int64)
     (kind : KcovKind)
@@ -122,11 +141,18 @@ theorem Frame.region_callback (fetch : Int64 → Option Decoded) (address return
       t.data.dmem=s.dmem.storeInt (s.regs.rsp.toBitVec-8) 8 returnPC.toBitVec.toInt ∧ t.pc=address) initial) :
     Eventually (instructionStep fetch) (fun t =>
       t.pc=returnPC ∧ Frame base c t.data ∧ t.data.regs.rbx=registers.rbx ∧
-      t.data.regs.rbp=registers.rbp ∧ t.data.regs.r14=registers.r14) initial := by
+      t.data.regs.rbp=registers.rbp ∧ t.data.regs.r14=registers.r14 ∧
+      t.data.dmem.loadInt base.regs.rsp.toBitVec 8=s.dmem.loadInt base.regs.rsp.toBitVec 8) initial := by
   have called := CommonBitsCoverage.region_callback fetch address returnPC kind contract c initial s registers frame.ready region
   apply eventually_weaken (instructionStep fetch) _ _ _ _ called
   rintro t ⟨pc,sp,bx,bp,r12,r13,r14,r15,ready,written⟩
-  refine ⟨pc,?_,bx,bp,r14⟩
+  have parent : t.data.dmem.loadInt base.regs.rsp.toBitVec 8=s.dmem.loadInt base.regs.rsp.toBitVec 8 := by
+    apply frame.parent_preserved
+    intro a outside
+    apply written a
+    intro h
+    exact outside (AllowedipsLoop.callback_subset s.regs.rsp c a h)
+  refine ⟨pc,?_,bx,bp,r14,parent⟩
   apply frame.after sp (r13.trans key) (r12.trans cidr) (r15.trans bits) ready.state
     (frame.callback_mapped sp ready written)
   intro a outside

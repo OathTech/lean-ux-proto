@@ -87,6 +87,10 @@ def check (names : Names) (o : AllowedipsProbe.Offsets) (c : CommonBitsCoverage.
         throw "placement.service-separation"
       unless spansApart (readSpans names o) ([(stack-48,56)]++Trie.writeSpans c) do
         throw "placement.heap-separation"
+      unless spansApart [(machine.data.regs.r13.toNat,width/8)]
+          ([(stack-48,56)]++Trie.writeSpans c) do throw "placement.query-separation"
+      unless spansApart [(stack+8,8),(stack+0x10,4),(stack+0x18,8),(stack+0x24,4)]
+          (Trie.writeSpans c) do throw "placement.saved-input-separation"
       current := acc.2.1
       let ((step,next),nextAmbient) ← ((iteration key cidr width acc).run entries).run ambient |>.mapError Stop.message
       entries := next; ambient := nextAmbient

@@ -14,9 +14,9 @@ theorem child_step (s : MachineData) (byteIndex shift byte : Nat) (next : BitVec
     (indexBound : byteIndex < 16) (shiftBound : shift < 8) (byteBound : byte < 256)
     (old : Int)
     (mapped : s.dmem.loadInt s.regs.rsp.toBitVec 8=some old)
-    (indexRead : s.dmem.loadInt (s.regs.rbx.toBitVec + 25) 1 = some byteIndex)
-    (shiftRead : s.dmem.loadInt (s.regs.rbx.toBitVec + 26) 1 = some shift)
-    (byteRead : (parentMemory s).loadInt (s.regs.r13.toBitVec + .ofNat 64 byteIndex) 1 = some byte)
+    (indexRead : s.dmem.loadInt (s.regs.rbx.toBitVec + 25) 1 = some (byteIndex : Int))
+    (shiftRead : s.dmem.loadInt (s.regs.rbx.toBitVec + 26) 1 = some (shift : Int))
+    (byteRead : (parentMemory s).loadInt (s.regs.r13.toBitVec + .ofNat 64 byteIndex) 1 = some (byte : Int))
     (childRead : (parentMemory s).loadInt (s.regs.rbx.toBitVec + 8 + .ofNat 64 (8 * selected byte shift)) 8 = some next.toNat) :
     (physical Add.rcf 0xcf s).All (fun t => t.pc=Add.entry+0xee ∧
       t.data.dmem=parentMemory s ∧ t.data.regs={s.regs with

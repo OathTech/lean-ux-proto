@@ -1,4 +1,4 @@
-import PairAllowedipsPlacementSource
+import AllowedipsPlacementSourceStep
 import SequentialForIn
 
 namespace Binary.Pair.Allowedips.Placement
@@ -13,7 +13,7 @@ theorem compose_loop [Labels] (fetch : Int64 → Option Decoded)
     (R : Acc → AipStore → Ambient → MachineState → Prop)
     (step : ∀ acc store ambient next nextStore nextAmbient machine,
       ((iteration key cidr bits acc).run store).run ambient=.ok ((next,nextStore),nextAmbient) →
-      R acc store ambient machine →
+      acc.1=none → R acc store ambient machine →
       Eventually (instructionStep fetch)
         (R (match next with | .done a => a | .yield a => a) nextStore nextAmbient) machine)
     (store finalStore : AipStore) (ambient finalAmbient : Ambient)
@@ -46,9 +46,11 @@ theorem compose_loop [Labels] (fetch : Int64 → Option Decoded)
       rw [resultEq] at accepted
       change Except.ok ((answer,entries),state)=.ok ((result,finalStore),finalAmbient) at accepted
       cases accepted
-      have loop := Sequential.forIn_execution fetch body R
-        (by intro _ acc store ambient next nextStore nextAmbient machine accepted related
-            cases next <;> exact step acc store ambient _ nextStore nextAmbient machine accepted related) items _ _ _ _ _ _ machine first initial
+      have loop := Sequential.forIn_execution fetch body R (fun acc => acc.1=none)
+        (by intro _ acc store ambient next nextStore nextAmbient accepted
+            exact yield_open (iteration_accepted accepted).1)
+        (by intro _ acc store ambient next nextStore nextAmbient machine accepted openLoop related
+            cases next <;> exact step acc store ambient _ nextStore nextAmbient machine accepted openLoop related) items _ _ _ _ _ _ machine first rfl initial
       apply eventually_weaken (instructionStep fetch) _ _ _ _ loop
       intro t related
       exact ⟨acc,resultEq,related⟩

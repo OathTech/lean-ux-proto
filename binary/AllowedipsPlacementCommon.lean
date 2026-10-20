@@ -45,7 +45,8 @@ theorem Frame.common_segment (fetch : Int64 → Option Decoded)
     (queryApart : ∀ a, InRange s.regs.r13.toBitVec (bits/8) a → ¬Writes base.regs.rsp c a) :
     Eventually (instructionStep fetch) (fun t => t.pc=Add.entry+0xa1 ∧
       Frame base c t.data ∧ t.data.regs.rbx=s.regs.rbx ∧ t.data.regs.rbp=s.regs.rbp ∧
-      (t.data.regs.get (.low .rax .W8)).toNat=AllowedipsRelation.common bits stored query) ⟨s,Add.entry+0x93⟩ := by
+      (t.data.regs.get (.low .rax .W8)).toNat=AllowedipsRelation.common bits stored query ∧
+      t.data.dmem.loadInt base.regs.rsp.toBitVec 8=s.dmem.loadInt base.regs.rsp.toBitVec 8) ⟨s,Add.entry+0x93⟩ := by
   have first := region_eventually (arguments_layout.agreement mutation.add) s _ (common_arguments s)
   apply eventually_trans (instructionStep fetch) _ _ _ first
   rintro t ⟨pc,regs,memory⟩
@@ -63,8 +64,8 @@ theorem Frame.common_segment (fetch : Int64 → Option Decoded)
   have state : t=⟨t.data,Add.entry+0x9c⟩ := by cases t; simp_all
   rw [state]
   apply eventually_weaken (instructionStep fetch) _ _ _ _ called
-  rintro out ⟨pc,frame,bx,bp,answer⟩
-  refine ⟨pc,frame,?_,?_,?_⟩
+  rintro out ⟨pc,frame,bx,bp,answer,parent⟩
+  refine ⟨pc,frame,?_,?_,?_,by simpa only [memory] using parent⟩
   · simpa only [regs] using bx
   · simpa only [regs] using bp
   · simpa only [common_input_result _ _ _ _ _ family keyFields.1 keyFields.2.1] using answer
