@@ -402,3 +402,5 @@ Source-112 `cc4ef4fd` derives the remaining partial-allocation and trim semantic
 Source-113 `79cd5525` expands the initialized relation through atomic access trees of six UDP-ingress helpers. This is a source-coverage improvement, not closure of the remaining index-lookup and RX queue/publication interiors. The campaign report records the intermediate build and axiom checks.
 
 Source-114 `7207e10d` joins the original index-loop, peer-acquisition and owner-word-write points to initialized ingress accounting. The saved-peer reference write retains its own read and original continuation. RX queue/publication and other finer native interiors remain open; the campaign report records the full validation checkpoint.
+
+Source-115 `328a0d2c` joins RX adapter and queue-admission points to initialized accounting. Allocation and erasure use native packet-bound transport; the adapter does not mutate WG state before write-back. The queue write retains its actual saved peer and source continuation. Publication and other finer interiors remain open. The campaign report records scoped validation and the unchanged aggregate checkpoint.
