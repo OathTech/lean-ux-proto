@@ -96,7 +96,7 @@ noncomputable def canonical (call : Syscall) : Shape (Driver.dispatchObserved ho
   case wgGetRecv => exact dumpReceiveShape
   case wgUp => exact socketShape SENDER_FD (.child (.family .open))
   case wgDown => exact socketShape SENDER_FD (.child (.family .down))
-  case wgSetMtu n => exact .native (.control (.mtu n))
+  case wgSetMtu n => exact .native (.scalar (ProductScalar.callShape n))
   case wgDeladdr family => exact .native (.stored (ProductStore.rtnetlinkShape (ProductStore.deladdrShape family)))
   case wgDelroute family named dst plen oif kind metric => exact .native (.stored (ProductStore.rtnetlinkShape (ProductStore.delrouteShape family named dst plen oif kind metric)))
   case wgAddroute dst plen oif kind metric metricMtu flags => exact .native (.stored (ProductStore.rtnetlinkShape (ProductStore.addrouteShape dst plen oif kind metric metricMtu flags)))

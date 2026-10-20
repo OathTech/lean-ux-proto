@@ -22,6 +22,7 @@ theorem Child.entry_carrier (child : Child action) (before : child.Entry h w) : 
 theorem Native.checked (token : Native action) : CompleteProduct.Checked (liftPrefix action) := by
   cases token with
   | stored source => exact source.checked
+  | scalar source => exact source.checked
   | fs body => exact CompleteProduct.fs body
   | seccomp body => exact CompleteProduct.seccomp body
   | ambient body => exact CompleteProduct.ambient body

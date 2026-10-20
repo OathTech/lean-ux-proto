@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRunnerPointCoverage
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDispatchStoreSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedMtuSource
 
 /-! Fixed dispatch syntax. Ordinary subsystems are native projection frames;
 WireGuard source families are named children, never the dispatch function itself.
@@ -31,6 +32,7 @@ def Control.call : Control → Syscall
 
 inductive Native : {α : Type} → Leanux.M α → Type 1 where
   | stored (source : ProductStore.Shape action) : Native action
+  | scalar (source : ProductScalar.Shape action) : Native action
   | fs (body : FS.M α) : Native (liftFS body)
   | seccomp (body : Seccomp.M α) : Native (liftSeccomp body)
   | ambient (body : AmbientM α) : Native (liftAmbient body)

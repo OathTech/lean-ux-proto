@@ -17,6 +17,7 @@ theorem boundary_carrier (before : Framed shape w h)
   | returned _ performed => exact before.normal performed
   | interior _ impossible => cases impossible
   | stored point => exact point.carrier before
+  | scalar point => exact point.carrier before
   | left _ _ ih => exact ih before.1
   | right _ _ leading _ ih => exact ih (before.2 _ _ _ leading)
   | marked _ _ ih => exact ih before
