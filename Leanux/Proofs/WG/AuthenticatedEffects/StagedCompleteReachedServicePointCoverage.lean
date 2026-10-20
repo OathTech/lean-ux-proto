@@ -43,6 +43,7 @@ theorem boundary_carrier (before : CompleteProduct.Carrier h w)
   | entry => exact before
   | returned shape performed => exact shape.normal before performed
   | delete point => exact point.carrier before
+  | reading point => exact point.carrier before
   | interior _ impossible => cases impossible
   | left _ _ ih => exact ih before
   | right head _ leading _ ih => exact ih (head.normal before leading)

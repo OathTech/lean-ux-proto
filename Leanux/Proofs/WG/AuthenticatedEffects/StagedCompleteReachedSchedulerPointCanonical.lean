@@ -38,8 +38,8 @@ macro "scheduler_shape_step" : tactic => `(tactic|
   first
   | (scheduler_shape_head Pure.pure; exact .pure _)
   | (scheduler_shape_head Bind.bind; apply Shape.bind)
-  | (scheduler_native_head getDev; exact .native .device)
-  | (scheduler_native_head Env.pendingDevice; exact .native (.pendingDevice _ _))
+  | (scheduler_native_head getDev; exact .native (.reading (.wg ReadAccess.deviceShape)))
+  | (scheduler_native_head Env.pendingDevice; exact .native (.reading (ProductRead.pendingShape _ _)))
   | (scheduler_native_head getAmbient; exact .native .ambient)
   | (scheduler_native_head peekHiddenSite; exact .native .hiddenSite)
   | (scheduler_native_head peekUnit; exact .native (.unit _))
@@ -47,9 +47,9 @@ macro "scheduler_shape_step" : tactic => `(tactic|
   | (scheduler_native_head modifyDev; exact .native (.eraseWork _))
   | (scheduler_native_head hidden; first | exact .native (.start _) | exact .native (.stop _))
   | (scheduler_native_head modifyAmbient; exact .native (.resume _))
-  | (scheduler_native_head pendingNapi; exact .native (.pending _))
-  | (scheduler_native_head Env.Activation.hasWork; exact .native (.work _))
-  | (scheduler_native_head List.filterM; exact .native (.trials _))
+  | (scheduler_native_head pendingNapi; exact .native (.reading (ProductRead.napiShape _)))
+  | (scheduler_native_head Env.Activation.hasWork; exact .native (.reading (ProductRead.workShape _)))
+  | (scheduler_native_head List.filterM; exact .native (.reading (ProductRead.trialsShape _)))
   | (scheduler_native_head invariant; exact .native (.invariant _))
   | (scheduler_native_head unsupported; exact .native (.unsupported _))
   | (scheduler_native_head budgetExhausted; exact .native (.exhausted _))
@@ -77,9 +77,9 @@ noncomputable def runFinishShape (a : Activation) (occupancy refills : Nat) (sta
 noncomputable def runShape (a : Activation) : Shape (SourceScheduler.run iteration a) := by
   apply Shape.marked (.run a)
   rw [run_factor]
-  apply Shape.bind (.native (.occupancy a))
+  apply Shape.bind (.native (.reading (ProductRead.occupancyShape a)))
   intro occupancy
-  apply Shape.bind (.native .refills)
+  apply Shape.bind (.native (.reading ProductRead.refillsShape))
   intro refills
   rw [runBody_list]
   apply Shape.bind (listShape _ _ _ (runStepShape occupancy))
@@ -87,7 +87,7 @@ noncomputable def runShape (a : Activation) : Shape (SourceScheduler.run iterati
 
 noncomputable def dispatchChooseShape (worker : Worker) : Shape (dispatchChoose worker) := by
   unfold dispatchChoose
-  apply Shape.bind (.native .device)
+  apply Shape.bind (.native (.reading (.wg ReadAccess.deviceShape)))
   intro device
   cases worker <;> dsimp only
   all_goals repeat' scheduler_shape_step

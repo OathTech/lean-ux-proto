@@ -1,5 +1,7 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDispatchPointRunner
 
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedProductReadCanonical
+
 /-! Fixed service source syntax. Timers and delivery are expanded from the
 original source; only the seven deeper callback families remain children.
 No service operation is itself a child and no new evaluator is introduced. -/
@@ -53,6 +55,7 @@ def NativeKind.action (kind : NativeKind) : PrefixM Event kind.Result := match k
   | .delivery sent => emitPrefix (Event.delivery sent)
 
 inductive Native : {α : Type} → PrefixM Event α → Type 1 where
+  | reading (source : ProductRead.Shape body) : Native (liftPrefix body)
   | kind (source : NativeKind) : Native source.action
 
 inductive Family where

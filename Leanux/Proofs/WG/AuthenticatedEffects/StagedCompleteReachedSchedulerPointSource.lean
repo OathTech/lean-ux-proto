@@ -1,5 +1,7 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedSchedulerIteration
 
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedProductReadCanonical
+
 /-! A proof-only source shape indexed by the original action. It has no
 evaluator and introduces no new scheduler or ledger. Points will index the
 fixed canonical shape, not an existential shape or bind-factor equation.
@@ -12,6 +14,7 @@ abbrev History := List Event
 abbrev Result (α : Type) := Except Stop (α × World)
 
 inductive Native : {α : Type} → Leanux.M α → Type 1 where
+  | reading (source : ProductRead.Shape body) : Native body
   | device : Native (liftWG getDev)
   | ambient : Native getAmbient
   | budget : Native recordBudget

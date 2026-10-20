@@ -16,6 +16,7 @@ inductive Site where
   | returned
   | delete
   | interior
+  | reading
   | left (site : Site)
   | right (site : Site)
   | marked (label : Label) (site : Site)
@@ -30,6 +31,9 @@ inductive Point (inside : ChildPoints) : {α : Type} → {action : PrefixM Event
       Point inside (.native (.kind (.delete pid timer))) w h .delete {w with wg:=v,ambient:=b} h
   | interior (token : Child action) (point : inside _ _ token w h u middle) :
       Point inside (.child token) w h .interior u middle
+  | reading {α : Type} {body : Leanux.M α} {source : ProductRead.Shape body}
+      (point : ProductRead.Point source w v) :
+      Point inside (.native (.reading source)) w h .reading v h
   | left {body : PrefixM Event α} {next : α → PrefixM Event β}
       {head : Shape body} (tail : ∀ value, Shape (next value)) (point : Point inside head w h site u middle) :
       Point inside (.bind head tail) w h (.left site) u middle
@@ -86,6 +90,7 @@ theorem Point.coverage (contracts : ChildContracts native inside Good)
   | returned shape performed => exact .returned shape performed
   | delete point => exact .delete point
   | interior token point => exact .interior token ((contracts.at token).coverage _ _ _ _ point)
+  | reading point => exact .reading point
   | left tail point ih => exact .left tail ih
   | right head tail leading point ih => exact .right head tail leading ih
   | marked label point ih => exact .marked label ih
@@ -100,6 +105,7 @@ theorem Point.safe (carrierGood : ∀ h w, CompleteProduct.Carrier h w → Good 
   | returned shape performed => exact carrierGood _ _ (shape.normal before performed)
   | delete point => exact carrierGood _ _ (point.carrier before)
   | interior token point => exact (contracts.at token).safe _ _ _ _ before point
+  | reading point => exact carrierGood _ _ (point.carrier before)
   | left tail point ih => exact ih before
   | right head tail leading point ih => exact ih (head.normal before leading)
   | marked label point ih => exact ih before

@@ -8,6 +8,7 @@ open CompleteProduct
 
 theorem Native.checked (token : Native action) : Checked (liftPrefix action) := by
   cases token with
+  | reading source => exact source.checked
   | device => exact wg _ (state_store _ getDev_sameWGStore)
   | ambient => exact CompleteProduct.ambient _
   | budget => exact CompleteProduct.ambient _

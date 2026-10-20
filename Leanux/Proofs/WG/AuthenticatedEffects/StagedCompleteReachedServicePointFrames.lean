@@ -29,6 +29,7 @@ theorem NativeKind.checked (kind : NativeKind) : Checked kind.action := by
 
 theorem Native.checked (token : Native action) : Checked action := by
   cases token with
+  | reading source => exact source.checked
   | kind source => exact source.checked
 
 theorem Family.checked (family : Family) : Checked family.action := by

@@ -39,20 +39,20 @@ macro "service_shape_step" : tactic => `(tactic| first
   | (service_shape_head Pure.pure; exact .pure _)
   | (service_shape_head Bind.bind; apply Shape.bind)
   | (service_shape_head ForIn.forIn; first | apply rangeShape | apply listShape)
-  | (service_native_head getWG; exact .native (.kind .wg))
-  | (service_native_head getDev; exact .native (.kind .device))
-  | (service_native_head getEnv; exact .native (.kind .env))
-  | (service_native_head getRouting; exact .native (.kind .routing))
+  | (service_native_head getWG; exact .native (.reading (.wg ReadAccess.Shape.read)))
+  | (service_native_head getDev; exact .native (.reading (.wg ReadAccess.deviceShape)))
+  | (service_native_head getEnv; exact .native (.reading ProductRead.environmentShape))
+  | (service_native_head getRouting; exact .native (.reading ProductRead.routingShape))
   | (service_native_head modifyEnv; exact .native (.kind (.envEdit _)))
   | (service_native_head modifyAmbient; exact .native (.kind (.ambientEdit _)))
   | (service_native_head modifyWG; first
       | exact .native (.kind .reset) | exact .native (.kind .sentClear)
       | exact .native (.kind (.pass _)) | exact .native (.kind (.jiffies _)))
   | (service_native_head delTimer; exact .native (.kind (.delete _ _)))
-  | (service_native_head Env.peekNextSite; exact .native (.kind .peek))
-  | (service_native_head Env.timerWorker; exact .native (.kind (.timerWorker _)))
-  | (service_native_head Env.requireStepComplete; exact .native (.kind (.stepComplete _)))
-  | (service_native_head Env.requireNothingDue; exact .native (.kind (.nothingDue _)))
+  | (service_native_head Env.peekNextSite; exact .native (.reading ProductRead.peekShape))
+  | (service_native_head Env.timerWorker; exact .native (.reading (ProductRead.timerWorkerShape _)))
+  | (service_native_head Env.requireStepComplete; exact .native (.reading (ProductRead.stepShape _)))
+  | (service_native_head Env.requireNothingDue; exact .native (.reading (ProductRead.dueShape _)))
   | (service_native_head getAmbient; exact .native (.kind (.ambient (get : AmbientM Ambient))))
   | (service_native_head recordBudget; exact .native (.kind (.ambient AmbientM.recordBudget)))
   | (service_native_head peekUnit; exact .native (.kind (.ambient (AmbientM.peekUnit _))))
@@ -70,7 +70,7 @@ macro "service_shape_step" : tactic => `(tactic| first
 noncomputable def deliveryShape : Shape hooks.deliver := by
   apply Shape.marked .delivery
   unfold Hooks.deliver CausalJournal.hooks DeliverySource.observed
-  apply Shape.bind (.native (.kind .wg))
+  apply Shape.bind (.native (.reading (.wg ReadAccess.Shape.read)))
   intro saved
   apply Shape.bind (.native (.kind (.delivery saved.sent)))
   intro _

@@ -21,8 +21,8 @@ theorem run_visit (a : Activation)
   refine ⟨.marked (.run a) (.right (.right (.left loopSite))),?_⟩
   apply Point.marked
   apply Point.source_mpr (run_factor a)
-  apply Point.right (.native (.occupancy a)) _ read
-  apply Point.right (.native .refills) _ refillRead
+  apply Point.right (.native (.reading (ProductRead.occupancyShape a))) _ read
+  apply Point.right (.native (.reading ProductRead.refillsShape)) _ refillRead
   apply Point.source_mpr (runBody_list a occupancy refills)
   exact .left _ loopPoint
 

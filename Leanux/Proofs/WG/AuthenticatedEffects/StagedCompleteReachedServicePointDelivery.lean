@@ -45,6 +45,7 @@ theorem Point.childFree (free : shape.ChildFree)
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
   | delete point => exact .delete point
+  | reading point => exact .reading point
   | interior token point => exact False.elim free
   | left tail point ih => exact .left tail (ih free.1)
   | right head tail leading point ih => exact .right head tail leading (ih (free.2 _))
@@ -143,6 +144,7 @@ theorem Point.childFree_remaining {action : PrefixM Event α} {shape : Shape act
   | returned shape performed =>
       exact ⟨pure _,performed.trans (runPrefix_pure _ _ _).symm⟩
   | delete point => exact ⟨_,SavedCall.deleteRemainder_run _ point⟩
+  | reading point => exact ⟨_,ProductRead.remainder_run _ point⟩
   | interior token point => exact False.elim free
   | left tail point ih =>
       rename_i body next head
