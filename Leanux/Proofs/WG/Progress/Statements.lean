@@ -1,3 +1,6 @@
+import Leanux.Proofs.WG.Progress.TrafficFiniteClaims
+import Leanux.Proofs.WG.Progress.RunnerInitialFiniteClaims
+import Leanux.Proofs.WG.Progress.SeccompPrefillFiniteClaims
 import Leanux.Proofs.WG.Progress.ObservationFiniteClaims
 import Leanux.Proofs.WG.Progress.DeferredFiniteOuterClaims
 import Leanux.Proofs.WG.Progress.LifecycleEnvironmentFiniteClaims
@@ -110,6 +113,44 @@ inspected operation succeeds. Generic callback laws are explicitly generic. -/
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Progress
 open Leanux Leanux.WG Leanux.Env Campaign2.Product
+
+/-- The fixed prefill program has exactly the finite creator's translation,
+including all original failures, without raising a Lean resource limit. -/
+theorem original_seccomp_prefill_translation_finite :
+    Seccomp.Prefill.translated = SeccompPrefillFinite.translated :=
+  SeccompPrefillFinite.original_translation_finite
+
+/-- Complete prefill preserves the original count guard, insertion sequence,
+task flags and exact errors through finite translation and bounded copies. -/
+theorem original_seccomp_prefill_finite :
+    Seccomp.Prefill.apply = SeccompPrefillFinite.install :=
+  SeccompPrefillFinite.original_install_finite
+
+/-- Initialized traces use finite prefill evaluation with the original fixture
+and boot sequence, preserving every result and indexed initialization Stop. -/
+theorem original_runner_initial_finite (trace : Runner.Trace) (placeholders : Bool) :
+    runnerInitial trace placeholders = RunnerFinite.initial trace placeholders :=
+  RunnerFinite.original_initial_finite trace placeholders
+
+/-- Injection uses finite deferred workers and preserves every original return and Stop. -/
+theorem original_traffic_inject_finite (family port : Nat) (msg : List UInt8) (tos : Nat) (ll : Bool) (dest : Nat) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.inject family port msg tos ll dest) (TrafficFinite.nativeInject family port msg tos ll dest) :=
+  TrafficFinite.original_inject_finite family port msg tos ll dest
+
+/-- Batch completion uses finite scheduling and send callbacks with the original drain guards. -/
+theorem original_traffic_afterBatch_finite  :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.afterBatch) (TrafficFinite.nativeAfterBatch) :=
+  TrafficFinite.original_afterBatch_finite
+
+/-- The bounded flood preserves complete deferred outcomes for arbitrary messages and records. -/
+theorem original_traffic_flood_finite (count port family : Nat) (messages : List (List UInt8)) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.flood count port family messages) (TrafficFinite.nativeFlood count port family messages) :=
+  TrafficFinite.original_flood_finite count port family messages
+
+/-- Every batch item and its completion suffix use finite callbacks with exact original outcomes. -/
+theorem original_traffic_batch_finite (items : List Env.BatchItem) :
+    Campaign2.Product.AgreesOn (fun _ => True) (Env.batch items) (TrafficFinite.nativeBatch items) :=
+  TrafficFinite.original_batch_finite items
 
 /-- The historical trace is rejected at the current batch-completion boundary. -/
 theorem original_pending_batch_accepted : accepted = false :=

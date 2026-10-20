@@ -1,5 +1,10 @@
 # Campaign 2: Prefill proof-factoring investigation
 
+Update, 2026-10-20: the proposed staged bridge is adopted and integrated, together
+with whole prefill and trace initialization. The current status and validation
+are in the [campaign report](2026-10-14-proof-campaign-2.md); the investigation
+and earlier failed form below remain historical evidence.
+
 ## Recommendation and scope
 
 The exact equality rejected on 2026-10-19 now checks with the stock Lean

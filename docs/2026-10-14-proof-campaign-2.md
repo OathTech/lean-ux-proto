@@ -2,20 +2,19 @@
 
 ## Current checkpoint
 
-**Current checkpoint: the Prefill equation has a checked staged proof;
-H5 integration remains paused for the path decision.** The
-[investigation](2026-10-20-proof-campaign-2-prefill-investigation.md) proves
-the exact previously rejected equation with maxRecDepth 512, standard
-axioms and fresh kernel replay. The native definition bridge and the
-generic finite-creator substitution are proved separately and composed.
-No mirror change, limit increase or weaker premise is needed.
+**Current checkpoint: the staged Prefill proof is integrated; whole
+initialization and traffic finite composition now close.** [USER 2026-10-20]
+Adopt the investigated abstraction and resume campaign completion, retaining
+resource-limit increases as a last resort. The native bridge and generic
+creator substitution prove the exact original equation at the existing
+limits. Complete prefill insertion and trace initialization preserve every
+original result and indexed Stop.
 
-The proposed bridge is reproduced in the investigation report and has not
-been added to the registered proof tree. H5 global termination remains
-unproved; whole Prefill, initialization, traffic/syscall/Runner composition
-and the remaining progress obligations still need completion. H1–H4 and H6
-remain current in their documented scopes over main 3308c49a, merged at
-a9845661; the closed tree at e901e03d retains its passing gate and replay.
+H5 global termination remains open. Complete syscall/Runner composition
+and initialized record-relative service still need completion. H1–H4 and
+H6 remain current in their documented scopes over main 3308c49a. The
+[investigation](2026-10-20-proof-campaign-2-prefill-investigation.md) retains
+the rejected proof form and the successful staged architecture.
 
 The [shared-layer carry request](2026-10-19-campaign-2-environment-carry.md)
 is fulfilled by main. The five inherited failures are repaired, and the
@@ -30,9 +29,10 @@ cleared pending work. The refill prefix reaches the undrained-work guard,
 and the empty dump restores its four-byte nest header. The historical
 counterexamples remain records about the earlier mirror.
 
-Current validation: the full gate passes 3,119 jobs and 1,761 terminal
-statements with standard axioms only; fresh whole-tree kernel replay exits
-zero, and all 12 counterexample recipes pass. The first two post-merge
+Current integration validation: the full gate passes 3,125 jobs and 1,768
+terminal statements with standard axioms only; fresh Progress-root kernel
+replay exits zero. The prior full-tree replay and all 12 unchanged
+counterexample recipes passed at e901e03d. The first two post-merge
 gates failed on owned carry errors, repaired before this pass. The prior
 complete checkpoint was 46b6089c over 783510e8 (3,054 jobs / 1,690 terminals);
 the intervening scoped tranches passed their named checks while their full
@@ -62,13 +62,13 @@ projection, and shared campaign-1 layers and the gate are unchanged.
 | H2 Index | 162 | 1532 | Complete at normal initialized runner endpoints. Original index operations, collision retry and lookup contracts compose with reachable numeric/owner uniqueness, hashed-slot coverage, resident positive owners, store bounds and current-slot compatibility. Concrete ingress, poll/NAPI, crypt/TX, dump, configuration, lifecycle, scheduler/deferred, traffic and every syscall retain the same execution and its changing ledger. The projected initialized inspection preserves exact JSON/indexed Stops and derives Core plus its actual residual account without an invariant or callback premise. Earlier arbitrary-state counterexamples remain recorded; no initialized discrepancy is asserted. Final state on Stop and global termination are outside this H2 claim. Combined gate and fresh replay pass. |
 | H3 Roaming | 45 | 1305 | Complete within the documented committed-attempt and normal-final-destination scope. Initialized committed handshake setter attempts and every reached original data check carry actual prior authentication, including before indexed Stops. Both inspections preserve original outcomes and exact occurrence coverage. Normal initialized final remote destinations have their actual latest configuration or authenticated packet setter, excluding later setters/resets. No callback/invariant/success premise remains; cached local source/flowinfo, discarded consistency trials and stopped final states remain outside these claims. |
 | H4 Configuration | 217 | 2084 | Validated configuration contracts, actual mixed/key setter paginated readback with arbitrary endpoints, whole finite single-peer mixed-width getter and actual finite empty-IP peer getter and exact arbitrary-room empty-IP serializer/whole normal cursor callback and actual mixed/key setter composition with exact DATA/DONE count and arbitrary endpoints and arbitrary finite empty-IP multi-peer scalar, mixed fwmark/scalar and established-identity private-key set/get and actual endpoint set/weighted readback and local mixed-page serializer/cursor/coalescer support plus finite mixed-page planning, native callback, computed selection/reference support, finite receive budget, exact page content and complete finite mixed peer/allowed-IP getter and scalar, endpoint, fwmark/scalar and established-identity key set/get plus mixed port-refusal and all nonzero and zero port-only set/get outcomes and actual empty allowed-IP replacement/full mixed readback and initial-state flag-only replace-peers free/first-pass observations and general represented insertion/fresh-peer readback current; initialized routing, index and residual-account facts now share the same actual endpoint; allowed-IP insertion preserves configured and resident owners from initial ownership and listed residency. Actual complete peer removal preserves configured ownership through queued cleanup, and flag-only replacement derives an empty configured peer/public-key list and represented routes at normal completion from initial funding and coherence. The selected mixed allowed-IP/keepalive/staged-send tail now preserves configured ownership with the real account and pays its caller reference through normal early-error paths; exact representation uniqueness joins funding to resident owner/list coherence. Complete peer/device commands now preserve ownership with their actual account; queued flag-only replacement derives getter eligibility and exact empty-peer readback. Actual arbitrary-request certificates now retain completed-stage order, generation linkage and peer/error positions; whole queued REMOVE_ME derives configured list/table filtering and route-owner exclusion. Initialized parsed executions now derive configured/resident routing ownership from the same actual account; same-request refusal receipts fix exact normal final WG states and expose concrete port/source effects. Initial-to-port fields and normal refusal endpoints now derive from the original entry; all-branch key-stage effects, arbitrary peer-command metadata and initialized getter readability/freshness are checked. Outer key-stage funding, completed key/peer-to-final metadata, initialized native getter completion under static bounds, and arbitrary mixed refused-port setter/getter composition now check. Final identity after later peer attributes, original-entry getter context and whole-command UPDATE_ONLY/validation behavior now check. The actual acquired update now retains its completed PSK/endpoint cut before later errors; actual staging/keepalive retain full endpoint/PSK/interval for surviving peers, and same-run key getter composition checks. Original-to-key header/port continuity, arbitrary acquired-update allowed-IP order and same-account final finish scalar effects now check. Whole peer-command routing order, exact acquired-update scalar errno/success effects, original-entry final-header/key fields and mixed readback with derived readability now check. Whole existing-target scalars, nested routing positions/negative cutoff, actual WG receipt adjacency and arbitrary optional-key readback now check. Original request funding now derives every completed nested peer/routing account. Actual queued work/removal retains stamped PSK, interval and normalized serialized endpoint fields. Actual missing-target creation/acquisition/update and private-key-stage surviving scalar retention now check. Request-entry to key-stage retention and arbitrary-command nonselected retention now check without routing-shape premises. The source-classified scalar fold now derives surviving final cells from the original entry and joins exact mixed getter output. Empty-history readback and the exhaustive normal-outcome partition close the remaining statement scope. H4 is complete at the documented normal-outcome and statically bounded getter boundary; terminal build, full gate and fresh replay pass. |
-| H5 Progress | 267 | 1655 | Closed proofs current: exact runner/activation/scheduler observations and completion guards; initialized committed receipts; finite curve, allocation and pipe helpers. Actual routing, sockets, whole handshake calls, inner delivery, poll/GRO and all NAPI callers now preserve supplied-record suffixes with concrete dependencies. Every normal receive/encrypt/decrypt/transmit activation strictly consumes supplied records, as do selected send and clear dispatches. The transmit claim includes actual cryptAhead and complete disposal/payments; nonempty receive needs no empty-start premise. Actual dispatch, scheduler and timer continuing turns strictly consume records; whole scheduling, delivery and timer looping retain suffixes. The scheduler, send, timer and batch outer record budgets are adequate within their stated normal-result or exact-source scopes. Initialized committed activation receipts derive same-call strictness, including before later Stops. Separate exact finite evaluators now cover all four handshake create/consume calls, both senders, the queued send worker, keepalive, cookie/rate/reply paths and the complete native receive step. The record measures alone do not assert callback evaluation; activation fuel adequacy, useful service and global termination remain open. The native environment guards and regressions are carried; cleanup, all concrete timer/deferred callers, complete configuration, FS release and Seccomp installation finite composition now closes. The shared observer carry is landed; the Prefill source equation now has a checked stock-limit prototype awaiting integration. Global termination remains unproved. |
+| H5 Progress | 274 | 1687 | Closed proofs current: exact runner/activation/scheduler observations and completion guards; initialized committed receipts; finite curve, allocation and pipe helpers. Actual routing, sockets, whole handshake calls, inner delivery, poll/GRO and all NAPI callers now preserve supplied-record suffixes with concrete dependencies. Every normal receive/encrypt/decrypt/transmit activation strictly consumes supplied records, as do selected send and clear dispatches. The transmit claim includes actual cryptAhead and complete disposal/payments; nonempty receive needs no empty-start premise. Actual dispatch, scheduler and timer continuing turns strictly consume records; whole scheduling, delivery and timer looping retain suffixes. The scheduler, send, timer and batch outer record budgets are adequate within their stated normal-result or exact-source scopes. Initialized committed activation receipts derive same-call strictness, including before later Stops. Separate exact finite evaluators now cover all four handshake create/consume calls, both senders, the queued send worker, keepalive, cookie/rate/reply paths and the complete native receive step. The record measures alone do not assert callback evaluation; activation fuel adequacy, useful service and global termination remain open. The native environment guards and regressions are carried; cleanup, all concrete timer/deferred callers, complete configuration, FS release and Seccomp installation finite composition now closes. The shared observer carry is landed; the staged Prefill source equation, whole prefill, trace initialization and traffic finite composition now close at existing limits. Global termination remains unproved. |
 | H6 Timers | 100 | 1183 | Full terminal closure, actual retry blocks and allocation-labelled guarded session-arm events with outgoing call-entry origin and initialized give-up runtime witness with checked concrete curve outputs and all five syntactic traversal call sites covered by six observer branches with all-mode immediate effects; the initialized runner and all deferred constructors now retain every reached actual runTimers invocation with exact JSON/indexed Stops and actual wheel-selection chains for normal episodes. Placeholder passes are separate; failed episodes retain their exact Stop but no partial turn list. Eight hook adapters now retain exact outcomes and local effects, and the complete createDataDone caller retains its three possible hook invocations on both return and Stop. Complete initiation/send dispatch, response/reception/receiveStep, consumeDataDone and transmit iteration now retain exact hook histories. Successful session and derived-hook receipts are adjacent with equal per-counter occurrence counts, including hook Stop. Complete concrete poll/NAPI, scheduler and every deferred operation now retain the same histories and local wheel effects. Configuration/lifecycle/traffic/syscall composition and initialized committed hook coverage now close with exact original outcomes. Complete response/reception/receive-step histories also have ordered allocation IDs and at most one derived hook per label. Initialized successful session stamps are now strictly ordered, session/derived-hook counts agree and are at most one per stamp, and completed session-derived enqueue totals are at most one. H6 is complete within the recorded guarded/completed-call scope; no arbitrary interleaved retry-block decomposition or stopped final state is claimed. |
 
-The current surface is 9,356 theorems and 866 headlines in 2,187
+The current surface is 9,388 theorems and 873 headlines in 2,193
 campaign-owned modules. The completed retrofit accounts for 1,983:
 1,321 retyped, 244 explicitly corrected, 239 retained and 179 added
-support/finding declarations. Subsequent extensions add a net 7,373
+support/finding declarations. Subsequent extensions add a net 7,405
 theorems. Twenty-two baseline frames were deleted because types supply
 their facts; five false historical cookie supports were separately retired
 with checked refutations. All 258 original terminal names and order survive.
@@ -95,10 +95,9 @@ The owned H6 socket view supplies the needed tags without a shared-layer copy.
 
 ## Landing estimate and remaining scope, 2026-10-20
 
-The exact Prefill proof-form obstruction has a checked solution. After the
-path decision, integrating it and completing the remaining composition,
-progress obligations and validation are still estimated at 2–5 focused
-working days. The investigation has not closed these wider obligations.
+The exact Prefill proof-form obstruction has a checked solution. The adopted bridge, whole initialization and traffic are integrated.
+Completing syscall/Runner composition, the remaining progress obligations
+and validation is estimated at 2–5 focused working days. The investigation has not closed these wider obligations.
 The external shared-carry wait is over.
 
 | Result | Mirror | Status | Remaining whole-run scope |
@@ -107,7 +106,7 @@ The external shared-carry wait is over.
 | H2 | 3308c49a | Current, complete within documented scope; 162 / 1532 | Normal initialized endpoint store, slot and owner coherence closed; original lookup/collision contracts retained; no internal failed-state or termination claim |
 | H3 | 3308c49a | Current, complete within documented scope; 45 / 1305 | Initialized committed handshake/data attempt coverage and normal final latest-setter provenance closed |
 | H4 | 3308c49a | Current, complete within documented scope; 217 / 2084 | Actual mixed request order, effective scalars, ownership and conditioned exact getter composition closed; no total setter or stopped-final-state claim |
-| H5 | 3308c49a | Closed proofs current; Prefill bridge checked outside tree, integration paused; global termination open; 267 / 1655 | Actual workers, dispatch, scheduler and timer turns have concrete normal record decrease; scheduler, send, timer and batch outer budgets are adequate and initialized receipts derive same-call strictness. Concrete handshake, activation/scheduler, peer creation and allowed-IP finite evaluation is closed; complete configuration and all concrete deferred/environment lifecycle callers now have finite evaluators. Whole Prefill and initialization, traffic, syscall/Runner composition and initialized useful-work progress remain; the exact Prefill source bridge now checks at maxRecDepth 512 but is not integrated. The native completion guards and regressions are carried; shared observers are repaired |
+| H5 | 3308c49a | Closed proofs current; Prefill, initialization and traffic integrated; global termination open; 274 / 1687 | Actual workers, dispatch, scheduler and timer turns have concrete normal record decrease; scheduler, send, timer and batch outer budgets are adequate and initialized receipts derive same-call strictness. Concrete handshake, activation/scheduler, peer creation and allowed-IP finite evaluation is closed; complete configuration and all concrete deferred/environment lifecycle callers now have finite evaluators. Whole Prefill, initialization and traffic now have exact finite source equations at existing limits. Syscall/Runner composition and initialized useful-work progress remain. The native completion guards and regressions are carried; shared observers are repaired |
 | H6 | 3308c49a | Current, complete within documented scope; 100 / 1183 | Initialized wheel episodes, complete caller/scheduler hook coverage and global allocation-relative occurrence/completed-enqueue counts closed; guards, separate give-up cleanup and qualifying retry-block boundary retained |
 
 Main 3308c49a is incorporated in merge a9845661. The previous environment
@@ -128,6 +127,44 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/pro
 
 
 
+
+## Prefill, initialization and traffic integration, 2026-10-20
+
+The approved two-stage bridge is now in
+`SeccompPrefillFiniteSource.lean`: a native program-parametric wrapper
+admits the reflexivity bridge, then the generic creator equality is applied.
+`installWith` exposes translation independently of bounded filter insertion;
+`RunnerInitialFiniteSource.lean` exposes prefill independently of original
+fixture initialization and finite boot operations. No resource limit,
+mirror definition or shared proof changes.
+
+`TrafficFiniteSource.lean` instantiates the existing traffic factories with
+finite crypt/send/scheduler callbacks. Injection, batch completion, flood
+and batch preserve complete native outcomes without a success premise.
+Admission, transmit, inline NAPI, multicast and guard leaves retain their
+bounded native computations and the established static allocation
+reductions. These equations alone do not establish useful service or
+exclude an activation's exhaustion Stop.
+
+Claims are in the three corresponding `*Claims.lean` files and the seven
+new headlines in `Progress/Statements.lean`. Source adapters are in the
+three `*Source.lean` files; no new frames. The tranche adds 32 theorems,
+seven headlines and six modules. H5 is 1,687 / 274 / 356; the campaign is
+9,388 / 873 / 2,193 (theorems / headlines / modules).
+
+Validation: Prefill 40-job, initialization 81-job and traffic 716-job scoped
+builds pass. The full gate passes 3,125 jobs and 1,768 terminal statements
+with only the standard axioms. Fresh Progress-root kernel replay exits zero.
+Three initial build attempts failed on two multiline record-layout errors;
+the corrected definitions pass. No infrastructure rerun, KILLED job or
+limit increase occurred. The inherited mirror `Env.lean:873` deprecation
+warning remains outside this lane.
+
+Reproduce the trust checks with the full gate command above and
+`capped -- scripts/in-bundle lake env leanchecker --fresh Leanux.Proofs.WG.Progress.Statements`.
+Remaining H5 work is complete syscall/Runner composition and record-relative
+progress, with fuel adequacy and placeholder pending-work coverage stated
+separately from finite evaluation.
 
 ## Prefill investigation and recommendation, 2026-10-20
 

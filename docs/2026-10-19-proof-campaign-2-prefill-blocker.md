@@ -1,5 +1,10 @@
 # Campaign 2: original Prefill specialization blocker
 
+Update, 2026-10-20: the proposed staged bridge is adopted and integrated, together
+with whole prefill and trace initialization. The current status and validation
+are in the [campaign report](2026-10-14-proof-campaign-2.md); the investigation
+and earlier failed form below remain historical evidence.
+
 ## Investigation update, 2026-10-20
 
 The [staged-bridge investigation](2026-10-20-proof-campaign-2-prefill-investigation.md)
