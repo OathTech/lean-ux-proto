@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNapiPointScheduler
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedReceiveMetadataCanonical
 
 /-! Fixed original receive actions. Snapshot reads are real state reads used
 only to construct the existing receipts; no new event or native effect is added. -/
@@ -11,6 +12,7 @@ abbrev Result (α : Type) := Except Stop (α × World)
 abbrev wg (action : WG.M α) : PrefixM Event α := liftWGObserver (liftWGPrefix action)
 
 inductive Native : {α : Type} → PrefixM Event α → Type 1 where
+  | metadata (body : WG.M α) (source : PeerMetadata.Shape body) : Native (wg body)
   | world : Native (liftPrefix (get : Leanux.M World))
   | branch (site : Decision) (yes : Bool) : Native (wg (branch site yes))
   | compare (site : Decision) (yes : Bool) (left right : Int) : Native (wg (branchCmp site yes left right))
@@ -42,6 +44,16 @@ inductive Native : {α : Type} → PrefixM Event α → Type 1 where
   | unsupported (message : String) : Native (liftPrefix (Leanux.unsupported message : Leanux.M α))
   | excluded (message : String) : Native (liftPrefix (Leanux.Env.Stack.excluded message))
   | wgUnsupported (message : String) : Native (wg (unsupported message : WG.M α))
+
+noncomputable def metadataRemainder {α E : Type} {body : WG.M α} {source : PeerMetadata.Shape body}
+    {w : World} (h : List E) (point : PeerMetadata.Point source w.wg w.ambient v b) : PrefixM E α :=
+  Classical.choose (point.observed_remaining h)
+
+theorem metadataRemainder_run {α E : Type} {body : WG.M α} {source : PeerMetadata.Shape body}
+    {w : World} (h : List E) (point : PeerMetadata.Point source w.wg w.ambient v b) :
+    runPrefix (liftWGObserver (liftWGPrefix body)) w h =
+      runPrefix (metadataRemainder h point) {w with wg:=v,ambient:=b} h :=
+  Classical.choose_spec (point.observed_remaining h)
 
 inductive Child where
   | endpoint (pid : PeerId) (endpoint : Endpoint)

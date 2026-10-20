@@ -16,6 +16,7 @@ theorem native_checked (action : WG.M α) (frame : SameView StagedEntry.view act
 
 theorem Native.checked (token : Native action) : Checked action := by
   cases token with
+  | metadata body source => exact native_checked _ source.frame
   | world =>
     apply PrefixEnsures.lift _ carrier_safe
     intro h w value v before run

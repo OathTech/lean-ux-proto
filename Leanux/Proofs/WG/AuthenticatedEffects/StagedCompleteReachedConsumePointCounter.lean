@@ -150,10 +150,10 @@ macro "consume_native_shape" : tactic => `(tactic| first
   | (consume_wg_failure_head invariant; exact .failed (.wgInvariant _) _)
   | (consume_wg_head branch; exact .native (.branch _ _))
   | (consume_wg_head branchCmp; exact .native (.compare _ _ _ _))
-  | (consume_wg_head getKeypair; exact .native (.key _))
+  | (consume_wg_head getKeypair; exact .native (.metadata _ (PeerMetadata.keyReadShape _)))
   | (consume_wg_head setKeypair; exact .native (.writeKey _ _))
-  | (consume_wg_head getPeer; exact .native (.peer _))
-  | (consume_wg_head branchExpired; exact .native (.expired _ _ _))
+  | (consume_wg_head getPeer; exact .native (.metadata _ (PeerMetadata.peerReadShape _)))
+  | (consume_wg_head branchExpired; exact .native (.metadata _ (PeerMetadata.expiredShape _ _ _)))
   | (consume_wg_head invariant; exact .native (.wgInvariant _))
   | (consume_wg_head Pure.pure; exact .pure _)
   | (consume_wg_head Bind.bind; apply wgBindShape)
@@ -186,7 +186,7 @@ noncomputable def confirmationBodyShape (pid : PeerId) (kid : KeypairId) :
     Shape (wg (receivedWithKeypair pid kid)) := by
   unfold receivedWithKeypair
   rw [wg_bind]
-  refine .bind (.native (.peer pid)) ?_
+  refine .bind (.native (.metadata _ (PeerMetadata.peerReadShape pid))) ?_
   intro first
   rw [wg_bind]
   refine .bind (.native (.branch .receivedNotNew (first.keypairNext != some kid))) ?_
@@ -197,7 +197,7 @@ noncomputable def confirmationBodyShape (pid : PeerId) (kid : KeypairId) :
     exact .pure false
   · intro passed
     rw [wg_bind]
-    refine .bind (.native (.peer pid)) ?_
+    refine .bind (.native (.metadata _ (PeerMetadata.peerReadShape pid))) ?_
     intro second
     rw [wg_bind]
     refine .bind (.native (.branch .receivedChanged (second.keypairNext != some kid))) ?_
@@ -208,16 +208,16 @@ noncomputable def confirmationBodyShape (pid : PeerId) (kid : KeypairId) :
       exact .pure false
     · intro passed
       rw [wg_bind]
-      refine .bind (.native (.peer pid)) ?_
+      refine .bind (.native (.metadata _ (PeerMetadata.peerReadShape pid))) ?_
       intro peer
       rw [wg_bind]
-      refine .bind (.native (.previous pid)) ?_
+      refine .bind (.native (.metadata _ (PeerMetadata.previousShape pid))) ?_
       intro ignored
       rw [wg_bind]
       refine .bind (.child (.keyRelease peer.keypairPrevious)) ?_
       intro ignored
       rw [wg_bind]
-      exact .bind (.native (.current pid kid)) (fun _ => .pure true)
+      exact .bind (.native (.metadata _ (PeerMetadata.currentShape pid kid))) (fun _ => .pure true)
 
 noncomputable def confirmationShape (pid : PeerId) (kid : KeypairId) :
     Shape (liftWGObserver (hooks.confirmation pid kid)) := by

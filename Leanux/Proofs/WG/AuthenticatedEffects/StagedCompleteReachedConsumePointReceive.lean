@@ -24,13 +24,13 @@ theorem observer_if (test : Prop) [Decidable test] (yes no : WGPrefix Event α) 
 noncomputable def statsShape (pid : PeerId) (len : Nat) : Shape (wg (updateRxStats pid len)) := by
   unfold updateRxStats
   rw [wg_bind]
-  exact .bind (.native (.statsDevice len)) (fun _ => .native (.statsPeer pid len))
+  exact .bind (.native (.statsDevice len)) (fun _ => .native (.metadata _ (PeerMetadata.statsPeerShape pid len)))
 
 macro "consume_receive_shape" : tactic => `(tactic| first
-  | (consume_wg_tail_head setPeer; exact .native (.freshWrite _))
+  | (consume_wg_tail_head setPeer; exact .native (.metadata _ (PeerMetadata.freshWriteShape _)))
   | (consume_wg_head updateRxStats; exact statsShape _ _)
-  | (consume_wg_head dishonest; exact .native (.dishonest _))
-  | (consume_wg_head inetEcnDecapsulate; exact .native (.ecn _ _ _))
+  | (consume_wg_head dishonest; exact .native (.metadata _ (PeerMetadata.dishonestShape _)))
+  | (consume_wg_head inetEcnDecapsulate; exact .native (.metadata _ (PeerMetadata.ecnShape _ _ _)))
   | (consume_wg_head setPeerEndpoint; exact .child (.endpoint _ _))
   | (consume_wg_head timersHandshakeComplete; exact .child (.handshakeTimer _))
   | (consume_wg_head timersAnyAuthenticatedPacketReceived; exact .child (.authenticated _))
