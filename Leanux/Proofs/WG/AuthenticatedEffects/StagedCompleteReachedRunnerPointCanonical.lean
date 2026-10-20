@@ -36,7 +36,7 @@ noncomputable def callbackShape (callback : Callback) (index : Nat) (w : World) 
   | idle => exact .child index w .idle
   | afterXmit => exact .child index w .afterXmit
   | advance => exact .child index w .advance
-  | route => exact .native (.route index w)
+  | route => exact .native (.stored index w PrefixStore.routeShape)
   | cleanup => exact .native (.cleanup index w)
 
 noncomputable def sequenceShape (call : Syscall) (actions : List Callback)
@@ -52,14 +52,14 @@ noncomputable def sequenceShape (call : Syscall) (actions : List Callback)
 noncomputable def afterDispatchShape (call : Syscall) (ret : Int) (index : Nat) (w : World) :
     Shape (runAtPrefix index w (SyscallSource.afterDispatch call ret)) := by
   rw [ReturnSource.after_dispatch_factor,runAt_bind]
-  apply Shape.bind (.native (.prelude index w))
+  apply Shape.bind (.native (.stored index w PrefixStore.preludeShape))
   intro out
   rw [runAt_bind]
   rw [←callbacks_source call]
   apply Shape.bind (sequenceShape call (callbacks call) 0 index out.2)
   intro after
   rw [runAt_bind]
-  apply Shape.bind (.native (.routing index after.2 call))
+  apply Shape.bind (.native (.stored index after.2 (PrefixStore.routingShape call)))
   intro final
   rw [runAt_pure]
   exact .pure _
@@ -67,7 +67,7 @@ noncomputable def afterDispatchShape (call : Syscall) (ret : Int) (index : Nat) 
 noncomputable def syscallShape (call : Syscall) (index : Nat) (w : World) :
     Shape (runAtPrefix index w (Driver.syscallObserved hooks call)) := by
   rw [SyscallSource.syscall_factor,runAt_bind]
-  apply Shape.bind (.native (.enter index w call))
+  apply Shape.bind (.native (.stored index w (PrefixStore.enterShape call)))
   intro entered
   unfold SyscallSource.afterEntry
   rw [runAt_bind]
@@ -78,7 +78,7 @@ noncomputable def afterCallShape (op : Operation) (state : State) (ret : Int) (w
     Shape (RunnerOperation.afterCall (E:=Event) op state ret w) := by
   apply Shape.marked (.afterCall state.2.1.size op) w
   unfold RunnerOperation.afterCall
-  apply Shape.bind (.native (.skip state.2.1.size w))
+  apply Shape.bind (.native (.stored state.2.1.size w PrefixStore.skipShape))
   intro out
   rcases out with ⟨ignored,v⟩
   apply Shape.marked (.metadata state.2.1.size) v

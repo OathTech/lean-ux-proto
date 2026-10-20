@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedReturnFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteRunnerEndpoint
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRunnerStoreCanonical
 
 /-! Fixed outer source witnesses. The World is the original runner's explicit
 accumulator, not a reconstructed error state. The only effectful children are
@@ -23,6 +24,8 @@ inductive Child : {α : Type} → PrefixM Event α → Type 1 where
 caller selected by extensional equality. Initialization and metadata guards
 retain their original failure result and operation index. -/
 inductive Native : {α : Type} → PrefixOuter Event α → Type 1 where
+  | stored (index : Nat) (w : World) (source : PrefixStore.Shape body) :
+      Native (runAtPrefix index w body)
   | prefill (count : Nat) (w : World) : Native (ConservationRunner.prefillWith count w pure)
   | boot (net foreign : Bool) (w : World) : Native (ConservationRunner.bootWith net foreign w pure)
   | enter (index : Nat) (w : World) (call : Syscall) :

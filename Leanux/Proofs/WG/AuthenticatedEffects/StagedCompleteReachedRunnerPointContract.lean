@@ -14,6 +14,7 @@ inductive Site where
   | entry
   | returned
   | interior
+  | stored
   | left (site : Site)
   | right (site : Site)
   | marked (label : Label) (site : Site)
@@ -23,6 +24,8 @@ inductive Point (inside : ChildPoints) : {α : Type} → {action : PrefixOuter E
   | nativeEntry (token : Native action) : Point inside (.native token) h .entry token.input h
   | nativeReturn (token : Native action) (performed : runPrefixOuter action h=(.ok out,last)) :
       Point inside (.native token) h .returned (token.output out) last
+  | stored (point : PrefixStore.Point source w h u middle) :
+      Point inside (.native (.stored index w source)) h .stored u middle
   | childEntry (token : Child action) : Point inside (.child index w token) h .entry w h
   | childReturn (token : Child action)
       (performed : runPrefixOuter (runAtPrefix index w action) h=(.ok out,last)) :
@@ -98,6 +101,7 @@ theorem Point.coverage (children : ChildContracts native inside Good)
   induction point with
   | nativeEntry token => exact .nativeEntry token
   | nativeReturn token performed => exact .nativeReturn token performed
+  | stored point => exact .stored point
   | childEntry token => exact .childEntry token
   | childReturn token performed => exact .childReturn token performed
   | interior token point => exact .interior token ((children.at token).coverage _ _ _ _ point)
@@ -112,6 +116,7 @@ theorem Point.safe (carrierGood : ∀h w,CompleteProduct.Carrier h w→Good h w)
   induction point with
   | nativeEntry token => exact carrierGood _ _ framed
   | nativeReturn token performed => exact carrierGood _ _ (token.normal framed performed)
+  | stored point => exact carrierGood _ _ (point.carrier framed)
   | childEntry token => exact carrierGood _ _ (token.entry_carrier framed)
   | childReturn token performed => exact carrierGood _ _ (token.normal framed performed)
   | interior token point => exact (children.at token).safe _ _ _ _ framed point

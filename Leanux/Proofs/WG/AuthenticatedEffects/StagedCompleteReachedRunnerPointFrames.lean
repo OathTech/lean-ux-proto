@@ -8,6 +8,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged
 open Queues Queues.RxCredits TransmitSecurity CausalJournal
 
 def Native.input : {α : Type} → {action : PrefixOuter Event α} → Native action → World
+  | _,_,.stored _ w _ => w
   | _,_,.prefill _ w => w
   | _,_,.boot _ _ w => w
   | _,_,.enter _ w _ => w
@@ -18,6 +19,7 @@ def Native.input : {α : Type} → {action : PrefixOuter Event α} → Native ac
   | _,_,.skip _ w => w
 
 def Native.output : {α : Type} → {action : PrefixOuter Event α} → Native action → α → World
+  | _,_,.stored ..,out => out.2
   | _,_,.prefill ..,w => w
   | _,_,.boot ..,w => w
   | _,_,.enter ..,out => out.2
@@ -102,6 +104,7 @@ theorem Native.normal (token : Native action) (before : CompleteProduct.Carrier 
     (performed : runPrefixOuter action h=(.ok out,last)) :
     CompleteProduct.Carrier last (token.output out) := by
   cases token with
+  | stored index w source => exact checked_normal source.checked before performed
   | prefill count w =>
     have quiet := CompleteRunner.prefill_quiet (E:=Event) count w h
     rw [performed] at quiet

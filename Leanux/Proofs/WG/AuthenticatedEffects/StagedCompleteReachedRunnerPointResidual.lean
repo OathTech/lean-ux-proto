@@ -14,6 +14,9 @@ inductive Residual (children : ChildContracts native inside Good) :
       Residual children (.native token) h .entry token.input h action
   | nativeReturn (token : Native action) (performed : runPrefixOuter action h=(.ok out,last)) :
       Residual children (.native token) h .returned (token.output out) last (pure out)
+  | stored (point : PrefixStore.Point source w h u middle) :
+      Residual children (.native (.stored index w source)) h .stored u middle
+        (runAtPrefix index u (PrefixStore.remainder point))
   | childEntry (token : Child action) :
       Residual children (.child index w token) h .entry w h (runAtPrefix index w action)
   | childReturn (token : Child action)
@@ -42,6 +45,7 @@ theorem Point.residual (children : ChildContracts native inside Good)
   induction point with
   | nativeEntry token => exact ⟨_,.nativeEntry token⟩
   | nativeReturn token performed => exact ⟨_,.nativeReturn token performed⟩
+  | stored point => exact ⟨_,.stored point⟩
   | childEntry token => exact ⟨_,.childEntry token⟩
   | childReturn token performed => exact ⟨_,.childReturn token performed⟩
   | interior token point => exact ⟨_,.interior token point⟩
@@ -55,6 +59,7 @@ theorem Residual.run {shape : Shape action} (path : Residual children shape h si
   induction path with
   | nativeEntry => rfl
   | nativeReturn _ performed => exact performed
+  | stored point => simp only [runAtPrefix_run,PrefixStore.remainder_run point]
   | childEntry => rfl
   | childReturn _ performed => exact performed
   | interior token point =>
@@ -69,6 +74,7 @@ theorem Residual.point {children : ChildContracts native inside Good} (path : Re
   induction path with
   | nativeEntry token => exact .nativeEntry token
   | nativeReturn token performed => exact .nativeReturn token performed
+  | stored point => exact .stored point
   | childEntry token => exact .childEntry token
   | childReturn token performed => exact .childReturn token performed
   | interior token point => exact .interior token point

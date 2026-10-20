@@ -16,6 +16,7 @@ theorem boundary_carrier (framed : Framed shape h) (point : Point Boundary shape
   induction point with
   | nativeEntry token => exact framed
   | nativeReturn token performed => exact token.normal framed performed
+  | stored point => exact point.carrier framed
   | childEntry token => exact token.entry_carrier framed
   | childReturn token performed => exact token.normal framed performed
   | interior token impossible => cases impossible
