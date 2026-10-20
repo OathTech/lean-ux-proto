@@ -228,3 +228,6 @@ Source-122 `7f9005de` joins complete cookie emission through native routing, tun
 
 
 Source-123 `5b0a99a1` joins configuration metadata, public-key lookup, peer creation and the delayed send-worker prefix. The original read supplies saved-peer fields, and initialized allocation derives creation freshness. All cuts preserve the same ticket ledger. Configuration routing edits, lifecycle and remaining service interiors remain open. The campaign report records the passing aggregate gate, fresh replay, twelve recipes and scoped axiom queries.
+
+
+Source-124 `94d177c7` joins newlink through its actual registration write and continuation. The original setup account derives the new empty epoch account with the same ledger. Routing edits, other lifecycle and service interiors remain open. Scoped build and axiom validation passed over `1a69cebb`; the report distinguishes that checkpoint from main `1f766662`, awaiting merge and carry.
