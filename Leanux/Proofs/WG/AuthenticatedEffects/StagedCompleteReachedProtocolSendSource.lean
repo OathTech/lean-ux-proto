@@ -6,8 +6,6 @@ The sender's actual binds, timer helpers and counted repayment are explicit. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ProtocolSend
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
 open HandshakeSecurity.SendExchange
-set_option maxHeartbeats 600000
-set_option maxRecDepth 4096
 abbrev History := List Event
 
 inductive Native where
