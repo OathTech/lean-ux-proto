@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDispatchPointSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedControlStoreSource
 
 /-! Every canonical witness chooses the original dispatch constructor and its
 real wrapper order. No retained default callback can recurse to dispatch. -/
@@ -12,11 +13,11 @@ noncomputable def socketShape (fd : Nat) (body : Shape action) :
     Shape (socketCallOnWith (fun {_} a=>liftPrefix a) fd action) := by
   apply Shape.marked (.socket fd)
   unfold socketCallOnWith
-  apply Shape.bind (.native (.fs (fdget fd)))
+  apply Shape.bind (.native (.stored (ProductStore.fsShape (fdget fd))))
   intro f
   split
   · exact .pure _
-  · exact .bind body (fun ret=>.bind (.native (.fs (fdput f))) (fun _=>.pure ret))
+  · exact .bind body (fun ret=>.bind (.native (.stored (ProductStore.fsShape (fdput f)))) (fun _=>.pure ret))
 
 noncomputable def netlinkShape (body : Shape action) :
     Shape (netlinkRequestWith (fun {_} a=>liftPrefix a) action) := by
@@ -96,17 +97,17 @@ noncomputable def canonical (call : Syscall) : Shape (Driver.dispatchObserved ho
   case wgUp => exact socketShape SENDER_FD (.child (.family .open))
   case wgDown => exact socketShape SENDER_FD (.child (.family .down))
   case wgSetMtu n => exact .native (.control (.mtu n))
-  case wgDeladdr family => exact .native (.control (.deladdr family))
-  case wgDelroute family named dst plen oif kind metric => exact .native (.control (.delroute family named dst plen oif kind metric))
-  case wgAddroute dst plen oif kind metric metricMtu flags => exact .native (.control (.addroute dst plen oif kind metric metricMtu flags))
-  case wgAddaddr addr plen => exact .native (.control (.addaddr addr plen))
-  case wgAdvance ticks => exact .native (.control (.advance ticks))
-  case wgNetnsClose => exact .native (.control .netnsClose)
-  case seccompProbe nr args target strict => cases target <;> exact .native (.seccomp _)
-  case seccompInstall => exact .native (.seccomp _)
-  case seccompPrctl => exact .native (.seccomp _)
-  case seccompCapdrop => exact .native (.seccomp _)
-  case seccompQuery => exact .native (.seccomp _)
-  all_goals exact .native (.fs _)
+  case wgDeladdr family => exact .native (.stored (ProductStore.rtnetlinkShape (ProductStore.deladdrShape family)))
+  case wgDelroute family named dst plen oif kind metric => exact .native (.stored (ProductStore.rtnetlinkShape (ProductStore.delrouteShape family named dst plen oif kind metric)))
+  case wgAddroute dst plen oif kind metric metricMtu flags => exact .native (.stored (ProductStore.rtnetlinkShape (ProductStore.addrouteShape dst plen oif kind metric metricMtu flags)))
+  case wgAddaddr addr plen => exact .native (.stored (ProductStore.rtnetlinkShape (ProductStore.addaddrShape addr plen)))
+  case wgAdvance ticks => exact .native (.stored (ProductStore.advanceCallShape ticks))
+  case wgNetnsClose => exact .native (.stored ProductStore.netnsCloseShape)
+  case seccompProbe nr args target strict => cases target <;> exact .native (.stored (ProductStore.seccompShape _))
+  case seccompInstall => exact .native (.stored (ProductStore.seccompShape _))
+  case seccompPrctl => exact .native (.stored (ProductStore.seccompShape _))
+  case seccompCapdrop => exact .native (.stored (ProductStore.seccompShape _))
+  case seccompQuery => exact .native (.stored (ProductStore.seccompShape _))
+  all_goals exact .native (.stored (ProductStore.fsShape _))
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Dispatch.Points
