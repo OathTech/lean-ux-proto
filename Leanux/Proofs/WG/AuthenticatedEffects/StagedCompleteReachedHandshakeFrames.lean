@@ -12,6 +12,8 @@ theorem Native.checked (token : Native) : Checked token.action := by
   cases token with
   | quiet body frame=>
     exact Consume.Leaf.native_checked body frame
+  | metadata body source=>
+    exact Consume.Leaf.native_checked body source.frame
   | captured body frame=>
     exact CompletePoll.state _
       (StatePrefixPreserves.captureWGObserved (CompletePassive.native _ CompleteProduct.account_safe body frame))

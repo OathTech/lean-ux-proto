@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerMetadataCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRoutedTransmitComposition
 
 /-! Fixed handshake worker source. Callback scopes, receipts, keepalive and
@@ -10,6 +11,7 @@ abbrev History := List Event
 
 inductive Native : Type 1 where
   | quiet {α : Type} (body : WG.M α) (frame : SameView StagedEntry.view body)
+  | metadata {α : Type} (body : WG.M α) (source : PeerMetadata.Shape body)
   | captured {α : Type} (body : WG.M α) (frame : SameView StagedEntry.view body)
   | session (pid : PeerId)
   | initiation (mac : HandshakeMac)
@@ -23,6 +25,7 @@ inductive Native : Type 1 where
 
 def Native.Result : Native → Type
   | @quiet α .. => α
+  | @metadata α .. => α
   | @captured α .. => WGRunWitness α
   | .session _ => Bool
   | .initiation _ | .response _ => Option PeerId
@@ -30,6 +33,7 @@ def Native.Result : Native → Type
 
 def Native.action (token : Native) : PrefixM Event token.Result := match token with
   | .quiet body _ => liftWGObserver (liftWGPrefix body)
+  | .metadata body _ => liftWGObserver (liftWGPrefix body)
   | .captured body _ => liftWGObserver (captureWGRun body)
   | .session pid => liftWGObserver (CausalJournal.session pid)
   | .initiation mac => liftWGObserver (NestedPeerRelease.admitInitiationWith
@@ -138,5 +142,11 @@ noncomputable def oldShape (kind : HandshakeCausal.Kind) (pid : PeerId) (body : 
       (HandshakeWorker.old (Event.old ∘ Journal.Event.handshake) handshake? (HandshakeCausal.call kind pid body))) := by
   rw [HandshakeEffects.old_call]
   exact callbackShape kind pid _ (.native (.quiet body frame))
+
+noncomputable def oldMetadataShape (kind : HandshakeCausal.Kind) (pid : PeerId) (body : WG.M α)
+    (source : PeerMetadata.Shape body) : Shape (liftWGObserver
+      (HandshakeWorker.old (Event.old ∘ Journal.Event.handshake) handshake? (HandshakeCausal.call kind pid body))) := by
+  rw [HandshakeEffects.old_call]
+  exact callbackShape kind pid _ (.native (.metadata body source))
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.HandshakeConcrete
