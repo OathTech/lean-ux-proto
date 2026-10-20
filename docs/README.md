@@ -173,6 +173,7 @@ obligations. Current setup commands are in [binary/README.md](../binary/README.m
 
 | Document | Contents |
 | --- | --- |
+| [2026-10-20-fresh-eyes-scope-review.md](2026-10-20-fresh-eyes-scope-review.md) | Independent directional review of the mirror and three proof campaigns against the goal of verifying real Linux: execution-domain and statement boundaries, proof maintenance, ranked recommendations and pivot criteria |
 | [2026-10-14-pre-release-review.md](2026-10-14-pre-release-review.md) | The pre-release review: 14 critiques an outside expert would make, ranked by damage and fairness, with a fix for each; the two concrete evidence defects (the foreign-function rule, the timer-input reconstruction) and the self-selected domain lead |
 
 ## Retired
