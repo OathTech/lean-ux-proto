@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeInterpretation
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeFrontier
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeReceiptStaging
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeReceiptDisposal
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTrafficConcreteInitialized
@@ -2722,6 +2723,22 @@ theorem initialized_source_points_have_current_account_or_interval
       (fun h w=>NativeAccounting.Classified h w.wg)
       (Reached.Runner.Points.executeShape trace placeholders) [] :=
   NativeAccounting.initialized_classification trace placeholders
+
+/-- Security: every declared initialized source point has a complete current
+ticket account, its original pending records restoring that account without
+native mutation, or a partial allocation or trim interval. The records retain
+their actual source entry; no arbitrary future history or incoming accounting
+certificate is assumed. Finer native source coverage remains separate. -/
+theorem initialized_source_points_have_current_account_or_fixed_completion
+    (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    {nativeConsume : Consume.Points.ChildPoints} {nativeNapi : Napi.Points.ChildPoints}
+    {nativeWorker : Iteration.Points.ChildPoints} {nativeWork : WorkService.Points.ChildPoints}
+    {nativeDispatch : Dispatch.Points.ChildPoints} :
+    Reached.Runner.Points.Covered
+      (NativeAccounting.children nativeConsume nativeNapi nativeWorker nativeWork nativeDispatch)
+      (fun h w=>NativeAccounting.Frontier h w.wg)
+      (Reached.Runner.Points.executeShape trace placeholders) [] :=
+  NativeAccounting.initialized_frontier trace placeholders
 
 end
 
