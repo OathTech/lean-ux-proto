@@ -20,7 +20,7 @@ def dumpReplaceWith (o : Ops m) (ctx : DumpCtx) (nextCursor : Option PeerId) (do
     o.step (peerGet pid)
   o.release ctx.nextPeer
 
-def dumpFinishWith (o : Ops m) (seq : Nat) (ctx : DumpCtx) (nextCursor : Option PeerId)
+def dumpFinishWith (o : Ops m) (seq : UInt32) (ctx : DumpCtx) (nextCursor : Option PeerId)
     (skb0 : NlSkb) (flags : Nat) (device : List (String × Lean.Json)) (done : Bool)
     (peers : Option (Array PeerDumpAttrs)) : m DumpCall := do
   dumpReplaceWith o ctx nextCursor done
@@ -37,7 +37,7 @@ def dumpTailWith (o : Ops m) (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   let (ctx,nextCursor,skb,done,peers) ← o.step (DumpReservation.walkSource d ctx skb)
   dumpFinishWith o d.deviceUpdateGen ctx nextCursor skb flags attrs done peers
 
-def dumpChunkWith (o : Ops m) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) : m DumpCall := do
+def dumpChunkWith (o : Ops m) (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) : m DumpCall := do
   let d ← o.step getDev
   let (s,flags,attrs) ← o.step (deviceDumpHeaderSource d ctx prevSeq skb)
   dumpTailWith o d ctx s flags attrs
@@ -99,7 +99,7 @@ theorem dumpDone_native (ctx : DumpCtx) : dumpDoneWith native ctx = wgGetDeviceD
 theorem dumpReplace_native (ctx : DumpCtx) (nextCursor : Option PeerId) (done : Bool) :
     dumpReplaceWith native ctx nextCursor done = DumpReservation.replaceSource ctx nextCursor done := rfl
 
-theorem dumpFinish_native (seq : Nat) (ctx : DumpCtx) (nextCursor : Option PeerId)
+theorem dumpFinish_native (seq : UInt32) (ctx : DumpCtx) (nextCursor : Option PeerId)
     (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool)
     (peers : Option (Array PeerDumpAttrs)) :
     dumpFinishWith native seq ctx nextCursor skb flags attrs done peers =
@@ -111,7 +111,7 @@ theorem dumpTail_native (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   rw [DumpReservation.tail_factor]
   rfl
 
-theorem dumpChunk_native (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem dumpChunk_native (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     dumpChunkWith native ctx prevSeq skb = wgGetDeviceDump ctx prevSeq skb := by
   rw [wgGetDeviceDump_source]
   unfold dumpChunkWith

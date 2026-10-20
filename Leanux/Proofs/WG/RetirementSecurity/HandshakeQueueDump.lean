@@ -21,7 +21,7 @@ private theorem dump_tail_cell (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   handshake_cell_source [deviceDumpTailSource,requireNotPending] using
     [get,peerGet_frame,peerPut_frame]
 
-theorem dump_chunk_cell (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem dump_chunk_cell (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     SameView view (wgGetDeviceDump ctx seq skb) := by
   have header := fun d ctx seq skb => kernel (deviceDumpHeader_sameWGStore d ctx seq skb)
   rw [wgGetDeviceDump_source]

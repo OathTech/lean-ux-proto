@@ -20,7 +20,7 @@ theorem dumpReplace_erases (h : Ops.Erases g) (ctx : DumpCtx) (nextCursor : Opti
   repeat' first
     | nested_release_erase h
 
-theorem dumpFinish_erases (h : Ops.Erases g) (seq : Nat) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
+theorem dumpFinish_erases (h : Ops.Erases g) (seq : UInt32) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
     ErasesStatePrefix (dumpFinishWith g seq ctx nextCursor skb flags attrs done peers) (dumpFinishWith native seq ctx nextCursor skb flags attrs done peers) := by
   unfold dumpFinishWith
   repeat' first
@@ -34,7 +34,7 @@ theorem dumpTail_erases (h : Ops.Erases g) (d : Device) (ctx : DumpCtx) (skb : N
     | with_reducible exact dumpFinish_erases h _ _ _ _ _ _ _ _
     | nested_release_erase h
 
-theorem dumpChunk_erases (h : Ops.Erases g) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem dumpChunk_erases (h : Ops.Erases g) (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     ErasesStatePrefix (dumpChunkWith g ctx prevSeq skb) (dumpChunkWith native ctx prevSeq skb) := by
   unfold dumpChunkWith
   repeat' first

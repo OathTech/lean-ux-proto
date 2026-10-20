@@ -14,7 +14,7 @@ theorem done (ctx : DumpCtx) : CompleteProduct.StateChecked (dumpDoneWith (Drive
     (AllocatedFrames.observed (NetlinkDumpCall.erases (.done ctx))
       (NetlinkDumpCall.allocation (.done ctx)))
 
-theorem chunk (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) : CompleteProduct.StateChecked (dumpChunkWith (Driver.nestedOps hooks) ctx seq skb) :=
+theorem chunk (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) : CompleteProduct.StateChecked (dumpChunkWith (Driver.nestedOps hooks) ctx seq skb) :=
   CompleteProduct.pair (dump_chunk CompleteProduct.Safe CompleteProduct.account_safe ctx seq skb)
     (by simpa only [NetlinkDumpCall.original,dumpChunk_native] using dumpChunk_erases ops_erases ctx seq skb)
     (AllocatedFrames.observed (NetlinkDumpCall.erases (.chunk ctx seq skb))

@@ -39,7 +39,7 @@ theorem dump_replace (h : EffectsSafe extra origin replay hooks) (ctx : DumpCtx)
     | transport_dump_native
     | transport_carrier_state_step
 
-theorem dump_finish (h : EffectsSafe extra origin replay hooks) (seq : Nat) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
+theorem dump_finish (h : EffectsSafe extra origin replay hooks) (seq : UInt32) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
     StateSafe extra origin replay (dumpFinishWith (nestedOps hooks) seq ctx nextCursor skb flags attrs done peers) := by
   unfold dumpFinishWith
   simp only [nestedOps]
@@ -59,7 +59,7 @@ theorem dump_tail (h : EffectsSafe extra origin replay hooks) (d : Device) (ctx 
     | transport_dump_native
     | transport_carrier_state_step
 
-theorem dump_chunk (h : EffectsSafe extra origin replay hooks) (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem dump_chunk (h : EffectsSafe extra origin replay hooks) (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     StateSafe extra origin replay (dumpChunkWith (nestedOps hooks) ctx seq skb) := by
   unfold dumpChunkWith
   simp only [nestedOps]

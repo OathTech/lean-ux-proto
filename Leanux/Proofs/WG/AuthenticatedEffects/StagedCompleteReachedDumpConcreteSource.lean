@@ -78,7 +78,7 @@ noncomputable def replaceSource (ctx : DumpCtx) (nextCursor : Option PeerId) (do
   simp only [nestedOps]
   repeat' dump_source_step
 
-noncomputable def finishSource (seq : Nat) (ctx : DumpCtx) (nextCursor : Option PeerId)
+noncomputable def finishSource (seq : UInt32) (ctx : DumpCtx) (nextCursor : Option PeerId)
     (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool)
     (peers : Option (Array PeerDumpAttrs)) :
     Source (dumpFinishWith (nestedOps hooks) seq ctx nextCursor skb flags attrs done peers) := by
@@ -97,7 +97,7 @@ noncomputable def tailSource (d : Device) (ctx : DumpCtx) (skb : NlSkb)
     | (dump_source_head dumpFinishWith; exact finishSource _ _ _ _ _ _ _ _)
     | dump_source_step
 
-noncomputable def chunkSource (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+noncomputable def chunkSource (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     Source (dumpChunkWith (nestedOps hooks) ctx seq skb) := by
   unfold dumpChunkWith
   simp only [nestedOps]

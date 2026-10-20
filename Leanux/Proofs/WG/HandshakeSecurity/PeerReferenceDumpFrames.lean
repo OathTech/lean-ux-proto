@@ -42,7 +42,7 @@ theorem deviceDumpTail_preserves (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   simp (config := {zeta := false}) only [WG.orM,WG.andM,requireNotPending,branch,invariant,unsupported]
   repeat' peer_reference_driver_dump_steps
 
-theorem wgGetDeviceDump_preserves (ctx : DumpCtx) (seq : Nat) (skb : NlSkb)
+theorem wgGetDeviceDump_preserves (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb)
     :
     Framing.Preserves Inv (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]

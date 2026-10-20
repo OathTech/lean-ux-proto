@@ -91,8 +91,8 @@ noncomputable def four (e : Endpoint) (cache : Option PeerId) (bytes : List UInt
         exact .bind (SocketCache.ambientShape (AmbientM.invariant (α:=Unit) "unreachable"))
           (fun _=>fourAfterCache _ _ _ _ _ _ _ _ _)
     | some pid=>
-        exact .bind (SocketCache.getShape pid table.rtGenid4)
-          (fourCached e (some pid) bytes ds exactRx table.rtGenid4)
+        exact .bind (SocketCache.getShape pid table.rtGenid4.toNat)
+          (fourCached e (some pid) bytes ds exactRx table.rtGenid4.toNat)
   · exact fourAfterCache _ _ _ _ _ _ _ _ _
 
 noncomputable def sixFinish (route : Option Route) : Shape (Six.finishFront route) := by

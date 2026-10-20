@@ -20,7 +20,7 @@ theorem dumpReplace_frame (ρ : E → Option F) (h : Ops.Frames ρ g) (ctx : Dum
   repeat' first
     | nested_release_frame h ρ
 
-theorem dumpFinish_frame (ρ : E → Option F) (h : Ops.Frames ρ g) (seq : Nat) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
+theorem dumpFinish_frame (ρ : E → Option F) (h : Ops.Frames ρ g) (seq : UInt32) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
     StateHistoryFrame ρ (dumpFinishWith g seq ctx nextCursor skb flags attrs done peers) := by
   unfold dumpFinishWith
   repeat' first
@@ -34,7 +34,7 @@ theorem dumpTail_frame (ρ : E → Option F) (h : Ops.Frames ρ g) (d : Device) 
     | with_reducible exact dumpFinish_frame ρ h _ _ _ _ _ _ _ _
     | nested_release_frame h ρ
 
-theorem dumpChunk_frame (ρ : E → Option F) (h : Ops.Frames ρ g) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem dumpChunk_frame (ρ : E → Option F) (h : Ops.Frames ρ g) (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     StateHistoryFrame ρ (dumpChunkWith g ctx prevSeq skb) := by
   unfold dumpChunkWith
   repeat' first

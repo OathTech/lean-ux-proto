@@ -50,7 +50,7 @@ theorem coalesced (P : List SentDatagram → Prop) (messages : List NlMessage) :
 theorem done (ctx : DumpCtx) : SameView WGWorld.sent (wgGetDeviceDone ctx) := by
   sent_frame [wgGetDeviceDone] using [peerPut_sent_spec]
 
-theorem header (d : Device) (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem header (d : Device) (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     SameView WGWorld.sent (deviceDumpHeaderSource d ctx seq skb) := by
   sent_frame [deviceDumpHeaderSource] using []
 
@@ -60,7 +60,7 @@ theorem tail (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   sent_frame [deviceDumpTailSource,requireNotPending] using
     [getPeer_sent_spec,get_peer,peerGet_sent_spec,peerPut_sent_spec,list_spec]
 
-theorem chunk (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem chunk (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     SameView WGWorld.sent (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]
   intro initial
@@ -70,7 +70,7 @@ theorem chunk (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
   exact preserves_bind device (fun d => preserves_bind (header d ctx seq skb initial)
     (fun result => tail d ctx result.1 result.2.1 result.2.2 initial))
 
-theorem chunk_spec (P : List SentDatagram → Prop) (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem chunk_spec (P : List SentDatagram → Prop) (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     Preserves (fun w => P w.sent) (wgGetDeviceDump ctx seq skb) := (chunk ctx seq skb).wp P
 
 theorem done_spec (P : List SentDatagram → Prop) (ctx : DumpCtx) :

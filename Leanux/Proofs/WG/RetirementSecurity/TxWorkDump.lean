@@ -41,7 +41,7 @@ theorem serving_dump_tail (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   simp (config:={zeta:=false}) only [WG.orM,WG.andM,requireNotPending,branch,invariant,unsupported]
   repeat' serving_dump_step
 
-theorem serving_dump_chunk (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem serving_dump_chunk (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     Preserves (Serving [] [] tx) (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]
   repeat' first

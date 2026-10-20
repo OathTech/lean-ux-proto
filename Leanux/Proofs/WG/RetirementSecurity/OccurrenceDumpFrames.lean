@@ -35,7 +35,7 @@ private theorem dump_tail_wire (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   simp (config := {zeta := false}) only [WG.orM,WG.andM,requireNotPending,branch,invariant,unsupported]
   repeat' occurrence_dump_wire initial
 
-theorem dump_chunk_wire (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem dump_chunk_wire (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     SameView txCryptWire (wgGetDeviceDump ctx seq skb) := by
   intro initial
   change Preserves (fun w => txCryptWire w = initial) _

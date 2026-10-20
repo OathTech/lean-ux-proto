@@ -39,7 +39,7 @@ private theorem dump_tail_view (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   simp (config := {zeta := false}) only [WG.orM,WG.andM,requireNotPending,branch,invariant,unsupported]
   repeat' encryption_past_dump_frame initial
 
-theorem dump_chunk_view (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem dump_chunk_view (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     SameView view (wgGetDeviceDump ctx seq skb) := by
   intro initial
   change Preserves (fun w => view w = initial) _

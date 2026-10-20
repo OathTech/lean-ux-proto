@@ -39,7 +39,7 @@ theorem dump_replace (ctx : DumpCtx) (nextCursor : Option PeerId) (done : Bool) 
     | (maintenance_head Hooks.peerRelease; exact Disposal.original _ Safe accountSafe)
     | prefix_dump_step Safe using accountSafe
 
-theorem dump_finish (seq : Nat) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
+theorem dump_finish (seq : UInt32) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
     Passive.Checked debts locals Safe (dumpFinishWith (nestedOps hooks) seq ctx nextCursor skb flags attrs done peers) := by
   change StateEnsures (CompleteCarrier.Carrier debts locals) Safe _ (fun _ => CompleteCarrier.Carrier debts locals)
   unfold dumpFinishWith
@@ -59,7 +59,7 @@ theorem dump_tail (d : Device) (ctx : DumpCtx) (skb : NlSkb) (flags : Nat) (attr
     | (maintenance_head dumpFinishWith; exact dump_finish Safe accountSafe _ _ _ _ _ _ _ _)
     | prefix_dump_step Safe using accountSafe
 
-theorem dump_chunk (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem dump_chunk (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     Passive.Checked debts locals Safe (dumpChunkWith (nestedOps hooks) ctx seq skb) := by
   change StateEnsures (CompleteCarrier.Carrier debts locals) Safe _ (fun _ => CompleteCarrier.Carrier debts locals)
   unfold dumpChunkWith

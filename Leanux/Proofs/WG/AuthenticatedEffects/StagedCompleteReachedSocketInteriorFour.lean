@@ -62,7 +62,7 @@ def socket4Front (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8)
     (ds : Nat) (exactRx : Bool) : MixedM (Except Int Route) := do
   let d ← liftWGPrefix getDev
   if ← liftWGPrefix (branch .send4SockNull d.sock4.isNone) then return .error (-ENONET)
-  let gen := (← liftWGPrefix (liftRouting (Net.Fib.inSocketNs Net.Fib.getTable))).rtGenid4
+  let gen := (← liftWGPrefix (liftRouting (Net.Fib.inSocketNs Net.Fib.getTable))).rtGenid4.toNat
   let mut saddr := e.src
   let mut route : Option Route := none
   if ← liftWGPrefix (branch .send4HasCache cache.isSome) then

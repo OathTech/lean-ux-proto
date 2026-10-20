@@ -39,7 +39,7 @@ private theorem dump_tail (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   simp (config := {zeta := false}) only [WG.orM,WG.andM,requireNotPending,branch,invariant,unsupported]
   repeat' batch_dump_step
 
-theorem dump_chunk (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem dump_chunk (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     Preserves (Coherent [] []) (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]
   repeat' first

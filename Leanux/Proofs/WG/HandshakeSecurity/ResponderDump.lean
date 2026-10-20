@@ -38,7 +38,7 @@ theorem deviceDumpTail_preserves (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   simp (config := {zeta := false}) only [WG.orM,WG.andM,requireNotPending,branch,invariant,unsupported]
   repeat' responder_dump_steps confirmed
 
-theorem wgGetDeviceDump_preserves (ctx : DumpCtx) (seq : Nat) (skb : NlSkb)
+theorem wgGetDeviceDump_preserves (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb)
     (confirmed : List Nat) :
     Preserves (History.Native confirmed) (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]

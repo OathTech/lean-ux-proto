@@ -62,7 +62,7 @@ theorem replace (ctx : DumpCtx) (old : Option Owner) (nextCursor : Option PeerId
       cases equality
       exact ⟨d,p,device,resident,rfl,positive⟩
 
-theorem finish (seq : Nat) (ctx : DumpCtx) (old : Option Owner)
+theorem finish (seq : UInt32) (ctx : DumpCtx) (old : Option Owner)
     (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat)
     (attrs : List (String × Lean.Json)) (finished : Bool) (peers : Option (Array PeerDumpAttrs))
     (cursor : ctx.nextPeer = old.map Owner.slot)
@@ -110,7 +110,7 @@ theorem tail (d : Device) (ctx : DumpCtx) (skb : NlSkb)
     w a walk w ac True.intro walking).trans cursor
   exact finish _ _ old _ _ _ _ _ _ selected account ac b rest
 
-theorem chunk (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) (old : Option Owner)
+theorem chunk (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) (old : Option Owner)
     (cursor : ctx.nextPeer = old.map Owner.slot)
     (account : Credits carriers (old.toList ++ loans) w) (a b : Ambient)
     (run : ((wgGetDeviceDump ctx seq skb).run w).run a = .ok ((result,v),b)) :

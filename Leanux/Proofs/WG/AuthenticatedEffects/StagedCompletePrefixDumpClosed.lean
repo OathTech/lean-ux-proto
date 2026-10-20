@@ -12,7 +12,7 @@ theorem done (ctx : DumpCtx) : Product.StateChecked (dumpDoneWith (Driver.nested
   Product.pair (dump_done CompleteProduct.Safe CompleteProduct.account_safe ctx)
     (CompleteDump.done ctx)
 
-theorem chunk (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) : Product.StateChecked (dumpChunkWith (Driver.nestedOps hooks) ctx seq skb) :=
+theorem chunk (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) : Product.StateChecked (dumpChunkWith (Driver.nestedOps hooks) ctx seq skb) :=
   Product.pair (dump_chunk CompleteProduct.Safe CompleteProduct.account_safe ctx seq skb)
     (CompleteDump.chunk ctx seq skb)
 

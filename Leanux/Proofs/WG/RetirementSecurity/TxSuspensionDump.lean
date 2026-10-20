@@ -21,7 +21,7 @@ theorem dump_peer (pid : PeerId) (ctx : DumpCtx) (skb : NlSkb) : Keeps (getPeerD
 theorem dump_done (ctx : DumpCtx) : Keeps (wgGetDeviceDone ctx) := by
   suspension_source [wgGetDeviceDone] using [branch,peer_put]
 
-theorem dump_header (d : Device) (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem dump_header (d : Device) (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     Keeps (deviceDumpHeaderSource d ctx seq skb) := by
   suspension_source [deviceDumpHeaderSource] using [branch,unsupported]
 
@@ -31,7 +31,7 @@ theorem dump_tail (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   suspension_source [deviceDumpTailSource,requireNotPending,WG.orM,WG.andM]
     using [peer,branch,invariant,dump_peer,peer_get,peer_put,unsupported]
 
-theorem dump_chunk (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) : Keeps (wgGetDeviceDump ctx seq skb) := by
+theorem dump_chunk (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) : Keeps (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]
   suspension_source [] using [device,dump_header,dump_tail]
 

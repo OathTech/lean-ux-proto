@@ -44,7 +44,7 @@ theorem deviceDumpTail_geometry (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   simp (config := {zeta := false}) only [WG.orM,WG.andM,requireNotPending,branch,invariant,unsupported]
   repeat' transport_dump_step initial
 
-theorem wgGetDeviceDump_geometry (ctx : DumpCtx) (seq : Nat) (skb : NlSkb)
+theorem wgGetDeviceDump_geometry (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb)
     :
     SameView geometry (wgGetDeviceDump ctx seq skb) := by
   intro initial

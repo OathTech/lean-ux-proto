@@ -24,7 +24,7 @@ theorem dumpDone_old (release : StagedDisposal.Event → E)
 hiding only their disposal events preserves its complete old Stop prefix. -/
 theorem dumpChunk_old (release : StagedDisposal.Event → E)
     (decode : E → Option StagedDisposal.Event) (ρ : E → Option F)
-    (quiet : ∀ e, ρ (release e) = none) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+    (quiet : ∀ e, ρ (release e) = none) (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     StateProjectsPrefix ρ id (dumpChunkWith (observedOps release decode) ctx prevSeq skb)
       (liftWGPrefix (wgGetDeviceDump ctx prevSeq skb)) := by
   apply Exchange.quiet_native_projection ρ _ _ ?_

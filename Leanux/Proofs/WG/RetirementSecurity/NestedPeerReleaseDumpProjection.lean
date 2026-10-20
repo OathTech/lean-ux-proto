@@ -34,7 +34,7 @@ theorem dumpReplace_projects (ρ : E → Option F) (h : Ops.Projects ρ g t) (ct
   repeat' first
     | nested_release_project h ρ
 
-theorem dumpFinish_projects (ρ : E → Option F) (h : Ops.Projects ρ g t) (seq : Nat) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
+theorem dumpFinish_projects (ρ : E → Option F) (h : Ops.Projects ρ g t) (seq : UInt32) (ctx : DumpCtx) (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat) (attrs : List (String × Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
     StateProjectsPrefix ρ id (dumpFinishWith g seq ctx nextCursor skb flags attrs done peers) (dumpFinishWith t seq ctx nextCursor skb flags attrs done peers) := by
   unfold dumpFinishWith
   repeat' first
@@ -48,7 +48,7 @@ theorem dumpTail_projects (ρ : E → Option F) (h : Ops.Projects ρ g t) (d : D
     | with_reducible exact dumpFinish_projects ρ h _ _ _ _ _ _ _ _
     | nested_release_project h ρ
 
-theorem dumpChunk_projects (ρ : E → Option F) (h : Ops.Projects ρ g t) (ctx : DumpCtx) (prevSeq : Nat) (skb : NlSkb) :
+theorem dumpChunk_projects (ρ : E → Option F) (h : Ops.Projects ρ g t) (ctx : DumpCtx) (prevSeq : UInt32) (skb : NlSkb) :
     StateProjectsPrefix ρ id (dumpChunkWith g ctx prevSeq skb) (dumpChunkWith t ctx prevSeq skb) := by
   unfold dumpChunkWith
   repeat' first

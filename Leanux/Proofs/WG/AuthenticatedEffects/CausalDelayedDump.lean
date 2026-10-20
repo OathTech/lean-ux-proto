@@ -52,7 +52,7 @@ theorem deviceDumpTail_delayed (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   simp (config := {zeta := false}) only [WG.orM,WG.andM,requireNotPending,branch,invariant,unsupported]
   repeat' causal_delayed_dump_step h
 
-theorem wgGetDeviceDump_delayed (ctx : DumpCtx) (seq : Nat) (skb : NlSkb)
+theorem wgGetDeviceDump_delayed (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb)
     :
     StateSafe (liftWGPrefix (wgGetDeviceDump ctx seq skb)) := by
   apply state_native

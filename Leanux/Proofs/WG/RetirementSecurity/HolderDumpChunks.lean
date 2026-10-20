@@ -7,7 +7,7 @@ namespace Leanux.Proofs.WG.RetirementSecurity.HolderDump
 open Leanux Leanux.WG Leanux.Proofs.Framing Lifetimes Queues Queues.RxCredits
 open DurableHolders NetlinkDump
 
-theorem finish_keys (seq : Nat) (ctx : DumpCtx) (old : Option Owner)
+theorem finish_keys (seq : UInt32) (ctx : DumpCtx) (old : Option Owner)
     (nextCursor : Option PeerId) (skb : NlSkb) (flags : Nat)
     (device : List (String×Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs))
     (cursor : ctx.nextPeer=old.map Owner.slot)
@@ -61,7 +61,7 @@ theorem anchors_store (entry : SlotPeerReferences holders loans w)
   have device : v.dev=w.dev := congrArg WGStoreView.dev same
   simpa only [SlotPeerReferences,device] using entry
 
-theorem chunk_keys (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) (old : Option Owner)
+theorem chunk_keys (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) (old : Option Owner)
     (cursor : ctx.nextPeer=old.map Owner.slot)
     (funded : ClearWork.Inv carriers (old.toList ++ (holders.owners ++ loans)) w)
     (keys : HolderAccount temporary w) (anchors : SlotPeerReferences holders loans w)
@@ -79,7 +79,7 @@ theorem chunk_keys (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) (old : Option Owner
     ⟨funded.1.kernel both,funded.2.kernel both⟩ (HolderPoll.keys_store keys both)
     (anchors_store anchors both) ah b tailRun
 
-theorem finish_anchors (seq : Nat) (ctx : DumpCtx) (next : Option PeerId) (skb : NlSkb)
+theorem finish_anchors (seq : UInt32) (ctx : DumpCtx) (next : Option PeerId) (skb : NlSkb)
     (flags : Nat) (attrs : List (String×Lean.Json)) (done : Bool) (peers : Option (Array PeerDumpAttrs)) :
     Preserves (SlotPeerReferences holders loans)
       (DumpReservation.finishSource seq ctx next skb flags attrs done peers) := by
@@ -96,7 +96,7 @@ theorem tail_anchors (d : Device) (ctx : DumpCtx) (skb : NlSkb)
   exact preserves_bind ((DumpReservation.walk_frame d ctx skb).wp (SlotPeerReferences holders loans))
     (fun r=>finish_anchors _ _ _ _ _ _ _ _)
 
-theorem chunk_anchors (ctx : DumpCtx) (seq : Nat) (skb : NlSkb) :
+theorem chunk_anchors (ctx : DumpCtx) (seq : UInt32) (skb : NlSkb) :
     Preserves (SlotPeerReferences holders loans) (wgGetDeviceDump ctx seq skb) := by
   rw [wgGetDeviceDump_source]
   exact preserves_bind (SlotAnchors.store getDev_sameWGStore) (fun d=>
