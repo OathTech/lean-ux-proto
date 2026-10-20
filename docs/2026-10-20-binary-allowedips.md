@@ -390,7 +390,7 @@ assertion nor reconstruction excludes wrapping sequence states or substitutes
 a modulo target. The mirror and main remain untouched.
 
 
-## Exact-reassignment effect and list support (03:48 UTC)
+## Exact-reassignment effect and list support (03:47 UTC)
 
 The 14-instruction callback-free reassignment segment now proves the same
 `Exact.effect` memory/register summary that the paired runner checks at its
@@ -426,6 +426,34 @@ full reconstruction and the mirror's exact-update effect remains open. It is
 not an exact-path insertion theorem or completed-function coverage. All modules
 build with standard axioms. The first fresh-replay invocation incorrectly gave
 multiple roots with `--fresh` and failed; the corrected invocation uses the
-single partial-work root `AllowedipsInsertionSurface` and is pending. No
+single partial-work root `AllowedipsInsertionSurface` and passed. No
 external export acceptance is claimed. The complete insertion, allocation and
 rollback proofs, wrapper composition, and checkpoint B remain open.
+
+## Reassignment destination reconstruction (03:58 UTC)
+
+`Exact.segment_destination` connects the actual 14-instruction segment to the
+existing executable destination-list decoder. The resulting identity sequence
+is the old list with the focus removed and then appended. It covers same-peer
+singleton, move-to-tail and already-last updates, and an internal self-linked
+node joining a peer. The post-unlink tail read supplies its own named slot;
+the traversal budget follows from the existing finite interpretation. There
+is no new fuel, alignment, no-alias or no-wrap precondition. Local input facts
+about the focus and its neighbors still need to be derived from full entry
+reconstruction and the heap assertion in the function composition.
+
+The supporting unlink theorem also reconstructs deletion in every peer list,
+including lists that did not contain the focus. The append theorem and the
+physical-effect equality preserve the actual store order. Allocation geometry
+separates forward, backward and owner fields without assuming peer-base
+alignment. These lemmas will also serve insertion and deletion; no generic
+search tactic was introduced. All new modules build with standard axioms and
+no resource-limit increase. A fresh replay of the enlarged partial-work root
+is pending. The previous root's replay passed at `f922daa4`.
+
+This adds 731 proof/support lines approximately eleven minutes beyond the physical-effect checkpoint. The fast unit tier passes 136 tests (one skipped) in 23.036 seconds; its printed empty-report failure is the expected unit-test fixture, not a differential run.
+It is still a partial postcondition: owner-word reconstruction, the other peer
+lists and unchanged fields, the source-state update, and wrapper composition
+remain to be assembled. It adds no completed-function coverage. The mirror
+counter finding remains open pending the coordinator's landing notice; the
+failing witness and binary result are unchanged.
