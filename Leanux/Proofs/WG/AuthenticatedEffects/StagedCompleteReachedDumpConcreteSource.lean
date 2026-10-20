@@ -1,9 +1,10 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedLifecycleConcreteRunner
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDumpMetadataCanonical
 
 /-! Fixed dump source witnesses reuse the lifecycle source syntax. Their
 ordinary certificate excludes creation, reset and stronger staging entries.
-Native header/walk atoms keep the landed cancellation behavior; cursor release
-uses the counted peer source rather than a quiet native frame. -/
+Native header/walk trees keep the landed cancellation behavior; cursor release
+uses the counted peer source. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.DumpConcrete
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open TransmitSecurity RetirementSecurity CausalJournal NetlinkDump Driver NestedPeerRelease
@@ -17,11 +18,11 @@ noncomputable def pureSource (value : α) : Source (pure value) := by
   rw [liftWGObserver_pure]
   exact ⟨.pure value,True.intro⟩
 
-noncomputable def nativeSource (action : WG.M α) (frame : SameView StagedEntry.view action) :
+noncomputable def nativeSource (action : WG.M α) (source : PeerMetadata.Shape action) :
     Source (liftWGPrefix action) := by
   change {shape : Shape (liftWGObserver (liftWGPrefix action)) // Ordinary shape}
   rw [liftWGObserver_lift]
-  exact ⟨.native (.quiet (liftWG action) (wg_frame action frame)),True.intro⟩
+  exact ⟨.native (.metadata action source),True.intro⟩
 
 noncomputable def releaseSource (peer : Option PeerId) : Source (hooks.peerRelease peer) :=
   ⟨.child (.family (.release peer)),True.intro⟩
@@ -57,7 +58,15 @@ elab "dump_source_head " expected:ident : tactic => do
     Lean.throwError "different source head"
 
 macro "dump_source_step" : tactic => `(tactic| first
-  | (dump_source_head liftWGPrefix; apply nativeSource; complete_dump_frame)
+  | (dump_source_head liftWGPrefix; apply nativeSource; repeat' first
+      | (metadata_source_head RxCredits.DumpReservation.walkSource; exact PeerMetadata.dumpWalkShape _ _ _)
+      | (metadata_source_head deviceDumpHeaderSource; exact PeerMetadata.dumpHeaderShape _ _ _ _)
+      | (metadata_source_head getNlSock; exact PeerMetadata.dumpSocketReadShape _)
+      | (metadata_source_head setNlSock; exact PeerMetadata.dumpSocketWriteShape _ _)
+      | (metadata_source_head lookupInterface; exact PeerMetadata.interfaceShape _)
+      | (metadata_source_head coalesce; exact PeerMetadata.dumpCoalesceShape _)
+      | (metadata_source_head peerGet; exact PeerMetadata.peerGetShape _)
+      | dump_metadata_step)
   | (dump_source_head Hooks.peerRelease; exact releaseSource _)
   | (dump_source_head Pure.pure; exact pureSource _)
   | (dump_source_head Bind.bind; apply bindSource)

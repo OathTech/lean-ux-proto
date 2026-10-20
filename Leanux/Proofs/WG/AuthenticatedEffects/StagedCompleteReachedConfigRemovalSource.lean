@@ -33,7 +33,7 @@ noncomputable def removeNonNullShape (peer : Option PeerId) : Lifecycle.Points.S
   cases peer with
   | none=>exact .native (.quiet _ (Lifecycle.Points.wg_frame _ (by entry_lifecycle_native)))
   | some pid=>
-      exact .bind (.native (.quiet _ (Lifecycle.Points.wg_frame _ (RoutingFrames.make_dead pid))))
+      exact .bind (.native (.routing _ (Routing.deadShape pid)))
         (fun _=>Lifecycle.Points.afterDeadShape pid)
 
 noncomputable def removeBodyShape (peer : Option PeerId) : Lifecycle.Points.Shape (removeBody peer) := by

@@ -1,7 +1,7 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDumpConcreteSource
 
 /-! The actual dump source is ordinary for the packet account. Cursor release
-is a concrete counted callback; header and walk native interiors remain atoms. -/
+is a concrete counted callback; header and walk interiors use fixed metadata trees. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.DumpConcrete
 open Leanux Leanux.WG Leanux.Proofs.Logged TransmitSecurity CausalJournal
 open Lifecycle.Points
