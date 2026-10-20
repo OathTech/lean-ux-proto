@@ -429,3 +429,6 @@ Source-123 `5b0a99a1` joins configuration metadata, public-key lookup, peer crea
 
 
 Source-124 `94d177c7` joins newlink through its actual registration write and continuation. The original setup account derives the new empty epoch account with the same ledger. Routing edits, other lifecycle and service interiors remain open. Scoped build and axiom validation passed over `1a69cebb`; the report distinguishes that checkpoint from main `1f766662`, awaiting merge and carry.
+
+
+Source-125 `333ad8e0` joins configuration routing through fixed source trees, original saved peer-list prefixes, actual list writes and trie adapters. The same packet account holds at each point and the original continuation is retained. C1 removal source factors avoid increasing proof resource limits; C1 files are unchanged by this result. The thirteen C1/C3 roots pass 4462 build jobs, 57 focused and 2321 root/carry axiom queries, and token/import checks. Carry `5b311948` remains the latest scoped fresh replay and twelve-recipe checkpoint over mirror `1f766662`; the aggregate gate is blocked by the C2 word-type carry. Lifecycle/service interiors and the final native-source coverage audit remain open.
