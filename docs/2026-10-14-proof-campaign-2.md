@@ -29,6 +29,9 @@ finds 14 runner-guard copies in seven shared modules, plus the namespace
 frames/observer and the parser's new validation loop. This exceeds the
 charter's small-local-variant allowance; none of those layers is copied or
 edited here. The initial whole-tree build is exposing that inherited carry.
+The owned `RunnerFiniteSource`, `Noise/PendingEnvironmentSource` and
+`Index/LifecycleCleanupRuleSource` adaptations are prepared separately; their
+imports still prevent validation until the shared carry is available.
 
 The six summaries below describe the landing scope, with H5's pending-unit
 clause strengthened over `218d3ffd`, and supersede broader completion wording
