@@ -6,8 +6,8 @@ import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedLifecyclePoint
 /-! Fixed lifecycle roots derive their phase certificate from the original
 entry. Creation's temporary allocation metadata needs only the packet account;
 destruction retains the actual native reference/service companions until its check.
-Native atoms expose exact entry/returned cuts; finer atom interiors are not
-claimed here. Five deeper callback interiors remain explicit. The environment
+Newlink includes its fixed native source interiors and epoch transition;
+other native atoms retain their explicit entry/returned boundary. Five deeper callback interiors remain explicit. The environment
 and descriptor-wrapper shapes are available separately, but their complete
 root phase certificates are not claimed by this core coverage theorem. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Lifecycle.Points
@@ -68,6 +68,9 @@ theorem boundary_carrier (before : Framed shape w h)
   induction point with
   | entry => exact before.account
   | returned shape performed => exact before.normal performed
+  | newlink point =>
+    obtain ⟨ledger,start,creating⟩:=before
+    exact ⟨ledger,point.accounted creating⟩
   | interior _ impossible => cases impossible
   | left _ _ ih => exact ih before.1
   | right head _ leading _ ih => exact ih (before.2 _ _ _ leading)

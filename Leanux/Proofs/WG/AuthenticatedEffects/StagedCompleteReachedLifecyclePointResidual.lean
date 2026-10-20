@@ -14,6 +14,8 @@ inductive Residual {native inside : ChildPoints} {Good : History → World → P
   | returned (shape : Shape action)
       (performed : runPrefix action w h = (.ok (value,u),middle)) :
       Residual children shape w h .returned u middle (pure value)
+  | newlink {w : World} (point : DeviceCreation.Point w.wg w.ambient v b) :
+      Residual children (.native .newlink) w h .newlink {w with wg:=v,ambient:=b} h (DeviceCreation.remainder h point)
   | interior (token : Child action) (point : native _ _ token w h u middle) :
       Residual children (.child token) w h .interior u middle
         ((children.at token).remainder w h u middle point)
@@ -38,6 +40,7 @@ theorem Point.residual (children : ChildContracts native inside Good)
   induction point with
   | entry shape => exact ⟨_,.entry shape⟩
   | returned shape performed => exact ⟨_,.returned shape performed⟩
+  | newlink point => exact ⟨_,.newlink point⟩
   | interior token point => exact ⟨_,.interior token point⟩
   | left tail point ih =>
       obtain ⟨remaining,residual⟩ := ih
@@ -54,6 +57,7 @@ theorem Residual.point (residual : Residual children shape w h site u middle rem
   induction residual with
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
+  | newlink point => exact .newlink point
   | interior token point => exact .interior token point
   | left tail remaining ih => exact .left tail ih
   | right head tail leading remaining ih => exact .right head tail leading ih
@@ -66,6 +70,7 @@ theorem Residual.run {α : Type} {action : PrefixM Event α} {shape : Shape acti
   induction residual with
   | entry shape => rfl
   | returned shape performed => exact performed.trans (runPrefix_pure _ _ _).symm
+  | newlink point => exact DeviceCreation.remainder_run _ point
   | interior token point => exact (children.at token).continuation _ _ _ _ point
   | left tail remaining ih => simp only [runPrefix_bind,ih]
   | right head tail leading remaining ih => rw [runPrefix_bind,leading]; exact ih

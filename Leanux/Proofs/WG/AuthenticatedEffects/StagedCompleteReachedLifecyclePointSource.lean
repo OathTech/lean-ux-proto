@@ -1,4 +1,4 @@
-import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedLifecyclePointTransitionFrames
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedDeviceCreationFrames
 
 /-! A fixed source witness, not an existential factorization, determines
 lifecycle points. Native tokens carry concrete projection frames. Transition

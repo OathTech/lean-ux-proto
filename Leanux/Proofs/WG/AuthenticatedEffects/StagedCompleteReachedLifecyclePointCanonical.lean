@@ -2,8 +2,8 @@ import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedLifecyclePoint
 
 /-! Canonical witnesses expand the original lifecycle binds and saved peer
 traversals. The five children are only the actual staging/keepalive, drain,
-purge and release callbacks. Newlink and the destructor check are explicit
-native atoms; their finer native interiors are not silently counted as points. -/
+purge and release callbacks. Newlink has a dedicated source-point relation. Other native atoms, including
+the destructor check, keep their finer coverage boundary explicit. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Lifecycle.Points
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open TransmitSecurity RetirementSecurity CausalJournal HandshakeSecurity Driver

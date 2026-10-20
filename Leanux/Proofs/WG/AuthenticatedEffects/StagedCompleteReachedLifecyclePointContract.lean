@@ -14,6 +14,7 @@ inductive Site where
   | entry
   | returned
   | interior
+  | newlink
   | left (site : Site)
   | right (site : Site)
   | marked (label : Label) (site : Site)
@@ -24,6 +25,8 @@ inductive Point (inside : ChildPoints) : {α : Type} → {action : PrefixM Event
   | returned (shape : Shape action)
       (performed : runPrefix action w h = (.ok (value,u),middle)) :
       Point inside shape w h .returned u middle
+  | newlink {w : World} (point : DeviceCreation.Point w.wg w.ambient v b) :
+      Point inside (.native .newlink) w h .newlink {w with wg:=v,ambient:=b} h
   | interior (token : Child action) (point : inside _ _ token w h u middle) :
       Point inside (.child token) w h .interior u middle
   | left {body : PrefixM Event α} {next : α → PrefixM Event β}
@@ -75,6 +78,7 @@ theorem Point.coverage (contracts : ChildContracts native inside Good)
   induction point with
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
+  | newlink point => exact .newlink point
   | interior token point => exact .interior token ((contracts.at token).coverage _ _ _ _ point)
   | left tail point ih => exact .left tail ih
   | right head tail leading point ih => exact .right head tail leading ih
@@ -88,6 +92,9 @@ theorem Point.safe (accountGood : ∀ h w, Account h w → Good h w)
   induction point with
   | entry shape => exact accountGood _ _ before.account
   | returned shape performed => exact accountGood _ _ (before.normal performed)
+  | newlink point =>
+    obtain ⟨ledger,start,creating⟩:=before
+    exact accountGood _ _ ⟨ledger,point.accounted creating⟩
   | interior token point => exact (contracts.at token).safe _ _ _ _ before point
   | left tail point ih => exact ih before.1
   | right head tail leading point ih => exact ih (before.2 _ _ _ leading)
