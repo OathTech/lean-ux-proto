@@ -230,19 +230,35 @@ refuted pending disposition; the global termination obligation stays open.
 
 ## 5. Account for retained namespace-pin aliases at cleanup
 
-Status: new accepted initialized placeholder counterexample, independently
-reviewed for fixture-domain validity. The foreign fixture permits `dup(9)`,
-then its single `wg_netns_close`, then `close(ref 0)`. The original runner and
-exact boundary observer accept with pending worker 12 (`netnsCleanup`) after
-the final close. The default descriptor limit is 32.
+Status: open Rule Zero clause-1 mirror/environment defect over `1a69cebb`,
+with an accepted initialized placeholder counterexample. The foreign fixture
+permits `dup(9)`, its single `wg_netns_close`, then `close(ref 0)` at the
+default descriptor limit of 32. The original runner and exact boundary
+observer accept with pending worker 12 after the final close.
 
-[Finding and executable recipe](2026-10-20-proof-campaign-2-namespace-pin.md).
-The fixed-holder cleanup assumes the pin's last reference is gone; a retained
-alias violates that assumption without violating either parser's stated domain.
-The operation-end pending guard is restricted to supplied-record mode.
+[Finding and executable recipe](2026-10-20-proof-campaign-2-namespace-pin.md);
+[independent landing review, S3](2026-10-20-review-campaign-2-landing.md).
+The first defect is earlier: at operation 1 the mirror performs WireGuard
+pre-exit and creator-FIB teardown despite descriptor 10 retaining the pin.
+The review observes `wg_netns_pre_exit.creator=1` there. The C does not
+release the pin's file or queue `cleanup_net` at that close, so this branch
+label already diverges before the final pending bit.
 
-Request: determine and enforce the actual fixture domain or account for cleanup
-at the last pin release, preserving the real scheduling behavior. This is an
-altitude-preserving environment request, not a kernel claim. The proof campaign
-makes no mirror change and continues the independent termination and service
-claims. The unrestricted placeholder pending-emptiness statement remains refuted.
+`Syscalls.netnsClose` assumes the fixed pin close drops the last reference.
+`Env.netnsCleanup` silently skips `resolveUnit` when `peekUnit` finds none
+(`Leanux/Env.lean:1130`), then runs the section regardless. The actual last
+release at operation 2 queues cleanup that the ordinary close does not run.
+This is neither a wording artefact nor the C's legitimate asynchronous
+cleanup deferral: the mirror tears down at the wrong operation.
+
+Supplied mode refuses the missing cleanup section-start at operation 1;
+independently its operation-end pending guard would reject the later pending
+cut. The admitted path is the `--domain` placeholder filter, not the
+supplied-mode differential check. Request 4's lifecycle fix at `3f3879e0`
+did not close this path.
+
+Two possible mirror-lane dispositions are an explicit refusal of a retained
+pin alias, or cleanup queued and run at the actual last release with the C's
+asynchronous scheduling modeled. Both preserve the mirror's altitude; the
+mirror lane chooses and validates the fix. This campaign prescribes neither,
+makes no mirror change, and leaves unrestricted pending emptiness refuted.
