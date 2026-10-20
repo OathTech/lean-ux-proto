@@ -28,6 +28,11 @@ identities. It never repairs a dirty or differently pinned existing checkout.
 A network fetch, if needed inside Nono, must be run outside Nono. Neither setup
 nor the gate modifies machine-global configuration or requires the oracle ELF
 for Lean compilation. The separate binary gate does not build `LeanuxProofs`.
+It imports no `Leanux.Proofs` modules. The segment endpoint definitions copied
+from that tree live in `AllowedipsSourceModel.lean`, with their origins named;
+`AllowedipsSourceRun.lean` proves the needed execution equations locally over
+the operational mirror. The proof campaigns can change independently of this
+package's imports.
 
 The current semantics pin is `907830a1fb207e86f7914764717e3995c1f0df2d`:
 upstream `8af78062037bc237b341d20252aafd1797c1bcb7` plus **nine** committed

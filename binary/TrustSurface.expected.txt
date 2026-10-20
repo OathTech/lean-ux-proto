@@ -590,12 +590,12 @@ Binary.Pair.Allowedips.Root.initialization_checked : ∀ (fetch : Int64 → Opti
                             machine.data.dmem t.data.dmem ∧
                           Binary.Pair.Allowedips.Corresponds (names.allocated machine.data.regs.rbx.toNat)
                               Binary.Pair.Allowedips.Root.nodeOffsets t.data.dmem
-                              (Leanux.Proofs.WG.AllowedIps.emptyInstalled d (BEq.beq.{0} machine.data.regs.rbp.toNat 32)
-                                key cidr pid owner) ∧
+                              (Binary.Pair.Allowedips.Model.emptyInstalled d
+                                (BEq.beq.{0} machine.data.regs.rbp.toNat 32) key cidr pid owner) ∧
                             Eq.{1}
                               (Binary.Pair.Allowedips.heap (names.allocated machine.data.regs.rbx.toNat)
                                 (Binary.Pair.Allowedips.target
-                                  (Leanux.Proofs.WG.AllowedIps.emptyInstalled d
+                                  (Binary.Pair.Allowedips.Model.emptyInstalled d
                                     (BEq.beq.{0} machine.data.regs.rbp.toNat 32) key cidr pid owner))
                                 t.data.dmem)
                               (Except.ok.{0, 0} ()))
@@ -2202,11 +2202,11 @@ def Binary.Pair.Allowedips.Root.nodeOffsets : AllowedipsProbe.Offsets :=
   bitAtA := Binary.AllowedipsLayout.bit_at_a, bitAtB := Binary.AllowedipsLayout.bit_at_b,
   bitlen := Binary.AllowedipsLayout.bitlen, bits := Binary.AllowedipsLayout.bits,
   peerRefcount := Binary.Layouts.peer_refcount }
-def Leanux.Proofs.WG.AllowedIps.emptyInstalled : Leanux.WG.Device →
+def Binary.Pair.Allowedips.Model.emptyInstalled : Leanux.WG.Device →
   Bool → Nat → Nat → Nat → Leanux.WG.Peer → Leanux.WG.Device :=
 fun d v4 addr cidr pid p =>
-  have n := Leanux.WG.newNode addr cidr (Leanux.Proofs.WG.AllowedIps.rootWidth v4) (some.{0} pid);
-  Leanux.Proofs.WG.AllowedIps.rootWrite
+  have n := Leanux.WG.newNode addr cidr (Binary.Pair.Allowedips.Model.rootWidth v4) (some.{0} pid);
+  Binary.Pair.Allowedips.Model.rootWrite
     { ifindex := d.ifindex, ifname := d.ifname, running := d.running, sock4 := d.sock4, sock6 := d.sock6,
       creatingNet := d.creatingNet, carrier := d.carrier, cookieSecret := d.cookieSecret,
       cookieSecretBirthdate := d.cookieSecretBirthdate, cookieEncryptionKey := d.cookieEncryptionKey,
@@ -2247,7 +2247,7 @@ fun d v4 addr cidr pid p =>
       nodes :=
         Std.TreeMap.insert.{0, 0} (Std.TreeMap.insert.{0, 0} d.nodes d.nextNode n) d.nextNode
           { peer := n.peer, bit := n.bit, cidr := n.cidr, bitlen := n.bitlen, bits := n.bits,
-            parent := Leanux.Proofs.WG.AllowedIps.rootSlot v4 },
+            parent := Binary.Pair.Allowedips.Model.rootSlot v4 },
       nextNode := HAdd.hAdd.{0, 0, 0} d.nextNode 1, nextPeer := d.nextPeer, indexTable := d.indexTable,
       sendWorkQueue := d.sendWorkQueue, keypairs := d.keypairs, nextKeypairId := d.nextKeypairId,
       encryptLastCpu := d.encryptLastCpu, encryptQueue := d.encryptQueue, txWorkQueue := d.txWorkQueue,

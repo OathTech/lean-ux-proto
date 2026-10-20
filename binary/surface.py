@@ -108,7 +108,7 @@ DEFINITIONS = [
     'Binary.Pair.Allowedips.Return.Writes',
     'Binary.Pair.Allowedips.Root.boundary', 'Binary.Pair.Allowedips.Root.writeSpans', 'Binary.Pair.Allowedips.Root.InitWrites',
     'Binary.Pair.Allowedips.Names.allocated', 'Binary.Pair.Allowedips.Root.nodeOffsets',
-    'Leanux.Proofs.WG.AllowedIps.emptyInstalled',
+    'Binary.Pair.Allowedips.Model.emptyInstalled',
     'Binary.Pair.Allowedips.Root.effect', 'Binary.Pair.Allowedips.Root.attach',
     'Binary.Pair.Allowedips.Root.copy', 'Binary.Pair.Allowedips.Root.publish',
     'Binary.Pair.Allowedips.Root.store', 'Binary.Pair.Allowedips.Root.headerWord',

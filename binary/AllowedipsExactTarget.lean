@@ -1,12 +1,12 @@
 import AllowedipsReconstructUpdate
-import Leanux.Proofs.WG.AllowedIps.ExactMutation
+import AllowedipsSourceModel
 
 namespace Binary.Pair.Allowedips
 open Leanux Leanux.WG
-open Leanux.Proofs.WG.AllowedIps
+open Binary.Pair.Allowedips.Model
 
-/-- The executable reconstruction update is the landed source proof's exact
-device update, including the ordered peer lists and all unchanged records. -/
+/-- The executable reconstruction update agrees with the local endpoint
+definition copied from the source proof, including the ordered peer lists and all unchanged records. -/
 theorem target_exactInstalled (d : Device) (id pid : Nat) (old : AipNode) (peer : Peer)
     (hasNode : d.nodes.get? id=some old) (hasPeer : d.peers.get? pid=some peer) :
     target (exactInstalled d id old pid peer)=reassign id pid (target d) := by

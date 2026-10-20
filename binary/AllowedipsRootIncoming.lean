@@ -1,7 +1,7 @@
 import AllowedipsRootTree
 
 namespace Binary.Pair.Allowedips
-open Leanux Leanux.WG Leanux.Proofs.WG.AllowedIps
+open Leanux Leanux.WG Binary.Pair.Allowedips.Model
 
 def rootStep (id : NodeId) (node : AipNode) (entry : Option NodeId×Slot×Nat)
     (incoming : List Slot) : Except String (ForInStep (List Slot)) := do

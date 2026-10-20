@@ -2,7 +2,7 @@ import AllowedipsTrieLeaf
 import AllowedipsAllocationTarget
 
 namespace Binary.Pair.Allowedips.Root
-open Leanux Leanux.WG Leanux.Proofs.WG.AllowedIps
+open Leanux Leanux.WG Binary.Pair.Allowedips.Model
 
 theorem roots_below {s : State} {names m}
     (shape : heap names s m=.ok ()) (below : ∀ pair ∈ s.nodes, pair.1<s.nextNode) :

@@ -5,7 +5,7 @@ import AllowedipsRootHeap
 
 namespace Binary.Pair.Allowedips.Root
 open Leanux Leanux.WG
-open Leanux.Proofs.WG.AllowedIps
+open Binary.Pair.Allowedips.Model
 local instance : Labels := Image.linkedLabels
 
 private theorem ok_bind (value : α) (f : α → Except ε β) :

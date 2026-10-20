@@ -1378,3 +1378,14 @@ These local checks are not external `lake check` acceptance. The
 includes all nine current headline roots; no external acceptance of this
 added closure is claimed. The coordinator's independent landing review and
 the user's integration signoff are pending. No merge to main or push was made.
+
+## Landing-review corrections
+
+B1: the binary package no longer imports `Leanux.Proofs`. The required endpoint,
+list and branch-record definitions are copied into `AllowedipsSourceModel`
+with their origin recorded, and `AllowedipsSourceRun` proves local execution
+equations over the operational mirror. The printed endpoint formula is unchanged
+apart from its namespace. The default binary build passes 1,119 jobs without
+warnings; the proof gate's `check_imports` step passes in isolation. This removes
+the earlier unintentional coupling to 43 proof-tree modules. No entry/return
+insertion claim is added.

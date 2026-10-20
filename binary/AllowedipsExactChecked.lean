@@ -2,7 +2,7 @@ import AllowedipsReassignHeap
 
 namespace Binary.Pair.Allowedips.Exact
 open Leanux Leanux.WG
-open Leanux.Proofs.WG.AllowedIps
+open Binary.Pair.Allowedips.Model
 
 /-- The footprint frames bytes, rather than adding unchanged bytes to R. -/
 def Writes (names : Names) (base : Nat) (a : BitVec 64) : Prop :=

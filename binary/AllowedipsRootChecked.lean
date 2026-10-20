@@ -2,7 +2,7 @@ import AllowedipsRootPhaseInputs
 import AllowedipsRootReconstruct
 
 namespace Binary.Pair.Allowedips.Root
-open Leanux Leanux.WG Leanux.Proofs.WG.AllowedIps
+open Leanux Leanux.WG Binary.Pair.Allowedips.Model
 local instance : Labels := Image.linkedLabels
 
 theorem BoundaryFields.query_apart {names o world machine key cidr pid}

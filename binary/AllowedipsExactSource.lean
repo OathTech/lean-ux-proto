@@ -1,8 +1,9 @@
 import AllowedipsExactTarget
+import AllowedipsSourceRun
 
 namespace Binary.Pair.Allowedips.Exact
-open Leanux Leanux.WG Leanux.Proofs.Framing
-open Leanux.Proofs.WG.AllowedIps
+open Leanux Leanux.WG
+open Binary.Pair.Allowedips.Model
 
 /-- The mutation fragment of the actual exact branch of WG.add. This runs
 the mirror's existing operations; it is not another list implementation. -/
@@ -29,25 +30,20 @@ theorem assignment_run (k : WGWorld) (d : Device) (ambient : Ambient) (id pid : 
     intro a
     rw [liftAip_run,hasDevice]
     rfl
-  obtain ⟨delResult,deleted,a1,delRun,delValue,delState⟩ :=
-    (total_iff_run_ambient _ _ _).mp (listDel_wp kw updated rfl id) kw ambient rfl
-  subst delResult deleted
+  have delRun := listDel_run kw updated ambient rfl id
   have peerRead : (unlisted updated id).peers[pid]?=some (unlist id peer) := by
     rw [unlisted_get]
     have hp : d.peers[pid]?=some peer := hasPeer
     simp only [updated,hp,Option.map_some]
-  obtain ⟨addResult,added,a2,addRun,addValue,addState⟩ :=
-    (total_iff_run_ambient _ _ _).mp
-      (listAddTail_wp {kw with dev := some (unlisted updated id)} (unlisted updated id) rfl pid id (unlist id peer) peerRead)
-      _ a1 rfl
-  subst addResult added
+  have addRun := listAddTail_run {kw with dev := some (unlisted updated id)}
+    (unlisted updated id) ambient rfl pid id (unlist id peer) peerRead
   change ∀ a, ((monadLift (WG.getNode id) : WG.M _).run k).run a=.ok ((old,k),a) at nodeRead
   change ∀ a, ((monadLift (WG.setNode id {old with peer := some pid}) : WG.M _).run k).run a=
     .ok (((),kw),a) at nodeWrite
-  refine ⟨a2,?_⟩
+  refine ⟨ambient,?_⟩
   simp only [assignment,StateT.run_bind,
     nodeRead,nodeWrite,delRun,addRun,
-    Leanux.Proofs.WG.CounterWindow.except_ok_bind]
+    Source.except_ok_bind]
   rfl
 
 local instance : Labels := Image.linkedLabels

@@ -1,7 +1,7 @@
 import AllowedipsRootIncoming
 
 namespace Binary.Pair.Allowedips
-open Leanux Leanux.WG Leanux.Proofs.WG.AllowedIps
+open Leanux Leanux.WG Binary.Pair.Allowedips.Model
 
 theorem owners_installed_other (s : State) (v4 : Bool) (key cidr pid id : Nat)
     (different : id≠s.nextNode) :

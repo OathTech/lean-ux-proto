@@ -1,9 +1,9 @@
 import AllowedipsAllocationReconstruct
-import Leanux.Proofs.WG.AllowedIps.MutationMirror
+import AllowedipsSourceModel
 
 namespace Binary.Pair.Allowedips
 open Leanux Leanux.WG
-open Leanux.Proofs.WG.AllowedIps
+open Binary.Pair.Allowedips.Model
 
 /-- An allocation frontier larger than every existing identity makes the
 physical naming append agree with the mirror's ordered map insertion. -/

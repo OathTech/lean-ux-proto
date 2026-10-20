@@ -1,5 +1,5 @@
 import PairAllowedipsPlacementSource
-import Leanux.Proofs.WG.AllowedIps.ArithmeticMirror
+import AllowedipsSourceModel
 
 namespace Binary.Pair.Allowedips.Placement
 open Leanux Leanux.WG
@@ -9,7 +9,7 @@ def recordCmp (a : Ambient) (d : Decision) (outcome : Bool) (x y : Int) : Ambien
 
 theorem branch_run (d : Decision) (b : Bool) (store : AipStore) (a : Ambient) :
     ((branch d b : AipM Bool).run store).run a=
-      .ok ((b,store),Leanux.Proofs.WG.AllowedIps.record a d b) := rfl
+      .ok ((b,store),Binary.Pair.Allowedips.Model.record a d b) := rfl
 
 theorem branchCmp_run (d : Decision) (b : Bool) (x y : Int) (store : AipStore) (a : Ambient) :
     ((branchCmp d b x y : AipM Bool).run store).run a=.ok ((b,store),recordCmp a d b x y) := rfl
@@ -17,7 +17,7 @@ theorem branchCmp_run (d : Decision) (b : Bool) (x y : Int) (store : AipStore) (
 theorem common_run (node : AipNode) (key bits : Nat) (store : AipStore) (a : Ambient) :
     ((WG.commonBits node key bits : AipM Nat).run store).run a=
       .ok ((AllowedipsRelation.common bits node.bits key,store),
-        Leanux.Proofs.WG.AllowedIps.commonRecords a bits (node.bits ^^^ key)) := by
+        Binary.Pair.Allowedips.Model.commonRecords a bits (node.bits ^^^ key)) := by
   by_cases h32 : bits=32
   · subst bits; rfl
   · by_cases h128 : bits=128
@@ -25,15 +25,15 @@ theorem common_run (node : AipNode) (key bits : Nat) (store : AipStore) (a : Amb
       by_cases high : (node.bits ^^^ key)/2^64=0
       all_goals simp [WG.commonBits,StateT.run_bind,StateT.run_pure,branch_run,
         Source.except_ok_bind,Source.except_pure,AllowedipsRelation.common,
-        Leanux.Proofs.WG.AllowedIps.commonRecords,high] <;> rfl
+        Binary.Pair.Allowedips.Model.commonRecords,high] <;> rfl
     · simp [WG.commonBits,StateT.run_bind,StateT.run_pure,branch_run,
         Source.except_ok_bind,Source.except_pure,AllowedipsRelation.common,
-        Leanux.Proofs.WG.AllowedIps.commonRecords,h32,h128] <;> rfl
+        Binary.Pair.Allowedips.Model.commonRecords,h32,h128] <;> rfl
 
 theorem prefix_run (node : AipNode) (key bits : Nat) (store : AipStore) (a : Ambient) :
     ((WG.prefixMatches node key bits : AipM Bool).run store).run a=
       .ok ((decide (node.cidr≤AllowedipsRelation.common bits node.bits key),store),
-        Leanux.Proofs.WG.AllowedIps.commonRecords a bits (node.bits ^^^ key)) := by
+        Binary.Pair.Allowedips.Model.commonRecords a bits (node.bits ^^^ key)) := by
   unfold WG.prefixMatches
   simp only [StateT.run_bind,common_run,Source.except_ok_bind]
   rfl

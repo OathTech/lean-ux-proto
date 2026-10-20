@@ -2,7 +2,7 @@ import AllowedipsRootFrame
 
 namespace Binary.Pair.Allowedips.Root
 open Leanux Leanux.WG
-open Leanux.Proofs.WG.AllowedIps
+open Binary.Pair.Allowedips.Model
 
 /-- Initialize and reconstruct the fresh record from the actual attachment,
 header/copy and publication phases. Query and saved-slot facts are phase-local
