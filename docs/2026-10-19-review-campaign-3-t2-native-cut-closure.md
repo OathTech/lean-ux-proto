@@ -474,3 +474,67 @@ Source-144 `4a88e271` joins runner prefill and routing boot through exact setup 
 Source-145 `83ba24ee` joins namespace cleanup, socket replacement, endpoint/cache updates and routing teardown to the initialized runner. Peer writes retain their own getter result; every point preserves the same packet ledger and allocation geometry with its original remainder. The thirteen C1/C3 roots pass 4505 build jobs, 67 focused and 2321 root/carry standard-axiom queries, and token/import checks. Mirror and C2 directories match main; all sixteen C1 carry files remain unchanged. Allocation adapter interiors and the final source audit stay open. Scoped replay/recipes remain at `5b311948`; aggregate validation remains blocked by untouched C2 word types.
 
 Source-146 `df291b67` joins the actual allocation adapter's getter, isolated component and write-back points to initialized staging. Each point derives its existing partial-allocation cursor, retaining the same selected-ticket aliases and original batch-receipt capture; its remainder is the actual suffix. The thirteen C1/C3 roots pass 4508 build jobs, 15 focused and 2321 root/carry standard-axiom queries, and token/import checks. The final source audit and extension-parameter closure remain open. Scoped replay/recipes remain at `5b311948`; aggregate validation remains blocked by untouched C2 word types.
+
+
+## Final source audit at `decb640d`
+
+[AGENT 2026-10-20] The five proof-coverage findings are discharged by the
+fixed source composition and its native leaf refinements. The evidence below
+is a source/type audit, not a new independent review or a C simulation proof.
+The aggregate proof gate remains blocked by the separate C2 generation carry.
+
+1. **Normal and stopped interiors — fixed.** `Runner.Points.Point` follows the
+   literal `executeShape`. Its right-bind constructors require the actual
+   successful left run; left points do not require the enclosing call to
+   return. Child points retain their original entry, native world, history
+   and remainder. The canonical list/range shapes retain the original
+   iteration and accumulator. A Stop therefore leaves the preceding native
+   points available without inventing an exception post-world.
+2. **Caller coverage — fixed.** The concrete dispatch/runner composition joins
+   return callbacks, observed and placeholder timers, inject/flood/batch,
+   scheduler workers/NAPI/stack replies, protocol sends, configuration, open,
+   removal, dump and reset. The final ordinary-leaf audit also checked setup,
+   namespace cleanup, FS/task/seccomp adapters, routing, observation and
+   metadata. These preserve the same WG account at their native read and
+   write-back points. Isolated component computations cannot change the WG
+   projection before write-back; Ambient-only actions are restricted by type.
+3. **Mutation intervals — fixed.** Trim retains the removed cohort; take and
+   restore retain selected tickets; partial allocation retains ordinal aliases
+   of those tickets; installation consumes the unpublished local. Ring entries
+   remain aliases. Socket results retain their actual pending receipt; failed
+   and ordinary frees discharge a terminal obligation or cleanup debt at the
+   actual erase. Purge and final peer release retain their exact counted
+   records. Reset derives absence of pending ownership at its guard. RX
+   allocation/removal transports TX ownership through the real adapter rather
+   than asserting equality of the full packet store. The final allocation
+   adapter refinement (`df291b67`) covers getter, isolated allocation and
+   write-back, and derives the existing partial-allocation cursor.
+4. **Initialized headline — fixed.**
+   `TransmitSecurity.initialized_transmit_source_conservation` accepts only
+   the trace, placeholder mode and original `NativeAccounting.SourcePoint`.
+   It derives `AccountOrRecords`: a semantic ticket account now, or after the
+   original total pending records on the identical WG state. Its account
+   supplies unique ticket status, native cell ownership and allocation backing,
+   terminal evidence and exact receipt cardinality. An outstanding record is
+   not asserted to be already present in history. No invariant, semantic
+   acceptance predicate or child contract is an incoming premise.
+5. **Finite composition — fixed.** `NativeAccounting.children_closed` proves
+   independence of all five former extension parameters. `concreteChildren`
+   instantiates them with false predicates; `concrete_children` proves the
+   actual composition unchanged. The check follows consume, NAPI, iteration,
+   scheduler, work-service and dispatch composition. This equality alone would
+   not establish source completeness: findings 1–3 are also needed. The
+   canonical shapes and their audited leaf expansions supply that part.
+
+The scope is the mirror's projected state, with atomic state writes and
+source-level adapter boundaries. Copied-world scheduler trials are distinct
+from committed activations. Pure computations and isolated component internals
+cannot introduce another committed WG mutation. Eventual service of pending
+packets, C memory interleavings, cryptographic correctness and IPv4 routing
+composition remain outside this result. The original admission/refusal and
+socket authorization claims are retained, as are the named C2 hypotheses in
+other campaign outcomes. No mirror or C2 file was changed to close this work.
+
+Fresh scoped replay and all twelve C1/C3 counterexample recipes pass with
+retrieved exit zero; all 6738 frozen Lean source hashes match. The campaign
+report records the commands and the separate aggregate-gate blocker.

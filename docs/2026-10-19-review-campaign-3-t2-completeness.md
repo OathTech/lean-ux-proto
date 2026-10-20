@@ -276,3 +276,39 @@ Source-144 `4a88e271` joins runner prefill and routing boot through exact setup 
 Source-145 `83ba24ee` joins namespace cleanup, socket replacement, endpoint/cache updates and routing teardown to the initialized runner. Peer writes retain their own getter result; every point preserves the same packet ledger and allocation geometry with its original remainder. The thirteen C1/C3 roots pass 4505 build jobs, 67 focused and 2321 root/carry standard-axiom queries, and token/import checks. Mirror and C2 directories match main; all sixteen C1 carry files remain unchanged. Allocation adapter interiors and the final source audit stay open. Scoped replay/recipes remain at `5b311948`; aggregate validation remains blocked by untouched C2 word types.
 
 Source-146 `df291b67` joins the actual allocation adapter's getter, isolated component and write-back points to initialized staging. Each point derives its existing partial-allocation cursor, retaining the same selected-ticket aliases and original batch-receipt capture; its remainder is the actual suffix. The thirteen C1/C3 roots pass 4508 build jobs, 15 focused and 2321 root/carry standard-axiom queries, and token/import checks. The final source audit and extension-parameter closure remain open. Scoped replay/recipes remain at `5b311948`; aggregate validation remains blocked by untouched C2 word types.
+
+
+## Final dispositions at `decb640d`
+
+The four original conservation findings are fixed within the mirror projection:
+
+1. **Disappearing staged packets.** The shared history now contains the actual
+   overflow, purge and final-release receipts. Each settles the same ordered
+   ticket prefix or queue; allocation uses the remaining tickets rather than
+   choosing independent payload witnesses.
+2. **First terminal versus cleanup.** The ledger keeps one first terminal.
+   Every outer send attempt has its own result, including unsupported-family
+   refusal. Subsequent frees settle cleanup debt and cannot replace a send
+   outcome. DEAD and create-refusal frees use their actual named disposal
+   reason; device-ring refusal retains the peer-queue owner until disposal.
+3. **Stopped caller locals.** The initialized native source relation includes
+   selected, unpublished and completion locals before later Stop. Partial
+   allocation uses aliases; erasure consumes the actual debt or obligation.
+   A write-to-receipt interval names only its original total record suffix on
+   the same WG state. Successful interiors are included as well as failures.
+4. **Admission and error unit.** Successful splice and newly prepared
+   keepalive remain the ticket-admission cuts. The separate
+   `original_transmit_refusal_charged_once` theorem retains each named native
+   errno and one `txErrors` charge per original invocation, independent of GSO
+   length. It is part of the result, not an excluded pre-admission failure.
+
+`initialized_transmit_source_conservation` now supplies the concrete
+initialized source account with no incoming account or child-family premise.
+Its companion `transmit_source_children_are_closed` eliminates all extension
+parameters. The [final source audit](2026-10-19-review-campaign-3-t2-native-cut-closure.md#final-source-audit-at-decb640d)
+dispositions normal/Stop coverage, every caller family and the native mutation
+intervals separately; the parameter equality does not substitute for that
+audit. Existing socket binding and T3 append coverage join conservation to
+actual authorized egress. Pending ownership is retained, not a promise of
+future completion. The aggregate campaign gate still awaits the C2 carry;
+scoped validation is reported in the campaign report.

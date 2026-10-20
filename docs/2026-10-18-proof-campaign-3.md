@@ -2,13 +2,24 @@
 
 ## Progress
 
-Current source: source-146 `df291b67` over mirror `1f766662` joins allocation-adapter interiors to initialized staging and its existing alias accounting, preserving packet accounts and original continuations. The thirteen C1/C3 roots pass 4508 build jobs, 15 focused public axiom queries, 2321 root/carry queries and token/import checks. All sixteen inherited carry paths remain unchanged; source-130 and source-131 extended two C3 carry files for dump/socket source coverage. Carry `5b311948` is the latest scoped fresh-replay and twelve-recipe checkpoint; source-123 remains the latest aggregate proof-gate checkpoint. The aggregate build is blocked by unchanged campaign-2 generation types in `TimerDiscipline/SendView.lean` and `Config/DeviceDumpSource.lean`. T2 remains open at the final native-source coverage audit and extension-parameter closure.
+Current source: `decb640d` over mirror `1f766662`. T2's concrete initialized
+conservation theorem now eliminates all five source-extension parameters. The
+final source audit dispositions the native-coverage review, including normal
+and stopped interiors. The thirteen C1/C3 roots pass 4509 build jobs and 2337
+standard-or-empty root/carry axiom queries, including all 1569 terminal
+declarations; 167 focused queries and token/import checks also pass. Fresh
+kernel replay and all twelve C1/C3 recipes pass (retrieved exit zero); all
+6738 frozen Lean source hashes match. The aggregate gate
+remains blocked by unchanged C2 generation types in `TimerDiscipline/SendView.lean`
+and `Config/DeviceDumpSource.lean`; the campaign is not ready to land.
 
 [AGENT 2026-10-18] Work begins on `proofs/campaign-3` at `783510e8`, under
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
 proof tree includes campaign 1's GRO carry. At campaign start, no mirror
 definition or landed proof had been changed. The source contracts now cover staged nonce allocation, encryption receipts,
-cookie egress, native handshake histories and session reference payments. T1, T3, T4, T5 and the amended T6 are complete and validated; T2 remains open.
+cookie egress, native handshake histories and session reference payments. T1, T3, T4, T5 and the amended T6 have scoped validation. T2's final source
+composition and audit are closed with scoped validation. Campaign landing
+remains blocked by the aggregate gate.
 
 **C3-F1 is dispositioned as a statement artefact.** The original T6 wording
 excluded behavior already represented by R5's coherent initialized replays.
@@ -21,11 +32,76 @@ stops the work. The last validated checkpoint and the current integration status
 | Outcome | Status and remaining obligation |
 | --- | --- |
 | T1 nonce safety | Complete and validated. `initialized_nonce_safety` joins unique native reservations, actual key-allocation/nonce pairs, bounded serialized AEAD nonces and exact packet/header encoding, including stopped prefixes. Universal native rejection contracts prove invalidation, whole-batch restoration and unchanged drop count; the native rekey contracts expose the guarded helper request. No incoming invariant or campaign-2 premise remains. |
-| T2 transmit authorization and conservation | Open. Initialized socket claims bind each ciphertext to its admitted plaintext, selected peer, historical owning key and endpoint; allocation credits are unique. `CompletePrefix.Runner.reached` covers every prefix of the original normal or stopped journal without an incoming carrier or callback premise. Logical conservation gives one status per canonical admission, first-terminal evidence, native ownership and exact receipt cardinality on the same ledger. `NativeAccounting.initialized_account_or_records` derives a semantic account at every point of its declared source relation, either now or after only its original pending records without native mutation. Partial allocation and trim now have derived ticket status and native cell consequences on the same ledger. Source witnesses retain the original entry and continuation; the initialized theorem assumes no semantic-acceptance certificate. Its concrete dispatch composition includes traffic, scheduling, timer, lifecycle, dump and configuration callers. The twelve receipt families are interpreted by fixed total record sequences; native frees discharge their actual ticket or cleanup debt and queue installation consumes its unpublished local. The initialized relation includes internal access-tree points of six UDP-ingress helpers (key get/null get/put, header validation, DS-field extraction and CPU selection). Index lookup includes the original bucket loop, peer acquisition and owner-word write. RX allocation/free adapters, queue admission and publication retain their literal native interiors; remaining ordinary ingress calls use atomic access trees. Handshake response creation, MAC updates and related timer metadata now use read-derived native source points. Protocol socket calls include native route/cache, socket result and surrounding byte-accounting points. Session creation and rotation retain actual native points and both original receipts; flushed initiation creation and MAC/socket calls are also joined. MAC validation, cookie-secret rotation, load/rate-limit bookkeeping and endpoint updates retain their native points and original capture. Initiation, response and cookie consumers include actual authentication, lookup, capture, accepted writes and counted releases. Cookie emission and configuration metadata, lookup and fresh peer creation include native interiors; newlink includes its registration epoch change. Configuration routing now includes every original saved-list prefix, list write, trie adapter and branch. Timer deletion and peer acquisition now include their original read/write interiors. Lifecycle metadata, routing cleanup, worker retirement and destructor checks now expose their original native points. Receive key reads, age tests, confirmation updates, statistics and ECN handling now expose native points. Receive endpoint, key-release, routing and timer helpers now retain native interiors, including actual peer acquisition. Dump headers, peer and allowed-IP walks, socket bookkeeping, coalescing and individual removal now expose native interiors. Preparation metadata, key unhashing, routing adapters, socket-port reads and loopback bookkeeping now expose native interiors. Lifetime-observed peer, key and packet getters now retain actual native points and original receipts. NAPI metadata and RX reads now expose native points; RX removal transports the same TX account through its actual adapter write-back. Worker peer/packet reads preserve the allocation companion; rescheduling and work-service metadata retain literal branches and original continuations. Scheduler occupancy, refills, pending-work tests, copied-world consistency trials and timer completion guards now expose source points while preserving committed WG state. Ring-poll device reads, outer/inner wheel peer reads and explicit timer/protocol metadata callers now retain native source points. Staging getter points now preserve both WG and Ambient state; the remaining staging native leaves are classified by exact Ambient factorization or atomic writes. Traffic sender selection, packet construction and end-of-wait checks now expose their read-source points. Traffic routing adapters and multicast loopback now retain original source points and the full allocation companion. Dispatch observation and netlink getters now retain original points; the netlink setter is identified as one literal write. FS/task/seccomp adapters and address/route, namespace-close and time-advance controls now expose native read, isolated component and write-back points. MTU native points now preserve packet accounting and allocation metadata through the existing three-scalar projection. Runner entry, callback metadata, routing and skip helpers now expose fixed logged source points. Setup now exposes prefill component updates, routing boot and the original observation reset, retaining error index zero. Cleanup now retains actual worker sections, socket and endpoint updates, routing teardown and their original remainders. Allocation adapter points now derive their actual prefix cursor and preserve the original batch-receipt capture. The final source audit and extension-parameter closure remain open. The theorem does not claim every native point merely from covering the declared relation, nor eventual packet completion. Mirror current at `1f766662` within the scoped carry validation; campaign-2 facts remain named hypotheses where used. |
+| T2 transmit authorization and conservation | Proof and source audit closed; scoped validation passes, aggregate gate blocked. `initialized_transmit_source_conservation` derives `AccountOrRecords` from the original initialized source point, without an incoming invariant, semantic certificate or child-family premise. `transmit_source_children_are_closed` eliminates all five extension parameters. Each admitted ticket has one pending or terminal status; resident cells have native ownership and unique recorded backing or selected-ticket allocation aliases. Terminal receipts have exact cardinality. Native mutation intervals retain only their original pending record suffix on the same WG state; no arbitrary future history is allowed. The fixed source composition covers setup, dispatch, traffic, timers, scheduling, receive, configuration, lifecycle, dump and cleanup, including successful interiors and prefixes before Stop. Existing socket claims bind admitted plaintext, historically selected key and peer, ciphertext and the endpoint actually read at send; T3 supplies converse append coverage. Successful splice or new keepalive is the admission boundary. `original_transmit_refusal_charged_once` separately preserves the named early errno and one charge per invocation, independent of GSO length. Pending work need not complete. The claim is over the mirror projection, not C memory or cryptographic correctness. Current at `1f766662` within the C1/C3 scope; the aggregate gate awaits the C2 carry. |
 | T3 authenticated effects and silence | Complete and validated. `AuthenticatedEffects.initialized_silence_security_outcome` combines every native append’s own authorization, rooted timer/work effects, latest own handshake admission, authenticated replay and packet-specific GRO delivery. The cookie exception uses actual load/MAC guards: at most one source-bound 64-byte reply per invocation, strictly smaller than its initialized input, without session effects. Refused initialized consumers preserve every WG field modulo map representation; MAC refusal masks only load/cookie-secret/rate-limit bookkeeping, and decryption names the exact pre-AEAD invalidation alternative. Consumer equality is at completed native cuts, retained through later outer Stop; internally stopped effects use prefix observations. No incoming invariant, funding, coherence or H1 premise remains. No global reply-rate, CPU, timing or cryptographic-unforgeability claim is made. |
 | T4 handshake replay resistance | Complete and validated. Initialized retained-peer timestamps and exchange epochs are derived. Successful sessions have one actual allocation and clear their handshake; refused sessions preserve the whole WireGuard state. Final role-slot residency now follows the actual final-journal session entry. Actual initialized stale initiation receipts are refused, restore all peer records and preserve sent data. The factored native continuation returns without a response from the exact receipt endpoint; it requires no separate ambient-history join. The final-journal exports also establish response-consumption and session-installation uniqueness by exchange epoch, and exactly one allocation from the same successful session receipt. Named C2 source assumptions stay visible. |
 | T5 responder confirmation | Complete and validated. `initialized_responder_confirmation_discipline` joins promotion-label uniqueness, each confirmation's own accepted transport cause and actual responder AEAD after confirmation of the same allocation. Initialized transport covers inner promotion receipts even when the enclosing receive later stops. `PendingPromotion.H1DriverFrames` and `H1ResponderCurrentEdges` remain named local C2 operational assumptions; no incoming carrier, reachability, funding or callback premise remains. |
 | T6 key retirement | Complete and validated. `reference_aware_retirement_outcome` packages unconditional native TX/RX checks, invalidation, exact age comparison, initialized R2 access and holder accounting, the session-derived zero timer, selected-arm provenance, actual dispatch and worker unpublication, retained material and final removal. Actual clock/worker runs and residual-reference conditions remain explicit. Universal native RX final release includes authenticated cleanup. No worker-latency or physical-zeroization claim is made. |
+
+## T2 closure at `decb640d`
+
+The final claim is
+[`initialized_transmit_source_conservation`](../Leanux/Proofs/WG/TransmitSecurity/Statements.lean),
+paired with `transmit_source_children_are_closed`. Its only reachability premise
+is the original initialized `SourcePoint`; it requires no incoming account or
+child contract. The [native-source audit](2026-10-19-review-campaign-3-t2-native-cut-closure.md#final-source-audit-at-decb640d)
+and [conservation review dispositions](2026-10-19-review-campaign-3-t2-completeness.md#final-dispositions-at-decb640d)
+explain how the source refinements close each recorded gap. The audit does not
+substitute parameter independence for coverage. Historical key/peer selection,
+actual socket endpoints, the separate early-refusal counter theorem and T3's
+converse append coverage remain part of the T2 package.
+
+The thirteen C1/C3 roots pass 4509 build jobs. All 1569 terminal declarations
+are included in 2337 root/carry axiom queries; all are standard or empty. The
+167 focused public-declaration queries and the gate's token/import checks pass.
+Fresh `leanchecker --fresh C3FinalCheck` returned zero, with all 6738 frozen
+Lean source hashes unchanged. The root module contains exactly the thirteen
+imports of `a241295c^1:Leanux/Proofs.lean`; it excludes the six C2 roots.
+All twelve C1/C3 counterexample recipes pass (retrieved exit zero), including
+the retained R5 delayed-encryption and coherent-post-clear witnesses. The three
+C2 recipes were not run in this scope.
+
+The 2337-query set is reproducible from those current terminal declarations,
+public declarations in the sixteen and thirty-nine files changed by
+`bc9f2dc5` and `5b311948` (read at `5b311948`), and the fourteen declarations
+in `StagedCompleteReachedNativeSourceClosure.lean`, with duplicate names removed.
+The 167-query set uses that new module and `TransmitSecurity/Statements.lean`.
+Only `propext`, `Classical.choice` and `Quot.sound` are admitted. The final
+closure adds no frame, resource-limit increase or warning suppression.
+
+After the scoped build below, reproduce the fresh replay and twelve-recipe
+speedbump without editing the aggregate root:
+
+```sh
+capped -- scripts/in-bundle python3 - <<'PY_SCOPE'
+import re, runpy, subprocess
+from pathlib import Path
+source = subprocess.check_output(
+    ['git', 'show', 'a241295c^1:Leanux/Proofs.lean'], text=True)
+modules = re.findall(r'^import (\S+)', source, re.M)
+assert len(modules) == 13
+path = Path('.tmp/C3FinalCheck.lean')
+path.parent.mkdir(exist_ok=True)
+path.write_text(''.join(f'import {m}\n' for m in modules))
+subprocess.run(['lake', 'env', 'lean', str(path), '-o',
+                '.lake/build/lib/lean/C3FinalCheck.olean'], check=True)
+subprocess.run(['lake', 'env', 'leanchecker', '--fresh', 'C3FinalCheck'], check=True)
+replay = runpy.run_path('scripts/proof-counterexamples')
+excluded = {'h1-confirmation-incarnations', 'h5-namespace-pin',
+            'h6-initialized-giveup'}
+recipes = replay['RECIPES']
+assert len(recipes) == 15 and excluded <= {r[0] for r in recipes}
+replay['main'].__globals__['RECIPES'] = [r for r in recipes if r[0] not in excluded]
+raise SystemExit(replay['main']())
+PY_SCOPE
+```
+
+These are scoped results, not an aggregate proof-gate pass. The known C2
+failures below still block the campaign's landing; C2 files and the mirror
+match main. All sixteen inherited carry files match `bc9f2dc5`. Two C3 carry
+files were subsequently extended for dump/socket source coverage, as recorded
+at source-130 and source-131. No new differential claim, mirror finding, merge
+to main or push accompanies this proof checkpoint.
 
 ## Carry to main `1f766662`
 
