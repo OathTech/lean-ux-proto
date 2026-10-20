@@ -2,7 +2,7 @@
 
 ## Progress
 
-Current source: source-121 `722b7a0e` passes 4445 build jobs, the 1567-declaration gate and 58 public axiom queries over main `1a69cebb`. All 4398 frozen proof hashes and fifty carry paths match. Compound handshake consumer interiors now join initialized accounting. Fresh root replay and twelve recipes last passed at source-118 `67607187`. T2 remains open at complete native source coverage; the other five outcomes retain their stated boundaries.
+Current source: source-122 `7f9005de` passes 4450 build jobs and 73 public axiom queries over main `1a69cebb`. All 4403 frozen proof hashes and fifty carry paths match. Complete cookie emission now joins initialized accounting. The 1567-declaration gate last passed at source-121; fresh root replay and twelve recipes last passed at source-118 `67607187`. T2 remains open at complete native source coverage; the other five outcomes retain their stated boundaries.
 
 [AGENT 2026-10-18] Work begins on `proofs/campaign-3` at `783510e8`, under
 the [revised charter](2026-10-18-charter-proof-campaign-3.md). The inherited
@@ -566,3 +566,6 @@ Source-120 `cdf1eda8` joins MAC validation, cookie-secret rotation, rate-limit w
 
 
 Source-121 `722b7a0e` joins initiation, response and cookie consumers through their actual authentication fronts, public-key/index lookups, original captures and acceptance receipts, saved-peer writes and counted repayment children. The original flood delay is retained; abstracting its closed arithmetic during witness construction resolves the draft recursion limit at default settings. Validation passes 4445 build jobs, the 1567-declaration gate across thirteen roots and 58 changed/new standard-or-empty public axiom queries. All 4398 frozen proof hashes and fifty carry paths match. Main and mirror are unchanged, with no warnings. Cookie emission and other native administrative/service interiors remain open. Fresh root replay and twelve recipes last passed at source-118 `67607187`.
+
+
+Source-122 `7f9005de` joins the complete cookie-emission path: native message creation, reply selection, IPv4/IPv6 route/cache source, tunnel capture, sent-list append and receipt. Exact erasure and relabelling equations preserve the original capture entry and journal. The nine-module delta passes 4450 build jobs and 73 changed/new standard-or-empty public axiom queries. All 4403 frozen proof hashes and fifty carry paths match; main and mirror are unchanged, with no warnings. The route and capture drafts needed explicit native-result types and record destructuring; no mirror finding arose. Configuration, lifecycle and service interiors remain open. The aggregate gate last passed at source-121; fresh root replay and twelve recipes last passed at source-118 `67607187`.
