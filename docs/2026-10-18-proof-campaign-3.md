@@ -6,9 +6,10 @@ Branch `proofs/campaign-3` is rebased onto `ac55c7d5`, incorporating the
 namespace-pin shared carry (`a4aec70e`, registered by `7f89077d` and
 `66188b74`) and the resource rule at `25c89371`. The mirror pin is `218d3ffd`.
 The independent landing review (`ad268adc` on `task/review-campaign-3-landing`)
-is being dispositioned below. Current validation is pending; the earlier full
-pass at `7b8994b1` was over `1f766662`, not this mirror. No mirror edit, merge
-to main or push is part of this repair.
+is dispositioned below. The full proof gate passes at source head `0c6927b8`;
+the counterexample speedbump fails on one inherited C2 recipe (14/15 pass).
+Fresh kernel replay passes. No mirror edit, merge to main or push is part of
+this repair.
 
 The campaign does not establish all six original charter sentences without
 qualification. T1/T6 have the October 18 amendment, T2 has declared cut-point
@@ -28,6 +29,11 @@ setting files, all file-wide. The counts distinguish files from directives and
 all settings from file-wide settings. Existing raises are grandfathered by
 [AGENTS.md](../AGENTS.md); every file touched by this repair scopes any retained
 raises to individual declarations with reasons. No limit is increased here.
+After the rebase and repairs, the whole-tree census is 1,336 heartbeat-setting
+files (1,312 with file-wide settings) and 462 recursion-setting files (461 with
+file-wide settings). C3 contributes 897 heartbeat-setting files (877 file-wide)
+and 428 recursion-setting files (all file-wide). The three new adapter modules
+have no resource settings.
 
 **Statement history (S5).** The October 18 amendment narrowed T1's
 post-limit cancellation clause and T6's use-time validity/expiry clause to the
@@ -310,7 +316,7 @@ with empty plaintext.
 
 Individual reproduction from the repository root:
 
-```sh
+```bash
 cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
 set -o pipefail
 python3 -B docs/proof-campaign-replay.py r5-delayed-encryption |
@@ -367,17 +373,52 @@ The related N1–N3 notes are reflected in the observer-completeness boundary,
 T1's trimmed encoding docstring and function-level rejection wording. None of
 these documentation corrections adds a coverage or progress theorem.
 
+## Repair commits
+
+The changes are separable on `proofs/campaign-3`:
+
+| Commit | Review item or carry |
+| --- | --- |
+| `c2c0c312` | B1 resource census and correction |
+| `e3f325d6` | S5 October 18 target amendment and provenance |
+| `c841423e` | S1 direct H1 package construction and conditional remaining claims |
+| `eac6b297` | S2/S3 T2 cut and binding scopes; N2 nonce docstring |
+| `2c329e65` | S4 eighteen retirement field domains |
+| `2ddd5843` | S6 silence scopes and H3 citation |
+| `245e5b86` | S7/S8 reports, register rows and clone reproduction |
+| `0c6927b8` | C3 source/frame carry onto `ac55c7d5` |
+
+The carry adapts 31 existing C3 modules to pending-device guards, namespace
+cleanup refusal and the runner's pending-work check. No theorem conclusion or
+source-point type changes, and no frame is deleted. One touched file's former
+file-wide heartbeat setting is now scoped to its native-loop declaration;
+another passes at default limits and no longer needs its setting. Two already
+scoped dispatcher settings gained reasons. No mirror, C1 or C2 source is edited.
+
 ## Validation and reproduction
 
-The post-review full gate and counterexample speedbump are pending. Main's
-shared carry records one known speedbump lag: C2's `h5-namespace-pin` recipe
-still expects parser acceptance that mirror `218d3ffd` intentionally refuses.
-This campaign does not edit C2's files or reinterpret that failure as a pass.
+Validation is over source head `0c6927b8`, rebased on `ac55c7d5`, with 6,741
+Lean source hashes frozen. The final report-only commit does not change that
+source set. All 6,741 hashes matched after the checks.
+
+| Check | Result |
+| --- | --- |
+| Complete proof build | PASS: 6,680 jobs; no warnings. |
+| Full proof gate | PASS, exit 0: 2,448 terminal statements across 19 root modules, including all 674 C3 terminals; only `propext`, `Classical.choice` and `Quot.sound`; no warnings or forbidden trust tokens. |
+| Counterexample speedbump | **FAILED**, exit 1: 14/15 recipes pass, including both R5 witnesses for C3-F1. The sole failure is `h5-namespace-pin`, `Progress/NamespacePinPending.lean:36`: its concrete input no longer parses. |
+| Fresh root kernel replay | PASS, exit 0, no output: `lake env leanchecker --fresh Leanux.Proofs`. |
+
+The failed recipe is the lag already recorded by main's shared carry: it
+expects parser acceptance that mirror `218d3ffd` intentionally refuses. C2
+owns that regression repair. This campaign leaves its file unchanged and does
+not report the speedbump as green. All jobs ran under the outer `capped`
+wrapper; the gate's inner bundle PATH cannot find `capped` and prints a notice,
+but the complete invocation remains capped.
 
 Run from the repository root of a clone with Python 3 and the pinned Lean
 toolchain on `PATH` (for example through elan, which reads `lean-toolchain`):
 
-```sh
+```bash
 cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
 cap scripts/proof-gate
 cap scripts/proof-counterexamples
@@ -392,4 +433,4 @@ The counterexample speedbump includes both R5 recipes used for C3-F1. No recipe
 requires a private archive ref, an old pre-rebase commit or a worktree-specific
 path. The gate checks the complete imported terminal surface, standard axioms
 and forbidden trust tokens. Kernel replay is an additional check of the built
-root; validation counts and the checked head will be recorded when retrieved.
+root; the counts above refer to the retrieved command results.
