@@ -1,8 +1,8 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedIngressNativeFrames
 
 /-! Literal receive-entry branches expose RX allocation, queue admission,
-publication and counted peer release. Compound native access atoms retain
-their existing frames until their separate interior joins are supplied. -/
+publication and counted peer release. Key-reference, header and CPU calls use atomic access trees; the remaining native
+access atoms retain explicit separate interior obligations. -/
 namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Ingress
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing Lifetimes Queues
 open TransmitSecurity RetirementSecurity CausalJournal Driver NestedPeerRelease
@@ -57,6 +57,12 @@ macro "ingress_source_step" : tactic => `(tactic| first
   | (ingress_native_head freeRxSkb; exact .native (.free _))
   | (ingress_native_head modifyDev; exact handshakeAppend _ _)
   | (ingress_source_head Hooks.peerRelease; exact .release _)
+  | (ingress_native_head keypairGet; apply accessShape _ (Access.getShape _); solve | ingress_allocation_frame)
+  | (ingress_native_head keypairGetNull; apply accessShape _ Access.nullShape; solve | ingress_allocation_frame)
+  | (ingress_native_head keypairPut; apply accessShape _ (Access.putShape _ _); solve | ingress_allocation_frame)
+  | (ingress_native_head prepareSkbHeader; apply accessShape _ (Access.headerShape _); solve | ingress_allocation_frame)
+  | (ingress_native_head ipTunnelGetDsfield; apply accessShape _ (Access.dsfieldShape _ _); solve | ingress_allocation_frame)
+  | (ingress_native_head cpumaskNextOnline; apply accessShape _ Access.cpuShape; solve | ingress_allocation_frame)
   | (ingress_source_head liftWGPrefix
      apply quietShape
      · solve | complete_ingress_native

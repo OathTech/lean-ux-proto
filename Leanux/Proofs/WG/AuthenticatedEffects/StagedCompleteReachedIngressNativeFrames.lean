@@ -12,6 +12,9 @@ theorem NativeKind.checked (kind : NativeKind) : CompleteProduct.Checked kind.ac
   | quiet body frame allocated=>
       exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
         CompleteProduct.account_safe body frame allocated)
+  | access body source allocated=>
+      exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
+        CompleteProduct.account_safe body source.frame allocated)
   | allocate packet=>
       exact CompleteProduct.state (CompleteProduct.pair
         (CompleteIngress.new_rx CompleteProduct.Safe CompleteProduct.account_safe packet)

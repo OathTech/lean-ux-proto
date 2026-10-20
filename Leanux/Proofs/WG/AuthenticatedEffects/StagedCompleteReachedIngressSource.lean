@@ -1,3 +1,4 @@
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedAccessCanonical
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedXmitConcreteComposition
 
 /-! Fixed UDP ingress source syntax separates native RX allocation/free
@@ -10,16 +11,20 @@ abbrev History := List Event
 inductive NativeKind : Type 1 where
   | quiet {α : Type} (body : WG.M α) (frame : SameView StagedEntry.view body)
       (allocated : Preserves StackOwnership.Allocated body)
+  | access {α : Type} (body : WG.M α) (source : Access.Shape body)
+      (allocated : Preserves StackOwnership.Allocated body)
   | allocate (packet : RxPacket)
   | free (skb : SkbId)
 
 def NativeKind.Result : NativeKind → Type
   | @quiet α ..=>α
+  | @access α ..=>α
   | .allocate _=>SkbId
   | .free _=>Unit
 
 def NativeKind.action (kind : NativeKind) : PrefixM Event kind.Result := match kind with
   | .quiet body ..=>liftWGObserver (liftWGPrefix body)
+  | .access body ..=>liftWGObserver (liftWGPrefix body)
   | .allocate packet=>liftWGObserver (liftWGPrefix (newRxSkb packet))
   | .free skb=>liftWGObserver (liftWGPrefix (freeRxSkb skb))
 
@@ -43,6 +48,10 @@ noncomputable def observerBindShape {body : WGPrefix Event α} {next : α → WG
 noncomputable def quietShape (body : WG.M α) (frame : SameView StagedEntry.view body)
     (allocated : Preserves StackOwnership.Allocated body) : Shape (liftWGObserver (liftWGPrefix body)) :=
   .native (.quiet body frame allocated)
+
+noncomputable def accessShape (body : WG.M α) (source : Access.Shape body)
+    (allocated : Preserves StackOwnership.Allocated body) : Shape (liftWGObserver (liftWGPrefix body)) :=
+  .native (.access body source allocated)
 
 noncomputable def conditionalShape (test : Prop) [Decidable test]
     {yes no : WGPrefix Event α} (left : test → Shape (liftWGObserver yes))
