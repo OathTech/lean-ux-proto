@@ -10,9 +10,10 @@ with standard axioms only; fresh whole-tree kernel replay exits zero, and
 all 12 counterexample recipes pass. The report records the two failed
 owned-carry builds that preceded the corrected pass. All six register rows
 are current for their checked claims over 3308c49a.
-H5 now has a separate [Prefill blocker](2026-10-19-proof-campaign-2-prefill-blocker.md):
-the exact closed specialization exceeds kernel maxRecDepth 512 after the
-merge. It is not a further mirror or shared-layer request.
+The later [Prefill investigation](2026-10-20-proof-campaign-2-prefill-investigation.md)
+checks the exact source equation with a staged proof at stock limits. That
+prototype awaits integration; H5 global termination is still unproved. No
+further mirror or shared-layer change is requested.
 
 The remainder of this document records the earlier failed carry attempts
 and the scoped work completed while the shared repair was pending.

@@ -1,6 +1,17 @@
-# Campaign 2: closed Prefill specialization remains blocked
+# Campaign 2: original Prefill specialization blocker
 
-## Status after the shared carry
+## Investigation update, 2026-10-20
+
+The [staged-bridge investigation](2026-10-20-proof-campaign-2-prefill-investigation.md)
+now proves the exact previously rejected equality at the stock limits,
+with standard axioms and fresh kernel replay. The isolated failure was the
+native closed-definition bridge, not specializing the generic creator
+equation. The tested fix separates those two equalities and composes them.
+It remains a proposed integration, outside the registered proof tree; H5
+global termination is still unproved. The following sections record the
+original failed proof form and its stopping decision.
+
+## Historical status after the shared carry
 
 Main 3308c49a is merged into proofs/campaign-2 at a9845661. One stock-limit
 reproduction after that merge still rejects the closed Prefill specialization.
