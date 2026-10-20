@@ -13,6 +13,8 @@ inductive Site where
   | entry
   | returned
   | interior
+  | metadata
+  | acquire
   | left (site : Site)
   | right (site : Site)
   | marked (label : Label) (site : Site)
@@ -25,6 +27,11 @@ inductive Point (inside : ChildPoints) : {α : Type} → {action : PrefixM Event
       Point inside shape w h .returned u middle
   | interior (token : Child) (point : inside token w h u middle) :
       Point inside (.child token) w h .interior u middle
+  | metadata {α : Type} {body : WG.M α} {source : PeerMetadata.Shape body} {w : World}
+      (point : PeerMetadata.Point source w.wg w.ambient v b) :
+      Point inside (.native (.metadata body source)) w h .metadata {w with wg:=v,ambient:=b} h
+  | acquire {w : World} (point : PeerAcquire.Point peer w.wg w.ambient v b) :
+      Point inside (.native (.acquire peer)) w h .acquire {w with wg:=v,ambient:=b} h
   | left {body : PrefixM Event α} {next : α → PrefixM Event β}
       {head : Shape body} (tail : ∀ value, Shape (next value)) (point : Point inside head w h site u middle) :
       Point inside (.bind head tail) w h (.left site) u middle
@@ -59,6 +66,8 @@ theorem Point.coverage (contracts : ChildContracts native inside Good)
   | entry shape => exact .entry shape
   | returned shape performed => exact .returned shape performed
   | interior token point => exact .interior token ((contracts.contract token).coverage _ _ _ _ point)
+  | metadata point => exact .metadata point
+  | acquire point => exact .acquire point
   | left tail point ih => exact .left tail ih
   | right head tail leading point ih => exact .right head tail leading ih
   | marked label point ih => exact .marked label ih
@@ -72,6 +81,12 @@ theorem Point.safe (carrierGood : ∀ h w, Carrier h w → Good h w)
   | entry shape => exact carrierGood _ _ before
   | returned shape performed => exact carrierGood _ _ (shape.normal before performed)
   | interior token point => exact (contracts.contract token).safe _ _ _ _ before point
+  | metadata point =>
+      obtain ⟨ledger,account⟩ := before
+      exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
+  | acquire point =>
+      obtain ⟨ledger,account⟩ := before
+      exact carrierGood _ _ ⟨ledger,account.same_view point.frame⟩
   | left tail point ih => exact ih before
   | right head tail leading point ih => exact ih (head.normal before leading)
   | marked label point ih => exact ih before

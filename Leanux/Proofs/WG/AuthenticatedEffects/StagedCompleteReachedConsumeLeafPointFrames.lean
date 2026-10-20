@@ -67,6 +67,7 @@ theorem BaseNative.checked (token : BaseNative action) : Checked action := by
 
 theorem Native.checked (token : Native) : Checked token.action := by
   cases token with
+  | metadata body source => exact native_checked _ source.frame
   | base token => exact token.checked
   | find root bits key => exact native_checked _ (aip_read _ (findNode_sameAipStore root bits key))
   | node id => exact native_checked _ (aip_read _ (getNode_sameAipStore id))

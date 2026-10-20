@@ -10,11 +10,11 @@ noncomputable def updateThenShape (pid : PeerId) (f : Peer → Peer)
     (next : WG.M α) (tail : Shape (wg next)) :
     Shape (wg (getPeer pid >>= fun p => setPeer pid (f p) >>= fun _ => next)) := by
   rw [← bind_assoc,wg_bind]
-  exact .bind (.native (.base (.update pid f fields))) (fun _ => tail)
+  exact .bind (.native (.metadata _ (PeerMetadata.updateShape pid f fields))) (fun _ => tail)
 
 macro "consume_leaf_update" : tactic => `(tactic| (
   consume_leaf_wg_tail_head setPeer
-  refine .native (.base (.update _ _ ?_))
+  refine .native (.metadata _ (PeerMetadata.updateShape _ _ ?_))
   intro p
   exact ⟨rfl,rfl,rfl⟩))
 

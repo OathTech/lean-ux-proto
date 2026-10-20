@@ -6,9 +6,7 @@ open Leanux Leanux.WG Leanux.Proofs.Logged Lifetimes Queues TransmitSecurity Cau
 
 
 noncomputable def deleteShape (pid : PeerId) (timer : PeerTimer) : Shape (wg (delTimer pid timer)) := by
-  unfold delTimer
-  exact .native (.base (.update pid (fun p => (p.setTimer timer none).setWheel timer none)
-    (by intro p; cases timer <;> exact ⟨rfl,rfl,rfl⟩)))
+  exact .native (.metadata _ (PeerMetadata.timerDeleteShape pid timer))
 
 noncomputable def handshakeTimerShape (pid : PeerId) :
     Shape (wg (timersHandshakeComplete pid .walltimeLastHandshakeData)) := by

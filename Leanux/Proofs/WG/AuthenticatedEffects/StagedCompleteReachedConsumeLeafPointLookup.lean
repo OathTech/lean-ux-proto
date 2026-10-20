@@ -10,10 +10,8 @@ noncomputable def lookupNodeShape (root : Option NodeId) (bits key : Nat) :
   apply Shape.marked (.lookupNode root bits key)
   unfold lookup
   repeat' first
-    | (consume_leaf_wg_head swapEndian; exact .native (.base (.endian _)))
-    | (consume_leaf_wg_head liftM; first
-        | exact .native (.find _ _ _)
-        | exact .native (.node _))
+    | (consume_leaf_wg_head swapEndian; exact .native (.metadata _ (PeerMetadata.endianShape _)))
+    | (consume_leaf_wg_head liftM; exact .native (.metadata _ (Routing.aipShape _)))
     | (consume_leaf_wg_head peerGetMaybeZero; exact .native (.acquire _))
     | consume_leaf_shape
 

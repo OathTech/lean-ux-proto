@@ -1,4 +1,5 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConsumePointNapi
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedReceiveHelperCanonical
 
 /-! Fixed receive helper atoms. Peer updates are paired with their own native
 read; the metadata constraint excludes staged queues and packet ownership. -/
@@ -25,6 +26,7 @@ inductive BaseNative : {α : Type} → PrefixM Event α → Type 1 where
 def historyRead : PrefixM Event History := fun w => ExceptT.mk fun h => (.ok (h,w),h)
 
 inductive Native where
+  | metadata (body : WG.M α) (source : PeerMetadata.Shape body)
   | base {α : Type} {action : PrefixM Event α} (token : BaseNative action)
   | find (root : Option NodeId) (bits key : Nat)
   | node (id : NodeId)
@@ -35,6 +37,7 @@ inductive Native where
   | armed (receipt : TimerEffects.Arm Context)
 
 def Native.Result : Native → Type
+  | @Native.metadata α _ _ => α
   | @Native.base α _ _ => α
   | .find .. => Option NodeId
   | .node .. => AipNode
@@ -43,6 +46,7 @@ def Native.Result : Native → Type
   | .change .. | .failure .. | .armed .. => Unit
 
 def Native.action (token : Native) : PrefixM Event token.Result := match token with
+  | .metadata body _ => wg body
   | @Native.base _ action _ => action
   | .find root bits key => wg (liftAip (findNode root bits key))
   | .node id => wg (liftAip (getNode id))
@@ -51,6 +55,24 @@ def Native.action (token : Native) : PrefixM Event token.Result := match token w
   | .failure reason => wg (throw reason)
   | .history => historyRead
   | .armed receipt => emitPrefix (.armed receipt)
+
+theorem acquire_observed_remaining {w : World} (h : History)
+    (point : PeerAcquire.Point peer w.wg w.ambient v b) :
+    ∃ remaining : PrefixM Event (Option PeerId), runPrefix (wg (peerGetMaybeZero peer)) w h =
+      runPrefix remaining {w with wg:=v,ambient:=b} h := by
+  obtain ⟨rest,same⟩ := point.remaining
+  refine ⟨liftWGObserver (liftWGPrefix rest),?_⟩
+  simp only [wg,Points.wg,liftWGObserver_run,runWGPrefix_lift,same]
+
+noncomputable def acquireRemainder {w : World} (h : History)
+    (point : PeerAcquire.Point peer w.wg w.ambient v b) : PrefixM Event (Option PeerId) :=
+  Classical.choose (acquire_observed_remaining h point)
+
+theorem acquireRemainder_run {w : World} (h : History)
+    (point : PeerAcquire.Point peer w.wg w.ambient v b) :
+    runPrefix (wg (peerGetMaybeZero peer)) w h =
+      runPrefix (acquireRemainder h point) {w with wg:=v,ambient:=b} h :=
+  Classical.choose_spec (acquire_observed_remaining h point)
 
 inductive Child where
   | wheel (pid : PeerId) (timer : PeerTimer) (expires clock : UInt64) (unit : Option Nat)

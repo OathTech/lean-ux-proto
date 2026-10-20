@@ -74,7 +74,7 @@ noncomputable def receivedWriteShape (pid : PeerId) : Shape (liftWGObserver (do
     let p ← liftWGPrefix (getPeer pid)
     liftWGPrefix (setPeer pid {p with timerNeedAnotherKeepalive := true}))) := by
   rw [← Queued.lift_bind]
-  exact .native (.base (.update pid (fun p => {p with timerNeedAnotherKeepalive := true})
+  exact .native (.metadata _ (PeerMetadata.updateShape pid (fun p => {p with timerNeedAnotherKeepalive := true})
     (fun _ => ⟨rfl,rfl,rfl⟩)))
 
 noncomputable def receivedShape (pid : PeerId) : Shape (liftWGObserver (TimerEffects.dataReceivedWith effects pid)) := by
@@ -82,7 +82,7 @@ noncomputable def receivedShape (pid : PeerId) : Shape (liftWGObserver (TimerEff
   unfold TimerEffects.dataReceivedWith
   simp only [effect_step,discard]
   rw [liftWGObserver_bind]
-  refine .bind (.native (.base .device)) ?_
+  refine .bind (.native (.metadata _ PeerMetadata.deviceReadShape)) ?_
   intro device
   rw [liftWGObserver_bind]
   refine .bind (.native (.base (.basic (.branch .timersDataReceivedRunning device.running)))) ?_
@@ -91,7 +91,7 @@ noncomputable def receivedShape (pid : PeerId) : Shape (liftWGObserver (TimerEff
   apply conditionalShape
   · intro yes
     rw [liftWGObserver_bind]
-    refine .bind (.native (.base (.basic (.peer pid)))) ?_
+    refine .bind (.native (.metadata _ (PeerMetadata.peerReadShape pid))) ?_
     intro peer
     rw [liftWGObserver_bind]
     refine .bind (.native (.base (.basic (.branch .timersDataReceivedNotPending !(peer.timerPending .sendKeepalive))))) ?_

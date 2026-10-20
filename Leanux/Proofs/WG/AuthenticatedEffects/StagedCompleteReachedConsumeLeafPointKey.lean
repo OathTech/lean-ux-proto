@@ -10,9 +10,9 @@ noncomputable def keyReleaseShape (kid : Option KeypairId) (unreferenceNow : Boo
   apply Shape.marked (.keyRelease kid unreferenceNow)
   unfold keypairPut refcountDecAndTest
   repeat' first
-    | (consume_leaf_wg_head IndexOwner.peerDeref; exact .native (.base (.dereference _)))
+    | (consume_leaf_wg_head IndexOwner.peerDeref; exact .native (.metadata _ (PeerMetadata.dereferenceShape _)))
     | (consume_leaf_wg_head modifyDev; exact .native (.base (.eraseKey _)))
-    | (consume_leaf_wg_head liftM; exact .native (.base (.unhash _)))
+    | (consume_leaf_wg_head liftM; exact .native (.metadata _ (.access (PeerMetadata.indexShape _))))
     | consume_leaf_shape
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.Consume.Leaf

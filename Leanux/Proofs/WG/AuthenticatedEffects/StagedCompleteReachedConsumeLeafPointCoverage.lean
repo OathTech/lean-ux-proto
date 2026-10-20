@@ -17,6 +17,12 @@ theorem boundary_carrier (point : Point Boundary shape w h site u middle)
   | entry shape => exact before
   | returned shape performed => exact shape.normal before performed
   | interior token point => exact False.elim point
+  | metadata point =>
+      obtain ⟨ledger,account⟩ := before
+      exact ⟨ledger,account.same_view point.frame⟩
+  | acquire point =>
+      obtain ⟨ledger,account⟩ := before
+      exact ⟨ledger,account.same_view point.frame⟩
   | left tail point ih => exact ih before
   | right head tail leading point ih => exact ih (head.normal before leading)
   | marked label point ih => exact ih before
