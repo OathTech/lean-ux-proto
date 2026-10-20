@@ -6,7 +6,7 @@ namespace Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ConfigConcre
 open Leanux Leanux.WG Leanux.Proofs.Logged Leanux.Proofs.Framing TransmitSecurity CausalJournal
 
 inductive Site where
-  | entry | returned | child | saved | pskRead | metadata | lookup | creation
+  | entry | returned | child | saved | pskRead | metadata | lookup | creation | routing
   | left (site : Site) | right (site : Site)
 
 inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action →
@@ -22,6 +22,9 @@ inductive Point : {α : Type} → {action : PrefixM Event α} → Shape action �
   | lookup {w : World} (allocated : Preserves RetirementSecurity.StackOwnership.Allocated action)
       (point : Lookup.Point source w.wg w.ambient v b) :
       Point (.native (.lookup action source allocated)) w h .lookup {w with wg:=v,ambient:=b} h
+  | routing {w : World} (allocated : Preserves RetirementSecurity.StackOwnership.Allocated action)
+      (point : Routing.Point source w.wg w.ambient v b) :
+      Point (.native (.routing action source allocated)) w h .routing {w with wg:=v,ambient:=b} h
   | child (family : Family) (point : family.Point w h u middle) : Point (.child family) w h .child u middle
   | saved (point : ConfigSaved.Point pid running interval w h u middle) :
       Point (.saved pid running interval) w h .saved u middle
@@ -44,6 +47,7 @@ theorem Point.remaining {α : Type} {action : PrefixM Event α} {source : Shape 
   | creation point=>exact point.observed_remaining _
   | metadata allocated point=>exact point.observed_remaining _
   | lookup allocated point=>exact point.observed_remaining _
+  | routing allocated point=>exact point.observed_remaining _
   | child family point=>exact point.remaining
   | saved point=>exact point.remaining
   | pskRead performed=>exact ⟨_,by rw [psk_source,runPrefix_bind,performed]⟩
@@ -77,6 +81,9 @@ theorem Point.safe
       obtain ⟨ledger,account⟩:=before.1
       exact accountGood _ _ ⟨ledger,account.same_view point.frame⟩
   | lookup allocated point=>
+      obtain ⟨ledger,account⟩:=before.1
+      exact accountGood _ _ ⟨ledger,account.same_view point.frame⟩
+  | routing allocated point=>
       obtain ⟨ledger,account⟩:=before.1
       exact accountGood _ _ ⟨ledger,account.same_view point.frame⟩
   | child family point=>exact point.safe accountGood pendingGood acceptPeer acceptStaging acceptKeepalive before

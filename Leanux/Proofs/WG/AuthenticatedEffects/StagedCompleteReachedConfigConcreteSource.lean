@@ -1,6 +1,7 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedConfigSavedSource
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPeerCreationPointFrames
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedPubkeyLookupSource
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedRoutingCanonical
 
 /-! Configuration source witnesses expose creation, counted release, removal
 and fixture sends. Native frames describe the fixed projection and allocation
@@ -17,14 +18,16 @@ inductive NativeKind : Type 1 where
       (allocated : Preserves StackOwnership.Allocated action)
   | lookup {α : Type} (action : WG.M α) (source : Lookup.Shape action)
       (allocated : Preserves StackOwnership.Allocated action)
+  | routing {α : Type} (action : WG.M α) (source : Routing.Shape action)
+      (allocated : Preserves StackOwnership.Allocated action)
   | create (key : Key) (psk : Option Key)
 
 def NativeKind.Result : NativeKind → Type
-  | .quiet (α:=α) .. | .metadata (α:=α) .. | .lookup (α:=α) ..=>α
+  | .quiet (α:=α) .. | .metadata (α:=α) .. | .lookup (α:=α) .. | .routing (α:=α) ..=>α
   | .create ..=>Except Int PeerId
 
 def NativeKind.action (kind : NativeKind) : PrefixM Event kind.Result := match kind with
-  | .quiet action .. | .metadata action .. | .lookup action ..=>liftWGObserver (liftWGPrefix action)
+  | .quiet action .. | .metadata action .. | .lookup action .. | .routing action ..=>liftWGObserver (liftWGPrefix action)
   | .create key psk=>liftWGObserver (liftWGPrefix (peerCreate key psk))
 
 def pskUpdate (pid : PeerId) (psk : Option Key) : WGPrefix Event Unit := do
@@ -86,5 +89,9 @@ def metadataShape (action : WG.M α) (source : PeerMetadata.Shape action)
 def lookupShape (action : WG.M α) (source : Lookup.Shape action)
     (allocated : Preserves StackOwnership.Allocated action) : Shape (liftWGObserver (liftWGPrefix action)) :=
   .native (.lookup action source allocated)
+
+def routingShape (action : WG.M α) (source : Routing.Shape action)
+    (allocated : Preserves StackOwnership.Allocated action) : Shape (liftWGObserver (liftWGPrefix action)) :=
+  .native (.routing action source allocated)
 
 end Leanux.Proofs.WG.AuthenticatedEffects.StagedEntry.Reached.ConfigConcrete

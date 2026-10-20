@@ -17,6 +17,9 @@ theorem NativeKind.checked (token : NativeKind) : CompleteProduct.Checked token.
   | lookup action source allocated=>
       exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
         CompleteProduct.account_safe action source.frame allocated)
+  | routing action source allocated=>
+      exact CompleteProduct.state (CompleteConfigurationReady.passive CompleteProduct.Safe
+        CompleteProduct.account_safe action source.frame allocated)
   | create key psk=>
       exact CompleteProduct.state
         (CompleteAllocated.create CompleteProduct.Safe CompleteProduct.account_safe key psk)
@@ -63,8 +66,11 @@ noncomputable def publicLookupShape (key : Key) : Shape (liftWGObserver (liftWGP
   lookupShape _ (Lookup.pubkeyShape key) (AllocatedFrames.public_lookup key)
 
 macro "config_native_source" : tactic => `(tactic| first
-  | (config_native_head setAllowedip; config_native_frames)
-  | (config_native_head removeByPeer; config_native_frames)
+  | (config_native_head setAllowedip; refine routingShape _ (Routing.setShape _ _) ?_;
+      exact AllocatedFrames.configured (.allowedIp _ _))
+  | (config_native_head removeByPeer; refine routingShape _ (Routing.removeShape _) ?_;
+      exact AllocatedFrames.observed (removeByPeerPrefix_erases _)
+        (removeByPeerPrefix_preserves allocationAmbient allocationConfigurationPeer.removal.allowedIps.nodes _))
   | (config_native_head Leanux.WG.pubkeyLookup; exact publicLookupShape _)
   | (apply metadataShape
      · repeat' config_metadata_shape
