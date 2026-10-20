@@ -944,3 +944,12 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   replayed and the repair effort measured against the current tree. The
   mirror rule is revisited only on that evidence [AGENT, coordinator: the
   pilot's details].
+- **2026-10-20 [USER]** Lean resource-limit raises in the proof tree are
+  grandfathered: the file-wide `maxHeartbeats` and `maxRecDepth` settings
+  present when the scoping rule arrived (439 and 34 files on main at
+  03d85d1f; campaign 3's 1,337 and 462 files on its landing, found by its
+  independent landing review) stay as they are, new declarations scope a
+  raise to one declaration with its reason, and any refactor that touches a
+  file makes that file conformant as it goes. The rule is new, which is why
+  earlier landings did not check it; the campaign 3 report's statement that
+  no limit was raised is corrected as a named change of that landing.

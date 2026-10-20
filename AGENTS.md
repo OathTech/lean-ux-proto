@@ -137,6 +137,15 @@ target. Beside it, a speedbump: `scripts/proof-counterexamples` replays the
 published counterexample and witness recipes through the interpreter, which
 the gate's build does not cover.
 
+Lean resource limits (`maxHeartbeats`, `maxRecDepth` and similar) in the proof
+tree: the file-wide raises present when the rule arrived (439 files with
+`maxHeartbeats` and 34 with `maxRecDepth` on main at 03d85d1f, and campaign
+3's on its landing) are grandfathered [USER 2026-10-20]. New declarations
+scope a raise to the one declaration (`set_option ... in`) with its reason
+beside it, and a refactor that touches a file brings that file's raises into
+that form as it goes. A report or register entry says plainly whether a
+result's files carry raises.
+
 Everything else is a speedbump: cheap, run at claim points, never blocking
 intermediate work, built to catch honest drift and not adversarial attack:
 - the negative control suites (`corpus/*-controls`, their scripts);
