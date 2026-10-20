@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Progress.CommittedCaptureClaims
+import Leanux.Proofs.WG.Progress.CommittedInitializedCompletionClaims
 import Leanux.Proofs.WG.Progress.RunnerFiniteClaims
 import Leanux.Proofs.WG.Progress.TrafficFiniteClaims
 import Leanux.Proofs.WG.Progress.RunnerInitialFiniteClaims
@@ -2469,5 +2471,41 @@ theorem original_native_afterAdvance_finite  :
 theorem original_environment_observe_finite :
     Campaign2.Product.AgreesOn (fun _ => True) Env.observe ObservationFinite.observe :=
   ObservationFinite.original_observe_finite
+
+
+/-- Each committed dispatch/resume callback executes the native activation and
+records exactly one projected receipt, even when that call stops. The actual
+scheduler source installs these callbacks at its two committed run sites. -/
+theorem original_committed_activation_exactly_once
+    (origin : CommittedRuns.Origin) (activation : Activation) :
+    (do let result ← CommittedRuns.observeRun origin activation; pure result.1) =
+      Campaign2.Product.inspect (Env.Activation.run activation) ∧
+    Campaign2.Product.Returns (CommittedRuns.observeRun origin activation) (fun _ => True)
+      (fun result entry => ∃ receipt, result.2 = [receipt] ∧
+        receipt.origin = origin ∧ receipt.activation = activation ∧
+        receipt.before = entry ∧ receipt.exit.erase = result.1 ∧
+        CommittedRuns.SourceReceipt receipt) :=
+  CommittedRuns.original_activation_exact_capture origin activation
+
+/-- Acceptance of a complete initialized trace forces every actual committed
+activation call to have returned normally, including calls that yield. No
+per-receipt success or callback premise is assumed. -/
+theorem original_initialized_normal_activation_receipts
+    (trace : Runner.Trace) (placeholders : Bool) (json : Lean.Json)
+    (accepted : Runner.executeTrace trace placeholders = .ok json) :
+    CommittedRuns.NormalHistory (CommittedRuns.Initialized.inspection trace placeholders).2 :=
+  CommittedRuns.Initialized.original_initialized_normal_receipts trace placeholders json accepted
+
+/-- Every committed activation of an accepted trace has a normal final
+projection and strictly consumes supplied records at its own entry. This
+retains the entry-mode premise; it does not assert placeholder quiescence. -/
+theorem original_initialized_completed_record_decrease
+    (trace : Runner.Trace) (placeholders : Bool) (json : Lean.Json)
+    (accepted : Runner.executeTrace trace placeholders = .ok json) :
+    ∀ receipt ∈ (CommittedRuns.Initialized.inspection trace placeholders).2,
+      ∃ final, receipt.exit.erase = .ok ((),final) ∧
+        ∀ records, receipt.before.ambient.hidden = some records →
+          RecordSuffix.StrictTail records final.ambient.hidden :=
+  CommittedRuns.Initialized.original_initialized_completed_record_decrease trace placeholders json accepted
 
 end Leanux.Proofs.WG.Progress

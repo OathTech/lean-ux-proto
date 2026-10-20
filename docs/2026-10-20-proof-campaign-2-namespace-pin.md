@@ -56,7 +56,9 @@ The corresponding harness input is:
 ```
 
 The Python `harness.trace.validate_trace` accepts this object. The Lean recipe
-uses its matching typed trace, avoiding an unrelated parser-reduction claim.
+also parses it with `Runner.parseTrace` and checks that its original output
+agrees with the typed trace and boundary observer. These remain interpreter
+checks, not parser-reduction theorems.
 
 Reproducer:
 
