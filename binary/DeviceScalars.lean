@@ -10,7 +10,7 @@ structure DeviceStableFields (m : Mem 64) (a : BitVec 64)
     (d : Leanux.WG.Device) : Prop where
   handshakeQueueLen : m.loadInt (a + .ofNat 64 568) 4 = some (d.handshakeQueueLen : Int)
   numPeers : m.loadInt (a + .ofNat 64 572) 4 = some (d.numPeers : Int)
-  deviceUpdateGen : m.loadInt (a + .ofNat 64 576) 4 = some (d.deviceUpdateGen : Int)
+  deviceUpdateGen : m.loadInt (a + .ofNat 64 576) 4 = some (d.deviceUpdateGen.toNat : Int)
   fwmark : m.loadInt (a + .ofNat 64 580) 4 = some (d.fwmark : Int)
   incomingPort : m.loadInt (a + .ofNat 64 584) 2 = some (d.incomingPort : Int)
   staticIdentity_staticPublic : m.loadBytes (a + .ofNat 64 176) 32 = some d.staticIdentity.staticPublic

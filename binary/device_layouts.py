@@ -7,7 +7,7 @@ def generate_device_scalars(root, layouts):
         ('wg_device', 0, [
             ('handshakeQueueLen', 'handshake_queue_len', 'nat', 4),
             ('numPeers', 'num_peers', 'nat', 4),
-            ('deviceUpdateGen', 'device_update_gen', 'nat', 4),
+            ('deviceUpdateGen', 'device_update_gen', 'u32', 4),
             ('fwmark', 'fwmark', 'nat', 4),
             ('incomingPort', 'incoming_port', 'nat', 2),
         ]),
@@ -47,7 +47,8 @@ def generate_device_scalars(root, layouts):
         elif kind == 'signed':
             eq = f'∃ raw : BitVec 32, m.loadInt {addr} 4 = some (raw.toNat : Int) ∧ raw.toInt = d.{mirror}'
         else:
-            value = f'(d.{mirror} : Int)' if kind == 'nat' else f'(if d.{mirror} then 1 else 0)'
+            value = (f'(d.{mirror} : Int)' if kind == 'nat' else f'(d.{mirror}.toNat : Int)' if kind == 'u32'
+                     else f'(if d.{mirror} then 1 else 0)')
             eq = f'm.loadInt {addr} {width} = some {value}'
         text.append(f'  {name} : {eq}')
     text += ['', 'def deviceStableOffsets : List (Nat × Nat) :=',
