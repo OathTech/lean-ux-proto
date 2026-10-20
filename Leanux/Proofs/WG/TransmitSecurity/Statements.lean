@@ -718,6 +718,7 @@ import Leanux.Proofs.WG.TransmitSecurity.BatchNativeInitialized
 import Leanux.Proofs.WG.TransmitSecurity.BatchJournalFinal
 import Leanux.Proofs.WG.TransmitSecurity.SocketJournalFinal
 import Leanux.Proofs.WG.TransmitSecurity.CiphertextOriginFinal
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeSourceClosure
 
 /-! Campaign 3: initialized nonce safety and transmit source contracts.
 Actual key-allocation identity, reservation, packet and wire nonce are joined.
@@ -2758,6 +2759,35 @@ theorem initialized_source_points_have_semantic_ticket_accounts
       (fun h w=>NativeAccounting.AccountOrRecords h w.wg)
       (Reached.Runner.Points.executeShape trace placeholders) [] :=
   NativeAccounting.initialized_account_or_records trace placeholders
+
+end
+
+section
+open AuthenticatedEffects.StagedEntry.Reached
+
+/-- Security: every native source point of the initialized runner has one
+semantic account for each admitted packet, with a unique pending or terminal
+status, native cell ownership, allocation backing and exact terminal receipt
+counts. A mutation-to-receipt interval uses only its actual total pending
+records and keeps the same WG state. The concrete source family covers setup,
+traffic, scheduling, receive, timers, configuration, lifecycle, dump and cleanup;
+it requires no incoming invariant, child-family or semantic-acceptance premise.
+Eventual completion of pending packets and simulation of C memory are excluded. -/
+theorem initialized_transmit_source_conservation
+    (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    (point : NativeAccounting.SourcePoint trace placeholders site w h) :
+    NativeAccounting.AccountOrRecords h w.wg :=
+  NativeAccounting.initialized_concrete_account trace placeholders point
+
+/-- Security: changing any former extension family cannot omit a native child
+from the concrete initialized source relation. Every such parameter is eliminated
+by the source composition before the conservation claim is made. -/
+theorem transmit_source_children_are_closed
+    (consume : Consume.Points.ChildPoints) (napi : Napi.Points.ChildPoints)
+    (worker : Iteration.Points.ChildPoints) (work : WorkService.Points.ChildPoints)
+    (dispatch : Dispatch.Points.ChildPoints) :
+    NativeAccounting.children consume napi worker work dispatch=NativeAccounting.concreteChildren :=
+  NativeAccounting.concrete_children consume napi worker work dispatch
 
 end
 
