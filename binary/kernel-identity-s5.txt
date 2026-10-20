@@ -1,0 +1,5 @@
+# Pinned binary experiment target, independent of the mirror campaign's oracle.
+# Path-independent kernel identity:
+b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767
+# Exact ELF SHA256 for the image interpreted by the binary proofs:
+06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e

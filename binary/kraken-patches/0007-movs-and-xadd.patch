@@ -1,0 +1,376 @@
+From cd2ae360bfcf8e1fc719793405811ff49c3e75ce Mon Sep 17 00:00:00 2001
+From: Mike Dodds <mike@oath.tech>
+Date: Sun, 18 Oct 2026 20:11:58 +0000
+Subject: [PATCH] Implement MOVS and memory XADD for random recording hooks
+
+---
+ Kraken/X64/MovsTests.lean    | 69 ++++++++++++++++++++++++++++++++++++
+ Kraken/X64/Parser/Basic.lean | 29 ++++++++++++++-
+ Kraken/X64/PrintATT.lean     |  2 ++
+ Kraken/X64/PrintIntel.lean   |  3 ++
+ Kraken/X64/Semantics.lean    | 31 ++++++++++++++++
+ Kraken/X64/Syntax.lean       |  2 ++
+ Kraken/X64/XaddTests.lean    | 66 ++++++++++++++++++++++++++++++++++
+ notes/x64-movs-xadd.md       | 29 +++++++++++++++
+ 8 files changed, 230 insertions(+), 1 deletion(-)
+ create mode 100644 Kraken/X64/MovsTests.lean
+ create mode 100644 Kraken/X64/XaddTests.lean
+ create mode 100644 notes/x64-movs-xadd.md
+
+diff --git a/Kraken/X64/MovsTests.lean b/Kraken/X64/MovsTests.lean
+new file mode 100644
+index 0000000..2774f75
+--- /dev/null
++++ b/Kraken/X64/MovsTests.lean
+@@ -0,0 +1,69 @@
++module
++import Kraken.X64.OmniSemantics
++import Kraken.X64.Parser
++import Kraken.X64.PrintATT
++meta import Kraken.X64.Semantics
++meta import Kraken.Mem
++meta import Kraken.X64.PrintATT
++
++namespace Kraken.X64.MovsTests
++private instance : Labels := ⟨fun _ => 0⟩
++private def execute (aw w : Width) (repeated : Bool) (s : MachineData) : Effects :=
++  (Instr.regular aw w (.movs repeated)).interp s ⟨0,1⟩
++    (fun d => .done ⟨d,1⟩) (fun pc d => .done ⟨d,pc⟩)
++private def check (reads writes : Nat) (post : MachineState → Bool) : Effects → Bool
++  | .done s => reads==0 && writes==0 && post s
++  | .require_exec_access _ next => check reads writes post (next ())
++  | .require_read_access _ _ next => reads>0 && check (reads-1) writes post (next ())
++  | .require_write_access _ _ next => writes>0 && check reads (writes-1) post (next ())
++  | _ => false
++private def initial (backward : Bool) : MachineData := {
++  regs := {rsi := 0x1018,rdi := 0x2018,rcx := 3,rax := 37}
++  status := ⟨true,false,true,false,true,false⟩
++  system := {bits := if backward then 0x600 else 0x200,cpl := 0}
++  dmem := ((List.range 64).map (fun i => UInt8.ofNat (i+1))).At 0x1000 ∪
++    (List.replicate 64 (0 : UInt8)).At 0x2000 }
++
++#guard [false,true].all fun backward => [Width.W8,.W16,.W32,.W64].all fun w =>
++  let s := initial backward
++  let address (base i : Nat) := if backward then base-i*w.bytes else base+i*w.bytes
++  check 3 3 (fun t => t.pc==1 && t.data.regs.rcx==0 && t.data.regs.rax==37 &&
++    t.data.regs.rsi.toNat==address 0x1018 3 && t.data.regs.rdi.toNat==address 0x2018 3 &&
++    t.data.status==s.status && t.data.system==s.system &&
++    [0,1,2].all (fun i => t.data.dmem.loadInt (.ofNat 64 (address 0x2018 i)) w.bytes ==
++      s.dmem.loadInt (.ofNat 64 (address 0x1018 i)) w.bytes)) (execute .W64 w true s)
++
++#guard check 1 1 (fun t => t.data.regs.rcx==3 && t.data.regs.rsi==0x1019 && t.data.regs.rdi==0x2019)
++  (execute .W64 .W8 false (initial false))
++#guard check 0 0 (fun t => t.data.dmem=={} && t.data.regs.rsi==0 && t.data.regs.rdi==0)
++  (execute .W64 .W8 true {regs := {rcx := 0}})
++#guard !check 3 3 (fun _ => true) (execute .W64 .W8 true {initial false with dmem := {}})
++#guard !check 3 3 (fun _ => true) (execute .W32 .W8 true (initial false))
++-- Forward overlap reads the preceding write, rather than taking a bulk snapshot.
++#guard check 3 3 (fun t => t.data.dmem.loadBytes 0x1000 4==some [1,1,1,1])
++  (execute .W64 .W8 true {
++    regs := {rsi := 0x1000,rdi := 0x1001,rcx := 3}
++    dmem := ([1,2,3,4] : List UInt8).At 0x1000})
++-- The source exists but the destination does not: the attempted write fails.
++#guard !check 1 1 (fun _ => true)
++  (execute .W64 .W8 false {
++    regs := {rsi := 0x1000,rdi := 0x2000}
++    dmem := ([1] : List UInt8).At 0x1000})
++
++#guard match Parser.parse "rep movsb %ds:(%rsi),%es:(%rdi)\nmovsq\nrep movsl" with
++  | .ok p => p==[.instr (.regular .W64 .W8 (.movs true)),
++      .instr (.regular .W64 .W64 (.movs false)),.instr (.regular .W64 .W32 (.movs true))]
++  | .error _ => false
++#guard !(Parser.parse "rep movsb %fs:(%rsi),%es:(%rdi)").isOk
++#guard !(Parser.parse "rep movsb %ds:(%esi),%es:(%rdi)").isOk
++#guard !(Parser.parse "rep movsb %ds:(%rdi),%es:(%rsi)").isOk
++#guard !(Parser.parse "repne movsb").isOk
++#guard ATT.operation (w := .W8) .W64 (.movs true)=="rep movsb"
++
++theorem zero_count (s : MachineData) (zero : s.regs.rcx=0) :
++    (execute .W64 .W8 true s).All (fun t => t.pc=1 ∧ t.data=s) := by
++  simp [execute,Instr.interp,Operation.interp,MachineData.movsRepeat,zero,Effects.All,
++    show (Width.W64 != .W64)=false from rfl]
++
++#print axioms zero_count
++end Kraken.X64.MovsTests
+diff --git a/Kraken/X64/Parser/Basic.lean b/Kraken/X64/Parser/Basic.lean
+index 39c48de..e2c2998 100644
+--- a/Kraken/X64/Parser/Basic.lean
++++ b/Kraken/X64/Parser/Basic.lean
+@@ -626,6 +626,26 @@ def parseStos (mn : String) (repeated : Bool) : Parser Instr := do
+     pure (toInstr .none (w := w) (.stos repeated))
+   else fail "REP currently supports only STOS"
+ 
++def parseMovs (mn : String) (repeated : Bool) : Parser Instr := do
++  unless mn == "movsb" || mn == "movsw" || mn == "movsl" || mn == "movsq" do
++    fail "REP currently supports STOS and MOVS only"
++  let w ← instrWidth mn
++  skipHWs
++  let _ ← attempt (do
++    let _ ← (attempt (pstring "%ds:")) <|> pure ""
++    let _ ← pchar '('
++    let ⟨aw,source⟩ ← parseRegW
++    unless aw == .W64 && source == .low .rsi aw do fail "MOVS source must be RSI"
++    let _ ← pchar ')'
++    parseComma
++    let _ ← (attempt (pstring "%es:")) <|> pure ""
++    let _ ← pchar '('
++    let ⟨aw,destination⟩ ← parseRegW
++    unless aw == .W64 && destination == .low .rdi aw do fail "MOVS destination must be RDI"
++    let _ ← pchar ')'
++    pure ()) <|> pure ()
++  pure (toInstr .none (w := w) (.movs repeated))
++
+ def parseInstr : Parser Instr := do
+   skipHWs
+   let mnemonic ← parseName
+@@ -635,8 +655,10 @@ def parseInstr : Parser Instr := do
+   | "rep" =>
+     skipHWs
+     let operation ← parseName
+-    parseStos operation.toLower true
++    if operation.toLower.startsWith "stos" then parseStos operation.toLower true
++    else parseMovs operation.toLower true
+   | "stos" | "stosb" | "stosw" | "stosl" | "stosq" => parseStos mn false
++  | "movsb" | "movsw" | "movsl" | "movsq" => parseMovs mn false
+   -- Arithmetic (two-operand: src, dst) - 64-bit
+   | "add" =>
+     commaSeparated .none parseOperand parseRegOrMem .add
+@@ -916,6 +938,11 @@ def parseInstr : Parser Instr := do
+   | "cmpxchgq" | "cmpxchgl" | "cmpxchgw" | "cmpxchgb" => do
+     let w ← instrWidth mn
+     commaSeparated w parseRegA parseRegOrMem .cmpxchg
++  | "xadd" =>
++    commaSeparated .none parseRegA parseRegOrMem .xadd
++  | "xaddq" | "xaddl" | "xaddw" | "xaddb" => do
++    let w ← instrWidth mn
++    commaSeparated w parseRegA parseRegOrMem .xadd
+ 
+   -- Test (sets flags based on AND without storing result)
+   | "test" =>
+diff --git a/Kraken/X64/PrintATT.lean b/Kraken/X64/PrintATT.lean
+index eb1100d..9ca9aaa 100644
+--- a/Kraken/X64/PrintATT.lean
++++ b/Kraken/X64/PrintATT.lean
+@@ -82,6 +82,7 @@ def operation {w} (aw : Width) (op : Operation w) : String :=
+   | .cli => "cli"
+   | .sti => "sti"
+   | .stos repeated => (if repeated then "rep " else "") ++ s!"stos{s}"
++  | .movs repeated => (if repeated then "rep " else "") ++ s!"movs{s}"
+   | .pop d => one "pop" (rm aw d)
+   | .setcc cc d => s!"set{cc} {rm aw d}"
+   | .cmovcc cc d x => s!"cmov{cc} {rm aw x}, {reg d}"
+@@ -97,6 +98,7 @@ def operation {w} (aw : Width) (op : Operation w) : String :=
+   | .sbb d x => two "sbb" (operand aw x) (rm aw d)
+   | .cmp a b => two "cmp" (operand aw b) (rm aw a)
+   | .cmpxchg d x => two "cmpxchg" (reg x) (rm aw d)
++  | .xadd d x => two "xadd" (reg x) (rm aw d)
+   | .mul x => one "mul" (rm aw x)
+   | .mulx hi lo x => s!"mulx {rm aw x}, {reg lo}, {reg hi}"
+   | .imul1 x => one "imul" (rm aw x)
+diff --git a/Kraken/X64/PrintIntel.lean b/Kraken/X64/PrintIntel.lean
+index 31194e3..aee052c 100644
+--- a/Kraken/X64/PrintIntel.lean
++++ b/Kraken/X64/PrintIntel.lean
+@@ -137,6 +137,8 @@ def Operation.toStr {w} (op : Operation w) (addr_w : Width := .W64) : String :=
+   | .sti => "sti"
+   | .stos repeated => (if repeated then "rep " else "") ++
+       (match w with | .W8 => "stosb" | .W16 => "stosw" | .W32 => "stosd" | .W64 => "stosq")
++  | .movs repeated => (if repeated then "rep " else "") ++
++      (match w with | .W8 => "movsb" | .W16 => "movsw" | .W32 => "movsd" | .W64 => "movsq")
+   | .pop dst => s!"pop {dst.toStr addr_w}"
+   | .setcc cc dst => s!"set{cc} {dst.toStr addr_w}"
+   | .cmovcc cc dst src => s!"cmov{cc} {dst}, {src.toStr addr_w}"
+@@ -152,6 +154,7 @@ def Operation.toStr {w} (op : Operation w) (addr_w : Width := .W64) : String :=
+   | .sbb dst src => s!"sbb {dst.toStr addr_w}, {src.toStr addr_w}"
+   | .cmp a b => s!"cmp {a.toStr addr_w}, {b.toStr addr_w}"
+   | .cmpxchg dst src => s!"cmpxchg {dst.toStr addr_w}, {src}"
++  | .xadd dst src => s!"xadd {dst.toStr addr_w}, {src}"
+   | .mul src => s!"mul {src.toStr addr_w}"
+   | .mulx hi lo src => s!"mulx {hi}, {lo}, {src.toStr addr_w}"
+   | .imul none src1 src2 => s!"imul {src1.toStr addr_w}, {src2.toStr addr_w}"
+diff --git a/Kraken/X64/Semantics.lean b/Kraken/X64/Semantics.lean
+index c541f60..86282a6 100644
+--- a/Kraken/X64/Semantics.lean
++++ b/Kraken/X64/Semantics.lean
+@@ -370,6 +370,20 @@ def MachineData.stosRepeat (w : Width) : Nat → MachineData → (MachineData 
+   | count+1,s,next => s.stosOne w (fun t =>
+       stosRepeat w count {t with regs := {t.regs with rcx := t.regs.rcx-1}} next)
+ 
++/-- Sequential string move in 64-bit address mode. Source is read before
++destination is written, including overlaps. DF selects both index updates. -/
++def MachineData.movsOne (w : Width) (s : MachineData) (next : MachineData → Effects) : Effects :=
++  s.load s.regs.rsi.toBitVec w (fun value t =>
++    t.store s.regs.rdi.toBitVec value (fun u =>
++      next {u with regs := {u.regs with
++        rsi := if s.system.bits[10] then s.regs.rsi-UInt64.ofNat w.bytes else s.regs.rsi+UInt64.ofNat w.bytes
++        rdi := if s.system.bits[10] then s.regs.rdi-UInt64.ofNat w.bytes else s.regs.rdi+UInt64.ofNat w.bytes}}))
++
++def MachineData.movsRepeat (w : Width) : Nat → MachineData → (MachineData → Effects) → Effects
++  | 0,s,next => next s
++  | count+1,s,next => s.movsOne w (fun t =>
++      movsRepeat w count {t with regs := {t.regs with rcx := t.regs.rcx-1}} next)
++
+ def MachineData.storeAvx (s : MachineData) (addr : BitVec 64) {w : AvxWidth} (v : w.type) (ret: MachineData → Effects) (checkAlign : Bool := false) : Effects :=
+   if checkAlign && !(isAligned w.bytes addr) then
+     .gp_unaligned addr w.bytes
+@@ -531,6 +545,10 @@ set_option maxHeartbeats 1000000
+     if address_size.address_size != .W64 then
+       unimplemented "STOS: only 64-bit address size is implemented"
+     else if repeated then s.stosRepeat w s.regs.rcx.toNat next else s.stosOne w next
++  | .movs repeated =>
++    if address_size.address_size != .W64 then
++      unimplemented "MOVS: only 64-bit address size is implemented"
++    else if repeated then s.movsRepeat w s.regs.rcx.toNat next else s.movsOne w next
+   | .pop dst =>
+     let rsp := s.regs.get64 .rsp
+     s.load rsp w (fun val s =>
+@@ -644,6 +662,19 @@ set_option maxHeartbeats 1000000
+       of := v.signed != a.signed - b.signed }
+     { s with status }.store addr (if a == b then replacement else b) (fun s =>
+       next (if a == b then s else s.setReg (.low .rax w) b)))
++  -- The pinned UP recording counter uses the unlocked memory form.
++  -- Freeze the address before the source register receives the old memory.
++  | .xadd (.reg _) _ => unimplemented "XADD register destination"
++  | .xadd (.mem dst) src =>
++    let addr := (dst.interp s.regs p).zeroExtend 64
++    let a := s.regs.get src
++    s.load addr w (fun b s =>
++      let v := a+b
++      let status := .from_result v {
++        cf := v.unsigned != a.unsigned+b.unsigned
++        af := (v.take 4).unsigned != (a.take 4).unsigned+(b.take 4).unsigned
++        of := v.signed != a.signed+b.signed }
++      {s with status}.store addr v (fun t => next (t.setReg src b)))
+   | .mul src =>
+     let a := s.regs.get (Reg.low .rax w)
+     src.interp s p (fun b s =>
+diff --git a/Kraken/X64/Syntax.lean b/Kraken/X64/Syntax.lean
+index 929b520..b984e80 100644
+--- a/Kraken/X64/Syntax.lean
++++ b/Kraken/X64/Syntax.lean
+@@ -196,6 +196,7 @@ inductive Operation (w : Width)
+   | cli
+   | sti
+   | stos (repeated : Bool)
++  | movs (repeated : Bool)
+   | pop  (_ : Dst w)
+   | setcc (_ : CondCode) (_ : Dst w) -- {_ : w = .W8}
+   | cmovcc (_ : CondCode) (_ : Reg w) (src : RegOrMem w)
+@@ -212,6 +213,7 @@ inductive Operation (w : Width)
+   | sbb  (_ : Dst w) (src : Operand w)
+   | cmp  (a : RegOrMem w) (b : Operand w)
+   | cmpxchg (dst : RegOrMem w) (src : Reg w)
++  | xadd (dst : RegOrMem w) (src : Reg w)
+   | mul  (src : RegOrMem w)
+   | mulx (hi lo : Reg w) (src : RegOrMem w) -- {_ : 32 <= w.bits}
+   -- imul1 and imul collectively describe variants of the same
+diff --git a/Kraken/X64/XaddTests.lean b/Kraken/X64/XaddTests.lean
+new file mode 100644
+index 0000000..1f2a660
+--- /dev/null
++++ b/Kraken/X64/XaddTests.lean
+@@ -0,0 +1,66 @@
++module
++import Kraken.X64.OmniSemantics
++import Kraken.X64.Parser
++import Kraken.X64.PrintATT
++meta import Kraken.X64.Semantics
++meta import Kraken.Mem
++meta import Kraken.X64.PrintATT
++
++namespace Kraken.X64.XaddTests
++private instance : Labels := ⟨fun _ => 0⟩
++private def instruction (w : Width) : Instr := .regular .W64 w
++  (.xadd (.mem {base := some (.reg .rbx),idx := none}) (.low .rcx w))
++private def execute (i : Instr) (s : MachineData) : Effects :=
++  i.interp s ⟨0,4⟩ (fun d => .done ⟨d,4⟩) (fun pc d => .done ⟨d,pc⟩)
++private def initial (w : Width) (src old : Nat) : MachineData := {
++  regs := {rbx := 0x1000,rcx := .ofNat src,rax := 73}
++  system := {bits := 512,cpl := 0}
++  dmem := (Int.toBytes w.bytes old).At 0x1000 }
++private def check (reads writes : Nat) (post : MachineState → Bool) : Effects → Bool
++  | .done s => reads==0 && writes==0 && post s
++  | .require_exec_access _ next => check reads writes post (next ())
++  | .require_read_access _ _ next => reads>0 && check (reads-1) writes post (next ())
++  | .require_write_access _ _ next => writes>0 && check reads (writes-1) post (next ())
++  | _ => false
++
++#guard [Width.W8,.W16,.W32,.W64].all fun w =>
++  check 1 1 (fun t => t.pc==4 && t.data.regs.rcx==5 && t.data.regs.rax==73 &&
++    t.data.dmem.loadInt 0x1000 w.bytes==some 14 && !t.data.status.cf &&
++    !t.data.status.af && !t.data.status.of && !t.data.status.zf &&
++    !t.data.status.sf && !t.data.status.pf && t.data.system==(initial w 9 5).system)
++    (execute (instruction w) (initial w 9 5))
++-- Carry, auxiliary carry, zero and even parity on wraparound, at each width.
++#guard [Width.W8,.W16,.W32,.W64].all fun w =>
++  check 1 1 (fun t => t.data.regs.rcx.toNat==2^w.bits-1 &&
++    t.data.dmem.loadInt 0x1000 w.bytes==some 0 && t.data.status.cf &&
++    t.data.status.af && !t.data.status.of && t.data.status.zf &&
++    !t.data.status.sf && t.data.status.pf)
++    (execute (instruction w) (initial w 1 (2^w.bits-1)))
++-- Signed overflow without unsigned carry.
++#guard [Width.W8,.W16,.W32,.W64].all fun w =>
++  check 1 1 (fun t => t.data.dmem.loadInt 0x1000 w.bytes==some (2^(w.bits-1) : Nat) &&
++    t.data.status.of && t.data.status.sf && !t.data.status.cf && !t.data.status.zf)
++    (execute (instruction w) (initial w 1 (2^(w.bits-1)-1)))
++-- Source writes obey partial-register preservation / 32-bit zero extension.
++#guard check 1 1 (fun t => t.data.regs.rcx==0x123400000005)
++  (execute (instruction .W8) (initial .W8 0x123400000009 5))
++#guard check 1 1 (fun t => t.data.regs.rcx==0x123400000005)
++  (execute (instruction .W16) (initial .W16 0x123400000009 5))
++#guard check 1 1 (fun t => t.data.regs.rcx==5)
++  (execute (instruction .W32) (initial .W32 0x123400000009 5))
++-- Effective address must be frozen before the source register is overwritten.
++#guard check 1 1 (fun t => t.data.regs.rcx==5 && t.data.dmem.loadInt 0x1000 8==some 0x1005)
++  (execute (.regular .W64 .W64
++    (.xadd (.mem {base := some (.reg .rcx),idx := none}) (.low .rcx .W64)))
++    (initial .W64 0x1000 5))
++#guard !check 1 1 (fun _ => true)
++  (execute (instruction .W64) {initial .W64 9 5 with dmem := {}})
++#guard !check 0 0 (fun _ => true)
++  (execute (.regular .W64 .W64 (.xadd (.reg (.low .rbx .W64)) (.low .rcx .W64)))
++    (initial .W64 9 5))
++#guard (Parser.parse "xadd %rcx,0x123(%rip)").isOk
++#guard (Parser.parse "xaddl %ecx,(%rbx)\nxaddb %cl,(%rbx)").isOk
++#guard !(Parser.parse "lock xadd %rcx,(%rbx)").isOk
++#guard !(Parser.parse "xadd $1,(%rbx)").isOk
++
++end Kraken.X64.XaddTests
+diff --git a/notes/x64-movs-xadd.md b/notes/x64-movs-xadd.md
+new file mode 100644
+index 0000000..eb47d81
+--- /dev/null
++++ b/notes/x64-movs-xadd.md
+@@ -0,0 +1,29 @@
++# Recording-hook instructions
++
++The pinned single-CPU Linux image's random recording hook reaches REP MOVSB
++while copying a steered value and unlocked memory XADD while allocating a
++record sequence number. This private extension implements those operations.
++
++MOVS supports all operand widths with 64-bit addressing and both DF directions.
++Each element loads and stores before advancing the pointers, so overlap follows
++instruction order. REP uses the entry RCX count and decrements it per element;
++zero count issues no data-access requests. Unsupported address sizes fail.
++The parser accepts only the modeled default source/destination segments and
++RSI/RDI forms. XADD freezes the effective address, requests read and write
++access, stores the sum, returns the old destination in the source register,
++and sets the six arithmetic flags. Register destinations and LOCK remain
++unsupported. This adds no concurrent atomicity claim.
++
++References: Intel SDM volume 2B, MOVS and REP entries, and volume 2C, XADD entry:
++
++- https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2b-manual.pdf
++- https://www.intel.com/content/dam/www/public/us/en/documents/manuals/64-ia-32-architectures-software-developer-vol-2c-manual.pdf
++
++`Kraken.X64.MovsTests` checks both directions, all widths, overlap, zero count,
++missing memory, access counts and parser exclusions; its zero-count theorem
++uses only standard axioms. `Kraken.X64.XaddTests` checks arithmetic flags,
++partial-register writes, address/source aliasing, access counts, missing
++memory and unsupported forms. Both build and pass fresh `leanchecker` replay
++with Lean 4.35.0. Consumer memory and system-state preservation proofs also
++build and replay. Recording-enabled provider executions reach return with
++direct and remote steering, including exhaustion of the steering entries.
+-- 
+2.43.0
+

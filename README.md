@@ -57,6 +57,12 @@ each; the [scope table](#scope) below is its summary.
   ingress conservation proved, the C's first-in-first-out order up to GRO
   proved within one poll, and a post-GRO order counterexample; R5 and R6
   include counterexamples.
+- **A separate binary refinement experiment:** [binary/](binary/README.md)
+  connects selected compiled WireGuard index and allowed-IPs functions under
+  Kraken to the executable mirror, using tested reconstruction functions and
+  conditional Lean proofs. It assumes an unrealistic sequential environment,
+  has its own build and trust gate, and does not establish whole-subsystem or
+  kernel-context refinement.
 - **A tray of kernel findings:** [docs/upstream-tray/](docs/upstream-tray/INDEX.md),
   reports on kernel behaviour that might concern its maintainers, drafted for
   future filing; reports only, no patches.

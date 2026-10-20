@@ -1,0 +1,2576 @@
+HEADLINE STATEMENTS AND INTERPRETATION DEFINITIONS
+Binary.Pair.Trie.findNode_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsDecoderAgreement fetch →
+    Binary.CommonBits.Callbacks fetch →
+      Binary.TrustBase.AllowedipsTraceCmp1Contract fetch →
+        ∀ (names : Binary.Pair.Trie.Names) (input : AllowedipsProbe.Input)
+          (coverage : Binary.CommonBitsCoverage.Context) (s : MachineState) (w final : Leanux.World)
+          (root : Option.{0} Leanux.WG.NodeId) (bits query : Nat) (answer : Option.{0} Leanux.WG.NodeId) {stack : Nat},
+          Eq.{1} (Binary.Pair.Trie.initialBoundary names input coverage s w root bits query stack)
+              (Except.ok.{0, 0} ()) →
+            Eq.{1} (StateT.run.{0, 0} (Binary.Source.findNode root bits query) w)
+                (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+              Eventually (Binary.historyStep fetch)
+                (fun t =>
+                  Eq.{1} t.machine.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsImage.Lookup.entry 257) ∧
+                    Eq.{1} t.machine.data.regs.rbp.toBitVec
+                        (Binary.AllowedipsRelation.pointer (Binary.Pair.Trie.interpretation names.nodes) answer) ∧
+                      (Exists.{1} fun d =>
+                          Eq.{1} final.wg.dev (some.{0} d) ∧
+                            Eq.{1} (Binary.Pair.Trie.reconstruct names input.offsets t.machine.data.dmem)
+                              (Except.ok.{0, 0} (Binary.Pair.Trie.target d))) ∧
+                        Binary.AllowedipsLoop.Frame s.data coverage t.machine.data)
+                { machine := s, history := List.cons.{0} s List.nil.{0} }
+Binary.Pair.Trie.lookup_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AllowedipsDecoderAgreement fetch →
+    Binary.TrustBase.AnchoredDecoderAgreement fetch →
+      Binary.CommonBits.Callbacks fetch →
+        Binary.TrustBase.AllowedipsTraceCmp1Contract fetch →
+          Binary.TrustBase.AllowedipsTraceConstCmp4Contract fetch →
+            Binary.TrustBase.AllowedipsTraceConstCmp1Contract fetch →
+              Binary.TrustBase.AllowedipsBhEnableContract fetch →
+                ∀ {names : Binary.Pair.Trie.Names} {input : AllowedipsProbe.Input}
+                  {coverage : Binary.CommonBitsCoverage.Context} {initial : MachineState} {w : Leanux.World}
+                  {root : Option.{0} Leanux.WG.NodeId} {bits key : Nat} {ra : UInt64}
+                  {answer : Option.{0} Leanux.WG.PeerId} {final : Leanux.World},
+                  Eq.{1} (Binary.Pair.Trie.callBoundary names input coverage initial w root bits key ra)
+                      (Except.ok.{0, 0} ()) →
+                    Eq.{1} (StateT.run.{0, 0} (Binary.Source.lookup root bits key) w)
+                        (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                      Eventually (Binary.instructionStep fetch)
+                        (fun t =>
+                          Binary.AllowedipsTail.Post initial coverage.coverage coverage.preempt ra
+                              {
+                                toBitVec :=
+                                  Binary.AllowedipsRelation.pointer (Binary.Pair.Trie.interpretation names.peers)
+                                    answer }
+                              t ∧
+                            (Exists.{1} fun d =>
+                                Eq.{1} final.wg.dev (some.{0} d) ∧
+                                  Binary.Pair.Trie.Corresponds names input.offsets t.data.dmem d) ∧
+                              Binary.EqualOutside
+                                (fun a =>
+                                  Binary.AllowedipsEntry.TotalWrites initial coverage.coverage coverage.preempt a ∨
+                                    Binary.Pair.Trie.CountBytes names input.offsets a)
+                                initial.data.dmem t.data.dmem)
+                        initial
+Binary.Pair.Trie.CallWitness.pre : ∀ (bits : Nat),
+  Eq.{1} bits 32 ∨ Eq.{1} bits 128 →
+    Binary.TrustBase.Pre_allowedips
+      (Binary.Pair.Trie.callConfig Binary.Pair.Trie.Witness.names (Binary.Pair.Trie.Witness.world bits)
+        (Binary.Pair.Trie.Witness.device bits) (some.{0} 0) bits 1)
+      Binary.Pair.Trie.CallWitness.coverage.coverage 0 (UInt64.ofNat stopAddr) (Binary.Pair.Trie.CallWitness.state bits)
+      (Binary.Pair.Trie.Witness.world bits)
+Binary.Pair.Trie.CallWitness.accepted : ∀ (bits : Nat),
+  Eq.{1} bits 32 ∨ Eq.{1} bits 128 →
+    Exists.{1} fun final =>
+      Eq.{1} (StateT.run.{0, 0} (Binary.Source.lookup (some.{0} 0) bits 1) (Binary.Pair.Trie.Witness.world bits))
+        (Except.ok.{0, 0} (Prod.mk.{0, 0} (some.{0} 0) final))
+Binary.Callback.pc_contract : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.ServiceDecoderAgreement fetch → Binary.TrustBase.TracePcContract fetch
+Binary.Callback.cmp4_contract : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.ServiceDecoderAgreement fetch → Binary.TrustBase.TraceCmp4Contract fetch
+Binary.Callback.const_cmp4_contract : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.ServiceDecoderAgreement fetch → Binary.TrustBase.TraceConstCmp4Contract fetch
+Binary.Callback.const_cmp1_contract : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.ServiceDecoderAgreement fetch → Binary.TrustBase.TraceConstCmp1Contract fetch
+Binary.Callback.bh_contract : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.ServiceDecoderAgreement fetch → Binary.TrustBase.BhEnableContract fetch
+Binary.Pair.IndexLookup.lookup_first_return : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.ServiceDecoderAgreement fetch →
+      ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+        {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+        {w : Leanux.World} {query : Nat} {kinds : List.{0} Leanux.WG.IndexKind} {ra : UInt64}
+        {answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId)} {final : Leanux.World},
+        Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+          Binary.TrustBase.FirstReturnCallPermissions fetch permissions initial ra →
+            Binary.Pair.IndexLookup.Pre n o c initial w query kinds ra →
+              Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup kinds query) w)
+                  (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                Eventually (Binary.historyStep fetch)
+                  (fun t =>
+                    Binary.Pair.IndexLookup.Post n o c initial ra answer final t.machine ∧
+                      Binary.ActualHistory fetch initial t.history ∧
+                        Eq.{1} (List.getLast?.{0} t.history) (some.{0} t.machine) ∧
+                          Binary.TrustBase.BeforeOuterReturn initial ra t.history ∧
+                            Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions t.history)
+                  { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.Pair.Remove.remove_first_return : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexRemoveDecoderAgreement fetch →
+    Binary.TrustBase.ServiceDecoderAgreement fetch →
+      ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+        {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+        {w : Leanux.World} {owner : Leanux.WG.IndexOwner} {ra : UInt64} {final : Leanux.World},
+        Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+          Binary.TrustBase.FirstReturnCallPermissions fetch permissions initial ra →
+            Binary.Pair.Remove.Pre n o c initial w owner ra →
+              Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexRemove owner) w)
+                  (Except.ok.{0, 0} (Prod.mk.{0, 0} () final)) →
+                Eventually (Binary.historyStep fetch)
+                  (fun t =>
+                    Binary.Pair.Remove.Post n o c initial ra final t.machine ∧
+                      Binary.ActualHistory fetch initial t.history ∧
+                        Eq.{1} (List.getLast?.{0} t.history) (some.{0} t.machine) ∧
+                          Binary.TrustBase.BeforeOuterReturn initial ra t.history ∧
+                            Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions t.history)
+                  { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.Pair.Replace.replace_first_return : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexReplaceDecoderAgreement fetch →
+    Binary.TrustBase.ServiceDecoderAgreement fetch →
+      ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+        {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+        {w : Leanux.World} {pid : Leanux.WG.PeerId} {kid : Leanux.WG.KeypairId} {ra : UInt64} {answer : Bool}
+        {final : Leanux.World},
+        Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+          Binary.TrustBase.FirstReturnCallPermissions fetch permissions initial ra →
+            Binary.Pair.Replace.Pre n o c initial w pid kid ra →
+              Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexReplaceHandshake pid kid) w)
+                  (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                Eventually (Binary.historyStep fetch)
+                  (fun t =>
+                    Binary.Pair.Replace.Post n o c initial ra answer final t.machine ∧
+                      Binary.ActualHistory fetch initial t.history ∧
+                        Eq.{1} (List.getLast?.{0} t.history) (some.{0} t.machine) ∧
+                          Binary.TrustBase.BeforeOuterReturn initial ra t.history ∧
+                            Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions t.history)
+                  { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.Pair.Sequence.First.sequence_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.IndexRemoveDecoderAgreement fetch →
+      Binary.TrustBase.IndexReplaceDecoderAgreement fetch →
+        Binary.TrustBase.ServiceDecoderAgreement fetch →
+          ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+            {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+            {w : Leanux.World} {ra : UInt64} {calls : List.{0} Binary.Pair.Sequence.Call}
+            {answers : List.{0} Binary.Pair.Sequence.Answer} {finalWorld : Leanux.World},
+            Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+              Binary.TrustBase.FirstReturnDomainPermissions fetch permissions ra
+                  (Binary.Pair.Sequence.EntryDomain n initial ra) →
+                Eq.{1} (Binary.Pair.Sequence.initialCheck n o c initial w ra) (Except.ok.{0, 0} ()) →
+                  Binary.Pair.Sequence.AdmissibleSequence n calls w →
+                    Eq.{1} (StateT.run.{0, 0} (Binary.Pair.Sequence.program calls) w)
+                        (Except.ok.{0, 0} (Prod.mk.{0, 0} answers finalWorld)) →
+                      Binary.Pair.Sequence.Execute fetch n initial ra calls initial
+                        (Binary.Pair.Sequence.First.SequencePost fetch permissions onlineCPUs externalActions n o c
+                          initial initial ra answers finalWorld)
+Binary.Pair.Insert.insert_from_image : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+    Binary.TrustBase.ServiceDecoderAgreement fetch →
+      ∀ {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+        {ra : UInt64} {config : Binary.RandomProvider.Config} {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop}
+        {w : Leanux.World} {owner : Leanux.WG.IndexOwner} {records : List.{0} Leanux.HiddenRecord} {answer : Nat}
+        {final : Leanux.World},
+        Binary.TrustBase.RandomReturnContract fetch config →
+          Binary.TrustBase.RandomInputCoupling fetch config c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)
+              (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+            Binary.Pair.Insert.Pre n o c initial w owner ra config →
+              Eq.{1} w.hidden (some.{0} records) →
+                inputAt initial.data.dmem records →
+                  Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexInsert owner) w)
+                      (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                    Eventually (Binary.instructionStep fetch)
+                      (Binary.Pair.Insert.Post n o c initial ra config inputAt answer final) initial
+Binary.Pair.Insert.insert_simulation_from_image : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+    Binary.TrustBase.ServiceDecoderAgreement fetch →
+      ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+        {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+        {ra : UInt64} {config : Binary.RandomProvider.Config} {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop}
+        {w : Leanux.World} {owner : Leanux.WG.IndexOwner} {records : List.{0} Leanux.HiddenRecord} {answer : Nat}
+        {final : Leanux.World},
+        Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+          Binary.TrustBase.ReturningCallPermissions fetch permissions initial ra →
+            Binary.TrustBase.RandomReturnContract fetch config →
+              Binary.TrustBase.RandomInputCoupling fetch config c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)
+                  (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+                Binary.Pair.Insert.Pre n o c initial w owner ra config →
+                  Eq.{1} w.hidden (some.{0} records) →
+                    inputAt initial.data.dmem records →
+                      Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexInsert owner) w)
+                          (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                        Eventually (Binary.historyStep fetch)
+                          (fun t =>
+                            Binary.Pair.Insert.Post n o c initial ra config inputAt answer final t.machine ∧
+                              Binary.ActualHistory fetch initial t.history ∧
+                                Eq.{1} (List.getLast?.{0} t.history) (some.{0} t.machine) ∧
+                                  Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions
+                                    t.history)
+                          { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.Pair.InsertSequence.sequence_from_image : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.IndexRemoveDecoderAgreement fetch →
+      Binary.TrustBase.IndexReplaceDecoderAgreement fetch →
+        Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+          Binary.TrustBase.ServiceDecoderAgreement fetch →
+            ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+              {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+              {w : Leanux.World} {ra : UInt64} {calls : List.{0} Binary.Pair.InsertSequence.Call}
+              {answers : List.{0} Binary.Pair.InsertSequence.Answer} {finalWorld : Leanux.World}
+              {config : Binary.RandomProvider.Config} {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop}
+              {records : List.{0} Leanux.HiddenRecord},
+              Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+                Binary.TrustBase.ReturningDomainPermissions fetch permissions ra
+                    (Binary.Pair.InsertSequence.EntryDomain n o c initial ra config inputAt) →
+                  Binary.TrustBase.RandomReturnContract fetch config →
+                    Binary.TrustBase.RandomInputCoupling fetch config c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)
+                        (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+                      Eq.{1} (Binary.Pair.InsertSequence.initialCheck n o c initial w ra config) (Except.ok.{0, 0} ()) →
+                        Eq.{1} w.hidden (some.{0} records) →
+                          inputAt initial.data.dmem records →
+                            Binary.Pair.InsertSequence.AdmissibleSequence n calls w →
+                              Eq.{1} (StateT.run.{0, 0} (Binary.Pair.InsertSequence.program calls) w)
+                                  (Except.ok.{0, 0} (Prod.mk.{0, 0} answers finalWorld)) →
+                                Binary.Pair.InsertSequence.Execute fetch n initial ra calls initial
+                                  (Binary.Pair.InsertSequence.SequencePost fetch permissions onlineCPUs externalActions
+                                    n o c initial initial ra config inputAt calls w answers finalWorld)
+Binary.LookupRelation.lookup_simulation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.TraceConstCmp4Contract fetch →
+          Binary.TrustBase.TraceConstCmp1Contract fetch →
+            Binary.TrustBase.BhEnableContract fetch →
+              ∀ (c : Binary.LookupRelation.Config) (coverage : Binary.TrustBase.KcovLayout) (preempt : BitVec 32)
+                (returnAddress : UInt64) (initial : MachineState) (world : Leanux.World) (onlineCPUs : Nat)
+                (externalActions : List.{0} Nat) (permissions : Binary.TrustBase.Permissions),
+                Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+                  Binary.TrustBase.InvocationPermissions fetch permissions initial
+                      (HAdd.hAdd.{0, 0, 0} Binary.Image.Lookup.entry 148) →
+                    Binary.TrustBase.Pre_lookup c coverage preempt returnAddress initial world →
+                      ∀ (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))
+                        (finalWorld : Leanux.World),
+                        Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup c.kinds c.query) world)
+                            (Except.ok.{0, 0} (Prod.mk.{0, 0} answer finalWorld)) →
+                          Eventually (Binary.historyStep fetch)
+                            (fun final =>
+                              Binary.LookupRelation.LookupPost c coverage preempt returnAddress initial world answer
+                                  finalWorld final ∧
+                                Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions
+                                  final.history)
+                            { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.LookupRelation.lookup_transport : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.TraceConstCmp4Contract fetch →
+          Binary.TrustBase.TraceConstCmp1Contract fetch →
+            Binary.TrustBase.BhEnableContract fetch →
+              ∀ (c : Binary.LookupRelation.Config) (coverage : Binary.TrustBase.KcovLayout) (preempt : BitVec 32)
+                (returnAddress : UInt64) (initial : MachineState) (world : Leanux.World) (onlineCPUs : Nat)
+                (externalActions : List.{0} Nat) (permissions : Binary.TrustBase.Permissions),
+                Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+                  Binary.TrustBase.InvocationPermissions fetch permissions initial
+                      (HAdd.hAdd.{0, 0, 0} Binary.Image.Lookup.entry 148) →
+                    Binary.TrustBase.Pre_lookup c coverage preempt returnAddress initial world →
+                      ∀ (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))
+                        (finalWorld : Leanux.World),
+                        Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup c.kinds c.query) world)
+                            (Except.ok.{0, 0} (Prod.mk.{0, 0} answer finalWorld)) →
+                          ∀
+                            (P :
+                              Binary.MirrorHistory.Run
+                                  (Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId)) →
+                                Prop),
+                            (∀
+                                (run :
+                                  Binary.MirrorHistory.Run
+                                    (Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))),
+                                Binary.MirrorHistory.Accepted (Binary.MirrorHistory.lookup c.kinds c.query) world run →
+                                  P run) →
+                              Eventually (Binary.historyStep fetch)
+                                (fun final =>
+                                  Binary.LookupRelation.LookupPost c coverage preempt returnAddress initial world answer
+                                      finalWorld final ∧
+                                    Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions
+                                        final.history ∧
+                                      Exists.{1} fun run =>
+                                        Eq.{1} run.result answer ∧
+                                          Eq.{1} run.finalWorld finalWorld ∧
+                                            Binary.MirrorHistory.Accepted (Binary.MirrorHistory.lookup c.kinds c.query)
+                                                world run ∧
+                                              Binary.LookupRelation.RealizesLookupRun c final run ∧ P run)
+                                { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.LookupRelation.LookupPost.frame : ∀ (c : Binary.LookupRelation.Config) (coverage : Binary.TrustBase.KcovLayout)
+  (preempt : BitVec 32) (ra : UInt64) (initial : MachineState) (world : Leanux.World)
+  (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId)) (finalWorld : Leanux.World)
+  (final : Binary.Executed),
+  Binary.LookupRelation.LookupPost c coverage preempt ra initial world answer finalWorld final →
+    ∀ (F : Mem 64 → Prop),
+      F initial.data.dmem →
+        (∀ (v : Binary.LookupRelation.View),
+            Binary.TrustBase.LookupEntry c coverage preempt ra initial world v →
+              ∀ (before after : Mem 64),
+                Binary.EqualOutside (Binary.LookupRelation.LookupWrites c coverage preempt initial.data v) before
+                    after →
+                  F before → F after) →
+          F final.machine.data.dmem
+Binary.LookupRelation.LookupPost.frame_cuts : ∀ (c : Binary.LookupRelation.Config)
+  (coverage : Binary.TrustBase.KcovLayout) (preempt : BitVec 32) (ra : UInt64) (initial : MachineState)
+  (world : Leanux.World) (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))
+  (finalWorld : Leanux.World) (final : Binary.Executed),
+  Binary.LookupRelation.LookupPost c coverage preempt ra initial world answer finalWorld final →
+    ∀ (F : Mem 64 → Prop),
+      F initial.data.dmem →
+        (∀ (v : Binary.LookupRelation.View),
+            Binary.TrustBase.LookupEntry c coverage preempt ra initial world v →
+              ∀ (before after : Mem 64),
+                Binary.EqualOutside (Binary.LookupRelation.LookupWrites c coverage preempt initial.data v) before
+                    after →
+                  F before → F after) →
+          ∀ (current : MachineState),
+            Membership.mem.{0, 0} final.history current →
+              Membership.mem.{0, 0} Binary.Image.cutPoints current.pc → F current.data.dmem
+@Binary.LookupRelation.lookup_framed_transport : ∀ {α : Type} (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.TraceConstCmp4Contract fetch →
+          Binary.TrustBase.TraceConstCmp1Contract fetch →
+            Binary.TrustBase.BhEnableContract fetch →
+              ∀ (c : Binary.LookupRelation.Config) (coverage : Binary.TrustBase.KcovLayout) (preempt : BitVec 32)
+                (returnAddress : UInt64) (initial : MachineState) (world : Leanux.World) (onlineCPUs : Nat)
+                (externalActions : List.{0} Nat) (permissions : Binary.TrustBase.Permissions),
+                Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+                  Binary.TrustBase.InvocationPermissions fetch permissions initial
+                      (HAdd.hAdd.{0, 0, 0} Binary.Image.Lookup.entry 148) →
+                    Binary.TrustBase.Pre_lookup c coverage preempt returnAddress initial world →
+                      ∀ (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))
+                        (finalWorld : Leanux.World),
+                        Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup c.kinds c.query) world)
+                            (Except.ok.{0, 0} (Prod.mk.{0, 0} answer finalWorld)) →
+                          ∀
+                            (P :
+                              Binary.MirrorHistory.Run
+                                  (Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId)) →
+                                Prop),
+                            (∀
+                                (run :
+                                  Binary.MirrorHistory.Run
+                                    (Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))),
+                                Binary.MirrorHistory.Accepted (Binary.MirrorHistory.lookup c.kinds c.query) world run →
+                                  P run) →
+                              ∀ (observer : Leanux.World → α) (represents : Mem 64 → α → Prop),
+                                represents initial.data.dmem (observer world) →
+                                  (∀ (v : Binary.LookupRelation.View),
+                                      Binary.TrustBase.LookupEntry c coverage preempt returnAddress initial world v →
+                                        ∀ (before after : Mem 64),
+                                          Binary.EqualOutside
+                                              (Binary.LookupRelation.LookupWrites c coverage preempt initial.data v)
+                                              before after →
+                                            represents before (observer world) → represents after (observer world)) →
+                                    (∀
+                                        (run :
+                                          Binary.MirrorHistory.Run
+                                            (Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))),
+                                        Binary.MirrorHistory.Accepted (Binary.MirrorHistory.lookup c.kinds c.query)
+                                            world run →
+                                          Eq.{1} (observer run.finalWorld) (observer world) ∧
+                                            ∀ (point : Binary.MirrorHistory.Point),
+                                              Membership.mem.{0, 0} run.points point →
+                                                Eq.{1} (observer point.world) (observer world)) →
+                                      Eventually (Binary.historyStep fetch)
+                                        (fun final =>
+                                          Binary.LookupRelation.LookupPost c coverage preempt returnAddress initial
+                                              world answer finalWorld final ∧
+                                            Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions
+                                                final.history ∧
+                                              Exists.{1} fun run =>
+                                                Eq.{1} run.result answer ∧
+                                                  Eq.{1} run.finalWorld finalWorld ∧
+                                                    Binary.MirrorHistory.Accepted
+                                                        (Binary.MirrorHistory.lookup c.kinds c.query) world run ∧
+                                                      Binary.LookupRelation.FramedLookupRun c observer represents final
+                                                          run ∧
+                                                        P run)
+                                        { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.LookupRelation.lookup_snapshot_transport : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.TraceConstCmp4Contract fetch →
+          Binary.TrustBase.TraceConstCmp1Contract fetch →
+            Binary.TrustBase.BhEnableContract fetch →
+              ∀ (c : Binary.LookupRelation.Config) (coverage : Binary.TrustBase.KcovLayout) (preempt : BitVec 32)
+                (returnAddress : UInt64) (initial : MachineState) (world : Leanux.World) (onlineCPUs : Nat)
+                (externalActions : List.{0} Nat) (permissions : Binary.TrustBase.Permissions),
+                Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+                  Binary.TrustBase.InvocationPermissions fetch permissions initial
+                      (HAdd.hAdd.{0, 0, 0} Binary.Image.Lookup.entry 148) →
+                    Binary.TrustBase.Pre_lookup c coverage preempt returnAddress initial world →
+                      ∀ (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))
+                        (finalWorld : Leanux.World),
+                        Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup c.kinds c.query) world)
+                            (Except.ok.{0, 0} (Prod.mk.{0, 0} answer finalWorld)) →
+                          ∀
+                            (P :
+                              Binary.MirrorHistory.Run
+                                  (Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId)) →
+                                Prop),
+                            (∀
+                                (run :
+                                  Binary.MirrorHistory.Run
+                                    (Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))),
+                                Binary.MirrorHistory.Accepted (Binary.MirrorHistory.lookup c.kinds c.query) world run →
+                                  P run) →
+                              Binary.LookupRelation.ReceivingSnapshotFields c.keypairs initial.data.dmem
+                                  (Binary.LookupSourceFrame.receivingSnapshot world) →
+                                (∀ (v : Binary.LookupRelation.View),
+                                    Binary.TrustBase.LookupEntry c coverage preempt returnAddress initial world v →
+                                      ∀ (a : Binary.Address),
+                                        Binary.LookupRelation.ReceivingSnapshotReads c.keypairs
+                                            (Binary.LookupSourceFrame.receivingSnapshot world) a →
+                                          ¬Binary.LookupRelation.LookupWrites c coverage preempt initial.data v a) →
+                                  Eventually (Binary.historyStep fetch)
+                                    (fun final =>
+                                      Binary.LookupRelation.LookupPost c coverage preempt returnAddress initial world
+                                          answer finalWorld final ∧
+                                        Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions
+                                            final.history ∧
+                                          Exists.{1} fun run =>
+                                            Eq.{1} run.result answer ∧
+                                              Eq.{1} run.finalWorld finalWorld ∧
+                                                Binary.MirrorHistory.Accepted
+                                                    (Binary.MirrorHistory.lookup c.kinds c.query) world run ∧
+                                                  Binary.LookupRelation.FramedLookupRun c
+                                                      Binary.LookupSourceFrame.receivingSnapshot
+                                                      (Binary.LookupRelation.ReceivingSnapshotFields c.keypairs) final
+                                                      run ∧
+                                                    P run)
+                                    { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.LookupSourceFrame.lookup_receivingSnapshot : ∀ (kinds : List.{0} Leanux.WG.IndexKind) (index : Nat)
+  (world final : Leanux.World) (answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId))
+  (points : List.{0} Binary.MirrorHistory.Point),
+  Eq.{1} (StateT.run.{0, 0} (StateT.run.{0, 0} (Binary.MirrorHistory.lookup kinds index) List.nil.{0}) world)
+      (Except.ok.{0, 0} (Prod.mk.{0, 0} (Prod.mk.{0, 0} answer points) final)) →
+    Eq.{1} (Binary.LookupSourceFrame.receivingSnapshot final) (Binary.LookupSourceFrame.receivingSnapshot world) ∧
+      ∀ (point : Binary.MirrorHistory.Point),
+        Membership.mem.{0, 0} points point →
+          Eq.{1} (Binary.LookupSourceFrame.receivingSnapshot point.world)
+            (Binary.LookupSourceFrame.receivingSnapshot world)
+Binary.LookupWitness.witness_pre : Binary.TrustBase.Pre_lookup Binary.LookupWitness.config Binary.LookupWitness.coverage
+  0 5242880 Binary.LookupWitness.initial Binary.LookupWitness.world
+Binary.LookupHitWitness.dead_pre : Binary.TrustBase.Pre_lookup Binary.LookupHitWitness.config
+  Binary.LookupWitness.coverage 0 5242880 (Binary.LookupHitWitness.initial false) (Binary.LookupHitWitness.world false)
+Binary.LookupHitWitness.live_pre : Binary.TrustBase.Pre_lookup Binary.LookupHitWitness.config
+  Binary.LookupWitness.coverage 0 5242880 (Binary.LookupHitWitness.initial true) (Binary.LookupHitWitness.world true)
+Binary.AllowedipsWitness.pre4 : Binary.TrustBase.Pre_allowedips Binary.AllowedipsWitness.config4
+  Binary.AllowedipsWitness.coverage 512 5242880 Binary.AllowedipsWitness.initial4 Binary.AllowedipsWitness.world
+Binary.AllowedipsWitness.pre6 : Binary.TrustBase.Pre_allowedips Binary.AllowedipsWitness.config6
+  Binary.AllowedipsWitness.coverage 512 5242880 Binary.AllowedipsWitness.initial6 Binary.AllowedipsWitness.world
+Binary.Pair.Remove.remove_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexRemoveDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.BhEnableContract fetch →
+        ∀ {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+          {w : Leanux.World} {owner : Leanux.WG.IndexOwner} {ra : UInt64} {final : Leanux.World},
+          Binary.Pair.Remove.Pre n o c initial w owner ra →
+            Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexRemove owner) w)
+                (Except.ok.{0, 0} (Prod.mk.{0, 0} () final)) →
+              Eventually (Binary.instructionStep fetch) (Binary.Pair.Remove.Post n o c initial ra final) initial
+Binary.Pair.Remove.remove_simulation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexRemoveDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.BhEnableContract fetch →
+        ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+          {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+          {w : Leanux.World} {owner : Leanux.WG.IndexOwner} {ra : UInt64} {final : Leanux.World},
+          Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+            Binary.TrustBase.ReturningCallPermissions fetch permissions initial ra →
+              Binary.Pair.Remove.Pre n o c initial w owner ra →
+                Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexRemove owner) w)
+                    (Except.ok.{0, 0} (Prod.mk.{0, 0} () final)) →
+                  Eventually (Binary.historyStep fetch)
+                    (fun t =>
+                      Binary.Pair.Remove.Post n o c initial ra final t.machine ∧
+                        Binary.ActualHistory fetch initial t.history ∧
+                          Eq.{1} (List.getLast?.{0} t.history) (some.{0} t.machine) ∧
+                            Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions t.history)
+                    { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.Pair.Replace.replace_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexReplaceDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.BhEnableContract fetch →
+        ∀ {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+          {w : Leanux.World} {pid : Leanux.WG.PeerId} {kid : Leanux.WG.KeypairId} {ra : UInt64} {answer : Bool}
+          {final : Leanux.World},
+          Binary.Pair.Replace.Pre n o c initial w pid kid ra →
+            Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexReplaceHandshake pid kid) w)
+                (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+              Eventually (Binary.instructionStep fetch) (Binary.Pair.Replace.Post n o c initial ra answer final) initial
+Binary.Pair.Replace.replace_simulation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexReplaceDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.BhEnableContract fetch →
+        ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+          {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+          {w : Leanux.World} {pid : Leanux.WG.PeerId} {kid : Leanux.WG.KeypairId} {ra : UInt64} {answer : Bool}
+          {final : Leanux.World},
+          Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+            Binary.TrustBase.ReturningCallPermissions fetch permissions initial ra →
+              Binary.Pair.Replace.Pre n o c initial w pid kid ra →
+                Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexReplaceHandshake pid kid) w)
+                    (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                  Eventually (Binary.historyStep fetch)
+                    (fun t =>
+                      Binary.Pair.Replace.Post n o c initial ra answer final t.machine ∧
+                        Binary.ActualHistory fetch initial t.history ∧
+                          Eq.{1} (List.getLast?.{0} t.history) (some.{0} t.machine) ∧
+                            Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions t.history)
+                    { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.Pair.IndexLookup.lookup_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.TraceConstCmp4Contract fetch →
+          Binary.TrustBase.TraceConstCmp1Contract fetch →
+            Binary.TrustBase.BhEnableContract fetch →
+              ∀ {n : Binary.Pair.Names} {o : Offsets} {coverage : Binary.CommonBitsCoverage.Context}
+                {initial : MachineState} {w : Leanux.World} {query : Nat} {kinds : List.{0} Leanux.WG.IndexKind}
+                {ra : UInt64} {answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId)}
+                {finalWorld : Leanux.World},
+                Binary.Pair.IndexLookup.Pre n o coverage initial w query kinds ra →
+                  Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup kinds query) w)
+                      (Except.ok.{0, 0} (Prod.mk.{0, 0} answer finalWorld)) →
+                    Eventually (Binary.instructionStep fetch)
+                      (Binary.Pair.IndexLookup.Post n o coverage initial ra answer finalWorld) initial
+Binary.Pair.IndexLookup.lookup_simulation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.TraceConstCmp4Contract fetch →
+          Binary.TrustBase.TraceConstCmp1Contract fetch →
+            Binary.TrustBase.BhEnableContract fetch →
+              ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+                {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+                {w : Leanux.World} {query : Nat} {kinds : List.{0} Leanux.WG.IndexKind} {ra : UInt64}
+                {answer : Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId)} {final : Leanux.World},
+                Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+                  Binary.TrustBase.ReturningCallPermissions fetch permissions initial ra →
+                    Binary.Pair.IndexLookup.Pre n o c initial w query kinds ra →
+                      Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexLookup kinds query) w)
+                          (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                        Eventually (Binary.historyStep fetch)
+                          (fun t =>
+                            Binary.Pair.IndexLookup.Post n o c initial ra answer final t.machine ∧
+                              Binary.ActualHistory fetch initial t.history ∧
+                                Eq.{1} (List.getLast?.{0} t.history) (some.{0} t.machine) ∧
+                                  Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions
+                                    t.history)
+                          { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.Pair.Sequence.sequence_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.IndexRemoveDecoderAgreement fetch →
+      Binary.TrustBase.IndexReplaceDecoderAgreement fetch →
+        Binary.TrustBase.TracePcContract fetch →
+          Binary.TrustBase.TraceCmp4Contract fetch →
+            Binary.TrustBase.TraceConstCmp4Contract fetch →
+              Binary.TrustBase.TraceConstCmp1Contract fetch →
+                Binary.TrustBase.BhEnableContract fetch →
+                  ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+                    {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context}
+                    {initial : MachineState} {w : Leanux.World} {ra : UInt64}
+                    {calls : List.{0} Binary.Pair.Sequence.Call} {answers : List.{0} Binary.Pair.Sequence.Answer}
+                    {finalWorld : Leanux.World},
+                    Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+                      Binary.TrustBase.ReturningDomainPermissions fetch permissions ra
+                          (Binary.Pair.Sequence.EntryDomain n initial ra) →
+                        Eq.{1} (Binary.Pair.Sequence.initialCheck n o c initial w ra) (Except.ok.{0, 0} ()) →
+                          Binary.Pair.Sequence.AdmissibleSequence n calls w →
+                            Eq.{1} (StateT.run.{0, 0} (Binary.Pair.Sequence.program calls) w)
+                                (Except.ok.{0, 0} (Prod.mk.{0, 0} answers finalWorld)) →
+                              Binary.Pair.Sequence.Execute fetch n initial ra calls initial
+                                (Binary.Pair.Sequence.SequencePost fetch permissions onlineCPUs externalActions n o c
+                                  initial initial ra answers finalWorld)
+Binary.Pair.Remove.Witness.check_linked : Binary.Pair.Remove.Pre Binary.Pair.Remove.Witness.names
+  Binary.Pair.Remove.Witness.offsets Binary.Pair.Remove.Witness.context (Binary.Pair.Remove.Witness.state true)
+  (Binary.Pair.Remove.Witness.world true) (Leanux.WG.IndexOwner.keypair 0) (UInt64.ofNat stopAddr)
+Binary.Pair.Remove.Witness.check_unhashed : Binary.Pair.Remove.Pre Binary.Pair.Remove.Witness.names
+  Binary.Pair.Remove.Witness.offsets Binary.Pair.Remove.Witness.context (Binary.Pair.Remove.Witness.state false)
+  (Binary.Pair.Remove.Witness.world false) (Leanux.WG.IndexOwner.keypair 0) (UInt64.ofNat stopAddr)
+Binary.Pair.Remove.Witness.executes : ∀ (linked : Bool) (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexRemoveDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.BhEnableContract fetch →
+        Eventually (Binary.instructionStep fetch)
+          (Binary.Pair.Remove.Post Binary.Pair.Remove.Witness.names Binary.Pair.Remove.Witness.offsets
+            Binary.Pair.Remove.Witness.context (Binary.Pair.Remove.Witness.state linked) (UInt64.ofNat stopAddr)
+            (Binary.Pair.Remove.sourceFinal (Binary.Pair.Remove.Witness.world linked)
+              (Binary.Pair.Remove.Witness.device linked) (Leanux.WG.IndexOwner.keypair 0)))
+          (Binary.Pair.Remove.Witness.state linked)
+Binary.Pair.Replace.Witness.check_linked : Binary.Pair.Replace.Pre Binary.Pair.Replace.Witness.names
+  Binary.Pair.Replace.Witness.offsets Binary.Pair.Replace.Witness.context (Binary.Pair.Replace.Witness.state true)
+  (Binary.Pair.Replace.Witness.world true) 0 0 (UInt64.ofNat stopAddr)
+Binary.Pair.Replace.Witness.check_unhashed : Binary.Pair.Replace.Pre Binary.Pair.Replace.Witness.names
+  Binary.Pair.Replace.Witness.offsets Binary.Pair.Replace.Witness.context (Binary.Pair.Replace.Witness.state false)
+  (Binary.Pair.Replace.Witness.world false) 0 0 (UInt64.ofNat stopAddr)
+Binary.Pair.Replace.Witness.executes : ∀ (linked : Bool) (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexReplaceDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.BhEnableContract fetch →
+        Eventually (Binary.instructionStep fetch)
+          (Binary.Pair.Replace.Post Binary.Pair.Replace.Witness.names Binary.Pair.Replace.Witness.offsets
+            Binary.Pair.Replace.Witness.context (Binary.Pair.Replace.Witness.state linked) (UInt64.ofNat stopAddr)
+            (Binary.Pair.Replace.sourceAnswer (Binary.Pair.Replace.Witness.device linked) 0)
+            (Binary.Pair.Replace.sourceFinal (Binary.Pair.Replace.Witness.world linked)
+              (Binary.Pair.Replace.Witness.device linked) 0 0))
+          (Binary.Pair.Replace.Witness.state linked)
+Binary.Pair.Insert.insert_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.BhEnableContract fetch →
+          ∀ {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+            {ra : UInt64} {config : Binary.RandomProvider.Config}
+            {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop} {w : Leanux.World} {owner : Leanux.WG.IndexOwner}
+            {records : List.{0} Leanux.HiddenRecord} {answer : Nat} {final : Leanux.World},
+            Binary.TrustBase.RandomReturnContract fetch config →
+              Binary.TrustBase.RandomInputCoupling fetch config c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)
+                  (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+                Binary.Pair.Insert.Pre n o c initial w owner ra config →
+                  Eq.{1} w.hidden (some.{0} records) →
+                    inputAt initial.data.dmem records →
+                      Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexInsert owner) w)
+                          (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                        Eventually (Binary.instructionStep fetch)
+                          (Binary.Pair.Insert.Post n o c initial ra config inputAt answer final) initial
+Binary.Pair.Insert.insert_simulation : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.BhEnableContract fetch →
+          ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+            {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context} {initial : MachineState}
+            {ra : UInt64} {config : Binary.RandomProvider.Config}
+            {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop} {w : Leanux.World} {owner : Leanux.WG.IndexOwner}
+            {records : List.{0} Leanux.HiddenRecord} {answer : Nat} {final : Leanux.World},
+            Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+              Binary.TrustBase.ReturningCallPermissions fetch permissions initial ra →
+                Binary.TrustBase.RandomReturnContract fetch config →
+                  Binary.TrustBase.RandomInputCoupling fetch config c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)
+                      (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+                    Binary.Pair.Insert.Pre n o c initial w owner ra config →
+                      Eq.{1} w.hidden (some.{0} records) →
+                        inputAt initial.data.dmem records →
+                          Eq.{1} (StateT.run.{0, 0} (Binary.Source.indexInsert owner) w)
+                              (Except.ok.{0, 0} (Prod.mk.{0, 0} answer final)) →
+                            Eventually (Binary.historyStep fetch)
+                              (fun t =>
+                                Binary.Pair.Insert.Post n o c initial ra config inputAt answer final t.machine ∧
+                                  Binary.ActualHistory fetch initial t.history ∧
+                                    Eq.{1} (List.getLast?.{0} t.history) (some.{0} t.machine) ∧
+                                      Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions
+                                        t.history)
+                              { machine := initial, history := List.cons.{0} initial List.nil.{0} }
+Binary.Pair.InsertSequence.sequence_checked : ∀ (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.AnchoredDecoderAgreement fetch →
+    Binary.TrustBase.IndexRemoveDecoderAgreement fetch →
+      Binary.TrustBase.IndexReplaceDecoderAgreement fetch →
+        Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+          Binary.TrustBase.TracePcContract fetch →
+            Binary.TrustBase.TraceCmp4Contract fetch →
+              Binary.TrustBase.TraceConstCmp4Contract fetch →
+                Binary.TrustBase.TraceConstCmp1Contract fetch →
+                  Binary.TrustBase.BhEnableContract fetch →
+                    ∀ (permissions : Binary.TrustBase.Permissions) (onlineCPUs : Nat) (externalActions : List.{0} Nat)
+                      {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context}
+                      {initial : MachineState} {w : Leanux.World} {ra : UInt64}
+                      {calls : List.{0} Binary.Pair.InsertSequence.Call}
+                      {answers : List.{0} Binary.Pair.InsertSequence.Answer} {finalWorld : Leanux.World}
+                      {config : Binary.RandomProvider.Config} {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop}
+                      {records : List.{0} Leanux.HiddenRecord},
+                      Binary.TrustBase.SerializedEnvironment onlineCPUs externalActions →
+                        Binary.TrustBase.ReturningDomainPermissions fetch permissions ra
+                            (Binary.Pair.InsertSequence.EntryDomain n o c initial ra config inputAt) →
+                          Binary.TrustBase.RandomReturnContract fetch config →
+                            Binary.TrustBase.RandomInputCoupling fetch config c.coverage
+                                (HAdd.hAdd.{0, 0, 0} c.preempt 512)
+                                (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+                              Eq.{1} (Binary.Pair.InsertSequence.initialCheck n o c initial w ra config)
+                                  (Except.ok.{0, 0} ()) →
+                                Eq.{1} w.hidden (some.{0} records) →
+                                  inputAt initial.data.dmem records →
+                                    Binary.Pair.InsertSequence.AdmissibleSequence n calls w →
+                                      Eq.{1} (StateT.run.{0, 0} (Binary.Pair.InsertSequence.program calls) w)
+                                          (Except.ok.{0, 0} (Prod.mk.{0, 0} answers finalWorld)) →
+                                        Binary.Pair.InsertSequence.Execute fetch n initial ra calls initial
+                                          (Binary.Pair.InsertSequence.SequencePost fetch permissions onlineCPUs
+                                            externalActions n o c initial initial ra config inputAt calls w answers
+                                            finalWorld)
+Binary.Pair.Insert.Witness.check : ∀ (linked : Bool),
+  Binary.Pair.Insert.Pre Binary.Pair.Insert.Witness.names Binary.Pair.Insert.Witness.offsets
+    Binary.Pair.Insert.Witness.context (Binary.Pair.Insert.Witness.state linked)
+    (Binary.Pair.Insert.Witness.world linked) (Leanux.WG.IndexOwner.keypair 0) (UInt64.ofNat stopAddr)
+    Binary.Pair.Insert.Witness.config
+Binary.Pair.Insert.Witness.source_success : ∀ (linked : Bool),
+  Exists.{1} fun final =>
+    Eq.{1}
+      (StateT.run.{0, 0} (Binary.Source.indexInsert (Leanux.WG.IndexOwner.keypair 0))
+        (Binary.Pair.Insert.Witness.world linked))
+      (Except.ok.{0, 0} (Prod.mk.{0, 0} 7 final))
+Binary.Pair.Insert.Witness.executes : ∀ (linked : Bool) (fetch : Int64 → Option.{0} Binary.Decoded),
+  Binary.TrustBase.IndexInsertDecoderAgreement fetch →
+    Binary.TrustBase.TracePcContract fetch →
+      Binary.TrustBase.TraceCmp4Contract fetch →
+        Binary.TrustBase.BhEnableContract fetch →
+          Binary.TrustBase.RandomReturnContract fetch Binary.Pair.Insert.Witness.config →
+            ∀ (inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop),
+              Binary.TrustBase.RandomInputCoupling fetch Binary.Pair.Insert.Witness.config
+                  Binary.Pair.Insert.Witness.context.coverage
+                  (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.Witness.context.preempt 512)
+                  (HAdd.hAdd.{0, 0, 0} Binary.Pair.Insert.codeEntry 121).toUInt64 inputAt →
+                inputAt (Binary.Pair.Insert.Witness.state linked).data.dmem
+                    (List.cons.{0} (Binary.Pair.Insert.record 7) List.nil.{0}) →
+                  Exists.{1} fun final =>
+                    Eq.{1}
+                        (StateT.run.{0, 0} (Binary.Source.indexInsert (Leanux.WG.IndexOwner.keypair 0))
+                          (Binary.Pair.Insert.Witness.world linked))
+                        (Except.ok.{0, 0} (Prod.mk.{0, 0} 7 final)) ∧
+                      Eventually (Binary.instructionStep fetch)
+                        (Binary.Pair.Insert.Post Binary.Pair.Insert.Witness.names Binary.Pair.Insert.Witness.offsets
+                          Binary.Pair.Insert.Witness.context (Binary.Pair.Insert.Witness.state linked)
+                          (UInt64.ofNat stopAddr) Binary.Pair.Insert.Witness.config inputAt 7 final)
+                        (Binary.Pair.Insert.Witness.state linked)
+Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.Decoded)
+  {config : Binary.RandomProvider.Config} {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop}
+  {coverage : Binary.TrustBase.KcovLayout} {preempt : BitVec 32} {ra : UInt64},
+  Binary.TrustBase.RandomReturnContract fetch config →
+    Binary.TrustBase.RandomInputCoupling fetch config coverage preempt ra inputAt →
+      ∀ {s : MachineState} {records : List.{0} Leanux.HiddenRecord} {value : Nat} {rest : List.{0} Leanux.HiddenRecord},
+        Eq.{1} s.pc (Int64.ofNat 18446744071582470656) →
+          Binary.TrustBase.RandomReady config coverage preempt s →
+            Binary.TrustBase.EntryFrame s ra →
+              inputAt s.data.dmem records →
+                Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
+                  Eventually (Binary.instructionStep fetch)
+                    (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
+@[reducible] def Binary.M : Type → Type :=
+Leanux.M
+@[reducible] def Binary.Source.indexLookup : List.{0} Leanux.WG.IndexKind →
+  Nat → Leanux.M (Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId)) :=
+fun kinds index => Leanux.liftWG (Leanux.WG.indexLookup kinds index)
+@[reducible] def Binary.Source.indexRemove : Leanux.WG.IndexOwner → Leanux.M Unit :=
+fun owner => Leanux.liftWG (Leanux.WG.liftIndex (Leanux.WG.indexRemove owner))
+@[reducible] def Binary.Source.indexReplaceHandshake : Leanux.WG.PeerId → Leanux.WG.KeypairId → Leanux.M Bool :=
+fun pid kid => Leanux.liftWG (Leanux.WG.liftIndex (Leanux.WG.indexReplaceHandshake pid kid))
+@[reducible] def Binary.Source.indexInsert : Leanux.WG.IndexOwner → Leanux.M Nat :=
+fun owner => Leanux.liftWG (Leanux.WG.liftIndex (Leanux.WG.indexInsert owner))
+@[reducible] def Binary.Source.lookup : Option.{0} Leanux.WG.NodeId →
+  Nat → Nat → Leanux.M (Option.{0} Leanux.WG.PeerId) :=
+fun root bits key => Leanux.liftWG (Leanux.WG.lookup root bits key)
+@[reducible] def Binary.Source.findNode : Option.{0} Leanux.WG.NodeId →
+  Nat → Nat → Leanux.M (Option.{0} Leanux.WG.NodeId) :=
+fun root bits key => Leanux.liftWG (Leanux.WG.liftAip (Leanux.WG.findNode root bits key))
+@[reducible] def Binary.Source.peerGetMaybeZero : Option.{0} Leanux.WG.PeerId →
+  Leanux.M (Option.{0} Leanux.WG.PeerId) :=
+fun peer => Leanux.liftWG (Leanux.WG.peerGetMaybeZero peer)
+def Leanux.liftWG : {α : Type} → Leanux.WG.M α → Leanux.M α :=
+fun {α} x w => do
+  let __x ← StateT.run.{0, 0} (StateT.run.{0, 0} x w.wg) w.ambient
+  match __x with
+    | Prod.mk.{0, 0} (Prod.mk.{0, 0} a wg) ambient =>
+      pure.{0, 0}
+        (Prod.mk.{0, 0} a
+          { ambient := ambient, tasks := w.tasks, seccomp := w.seccomp, fs := w.fs, wg := wg, fixture := w.fixture })
+def Binary.Pair.Trie.callBoundary : Binary.Pair.Trie.Names →
+  AllowedipsProbe.Input →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Option.{0} Leanux.WG.NodeId → Nat → Nat → UInt64 → Except.{0, 0} String Unit :=
+fun names input coverage initial w root width key ra => do
+  Binary.Pair.Trie.assertAt names input.offsets initial.data.dmem w
+  Binary.Pair.Trie.callInput names input.offsets initial.data.dmem root width key
+  let __do_lift ← Binary.Pair.Trie.address names.nodes root
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    Binary.Pair.Trie.callFrameCheck names input.offsets coverage initial ra width key
+  ite.{1}
+      (Eq.{1}
+        (BEq.beq.{0} initial.pc Binary.AllowedipsImage.Lookup.entry &&
+            BEq.beq.{0} initial.data.regs.rdi.toNat __do_lift &&
+          BEq.beq.{0} initial.data.regs.rsi.toNat width)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "call.abi-input"
+      __do_jp __r
+def Binary.Pair.Trie.initialBoundary : Binary.Pair.Trie.Names →
+  AllowedipsProbe.Input →
+    Binary.CommonBitsCoverage.Context →
+      MachineState →
+        Leanux.World →
+          Option.{0} Leanux.WG.NodeId → Nat → Nat → optParam.{1} Nat stackAddr → Except.{0, 0} String Unit :=
+fun names input c s w root width key stack => do
+  Binary.Pair.Trie.assertAt names input.offsets s.data.dmem w
+  Binary.Pair.Trie.callInput names input.offsets s.data.dmem root width key
+  Binary.Pair.Trie.locals names input s root width key root none.{0} stack
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    have __do_jp := fun __r =>
+      have __do_jp := fun __r =>
+        ite.{1}
+          (Eq.{1}
+            (Binary.Pair.spansApart
+              (List.cons.{0}
+                (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} s.data.regs.rsp.toBitVec 16).toNat (HDiv.hDiv.{0, 0, 0} width 8))
+                List.nil.{0})
+              (Binary.Pair.Trie.loopWrites c s.data))
+            true)
+          (pure.{0, 0} ()) (throw.{0, 0, 0} "boundary.query-separation");
+      ite.{1}
+        (Eq.{1}
+          (Binary.Pair.spansApart (Binary.Pair.Trie.decoderSpans names input.offsets)
+            (Binary.Pair.Trie.loopWrites c s.data))
+          true)
+        (__do_jp ()) do
+        let __r ← throw.{0, 0, 0} "boundary.decoder-separation"
+        __do_jp __r;
+    ite.{1} (Eq.{1} (Binary.Pair.Trie.frameCheck c s.data) true) (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "boundary.callback-frame"
+      __do_jp __r
+  ite.{1}
+      (Eq.{1} (BEq.beq.{0} s.pc (HAdd.hAdd.{0, 0, 0} Binary.AllowedipsImage.Lookup.entry 213) && Option.isSome.{0} root)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "boundary.header"
+      __do_jp __r
+def Binary.Pair.Trie.Corresponds : Binary.Pair.Trie.Names →
+  AllowedipsProbe.Offsets → DataMem → Leanux.WG.Device → Prop :=
+fun names o m d => Eq.{1} (Binary.Pair.Trie.reconstruct names o m) (Except.ok.{0, 0} (Binary.Pair.Trie.target d))
+def Binary.Pair.Sequence.First.SequencePost : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.TrustBase.Permissions →
+    Nat →
+      List.{0} Nat →
+        Binary.Pair.Names →
+          Offsets →
+            Binary.CommonBitsCoverage.Context →
+              MachineState →
+                MachineState →
+                  UInt64 →
+                    List.{0} Binary.Pair.Sequence.Answer →
+                      Leanux.World → List.{0} Binary.Pair.Sequence.CallRecord → MachineState → Prop :=
+fun fetch permissions onlineCPUs externalActions n o c base current ra answers finalWorld records final =>
+  Binary.Pair.Sequence.SequencePost fetch permissions onlineCPUs externalActions n o c base current ra answers
+      finalWorld records final ∧
+    ∀ (record : Binary.Pair.Sequence.CallRecord),
+      Membership.mem.{0, 0} records record →
+        Binary.TrustBase.BeforeOuterReturn (Prod.fst.{0, 0} record) ra (Prod.snd.{0, 0} record).history
+def Binary.LookupRelation.R : Binary.LookupRelation.Config →
+  List.{0} MachineState → List.{0} Binary.LookupObservation.Point → MachineState → Leanux.World → Prop :=
+fun c raw seen s w =>
+  Eq.{1} (List.getLast?.{0} raw) (some.{0} s) ∧
+    (Exists.{1} fun v =>
+        Eq.{1} (Binary.LookupRelation.project c w) (some.{0} v) ∧ Binary.LookupRelation.Physical c raw seen s v) ∧
+      Binary.LookupRelation.StepsAt c seen w
+def Binary.LookupRelation.LookupPost : Binary.LookupRelation.Config →
+  Binary.TrustBase.KcovLayout →
+    BitVec 32 →
+      UInt64 →
+        MachineState →
+          Leanux.World →
+            Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId) → Leanux.World → Binary.Executed → Prop :=
+fun c coverage preempt ra entry world answer finalWorld final =>
+  Binary.TrustBase.Returned entry final.machine ra ∧
+    Binary.LookupRelation.LookupResult c entry final.machine answer ∧
+      Exists.{1} fun v =>
+        Exists.{1} fun points =>
+          Exists.{1} fun source =>
+            Binary.TrustBase.LookupEntry c coverage preempt ra entry world v ∧
+              Binary.EqualOutside (Binary.LookupRelation.LookupWrites c coverage preempt entry.data v) entry.data.dmem
+                  final.machine.data.dmem ∧
+                Eq.{1}
+                    (StateT.run.{0, 0} (StateT.run.{0, 0} (Binary.MirrorHistory.lookup c.kinds c.query) List.nil.{0})
+                      world)
+                    (Except.ok.{0, 0} (Prod.mk.{0, 0} (Prod.mk.{0, 0} answer source) finalWorld)) ∧
+                  Eq.{1} (Binary.LookupObservation.observe c.rxSection final.history) (Except.ok.{0, 0} points) ∧
+                    Binary.LookupObservation.MatchesPoints
+                        (Binary.ExecutedCorrespondence.AtPoint (Binary.LookupRelation.R c) c.rxSection final.history)
+                        points source ∧
+                      Binary.ExecutedCorrespondence.CutsAligned (Binary.LookupRelation.R c) c.rxSection final.history
+                          source ∧
+                        Binary.LookupRelation.R c final.history points final.machine finalWorld ∧
+                          Binary.CutFrames (Binary.LookupRelation.LookupWrites c coverage preempt entry.data v)
+                              entry.data.dmem final.history ∧
+                            Binary.TrustBase.LookupCoverageAt coverage preempt v final.machine.data.dmem ∧
+                              Eq.{1}
+                                  (Binary.TrustBase.load32 final.machine.data.dmem Binary.TrustBase.preemptCountAddress)
+                                  (some.{0} preempt) ∧
+                                (Binary.TrustBase.LookupPendingRead preempt →
+                                    Eq.{1}
+                                      (Mem.loadInt final.machine.data.dmem Binary.TrustBase.softirqPendingAddress 2)
+                                      (some.{0} 0)) ∧
+                                  Binary.EndsAtReturn (HAdd.hAdd.{0, 0, 0} Binary.Image.Lookup.entry 148) final.history
+def Binary.EffectSuccessor : Effects → MachineState → Prop :=
+fun x x_1 => Effects.brecOn.{1} (motive := fun x => MachineState → Prop) x Binary.EffectSuccessor._f x_1
+def Binary.InstructionSuccessor : [Labels] → (Int64 → Option.{0} Binary.Decoded) → MachineState → MachineState → Prop :=
+fun [Labels] fetch s t =>
+  Exists.{1} fun decoded =>
+    Eq.{1} (fetch s.pc) (some.{0} decoded) ∧
+      GT.gt.{0} decoded.size 0 ∧
+        Binary.EffectSuccessor
+          (decoded.instruction.interp s.data (s.pc...HAdd.hAdd.{0, 0, 0} s.pc (Int64.ofNat decoded.size))
+            (fun d => Effects.done { data := d, pc := HAdd.hAdd.{0, 0, 0} s.pc (Int64.ofNat decoded.size) }) fun pc d =>
+            Effects.done { data := d, pc := pc })
+          t
+inductive Binary.ActualHistory : [Labels] →
+  (Int64 → Option.{0} Binary.Decoded) → MachineState → List.{0} MachineState → Prop
+number of parameters: 3
+constructors:
+Binary.ActualHistory.start : ∀ [inst : Labels] {fetch : Int64 → Option.{0} Binary.Decoded} {initial : MachineState},
+  Binary.ActualHistory fetch initial (List.cons.{0} initial List.nil.{0})
+Binary.ActualHistory.snoc : ∀ [inst : Labels] {fetch : Int64 → Option.{0} Binary.Decoded} {initial : MachineState}
+  {history : List.{0} MachineState} {current next : MachineState},
+  Binary.ActualHistory fetch initial history →
+    Eq.{1} (List.getLast?.{0} history) (some.{0} current) →
+      Binary.InstructionSuccessor fetch current next →
+        Binary.ActualHistory fetch initial (HAppend.hAppend.{0, 0, 0} history (List.cons.{0} next List.nil.{0}))
+def Binary.NoEarlyReturn : Int64 → List.{0} MachineState → Prop :=
+fun returnPC history =>
+  ∀ (s : MachineState), Membership.mem.{0, 0} (List.dropLast.{0} (List.dropLast.{0} history)) s → Ne.{1} s.pc returnPC
+def Binary.EndsAtReturn : Int64 → List.{0} MachineState → Prop :=
+fun returnPC history =>
+  Exists.{1} fun front =>
+    Exists.{1} fun before =>
+      Exists.{1} fun after =>
+        Eq.{1} history (HAppend.hAppend.{0, 0, 0} front (List.cons.{0} before (List.cons.{0} after List.nil.{0}))) ∧
+          Eq.{1} before.pc returnPC
+def Binary.Pair.Corresponds : Binary.Pair.Names → Offsets → DataMem → Leanux.WG.Device → Prop :=
+fun n o m d => Eq.{1} (Binary.Pair.reconstruct n o m) (Except.ok.{0, 0} (Binary.Pair.target d))
+def Binary.Pair.Remove.ownership : Binary.Pair.Names →
+  Offsets → DataMem → Binary.Pair.Decode.{0} (List.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Bool)) :=
+fun n o m =>
+  List.mapM.{0, 0, 0}
+    (fun x =>
+      match x with
+      | Prod.mk.{0, 0} owner a => do
+        let __do_lift ← Binary.Pair.word m "owner.pprev" (HAdd.hAdd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} a o.hash) o.pprev) 8
+        pure.{0, 0} (Prod.mk.{0, 0} owner (bne.{0} __do_lift 0)))
+    n.owners
+def Binary.Pair.Remove.targetOwnership : Leanux.WG.Device → List.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Bool) :=
+fun d =>
+  List.map.{0, 0} (fun owner => Prod.mk.{0, 0} owner (List.any.{0} d.indexTable fun x => BEq.beq.{0} x.owner owner))
+    (HAppend.hAppend.{0, 0, 0}
+      (List.map.{0, 0} (fun p => Leanux.WG.IndexOwner.handshake (Prod.fst.{0, 0} p))
+        (Std.TreeMap.toList.{0, 0} d.peers))
+      (List.map.{0, 0} (fun p => Leanux.WG.IndexOwner.keypair (Prod.fst.{0, 0} p))
+        (Std.TreeMap.toList.{0, 0} d.keypairs)))
+def Binary.Pair.Remove.Pre : Binary.Pair.Names →
+  Offsets → Binary.CommonBitsCoverage.Context → MachineState → Leanux.World → Leanux.WG.IndexOwner → UInt64 → Prop :=
+fun n o c s w owner ra => Eq.{1} (Binary.Pair.Remove.callBoundary n o c s w owner ra) (Except.ok.{0, 0} ())
+def Binary.Pair.Remove.callBoundary : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Leanux.WG.IndexOwner → UInt64 → Except.{0, 0} String Unit :=
+fun n o c s w owner ra => do
+  Binary.Pair.Remove.assertAt n o s.data.dmem w
+  let address ← Binary.Pair.addressOf n owner
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => Binary.Pair.Index.callFrameCheck n o c s ra 4
+  ite.{1}
+      (Eq.{1} (BEq.beq.{0} s.pc.toBitVec.toNat Binary.Pair.Remove.entry && BEq.beq.{0} s.data.regs.rsi.toNat address)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "remove.call.entry-arguments"
+      __do_jp __r
+def Binary.Pair.Remove.Post : Binary.Pair.Names →
+  Offsets → Binary.CommonBitsCoverage.Context → MachineState → UInt64 → Leanux.World → MachineState → Prop :=
+fun n o c initial ra final t =>
+  Binary.TrustBase.Returned initial t ra ∧
+    Binary.Pair.Index.MemoryReady c initial ra 4 (Binary.Pair.Remove.savedWords initial.data) false t.data.dmem ∧
+      (Exists.{1} fun d =>
+          Eq.{1} final.wg.dev (some.{0} d) ∧
+            Binary.Pair.Corresponds n o t.data.dmem d ∧
+              Eq.{1} (Binary.Pair.Remove.ownership n o t.data.dmem)
+                (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))) ∧
+        Binary.EqualOutside (fun a => Binary.Pair.Index.HeapBytes n o a ∨ Binary.Pair.Index.External c initial 4 a)
+            initial.data.dmem t.data.dmem ∧
+          Binary.Pair.Index.KindFrame n o initial.data.dmem t.data.dmem
+def Binary.Pair.Replace.Pre : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Leanux.WG.PeerId → Leanux.WG.KeypairId → UInt64 → Prop :=
+fun n o c s w pid kid ra => Eq.{1} (Binary.Pair.Replace.callBoundary n o c s w pid kid ra) (Except.ok.{0, 0} ())
+def Binary.Pair.Replace.callBoundary : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Leanux.WG.PeerId → Leanux.WG.KeypairId → UInt64 → Except.{0, 0} String Unit :=
+fun n o c s w pid kid ra => do
+  Binary.Pair.Remove.assertAt n o s.data.dmem w
+  let old ← Binary.Pair.addressOf n (Leanux.WG.IndexOwner.handshake pid)
+  let new ← Binary.Pair.addressOf n (Leanux.WG.IndexOwner.keypair kid)
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    match w.wg.dev with
+    | some.{0} d =>
+      have __do_jp := fun __r => Binary.Pair.Index.callFrameCheck n o c s ra 5;
+      ite.{1}
+        (Eq.{1} (List.any.{0} d.indexTable fun x => BEq.beq.{0} x.owner (Leanux.WG.IndexOwner.handshake pid)) true)
+        (have __do_jp := fun __r => do
+          let kind ←
+            Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message
+                (Binary.Pair.word s.data.dmem "replace.new.kind" (HAdd.hAdd.{0, 0, 0} new o.kind) 4)
+          have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => do
+            let _ ←
+              Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message
+                  (Binary.Pair.word s.data.dmem "replace.new.next"
+                    (HAdd.hAdd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} new o.hash) o.next) 8)
+            let _ ←
+              Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message
+                  (Binary.Pair.word s.data.dmem "replace.new.index" (HAdd.hAdd.{0, 0, 0} new o.index) 4)
+            __do_jp ()
+          ite.{1} (Eq.{1} (BEq.beq.{0} kind 2) true) (__do_jp ()) do
+              let __r ← throw.{0, 0, 0} "replace.call.new-kind"
+              __do_jp __r;
+        ite.{1}
+          (Eq.{1} (List.any.{0} d.indexTable fun x => BEq.beq.{0} x.owner (Leanux.WG.IndexOwner.keypair kid)) true)
+          (do
+            let __r ← throw.{0, 0, 0} "replace.call.new-linked"
+            __do_jp __r)
+          (__do_jp ()))
+        (__do_jp ())
+    | x => throw.{0, 0, 0} "replace.call.device"
+  ite.{1}
+      (Eq.{1}
+        (BEq.beq.{0} s.pc.toBitVec.toNat Binary.Pair.Replace.entry && BEq.beq.{0} s.data.regs.rsi.toNat old &&
+          BEq.beq.{0} s.data.regs.rdx.toNat new)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "replace.call.entry-arguments"
+      __do_jp __r
+def Binary.Pair.Replace.Post : Binary.Pair.Names →
+  Offsets → Binary.CommonBitsCoverage.Context → MachineState → UInt64 → Bool → Leanux.World → MachineState → Prop :=
+fun n o c initial ra answer final t =>
+  Binary.TrustBase.Returned initial t ra ∧
+    Eq.{1} (BitVec.setWidth 8 t.data.regs.rax.toBitVec) (ite.{1} (Eq.{1} answer true) 1 0) ∧
+      Binary.Pair.Index.MemoryReady c initial ra 5 (Binary.Pair.Replace.savedWords initial.data) false t.data.dmem ∧
+        (Exists.{1} fun d =>
+            Eq.{1} final.wg.dev (some.{0} d) ∧
+              Binary.Pair.Corresponds n o t.data.dmem d ∧
+                Eq.{1} (Binary.Pair.Remove.ownership n o t.data.dmem)
+                  (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))) ∧
+          Binary.EqualOutside (fun a => Binary.Pair.Index.HeapBytes n o a ∨ Binary.Pair.Index.External c initial 5 a)
+              initial.data.dmem t.data.dmem ∧
+            Binary.Pair.Index.KindFrame n o initial.data.dmem t.data.dmem
+def Binary.Pair.IndexLookup.Pre : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Nat → List.{0} Leanux.WG.IndexKind → UInt64 → Prop :=
+fun n o coverage s w query kinds ra =>
+  Eq.{1} (Binary.Pair.IndexLookup.callBoundary n o coverage s w query kinds ra) (Except.ok.{0, 0} ())
+def Binary.Pair.IndexLookup.callBoundary : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Nat → List.{0} Leanux.WG.IndexKind → UInt64 → Except.{0, 0} String Unit :=
+fun n o coverage s w query kinds ra => do
+  Binary.Pair.Remove.assertAt n o s.data.dmem w
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    match w.wg.dev with
+    | some.{0} d =>
+      have c := Binary.Pair.IndexLookup.callConfig n w d query kinds;
+      have v := Binary.Pair.IndexLookup.callView c d;
+      have mask := s.data.regs.get (Reg.low Reg64.rsi Width.W32);
+      have __do_jp := fun __r => do
+        Binary.Pair.Index.callFrameCheck n o coverage s ra (Binary.TrustBase.LookupStackWords c)
+        have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+          ite.{1} (Eq.{1} (Binary.Pair.IndexLookup.outputNeeded v) true)
+            (have __do_jp := fun __r =>
+              ite.{1}
+                (Eq.{1}
+                  (Binary.Pair.spansApart (Binary.Pair.IndexLookup.outputSpan s)
+                    (HAppend.hAppend.{0, 0, 0}
+                      (HAppend.hAppend.{0, 0, 0} (Binary.Pair.Index.storageSpans n o)
+                        (Binary.Pair.Index.callStack s (Binary.TrustBase.LookupStackWords c) true))
+                      (Binary.Pair.Trie.callServices coverage)))
+                  true)
+                (pure.{0, 0} ()) (throw.{0, 0, 0} "lookup.call.output-separation");
+            ite.{1} (Eq.{1} (Option.isSome.{0} (Mem.loadInt s.data.dmem s.data.regs.rcx.toBitVec 8)) true) (__do_jp ())
+              do
+              let __r ← throw.{0, 0, 0} "lookup.call.output-mapping"
+              __do_jp __r)
+            (pure.{0, 0} ())
+        ite.{1}
+            (Eq.{1}
+              (Binary.Pair.spansApart
+                  (HAppend.hAppend.{0, 0, 0} (Binary.Pair.IndexLookup.ownerSpans n)
+                    (Binary.Pair.IndexLookup.countSpans n o))
+                  (Binary.Pair.IndexLookup.shapeSpans n o) &&
+                Binary.Pair.spansApart (Binary.Pair.IndexLookup.ownerSpans n) (Binary.Pair.IndexLookup.countSpans n o))
+              true)
+            (__do_jp ()) do
+            let __r ← throw.{0, 0, 0} "lookup.call.data-separation"
+            __do_jp __r;
+      ite.{1}
+        (Eq.{1}
+          (BEq.beq.{0} s.pc Binary.Image.Lookup.entry && BEq.beq.{0} s.data.regs.rdi.toBitVec c.table &&
+                BEq.beq.{0} (BitVec.toNat (s.data.regs.get (Reg.low Reg64.rdx Width.W32))) query &&
+              BEq.beq.{0} (decide (Ne.{1} (HAnd.hAnd.{0, 0, 0} mask (Binary.kindWord Leanux.WG.IndexKind.handshake)) 0))
+                (List.contains.{0} kinds Leanux.WG.IndexKind.handshake) &&
+            BEq.beq.{0} (decide (Ne.{1} (HAnd.hAnd.{0, 0, 0} mask (Binary.kindWord Leanux.WG.IndexKind.keypair)) 0))
+              (List.contains.{0} kinds Leanux.WG.IndexKind.keypair))
+          true)
+        (__do_jp ()) do
+        let __r ← throw.{0, 0, 0} "lookup.call.arguments"
+        __do_jp __r
+    | x => throw.{0, 0, 0} "lookup.call.missing-device"
+  ite.{1} (Eq.{1} (Binary.Pair.IndexLookup.interpretationCheck n) true) (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "lookup.call.address-interpretation"
+      __do_jp __r
+def Binary.Pair.IndexLookup.Post : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState →
+        UInt64 → Option.{0} (Prod.{0, 0} Leanux.WG.IndexOwner Leanux.WG.PeerId) → Leanux.World → MachineState → Prop :=
+fun n o coverage initial ra answer finalWorld final =>
+  Binary.TrustBase.Returned initial final ra ∧
+    Binary.Pair.IndexLookup.Result n initial final answer ∧
+      (Exists.{1} fun d =>
+          Eq.{1} finalWorld.wg.dev (some.{0} d) ∧
+            Binary.Pair.Corresponds n o final.data.dmem d ∧
+              Eq.{1} (Binary.Pair.Remove.ownership n o final.data.dmem)
+                (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))) ∧
+        (∀ (b : Bool), (Binary.Pair.Index.phase coverage b).CoverageAt final.data.dmem) ∧
+          Eq.{1} (Binary.TrustBase.load32 final.data.dmem Binary.TrustBase.preemptCountAddress)
+              (some.{0} coverage.preempt) ∧
+            (Binary.TrustBase.LookupPendingRead coverage.preempt →
+                Eq.{1} (Mem.loadInt final.data.dmem Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0)) ∧
+              Binary.EqualOutside (Binary.Pair.IndexLookup.Writes n o coverage initial) initial.data.dmem
+                  final.data.dmem ∧
+                Binary.Pair.Index.KindFrame n o initial.data.dmem final.data.dmem
+def Binary.Pair.Sequence.initialCheck : Binary.Pair.Names →
+  Offsets → Binary.CommonBitsCoverage.Context → MachineState → Leanux.World → UInt64 → Except.{0, 0} String Unit :=
+fun n o c base w ra => do
+  Binary.Pair.Remove.assertAt n o base.data.dmem w
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => do
+    let _ ← List.mapM.{0, 0, 0} (Binary.Pair.Index.callFrameCheck n o c base ra) Binary.Pair.Sequence.stackSizes
+    Binary.Pair.Sequence.residentCheck n o base.data.dmem
+    have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+      have __do_jp := fun __r =>
+        have __do_jp := fun __r =>
+          ite.{1}
+            (Eq.{1}
+              (Binary.Pair.spansApart (Binary.Pair.Trie.callServices c) (Binary.Pair.Index.callStack base 13 true))
+              true)
+            (pure.{0, 0} ()) (throw.{0, 0, 0} "sequence.caller-return-separation");
+        ite.{1}
+          (Eq.{1}
+            (List.all.{0} Binary.Pair.Sequence.stackSizes fun words =>
+              Binary.Pair.spansApart (Binary.Pair.IndexLookup.outputSpan base)
+                (HAppend.hAppend.{0, 0, 0}
+                  (HAppend.hAppend.{0, 0, 0} (Binary.Pair.Index.storageSpans n o)
+                    (Binary.Pair.Index.callStack base words true))
+                  (Binary.Pair.Trie.callServices c)))
+            true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "sequence.output-separation"
+          __do_jp __r;
+      ite.{1} (Eq.{1} (Option.isSome.{0} (Mem.loadInt base.data.dmem base.data.regs.rcx.toBitVec 8)) true) (__do_jp ())
+        do
+        let __r ← throw.{0, 0, 0} "sequence.output-mapping"
+        __do_jp __r
+    ite.{1}
+        (Eq.{1}
+          (Binary.Pair.spansApart
+              (HAppend.hAppend.{0, 0, 0} (Binary.Pair.IndexLookup.ownerSpans n)
+                (Binary.Pair.IndexLookup.countSpans n o))
+              (Binary.Pair.IndexLookup.shapeSpans n o) &&
+            Binary.Pair.spansApart (Binary.Pair.IndexLookup.ownerSpans n) (Binary.Pair.IndexLookup.countSpans n o))
+          true)
+        (__do_jp ()) do
+        let __r ← throw.{0, 0, 0} "sequence.data-separation"
+        __do_jp __r
+  ite.{1} (Eq.{1} (Binary.Pair.IndexLookup.interpretationCheck n) true) (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "sequence.interpretation"
+      __do_jp __r
+def Binary.Pair.Sequence.Admissible : Binary.Pair.Names → Binary.Pair.Sequence.Call → Leanux.World → Prop :=
+fun n call w =>
+  match call with
+  | Binary.Pair.Sequence.Call.lookup query kinds => LT.lt.{0} query (HPow.hPow.{0, 0, 0} 2 32)
+  | Binary.Pair.Sequence.Call.remove owner =>
+    Exists.{1} fun a => Eq.{1} (Binary.Pair.addressOf n owner) (Except.ok.{0, 0} a)
+  | Binary.Pair.Sequence.Call.replace pid kid =>
+    (Exists.{1} fun a => Eq.{1} (Binary.Pair.addressOf n (Leanux.WG.IndexOwner.handshake pid)) (Except.ok.{0, 0} a)) ∧
+      (Exists.{1} fun a => Eq.{1} (Binary.Pair.addressOf n (Leanux.WG.IndexOwner.keypair kid)) (Except.ok.{0, 0} a)) ∧
+        ∀ (d : Leanux.WG.Device),
+          Eq.{1} w.wg.dev (some.{0} d) →
+            Eq.{1} (List.any.{0} d.indexTable fun x => BEq.beq.{0} x.owner (Leanux.WG.IndexOwner.handshake pid)) true →
+              Eq.{1} (List.any.{0} d.indexTable fun x => BEq.beq.{0} x.owner (Leanux.WG.IndexOwner.keypair kid)) false
+def Binary.Pair.Sequence.AdmissibleSequence : Binary.Pair.Names →
+  List.{0} Binary.Pair.Sequence.Call → Leanux.World → Prop :=
+fun n x x_1 =>
+  List.brecOn.{1, 0} (motive := fun x => Leanux.World → Prop) x (Binary.Pair.Sequence.AdmissibleSequence._f n) x_1
+def Binary.Pair.Sequence.program : List.{0} Binary.Pair.Sequence.Call →
+  Binary.M (List.{0} Binary.Pair.Sequence.Answer) :=
+fun x => List.brecOn.{1, 0} x Binary.Pair.Sequence.program._f
+def Binary.Pair.Sequence.install : Binary.Pair.Names →
+  MachineState → UInt64 → Int64 → Nat → Nat → MachineState → MachineState :=
+fun n base ra pc arg2 arg3 current =>
+  {
+    data :=
+      have __src := current.data;
+      {
+        regs :=
+          have __src := current.data.regs;
+          { rax := __src.rax, rbx := __src.rbx, rcx := base.data.regs.rcx, rdx := UInt64.ofNat arg3,
+            rsi := UInt64.ofNat arg2, rdi := UInt64.ofNat n.table, rsp := base.data.regs.rsp, rbp := __src.rbp,
+            r8 := __src.r8, r9 := __src.r9, r10 := __src.r10, r11 := __src.r11, r12 := __src.r12, r13 := __src.r13,
+            r14 := __src.r14, r15 := __src.r15 },
+        zmms := __src.zmms, status := __src.status, system := __src.system,
+        dmem := Mem.storeInt current.data.dmem base.data.regs.rsp.toBitVec 8 ra.toBitVec.toInt },
+    pc := pc }
+def Binary.Pair.Sequence.prepare : Binary.Pair.Names →
+  MachineState → UInt64 → Binary.Pair.Sequence.Call → MachineState → Except.{0, 0} String MachineState :=
+fun n base ra call current =>
+  match call with
+  | Binary.Pair.Sequence.Call.lookup query kinds =>
+    pure.{0, 0}
+      (Binary.Pair.Sequence.install n base ra Binary.Image.Lookup.entry (Binary.Pair.kindMask kinds) query current)
+  | Binary.Pair.Sequence.Call.remove owner => do
+    let __do_lift ← Binary.Pair.addressOf n owner
+    pure.{0, 0} (Binary.Pair.Sequence.install n base ra (Int64.ofNat Binary.Pair.Remove.entry) __do_lift 0 current)
+  | Binary.Pair.Sequence.Call.replace pid kid => do
+    let old ← Binary.Pair.addressOf n (Leanux.WG.IndexOwner.handshake pid)
+    let new ← Binary.Pair.addressOf n (Leanux.WG.IndexOwner.keypair kid)
+    pure.{0, 0} (Binary.Pair.Sequence.install n base ra (Int64.ofNat Binary.Pair.Replace.entry) old new current)
+structure Binary.Pair.Sequence.Ready (n : Binary.Pair.Names) (o : Offsets) (c : Binary.CommonBitsCoverage.Context)
+  (base : MachineState) (m : DataMem) (w : Leanux.World) : Prop
+number of parameters: 6
+fields:
+  Binary.Pair.Sequence.Ready.state : Exists.{1} fun d =>
+      Eq.{1} w.wg.dev (some.{0} d) ∧
+        Binary.Pair.Corresponds n o m d ∧
+          Eq.{1} (Binary.Pair.Remove.ownership n o m) (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))
+  Binary.Pair.Sequence.Ready.coverage : ∀ (b : Bool), (Binary.Pair.Index.phase c b).CoverageAt m
+  Binary.Pair.Sequence.Ready.preempt : Eq.{1} (Binary.TrustBase.load32 m Binary.TrustBase.preemptCountAddress)
+      (some.{0} c.preempt)
+  Binary.Pair.Sequence.Ready.pending : Binary.TrustBase.LookupPendingRead c.preempt →
+      Eq.{1} (Mem.loadInt m Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0)
+  Binary.Pair.Sequence.Ready.mapped : ∀ (a : BitVec 64) (size : Nat),
+      Eq.{1} (Option.isSome.{0} (Mem.loadInt base.data.dmem a size)) true →
+        Eq.{1} (Option.isSome.{0} (Mem.loadInt m a size)) true
+  Binary.Pair.Sequence.Ready.kinds : Binary.Pair.Index.KindFrame n o base.data.dmem m
+constructor:
+  Binary.Pair.Sequence.Ready.mk {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context}
+    {base : MachineState} {m : DataMem} {w : Leanux.World}
+    (state :
+      Exists.{1} fun d =>
+        Eq.{1} w.wg.dev (some.{0} d) ∧
+          Binary.Pair.Corresponds n o m d ∧
+            Eq.{1} (Binary.Pair.Remove.ownership n o m) (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d)))
+    (coverage : ∀ (b : Bool), (Binary.Pair.Index.phase c b).CoverageAt m)
+    (preempt : Eq.{1} (Binary.TrustBase.load32 m Binary.TrustBase.preemptCountAddress) (some.{0} c.preempt))
+    (pending :
+      Binary.TrustBase.LookupPendingRead c.preempt →
+        Eq.{1} (Mem.loadInt m Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0))
+    (mapped :
+      ∀ (a : BitVec 64) (size : Nat),
+        Eq.{1} (Option.isSome.{0} (Mem.loadInt base.data.dmem a size)) true →
+          Eq.{1} (Option.isSome.{0} (Mem.loadInt m a size)) true)
+    (kinds : Binary.Pair.Index.KindFrame n o base.data.dmem m) : Binary.Pair.Sequence.Ready n o c base m w
+def Binary.Pair.Sequence.Execute : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.Pair.Names →
+    MachineState →
+      UInt64 →
+        List.{0} Binary.Pair.Sequence.Call →
+          MachineState → (List.{0} Binary.Pair.Sequence.CallRecord → MachineState → Prop) → Prop :=
+fun fetch n base ra x x_1 x_2 =>
+  List.brecOn.{1, 0} (motive := fun x =>
+    MachineState → (List.{0} Binary.Pair.Sequence.CallRecord → MachineState → Prop) → Prop) x
+    (Binary.Pair.Sequence.Execute._f fetch n base ra) x_1 x_2
+def Binary.Pair.Sequence.SequencePost : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.TrustBase.Permissions →
+    Nat →
+      List.{0} Nat →
+        Binary.Pair.Names →
+          Offsets →
+            Binary.CommonBitsCoverage.Context →
+              MachineState →
+                MachineState →
+                  UInt64 →
+                    List.{0} Binary.Pair.Sequence.Answer →
+                      Leanux.World → List.{0} Binary.Pair.Sequence.CallRecord → MachineState → Prop :=
+fun fetch permissions onlineCPUs externalActions n o c base current ra answers finalWorld records final =>
+  Binary.Pair.Sequence.Ready n o c base final.data.dmem finalWorld ∧
+    Binary.Pair.Mapped.{0, 0} (Binary.Pair.Sequence.Observed fetch permissions onlineCPUs externalActions n ra) answers
+        records ∧
+      Binary.EqualOutside (Binary.Pair.Sequence.Writes n o c base) current.data.dmem final.data.dmem
+def Binary.Pair.Sequence.EntryDomain : Binary.Pair.Names → MachineState → UInt64 → MachineState → Prop :=
+fun n base ra entry =>
+  Exists.{1} fun call =>
+    Exists.{1} fun current => Eq.{1} (Binary.Pair.Sequence.prepare n base ra call current) (Except.ok.{0, 0} entry)
+def Binary.Pair.Sequence.Observed : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.TrustBase.Permissions →
+    Nat →
+      List.{0} Nat →
+        Binary.Pair.Names → UInt64 → Binary.Pair.Sequence.Answer → Binary.Pair.Sequence.CallRecord → Prop :=
+fun fetch permissions onlineCPUs externalActions n ra answer record =>
+  Binary.Pair.Sequence.Interface n ra (Prod.fst.{0, 0} record) (Prod.snd.{0, 0} record).machine answer ∧
+    Binary.ActualHistory fetch (Prod.fst.{0, 0} record) (Prod.snd.{0, 0} record).history ∧
+      Eq.{1} (List.getLast?.{0} (Prod.snd.{0, 0} record).history) (some.{0} (Prod.snd.{0, 0} record).machine) ∧
+        Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions (Prod.snd.{0, 0} record).history
+def Binary.Pair.Insert.Pre : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Leanux.WG.IndexOwner → UInt64 → Binary.RandomProvider.Config → Prop :=
+fun n o c s w owner ra config =>
+  Eq.{1} (Binary.Pair.Insert.callBoundary n o c s w owner ra) (Except.ok.{0, 0} ()) ∧
+    Eq.{1} (Binary.Pair.Insert.providerCheck n o c s ra config) (Except.ok.{0, 0} ())
+def Binary.Pair.Insert.callBoundary : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → Leanux.WG.IndexOwner → UInt64 → Except.{0, 0} String Unit :=
+fun n o c s w owner ra => do
+  Binary.Pair.Remove.assertAt n o s.data.dmem w
+  let address ← Binary.Pair.addressOf n owner
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => do
+    let kind ←
+      Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message
+          (Binary.Pair.word s.data.dmem "insert.kind" (HAdd.hAdd.{0, 0, 0} address o.kind) 4)
+    have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => do
+      let _ ←
+        Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message
+            (Binary.Pair.word s.data.dmem "insert.next"
+              (HAdd.hAdd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} address o.hash) o.next) 8)
+      let _ ←
+        Except.mapError.{0, 0, 0} Binary.Pair.DecodeError.message
+            (Binary.Pair.word s.data.dmem "insert.index" (HAdd.hAdd.{0, 0, 0} address o.index) 4)
+      Binary.Pair.Index.callFrameCheck n o c s ra 7
+      have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+        have __do_jp := fun __r =>
+          have __do_jp := fun __r =>
+            ite.{1} (Eq.{1} (Option.isSome.{0} w.hidden) true) (pure.{0, 0} ())
+              (throw.{0, 0, 0} "insert.call.recorded-input-required");
+          ite.{1} (Binary.TrustBase.LookupPendingRead (HAdd.hAdd.{0, 0, 0} c.preempt 512))
+            (have __do_jp := fun __r =>
+              ite.{1}
+                (Eq.{1}
+                  (Binary.Pair.spansApart
+                    (List.cons.{0} (Prod.mk.{0, 0} Binary.TrustBase.softirqPendingAddress.toNat 2) List.nil.{0})
+                    (HAppend.hAppend.{0, 0, 0}
+                      (HAppend.hAppend.{0, 0, 0}
+                        (HAppend.hAppend.{0, 0, 0} (Binary.Pair.Index.storageSpans n o)
+                          (Binary.Pair.Index.callStack s 7 false))
+                        (Binary.Pair.Trie.callBuffers c))
+                      (List.cons.{0} (Prod.mk.{0, 0} Binary.TrustBase.preemptCountAddress.toNat 4) List.nil.{0})))
+                  true)
+                (__do_jp ()) do
+                let __r ← throw.{0, 0, 0} "insert.call.nested-pending-separation"
+                __do_jp __r;
+            ite.{1}
+              (Eq.{1} (BEq.beq.{0} (Mem.loadInt s.data.dmem Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0))
+                true)
+              (__do_jp ()) do
+              let __r ← throw.{0, 0, 0} "insert.call.nested-pending-softirq"
+              __do_jp __r)
+            (__do_jp ());
+        ite.{1} (Eq.{1} (BEq.beq.{0} (HAnd.hAnd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} c.preempt 1024) 983040) 0) true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "insert.call.nested-hardirq"
+          __do_jp __r
+      ite.{1}
+          (Eq.{1}
+            (Binary.Pair.Trie.coverageDataCheck
+              { coverage := c.coverage, preempt := HAdd.hAdd.{0, 0, 0} c.preempt 1024 } s.data.dmem)
+            true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "insert.call.nested-coverage"
+          __do_jp __r
+    ite.{1}
+        (Eq.{1}
+          (BEq.beq.{0} kind
+            (match owner with
+            | Leanux.WG.IndexOwner.handshake peer => 1
+            | Leanux.WG.IndexOwner.keypair keypair => 2))
+          true)
+        (__do_jp ()) do
+        let __r ← throw.{0, 0, 0} "insert.call.kind"
+        __do_jp __r
+  ite.{1}
+      (Eq.{1}
+        (BEq.beq.{0} s.pc.toBitVec.toNat Binary.Pair.Insert.entry && BEq.beq.{0} s.data.regs.rdi.toNat n.table &&
+          BEq.beq.{0} s.data.regs.rsi.toNat address)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "insert.call.entry-arguments"
+      __do_jp __r
+def Binary.Pair.Insert.providerCheck : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → UInt64 → Binary.RandomProvider.Config → Except.{0, 0} String Unit :=
+fun n o c s ra config => do
+  Binary.Pair.Index.callFrameCheck n o c s ra 135
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    have outer := { coverage := c.coverage, preempt := HAdd.hAdd.{0, 0, 0} c.preempt 512 };
+    have __do_jp := fun __r => do
+      Binary.RandomProvider.check config c.coverage.task.toNat
+          (Binary.TrustBase.RandomRecordingActive c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)) s.data.dmem
+      have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+        ite.{1}
+          (Eq.{1}
+            (Binary.Pair.spansApart (Binary.Pair.Index.callStack s 135 false) (Binary.Pair.Insert.providerPending c))
+            true)
+          (pure.{0, 0} ()) (throw.{0, 0, 0} "insert.provider.pending-stack")
+      ite.{1} (Eq.{1} (Binary.Pair.spansApart config.blocks (Binary.Pair.Insert.providerProtected n o c s)) true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "insert.provider.private-alias"
+          __do_jp __r;
+    ite.{1} (Eq.{1} (!decide outer.Needed || decide (GT.gt.{0} c.coverage.capacity.toNat 0)) true) (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "insert.provider.capacity"
+      __do_jp __r
+  ite.{1}
+      (Eq.{1}
+        (BEq.beq.{0} s.data.system.cpl 0 &&
+          !getElem.{0, 0, 0} s.data.system.bits 10 Binary.Pair.Insert.providerCheck._proof_2)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "insert.provider.mode"
+      __do_jp __r
+def Binary.Pair.Insert.Post : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState →
+        UInt64 →
+          Binary.RandomProvider.Config →
+            (DataMem → List.{0} Leanux.HiddenRecord → Prop) → Nat → Leanux.World → MachineState → Prop :=
+fun n o c initial ra config inputAt answer final t =>
+  Binary.TrustBase.Returned initial t ra ∧
+    Eq.{1} t.data.regs.rax.toNat answer ∧
+      Binary.Pair.Insert.MemoryReady c initial ra (Binary.Pair.Insert.savedWords initial.data)
+          Binary.Pair.Insert.Phase.enabled t.data.dmem ∧
+        (Exists.{1} fun d =>
+            Eq.{1} final.wg.dev (some.{0} d) ∧
+              Binary.Pair.Corresponds n o t.data.dmem d ∧
+                Eq.{1} (Binary.Pair.Remove.ownership n o t.data.dmem)
+                  (Except.ok.{0, 0} (Binary.Pair.Remove.targetOwnership d))) ∧
+          Binary.Pair.Insert.ProviderState config c initial t ∧
+            (Exists.{1} fun rest => Eq.{1} final.hidden (some.{0} rest) ∧ inputAt t.data.dmem rest) ∧
+              Binary.EqualOutside (Binary.Pair.Insert.Writes n o config c initial) initial.data.dmem t.data.dmem ∧
+                Binary.Pair.Index.KindFrame n o initial.data.dmem t.data.dmem
+structure Binary.Pair.Insert.ProviderState (config : Binary.RandomProvider.Config)
+  (c : Binary.CommonBitsCoverage.Context) (initial s : MachineState) : Prop
+number of parameters: 4
+fields:
+  Binary.Pair.Insert.ProviderState.privateCheck : Eq.{1}
+      (Binary.RandomProvider.check config c.coverage.task.toNat
+        (Binary.TrustBase.RandomRecordingActive c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)) s.data.dmem)
+      (Except.ok.{0, 0} ())
+  Binary.Pair.Insert.ProviderState.privilege : Eq.{1} s.data.system.cpl 0
+  Binary.Pair.Insert.ProviderState.direction : Eq.{1} (getElem.{0, 0, 0} s.data.system.bits 10 ⋯) false
+  Binary.Pair.Insert.ProviderState.mapped : ∀ (a : BitVec 64) (n : Nat),
+      Eq.{1} (Option.isSome.{0} (Mem.loadInt initial.data.dmem a n)) true →
+        Eq.{1} (Option.isSome.{0} (Mem.loadInt s.data.dmem a n)) true
+constructor:
+  Binary.Pair.Insert.ProviderState.mk {config : Binary.RandomProvider.Config} {c : Binary.CommonBitsCoverage.Context}
+    {initial s : MachineState}
+    (privateCheck :
+      Eq.{1}
+        (Binary.RandomProvider.check config c.coverage.task.toNat
+          (Binary.TrustBase.RandomRecordingActive c.coverage (HAdd.hAdd.{0, 0, 0} c.preempt 512)) s.data.dmem)
+        (Except.ok.{0, 0} ()))
+    (privilege : Eq.{1} s.data.system.cpl 0) (direction : Eq.{1} (getElem.{0, 0, 0} s.data.system.bits 10 ⋯) false)
+    (mapped :
+      ∀ (a : BitVec 64) (n : Nat),
+        Eq.{1} (Option.isSome.{0} (Mem.loadInt initial.data.dmem a n)) true →
+          Eq.{1} (Option.isSome.{0} (Mem.loadInt s.data.dmem a n)) true) :
+    Binary.Pair.Insert.ProviderState config c initial s
+def Binary.Pair.InsertSequence.initialCheck : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState → Leanux.World → UInt64 → Binary.RandomProvider.Config → Except.{0, 0} String Unit :=
+fun n o c base w ra config => do
+  Binary.Pair.Sequence.initialCheck n o c base w ra
+  Binary.Pair.Index.callFrameCheck n o c base ra 7
+  Binary.Pair.Insert.providerCheck n o c base ra config
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    have __do_jp := fun __r =>
+      have __do_jp := fun __r =>
+        have __do_jp := fun __r =>
+          ite.{1} (Eq.{1} (Option.isSome.{0} w.hidden) true) (pure.{0, 0} ())
+            (throw.{0, 0, 0} "insert-sequence.recorded-input-required");
+        ite.{1} (Eq.{1} (Binary.Pair.spansApart config.blocks (Binary.Pair.IndexLookup.outputSpan base)) true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "insert-sequence.private-output-separation"
+          __do_jp __r;
+      ite.{1} (Binary.TrustBase.LookupPendingRead (HAdd.hAdd.{0, 0, 0} c.preempt 512))
+        (have __do_jp := fun __r =>
+          ite.{1}
+            (Eq.{1}
+              (Binary.Pair.spansApart
+                (List.cons.{0} (Prod.mk.{0, 0} Binary.TrustBase.softirqPendingAddress.toNat 2) List.nil.{0})
+                (Binary.Pair.InsertSequence.pendingProtected n o c base config))
+              true)
+            (__do_jp ()) do
+            let __r ← throw.{0, 0, 0} "insert-sequence.pending-separation"
+            __do_jp __r;
+        ite.{1}
+          (Eq.{1} (BEq.beq.{0} (Mem.loadInt base.data.dmem Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0)) true)
+          (__do_jp ()) do
+          let __r ← throw.{0, 0, 0} "insert-sequence.nested-pending"
+          __do_jp __r)
+        (__do_jp ());
+    ite.{1} (Eq.{1} (BEq.beq.{0} (HAnd.hAnd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} c.preempt 1024) 983040) 0) true) (__do_jp ())
+      do
+      let __r ← throw.{0, 0, 0} "insert-sequence.nested-hardirq"
+      __do_jp __r
+  ite.{1}
+      (Eq.{1}
+        (Binary.Pair.Trie.coverageDataCheck { coverage := c.coverage, preempt := HAdd.hAdd.{0, 0, 0} c.preempt 1024 }
+          base.data.dmem)
+        true)
+      (__do_jp ()) do
+      let __r ← throw.{0, 0, 0} "insert-sequence.nested-coverage"
+      __do_jp __r
+def Binary.Pair.InsertSequence.Admissible : Binary.Pair.Names → Binary.Pair.InsertSequence.Call → Leanux.World → Prop :=
+fun n call w =>
+  match call with
+  | Binary.Pair.InsertSequence.Call.existing call => Binary.Pair.Sequence.Admissible n call w
+  | Binary.Pair.InsertSequence.Call.insert owner =>
+    Exists.{1} fun a => Eq.{1} (Binary.Pair.addressOf n owner) (Except.ok.{0, 0} a)
+def Binary.Pair.InsertSequence.AdmissibleSequence : Binary.Pair.Names →
+  List.{0} Binary.Pair.InsertSequence.Call → Leanux.World → Prop :=
+fun n x x_1 =>
+  List.brecOn.{1, 0} (motive := fun x => Leanux.World → Prop) x (Binary.Pair.InsertSequence.AdmissibleSequence._f n) x_1
+def Binary.Pair.InsertSequence.program : List.{0} Binary.Pair.InsertSequence.Call →
+  Binary.M (List.{0} Binary.Pair.InsertSequence.Answer) :=
+fun x => List.brecOn.{1, 0} x Binary.Pair.InsertSequence.program._f
+def Binary.Pair.InsertSequence.prepare : Binary.Pair.Names →
+  MachineState → UInt64 → Binary.Pair.InsertSequence.Call → MachineState → Except.{0, 0} String MachineState :=
+fun n base ra call current =>
+  match call with
+  | Binary.Pair.InsertSequence.Call.existing call => Binary.Pair.Sequence.prepare n base ra call current
+  | Binary.Pair.InsertSequence.Call.insert owner => do
+    let __do_lift ← Binary.Pair.addressOf n owner
+    pure.{0, 0} (Binary.Pair.Sequence.install n base ra (Int64.ofNat Binary.Pair.Insert.entry) __do_lift 0 current)
+structure Binary.Pair.InsertSequence.Ready (n : Binary.Pair.Names) (o : Offsets) (c : Binary.CommonBitsCoverage.Context)
+  (base current : MachineState) (w : Leanux.World) (config : Binary.RandomProvider.Config)
+  (inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop) : Prop
+number of parameters: 8
+fields:
+  Binary.Pair.InsertSequence.Ready.previous : Binary.Pair.Sequence.Ready n o c base current.data.dmem w
+  Binary.Pair.InsertSequence.Ready.provider : Binary.Pair.Insert.ProviderState config c base current
+  Binary.Pair.InsertSequence.Ready.nestedPending : Binary.TrustBase.LookupPendingRead
+        (HAdd.hAdd.{0, 0, 0} c.preempt 512) →
+      Eq.{1} (Mem.loadInt current.data.dmem Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0)
+  Binary.Pair.InsertSequence.Ready.input : Exists.{1} fun records =>
+      Eq.{1} w.hidden (some.{0} records) ∧ inputAt current.data.dmem records
+constructor:
+  Binary.Pair.InsertSequence.Ready.mk {n : Binary.Pair.Names} {o : Offsets} {c : Binary.CommonBitsCoverage.Context}
+    {base current : MachineState} {w : Leanux.World} {config : Binary.RandomProvider.Config}
+    {inputAt : DataMem → List.{0} Leanux.HiddenRecord → Prop}
+    (previous : Binary.Pair.Sequence.Ready n o c base current.data.dmem w)
+    (provider : Binary.Pair.Insert.ProviderState config c base current)
+    (nestedPending :
+      Binary.TrustBase.LookupPendingRead (HAdd.hAdd.{0, 0, 0} c.preempt 512) →
+        Eq.{1} (Mem.loadInt current.data.dmem Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0))
+    (input : Exists.{1} fun records => Eq.{1} w.hidden (some.{0} records) ∧ inputAt current.data.dmem records) :
+    Binary.Pair.InsertSequence.Ready n o c base current w config inputAt
+inductive Binary.Pair.InsertSequence.SourceBoundaries : List.{0} Binary.Pair.InsertSequence.Call →
+  Leanux.World → List.{0} (Prod.{0, 0} Binary.Pair.InsertSequence.Answer Leanux.World) → Leanux.World → Prop
+number of parameters: 0
+constructors:
+Binary.Pair.InsertSequence.SourceBoundaries.nil : ∀ (w : Leanux.World),
+  Binary.Pair.InsertSequence.SourceBoundaries List.nil.{0} w List.nil.{0} w
+Binary.Pair.InsertSequence.SourceBoundaries.cons : ∀ {call : Binary.Pair.InsertSequence.Call}
+  {calls : List.{0} Binary.Pair.InsertSequence.Call} {w : Leanux.World} {answer : Binary.Pair.InsertSequence.Answer}
+  {next : Leanux.World} {boundaries : List.{0} (Prod.{0, 0} Binary.Pair.InsertSequence.Answer Leanux.World)}
+  {final : Leanux.World},
+  Eq.{1} (StateT.run.{0, 0} (Binary.Pair.InsertSequence.source call) w)
+      (Except.ok.{0, 0} (Prod.mk.{0, 0} answer next)) →
+    Binary.Pair.InsertSequence.SourceBoundaries calls next boundaries final →
+      Binary.Pair.InsertSequence.SourceBoundaries (List.cons.{0} call calls) w
+        (List.cons.{0} (Prod.mk.{0, 0} answer next) boundaries) final
+def Binary.Pair.InsertSequence.Boundary : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.TrustBase.Permissions →
+    Nat →
+      List.{0} Nat →
+        Binary.Pair.Names →
+          Offsets →
+            Binary.CommonBitsCoverage.Context →
+              MachineState →
+                UInt64 →
+                  Binary.RandomProvider.Config →
+                    (DataMem → List.{0} Leanux.HiddenRecord → Prop) →
+                      Prod.{0, 0} Binary.Pair.InsertSequence.Answer Leanux.World →
+                        Binary.Pair.InsertSequence.CallRecord → Prop :=
+fun fetch permissions onlineCPUs externalActions n o c base ra config inputAt source record =>
+  Binary.Pair.InsertSequence.Observed fetch permissions onlineCPUs externalActions n ra (Prod.fst.{0, 0} source)
+      record ∧
+    Binary.Pair.InsertSequence.Ready n o c base (Prod.snd.{0, 0} record).machine (Prod.snd.{0, 0} source) config inputAt
+def Binary.Pair.InsertSequence.Execute : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.Pair.Names →
+    MachineState →
+      UInt64 →
+        List.{0} Binary.Pair.InsertSequence.Call →
+          MachineState → (List.{0} Binary.Pair.InsertSequence.CallRecord → MachineState → Prop) → Prop :=
+fun fetch n base ra x x_1 x_2 =>
+  List.brecOn.{1, 0} (motive := fun x =>
+    MachineState → (List.{0} Binary.Pair.InsertSequence.CallRecord → MachineState → Prop) → Prop) x
+    (Binary.Pair.InsertSequence.Execute._f fetch n base ra) x_1 x_2
+def Binary.Pair.InsertSequence.SequencePost : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.TrustBase.Permissions →
+    Nat →
+      List.{0} Nat →
+        Binary.Pair.Names →
+          Offsets →
+            Binary.CommonBitsCoverage.Context →
+              MachineState →
+                MachineState →
+                  UInt64 →
+                    Binary.RandomProvider.Config →
+                      (DataMem → List.{0} Leanux.HiddenRecord → Prop) →
+                        List.{0} Binary.Pair.InsertSequence.Call →
+                          Leanux.World →
+                            List.{0} Binary.Pair.InsertSequence.Answer →
+                              Leanux.World → List.{0} Binary.Pair.InsertSequence.CallRecord → MachineState → Prop :=
+fun fetch permissions onlineCPUs externalActions n o c base current ra config inputAt calls w answers finalWorld records
+    final =>
+  Binary.Pair.InsertSequence.Ready n o c base final finalWorld config inputAt ∧
+    (Exists.{1} fun boundaries =>
+        Binary.Pair.InsertSequence.SourceBoundaries calls w boundaries finalWorld ∧
+          Eq.{1} (List.map.{0, 0} Prod.fst.{0, 0} boundaries) answers ∧
+            Binary.Pair.Mapped.{0, 0}
+              (Binary.Pair.InsertSequence.Boundary fetch permissions onlineCPUs externalActions n o c base ra config
+                inputAt)
+              boundaries records) ∧
+      Binary.EqualOutside (Binary.Pair.InsertSequence.Writes n o c base config) current.data.dmem final.data.dmem
+def Binary.Pair.InsertSequence.EntryDomain : Binary.Pair.Names →
+  Offsets →
+    Binary.CommonBitsCoverage.Context →
+      MachineState →
+        UInt64 → Binary.RandomProvider.Config → (DataMem → List.{0} Leanux.HiddenRecord → Prop) → MachineState → Prop :=
+fun n o c base ra config inputAt entry =>
+  Exists.{1} fun call =>
+    Exists.{1} fun current =>
+      Exists.{1} fun w =>
+        Binary.Pair.InsertSequence.Ready n o c base current w config inputAt ∧
+          Binary.Pair.InsertSequence.Admissible n call w ∧
+            Eq.{1} (Binary.Pair.InsertSequence.prepare n base ra call current) (Except.ok.{0, 0} entry)
+def Binary.Pair.InsertSequence.Observed : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.TrustBase.Permissions →
+    Nat →
+      List.{0} Nat →
+        Binary.Pair.Names → UInt64 → Binary.Pair.InsertSequence.Answer → Binary.Pair.InsertSequence.CallRecord → Prop :=
+fun fetch permissions onlineCPUs externalActions n ra answer record =>
+  Binary.Pair.InsertSequence.Interface n ra (Prod.fst.{0, 0} record) (Prod.snd.{0, 0} record).machine answer ∧
+    Binary.ActualHistory fetch (Prod.fst.{0, 0} record) (Prod.snd.{0, 0} record).history ∧
+      Eq.{1} (List.getLast?.{0} (Prod.snd.{0, 0} record).history) (some.{0} (Prod.snd.{0, 0} record).machine) ∧
+        Binary.TrustBase.RunEnvironment fetch permissions onlineCPUs externalActions (Prod.snd.{0, 0} record).history
+structure Binary.RandomProvider.Config : Type
+number of parameters: 0
+fields:
+  Binary.RandomProvider.Config.blocks : List.{0} (Prod.{0, 0} Nat Nat)
+  Binary.RandomProvider.Config.remoteNodes : List.{0} Nat :=
+    List.nil.{0}
+constructor:
+  Binary.RandomProvider.Config.mk (blocks : List.{0} (Prod.{0, 0} Nat Nat)) (remoteNodes : List.{0} Nat) :
+    Binary.RandomProvider.Config
+def Binary.RandomProvider.snapshot : List.{0} (Prod.{0, 0} Nat Nat) → DataMem → Option.{0} DataMem :=
+fun x x_1 =>
+  List.brecOn.{1, 0} (motive := fun x => DataMem → Option.{0} DataMem) x Binary.RandomProvider.snapshot._f x_1
+def Binary.RandomProvider.initialized : DataMem → Except.{0, 0} String Unit :=
+fun m => do
+  let ready ← Binary.RandomProvider.read m Binary.RandomProvider.Layout.readyAddress 4
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => do
+    Binary.RandomProvider.mapped m Binary.RandomProvider.Layout.cacheAddress 108
+    Binary.RandomProvider.mapped m Binary.RandomProvider.Layout.cpuAddress 40
+    Binary.RandomProvider.mapped m Binary.RandomProvider.Layout.baseAddress 40
+  ite.{1} (Eq.{1} (BEq.beq.{0} ready 0 || decide (GE.ge.{0} ready (HPow.hPow.{0, 0, 0} 2 31))) true)
+      (do
+        let __do_lift ← Binary.RandomProvider.read m Binary.RandomProvider.Layout.initAddress 4
+        ite.{1} (GT.gt.{0} __do_lift 1) (__do_jp ()) do
+            let __r ← throw.{0, 0, 0} "random.private.not-initialized"
+            __do_jp __r)
+      (__do_jp ())
+def Binary.RandomProvider.recording : Binary.RandomProvider.Config → DataMem → Nat → Except.{0, 0} String Unit :=
+fun c m task => do
+  Binary.RandomProvider.mapped m (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskDropped) 4
+  let object ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskObject) 8
+  have selected : Nat := 0
+  have direct : Bool := false
+  have pointers : List.{0} (Prod.{0, 0} Nat Nat) := List.nil.{0}
+  have __do_jp : Unit → Nat → Bool → List.{0} (Prod.{0, 0} Nat Nat) → Except.{0, 0} String Unit :=
+    fun __r selected direct pointers =>
+    have __do_jp := fun __r selected pointers => do
+      Binary.RandomProvider.steer m selected
+      Binary.RandomProvider.mapped m Binary.RandomProvider.Layout.sequenceAddress 8
+      Binary.RandomProvider.recordingGeometry m task selected pointers;
+    ite.{1} (Eq.{1} (!direct) true)
+      (do
+        let handle ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskHandle) 8
+        have pointers : List.{0} (Prod.{0, 0} Nat Nat) :=
+          List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskHandle) 8) pointers
+        ite.{1} (Eq.{1} (bne.{0} handle 0) true)
+            (have bucket :=
+              HDiv.hDiv.{0, 0, 0}
+                (HMod.hMod.{0, 0, 0} (HMul.hMul.{0, 0, 0} handle 7046029254386353131) (HPow.hPow.{0, 0, 0} 2 64))
+                (HPow.hPow.{0, 0, 0} 2 60);
+            do
+            let link ←
+              Binary.RandomProvider.read m
+                  (HAdd.hAdd.{0, 0, 0} Binary.RandomProvider.Layout.remoteMapAddress (HMul.hMul.{0, 0, 0} 8 bucket)) 8
+            let __x ←
+              Binary.RandomProvider.remote c m handle (HAdd.hAdd.{0, 0, 0} (List.length.{0} c.remoteNodes) 1) link
+                  List.nil.{0}
+            match __x with
+              | Prod.mk.{0, 0} found remotePointers =>
+                have selected := found;
+                have pointers :=
+                  List.cons.{0}
+                    (Prod.mk.{0, 0}
+                      (HAdd.hAdd.{0, 0, 0} Binary.RandomProvider.Layout.remoteMapAddress (HMul.hMul.{0, 0, 0} 8 bucket))
+                      8)
+                    (HAppend.hAppend.{0, 0, 0} remotePointers pointers);
+                __do_jp () selected pointers)
+            (__do_jp () selected pointers))
+      (__do_jp () selected pointers)
+  ite.{1} (Eq.{1} (bne.{0} object 0) true)
+      (do
+        let isRemote ←
+          Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} object Binary.RandomProvider.Layout.objectRemote) 1
+        let __x ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} object Binary.RandomProvider.Layout.objectSteer) 8
+        have selected : Nat := __x
+        have pointers : List.{0} (Prod.{0, 0} Nat Nat) :=
+          List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} object Binary.RandomProvider.Layout.objectRemote) 1)
+            (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} object Binary.RandomProvider.Layout.objectSteer) 8)
+              List.nil.{0})
+        have direct : Bool := bne.{0} isRemote 0 || bne.{0} selected 0
+        __do_jp () selected direct pointers)
+      (__do_jp () selected direct pointers)
+def Binary.RandomProvider.steer : DataMem → Nat → Except.{0, 0} String Unit :=
+fun m address =>
+  ite.{1} (Eq.{1} (BEq.beq.{0} address 0) true) (pure.{0, 0} ()) do
+    let count ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} address Binary.RandomProvider.Layout.steerCount) 4
+    let head ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} address Binary.RandomProvider.Layout.steerHead) 4
+    have __do_jp : Unit → Except.{0, 0} String Unit := fun __r => do
+      let _ ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} address Binary.RandomProvider.Layout.steerMismatches) 4
+      Binary.RandomProvider.mapped m (HAdd.hAdd.{0, 0, 0} address Binary.RandomProvider.Layout.steerEntries)
+          (HMul.hMul.{0, 0, 0} count Binary.RandomProvider.Layout.entrySize)
+      forIn.{0, 0, 0, 0} [:count] PUnit.unit.{1} fun i __s => do
+          let __do_lift ←
+            Binary.RandomProvider.read m
+                (HAdd.hAdd.{0, 0, 0}
+                  (HAdd.hAdd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} address Binary.RandomProvider.Layout.steerEntries)
+                    (HMul.hMul.{0, 0, 0} i Binary.RandomProvider.Layout.entrySize))
+                  Binary.RandomProvider.Layout.entryLength)
+                4
+          ite.{1} (LE.le.{0} __do_lift 40) (pure.{0, 0} (ForInStep.yield.{0} PUnit.unit.{1})) do
+              throw.{0, 0, 0} "random.private.steering-payload"
+              pure.{0, 0} (ForInStep.yield.{0} PUnit.unit.{1})
+      pure.{0, 0} ()
+    ite.{1} (Eq.{1} (decide (LE.le.{0} count 64) && decide (LE.le.{0} head count)) true) (__do_jp ()) do
+        let __r ← throw.{0, 0, 0} "random.private.steering-counts"
+        __do_jp __r
+def Binary.RandomProvider.remote : Binary.RandomProvider.Config →
+  DataMem → Nat → Nat → Nat → List.{0} Nat → Except.{0, 0} String (Prod.{0, 0} Nat (List.{0} (Prod.{0, 0} Nat Nat))) :=
+fun c m handle x x_1 x_2 =>
+  Nat.brecOn.{1} (motive := fun x =>
+    Nat → List.{0} Nat → Except.{0, 0} String (Prod.{0, 0} Nat (List.{0} (Prod.{0, 0} Nat Nat)))) x
+    (Binary.RandomProvider.remote._f c m handle) x_1 x_2
+def Binary.RandomProvider.check : Binary.RandomProvider.Config → Nat → Bool → DataMem → Except.{0, 0} String Unit :=
+fun c task active m =>
+  have __do_jp := fun __r =>
+    match Binary.RandomProvider.snapshot c.blocks m with
+    | some.{0} privateMemory => do
+      Binary.RandomProvider.initialized privateMemory
+      ite.{1} (Eq.{1} active true) (Binary.RandomProvider.recording c privateMemory task) (pure.{0, 0} ())
+    | x => throw.{0, 0, 0} "random.private.allocation-unmapped";
+  ite.{1}
+    (Eq.{1}
+      (List.all.{0} c.blocks fun x =>
+        match x with
+        | Prod.mk.{0, 0} base size =>
+          decide (LT.lt.{0} 0 size) && decide (LE.le.{0} (HAdd.hAdd.{0, 0, 0} base size) (HPow.hPow.{0, 0, 0} 2 64)))
+      true)
+    (__do_jp ()) do
+    let __r ← throw.{0, 0, 0} "random.private.allocation-range"
+    __do_jp __r
+def Binary.RandomProvider.roleApart : Prod.{0, 0} Nat Nat → Prod.{0, 0} Nat Nat → Bool :=
+fun a b =>
+  decide (LE.le.{0} (HAdd.hAdd.{0, 0, 0} (Prod.fst.{0, 0} a) (Prod.snd.{0, 0} a)) (Prod.fst.{0, 0} b)) ||
+    decide (LE.le.{0} (HAdd.hAdd.{0, 0, 0} (Prod.fst.{0, 0} b) (Prod.snd.{0, 0} b)) (Prod.fst.{0, 0} a))
+def Binary.RandomProvider.writesApart : List.{0} (Prod.{0, 0} Nat Nat) → Bool :=
+fun x => List.brecOn.{1, 0} x Binary.RandomProvider.writesApart._f
+def Binary.RandomProvider.recordingGeometry : DataMem →
+  Nat → Nat → List.{0} (Prod.{0, 0} Nat Nat) → Except.{0, 0} String Unit :=
+fun m task selected pointers =>
+  have __do_jp := fun steering =>
+    have writes :=
+      HAppend.hAppend.{0, 0, 0}
+        (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.cacheAddress 108)
+          (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.cpuAddress 40)
+            (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.baseAddress 40)
+              (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.sequenceAddress 8)
+                (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskDropped) 4)
+                  List.nil.{0})))))
+        steering;
+    have stable :=
+      HAppend.hAppend.{0, 0, 0}
+        (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.readyAddress 4)
+          (List.cons.{0} (Prod.mk.{0, 0} Binary.RandomProvider.Layout.initAddress 4)
+            (List.cons.{0} (Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} task Binary.RandomProvider.Layout.taskObject) 8)
+              List.nil.{0})))
+        pointers;
+    ite.{1}
+      (Eq.{1}
+        ((List.all.{0} (HAppend.hAppend.{0, 0, 0} writes stable) fun x =>
+              match x with
+              | Prod.mk.{0, 0} base size =>
+                decide (LT.lt.{0} 0 size) &&
+                  decide (LE.le.{0} (HAdd.hAdd.{0, 0, 0} base size) (HPow.hPow.{0, 0, 0} 2 64))) &&
+            Binary.RandomProvider.writesApart writes &&
+          List.all.{0} writes fun write => List.all.{0} stable (Binary.RandomProvider.roleApart write))
+        true)
+      (pure.{0, 0} ()) (throw.{0, 0, 0} "random.private.role-alias");
+  ite.{1} (Eq.{1} (BEq.beq.{0} selected 0) true)
+    (do
+      let steering ← pure.{0, 0} List.nil.{0}
+      __do_jp steering)
+    do
+    let count ← Binary.RandomProvider.read m (HAdd.hAdd.{0, 0, 0} selected Binary.RandomProvider.Layout.steerCount) 4
+    let steering ←
+      pure.{0, 0}
+          (List.cons.{0}
+            (Prod.mk.{0, 0} selected
+              (HAdd.hAdd.{0, 0, 0} Binary.RandomProvider.Layout.steerEntries
+                (HMul.hMul.{0, 0, 0} count Binary.RandomProvider.Layout.entrySize)))
+            List.nil.{0})
+    __do_jp steering
+
+TRUST DECLARATIONS: binary/TrustBase.lean (verbatim)
+import FiniteExecution
+import Image
+import IndexMutatorImage
+import IndexInsertImage
+import AllowedipsImage
+import ServiceImage
+import Memory
+import LookupProjection
+import AllowedipsProjection
+import AllowedipsSelection
+import AllowedipsWords
+import RandomState
+import PairInsertInput
+
+/-! Named trust surface for the pinned lookup proof, under construction.
+    These are explicit hypotheses, not globally asserted facts. No declaration
+    here assumes the lookup result, a region's R-preservation, or a mirror run.
+    Pre_lookup is accompanied by its concrete satisfying witness.
+    The final milestone report must reproduce this file verbatim.
+
+    External interpretation: binutils 2.42 supplied the literal AST and DWARF
+    layouts from the ELF below. Lean checks execution of those terms, not the
+    binutils decoder, DWARF producer, SHA computation or correspondence of
+    Kraken's model with x86 hardware. The loader checks identity and branch
+    encodings. Mutable runtime globals are NOT assumed equal to ELF initial
+    bytes at a function entry; their current values belong in Pre_lookup.
+    A fixed fetch models stable text; the external ELF interpretation requires
+    no runtime text patch in these ranges. Independent review measured no
+    alternatives entry in the ranges, no jump table, empty smp_locks, no RET
+    thunk rewriting, and no GS use. These are interpretation facts, not unused
+    Lean premises. Permissions and serialization below are headline hypotheses.
+
+-/
+namespace Binary.TrustBase
+
+def krakenCommit : String := "dc3824fd5ca36c28b11321b8e7f7e2389b6f6ec4"
+def kernelIdentity : String := "b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767"
+def elfSha256 : String := "06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e"
+def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"
+
+local instance : Labels := Image.linkedLabels
+
+/-- The partial linked decoder for both anchored functions and all reached
+    service bodies. A rejected instruction remains a failing fetch; neither
+    its semantics nor successful execution is assumed by this definition. -/
+def pinnedFetch (pc : Int64) : Option Decoded :=
+  (Image.fetch pc).orElse (fun _ => ServiceImage.fetch pc)
+
+/-- The ambient decoder agrees with the pinned literal instructions/lengths.
+    Interpreting those literals as this ELF is the external decoding assumption. -/
+def AnchoredDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, Image.fetch pc = some instruction → fetch pc = some instruction
+
+/-- Literal instructions and lengths of the five shared index services.
+Their behavior is proved from these terms, rather than assumed separately. -/
+def ServiceDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, ServiceImage.fetch pc=some instruction → fetch pc=some instruction
+
+/-- Sequential paired removal uses the same pinned ELF interpretation, with
+its separately generated literal instruction range. -/
+def IndexRemoveDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, IndexMutatorImage.Remove.fetch pc = some instruction → fetch pc = some instruction
+
+/-- The separately generated replacement range of the same pinned ELF. -/
+def IndexReplaceDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, IndexMutatorImage.Replace.fetch pc = some instruction → fetch pc = some instruction
+
+/-- External paging/access permissions, absent from Kraken MachineState. -/
+structure Permissions where
+  read : BitVec 64 → Width → Prop
+  write : BitVec 64 → Width → Prop
+  execute : Std.Rco Int64 → Prop
+
+/-- Kraken's All grants permission requests. This separate premise makes
+    that grant explicit for every effect, including every undefined outcome. -/
+def AccessAllowed (permissions : Permissions) : Effects → Prop
+  | .done _ => True
+  | .unimplemented _ | .gp_unaligned .. | .nonmem_load .. | .nonmem_store .. => False
+  | @Effects.undefined α _ next => ∀ value : α, AccessAllowed permissions (next value)
+  | .require_read_access address width next =>
+      permissions.read address width ∧ AccessAllowed permissions (next ())
+  | .require_write_access address width next =>
+      permissions.write address width ∧ AccessAllowed permissions (next ())
+  | .require_exec_access pc next =>
+      permissions.execute pc ∧ AccessAllowed permissions (next ())
+
+/-- Every actually executed instruction has its requested accesses granted;
+    the final return destination is not itself executed by this run. -/
+def RunAccessAllowed (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (history : List MachineState) : Prop :=
+  ∀ s ∈ history.dropLast, ∃ decoded, fetch s.pc = some decoded ∧
+    permissions.execute ⟨s.pc, s.pc + .ofNat decoded.size⟩ ∧
+    AccessAllowed permissions
+      (decoded.instruction.interp s.data ⟨s.pc, s.pc + .ofNat decoded.size⟩
+        (fun d => .done ⟨d, s.pc + .ofNat decoded.size⟩) (fun pc d => .done ⟨d, pc⟩))
+
+/-- The environment places no interrupt, preemption or competing CPU action
+    inside this anchored call; the records place such actions between calls. -/
+structure SerializedEnvironment (onlineCPUs : Nat) (externalActions : List Nat) : Prop where
+  singleCPU : onlineCPUs = 1
+  noInterleaving : externalActions = []
+
+/-- Permission safety of finite actual prefixes through the first outer RET.
+    This is safety only: no termination, source result or relation is assumed.
+    Service interiors are included; the unexecuted return destination is not. -/
+def InvocationPermissions (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (initial : MachineState) (returnPC : Int64) : Prop :=
+  ∀ history, ActualHistory fetch initial history → NoEarlyReturn returnPC history →
+    RunAccessAllowed fetch permissions history
+
+/-- The exported interpretation audit of this actual instruction history. -/
+def RunEnvironment (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (onlineCPUs : Nat) (externalActions : List Nat) (history : List MachineState) : Prop :=
+  SerializedEnvironment onlineCPUs externalActions ∧ RunAccessAllowed fetch permissions history
+
+/-- Kernel ABI: the stack word is the actual CALL return address. Eight-byte
+    alignment follows this kernel's compiler flags, not a userspace ABI guess. -/
+def EntryFrame (s : MachineState) (returnAddress : UInt64) : Prop :=
+  s.data.regs.rsp.toNat % 8 = 0 ∧
+  s.data.dmem.loadInt s.data.regs.rsp.toBitVec 8 = some (returnAddress.toNat : Int)
+
+/-- Only ABI-preserved registers are constrained; caller-save registers and
+    flags may change. The callee has consumed the actual return-address word. -/
+def Returned (entry final : MachineState) (returnAddress : UInt64) : Prop :=
+  final.pc = .ofBitVec returnAddress.toBitVec ∧
+  final.data.regs.rsp = entry.data.regs.rsp + 8 ∧
+  final.data.regs.rbx = entry.data.regs.rbx ∧
+  final.data.regs.rbp = entry.data.regs.rbp ∧
+  final.data.regs.r12 = entry.data.regs.r12 ∧
+  final.data.regs.r13 = entry.data.regs.r13 ∧
+  final.data.regs.r14 = entry.data.regs.r14 ∧
+  final.data.regs.r15 = entry.data.regs.r15
+
+/-- No earlier state has reached the outer ABI boundary. Both the supplied
+return PC and consumed return-word stack position matter; internal RETs and
+an alias between the return PC and image code do not define this boundary. -/
+def BeforeOuterReturn (initial : MachineState) (returnAddress : UInt64)
+    (history : List MachineState) : Prop :=
+  ∀ s ∈ history.dropLast, ¬(s.pc=returnAddress.toInt64 ∧
+    s.data.regs.rsp=initial.data.regs.rsp+8)
+
+/-- Access safety only for actual prefixes before the first outer ABI
+return, including the instruction that reaches it. This assumes neither
+termination nor a source result, and omits the unexecuted continuation. -/
+def FirstReturnCallPermissions (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (initial : MachineState) (returnAddress : UInt64) : Prop :=
+  ∀ history, ActualHistory fetch initial history → BeforeOuterReturn initial returnAddress history →
+    RunAccessAllowed fetch permissions history
+
+/-- The same prefix permission premise for caller-prepared entry states. -/
+def FirstReturnDomainPermissions (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (returnAddress : UInt64) (domain : MachineState → Prop) : Prop :=
+  ∀ initial, domain initial → FirstReturnCallPermissions fetch permissions initial returnAddress
+
+/-- External access safety for actual finite histories completing this ABI
+call, including service interiors. It asserts no run exists, no source
+result, and no reconstruction. The unexecuted caller continuation is omitted.
+This form also covers a function that tail-calls its returning service. -/
+def ReturningCallPermissions (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (initial : MachineState) (returnAddress : UInt64) : Prop :=
+  ∀ history final, ActualHistory fetch initial history → history.getLast?=some final →
+    Returned initial final returnAddress → RunAccessAllowed fetch permissions history
+
+/-- The same explicit permission premise for a family of caller-prepared
+entries. It grants access on actual returning histories; it neither asserts
+their existence nor supplies any future reconstruction or precondition. -/
+def ReturningDomainPermissions (fetch : Int64 → Option Decoded) (permissions : Permissions)
+    (returnAddress : UInt64) (domain : MachineState → Prop) : Prop :=
+  ∀ initial, domain initial → ReturningCallPermissions fetch permissions initial returnAddress
+
+/-- Service internals emit no anchored observation or cut. The final state
+    may return to an anchored address; it is deliberately not excluded. -/
+def NoAnchoredReentry (history : List MachineState) : Prop :=
+  ∀ s ∈ history.dropLast, Image.fetch s.pc = none
+
+/-- A service contract uses the same fetched-instruction execution as the
+    function proof. Its readiness and write footprint are physical predicates;
+    their concrete instantiations must be part of the witnessed entry domain. -/
+def ServiceReturns (fetch : Int64 → Option Decoded) (address : Int64)
+    (ready : MachineState → Prop) (writes : MachineState → BitVec 64 → Prop)
+    (effect : MachineState → MachineState → Prop) : Prop :=
+  ∀ s returnAddress, s.pc = address → ready s → EntryFrame s returnAddress →
+    Eventually (historyStep fetch)
+      (fun t => Returned s t.machine returnAddress ∧
+        EqualOutside (writes s) s.data.dmem t.machine.data.dmem ∧
+        effect s t.machine ∧ NoAnchoredReentry t.history)
+      ⟨s, [s]⟩
+
+def preemptCountAddress : BitVec 64 := .ofNat 64 0xffffffff81cc85c8
+def currentTaskAddress : BitVec 64 := .ofNat 64 0xffffffff81cc85c0
+def softirqPendingAddress : BitVec 64 := .ofNat 64 0xffffffff81cc85e0
+
+inductive KcovKind where
+  | pc | cmp1 | cmp4 | cmp8 | constCmp4 | constCmp1
+  deriving DecidableEq
+
+structure WordWrite where
+  address : BitVec 64
+  value : BitVec 64
+
+def load64 (memory : Mem 64) (address : BitVec 64) : Option (BitVec 64) :=
+  (memory.loadInt address 8).map (.ofInt 64)
+
+def load32 (memory : Mem 64) (address : BitVec 64) : Option (BitVec 32) :=
+  (memory.loadInt address 4).map (.ofInt 32)
+
+/-- Physical callback metadata, fixed during an anchored call except for the
+    separately balanced preempt count. Capacity is a count of 64-bit words. -/
+structure KcovLayout where
+  task : BitVec 64
+  area : BitVec 64
+  capacity : BitVec 32
+  mode : BitVec 32
+  softirqEnabled : BitVec 32
+
+/-- Exact runtime metadata reads, not the ELF's initial global bytes. -/
+def KcovMetadata (layout : KcovLayout) (memory : Mem 64) : Prop :=
+  load64 memory currentTaskAddress = some layout.task ∧
+  load32 memory (layout.task + 0x6e0) = some layout.mode ∧
+  load32 memory (layout.task + 0x6e4) = some layout.capacity ∧
+  load64 memory (layout.task + 0x6e8) = some layout.area ∧
+  load32 memory (layout.task + 0x704) = some layout.softirqEnabled
+
+/-- Mapped buffer and bounded runtime header. A full buffer is allowed; no
+    callback is required to have room for a record. This predicate says
+    nothing about the peer state or the lookup result. -/
+def KcovBuffer (layout : KcovLayout) (memory : Mem 64) : Prop :=
+  (∀ word < layout.capacity.toNat,
+    (memory.loadInt (layout.area + .ofNat 64 (8 * word)) 8).isSome = true) ∧
+  ∃ count : Nat, count ≤ layout.capacity.toNat ∧
+    load64 memory layout.area = some (.ofNat 64 count)
+
+def KcovBufferBytes (layout : KcovLayout) : BitVec 64 → Prop :=
+  InRange layout.area (8 * layout.capacity.toNat)
+
+/-- Storage read by an active callback. Even capacity zero still requires
+    the header; caller writes must preserve it as well as the buffer words. -/
+def KcovStorageBytes (layout : KcovLayout) (address : BitVec 64) : Prop :=
+  InRange layout.area 8 address ∨ KcovBufferBytes layout address
+
+def KcovMetadataBytes (layout : KcovLayout) (address : BitVec 64) : Prop :=
+  InRange currentTaskAddress 8 address ∨
+  InRange (layout.task + 0x6e0) 4 address ∨
+  InRange (layout.task + 0x6e4) 4 address ∨
+  InRange (layout.task + 0x6e8) 8 address ∨
+  InRange (layout.task + 0x704) 4 address
+
+/-- Physical disjointness from protected memory (metadata, live stack and
+    represented objects). Readiness is proved from this, not assumed at
+    every callback. The caller chooses the actual protected footprint. -/
+def KcovSeparated (layout : KcovLayout) (protectedBytes : BitVec 64 → Prop) : Prop :=
+  ∀ address, KcovBufferBytes layout address → ¬protectedBytes address
+
+/-- Physical state carried between callbacks. Disabled tracing requires no
+    mapped coverage area; the mode field itself still belongs to the task. -/
+def KcovState (layout : KcovLayout) (preempt : BitVec 32) (memory : Mem 64) : Prop :=
+  KcovMetadata layout memory ∧
+  load32 memory preemptCountAddress = some preempt ∧
+  (layout.mode = 2 ∨ layout.mode = 3 → KcovBuffer layout memory)
+
+/-- Bytes that caller stores must preserve. Buffer storage is needed only
+    in an active mode; metadata and preemption state are always physical. -/
+def KcovStateBytes (layout : KcovLayout) (address : BitVec 64) : Prop :=
+  KcovMetadataBytes layout address ∨ InRange preemptCountAddress 4 address ∨
+    ((layout.mode = 2 ∨ layout.mode = 3) ∧ KcovStorageBytes layout address)
+
+/-- KCOV comparison record encoding: width in bits 1..2, constant bit 0. -/
+def KcovRecordTag : KcovKind → BitVec 64
+  | .pc => 0 | .cmp1 => 0 | .cmp4 => 4 | .cmp8 => 6
+  | .constCmp4 => 5 | .constCmp1 => 1
+
+/-- Callback argument width is fixed by the called entry point. -/
+def KcovArgument (kind : KcovKind) (s : MachineState) (reg : Reg64) : BitVec 64 :=
+  if kind = .constCmp1 ∨ kind = .cmp1 then (s.data.regs.get (.low reg .W8)).setWidth 64
+  else if kind = .cmp8 then s.data.regs.get64 reg
+  else (s.data.regs.get (.low reg .W32)).setWidth 64
+
+/-- Physical KCOV callback specification, with the actual early-return read
+    dependencies and machine-width arithmetic. It is not a proof checker. -/
+def KcovPlan (kind : KcovKind) (s : MachineState) : Option (List WordWrite) := do
+  let memory := s.data.dmem
+  let preempt ← load32 memory preemptCountAddress
+  let returnPC ← load64 memory s.data.regs.rsp.toBitVec
+  let task ← load64 memory currentTaskAddress
+  if preempt &&& 0xff0100 != 0 then
+    if preempt &&& 0x100 == 0 || preempt &&& 0xff0000 != 0 then return []
+    let softirqEnabled ← load32 memory (task + 0x704)
+    if softirqEnabled == 0 then return []
+  let mode ← load32 memory (task + 0x6e0)
+  if mode != (if kind = .pc then 2 else 3) then return []
+  let area ← load64 memory (task + 0x6e8)
+  let capacity ← load32 memory (task + 0x6e4)
+  let count ← load64 memory area
+  if kind = .pc then
+    let next := count + 1
+    if next.toNat ≥ capacity.toNat then return []
+    return [⟨area, next⟩, ⟨area + 8 * next, returnPC⟩]
+  else
+    let slot := 4 * count
+    let ending := 8 * slot + 40
+    if 8 * (capacity.setWidth 64) < ending then return []
+    let tag := KcovRecordTag kind
+    let arg1 := KcovArgument kind s .rdi
+    let arg2 := KcovArgument kind s .rsi
+    return [⟨area, count + 1⟩, ⟨area + ending - 32, tag⟩,
+      ⟨area + ending - 24, arg1⟩, ⟨area + ending - 16, arg2⟩,
+      ⟨area + ending - 8, returnPC⟩]
+
+/-- Planned destinations are mapped and do not overwrite the return word.
+    Separation from all represented objects is an additional entry obligation. -/
+def KcovReady (kind : KcovKind) (s : MachineState) : Prop :=
+  ∃ stores, KcovPlan kind s = some stores ∧
+    ∀ write ∈ stores,
+      (s.data.dmem.loadInt write.address 8).isSome = true ∧
+      ∀ address, InRange write.address 8 address → ¬InRange s.data.regs.rsp.toBitVec 8 address
+
+def KcovWrites (kind : KcovKind) (s : MachineState) (address : BitVec 64) : Prop :=
+  ∃ stores, KcovPlan kind s = some stores ∧
+    ∃ write ∈ stores, InRange write.address 8 address
+
+/-- Exact callback stores keep repeated-call buffer readiness provable;
+    allowing arbitrary corruption of the coverage buffer would not suffice. -/
+def KcovEffect (kind : KcovKind) (before after : MachineState) : Prop :=
+  ∃ stores, KcovPlan kind before = some stores ∧
+    after.data.dmem = stores.foldl
+      (fun memory write => memory.storeInt write.address 8 write.value.toInt) before.data.dmem
+
+/-- KCOV PC callback: only its physically planned stores may occur. -/
+def TracePcContract (fetch : Int64 → Option Decoded) : Prop :=
+  ServiceReturns fetch (.ofNat 0xffffffff810f31f0) (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)
+
+/-- KCOV variable/variable 32-bit comparison callback. -/
+def TraceCmp4Contract (fetch : Int64 → Option Decoded) : Prop :=
+  ServiceReturns fetch (.ofNat 0xffffffff810f4080) (KcovReady .cmp4) (KcovWrites .cmp4) (KcovEffect .cmp4)
+
+/-- KCOV constant/variable 32-bit comparison callback. -/
+def TraceConstCmp4Contract (fetch : Int64 → Option Decoded) : Prop :=
+  ServiceReturns fetch (.ofNat 0xffffffff810f4100) (KcovReady .constCmp4)
+    (KcovWrites .constCmp4) (KcovEffect .constCmp4)
+
+/-- KCOV constant/variable 8-bit comparison callback used by peer-get. -/
+def TraceConstCmp1Contract (fetch : Int64 → Option Decoded) : Prop :=
+  ServiceReturns fetch (.ofNat 0xffffffff810f40c0) (KcovReady .constCmp1)
+    (KcovWrites .constCmp1) (KcovEffect .constCmp1)
+
+/-- The actual no-work BH-enable path, including nested disable counts.
+    The softirq word is needed only on the branch that reads it. -/
+def BhEnableReady (s : MachineState) : Prop :=
+  ∃ count : BitVec 32,
+    s.data.dmem.loadInt preemptCountAddress 4 = some (count.toNat : Int) ∧
+    count &&& 0x000f0000 = 0 ∧
+    ((count + 1 - s.data.regs.get (.low .rsi .W32)) &&& 0x00ffff00 = 0 →
+      s.data.dmem.loadInt softirqPendingAddress 2 = some 0) ∧
+    ∀ address, InRange preemptCountAddress 4 address → ¬InRange s.data.regs.rsp.toBitVec 8 address
+
+/-- BH enable balances the actual low-32-bit count argument, modulo 2^32.
+    Readiness must justify that its softirq path runs no pending work. -/
+def BhEnableContract (fetch : Int64 → Option Decoded) : Prop :=
+  ServiceReturns fetch (.ofNat 0xffffffff810732c0) BhEnableReady
+    (fun _ => InRange preemptCountAddress 4)
+    (fun before after => ∀ old : BitVec 32,
+      before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) →
+      after.data.dmem.loadInt preemptCountAddress 4 =
+        some ((old - before.data.regs.get (.low .rsi .W32)).toNat : Int))
+
+/-- Additional anchored decoder domain for M2; M1 agreement is separate
+    because peer-get is shared. The linked-label interpretation is unchanged. -/
+def AllowedipsDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, AllowedipsImage.fetch pc = some instruction → fetch pc = some instruction
+
+/-- A callback's interior is not another anchored M2 invocation. -/
+def NoAllowedipsReentry (history : List MachineState) : Prop :=
+  ∀ s ∈ history.dropLast, AllowedipsImage.fetch s.pc = none
+
+/-- M2 uses the same physical callback specification, with its additional
+    anchored ranges excluded from callback interiors. The original M1
+    contracts and their hypotheses remain unchanged. -/
+def AllowedipsServiceReturns (fetch : Int64 → Option Decoded) (address : Int64)
+    (ready : MachineState → Prop) (writes : MachineState → BitVec 64 → Prop)
+    (effect : MachineState → MachineState → Prop) : Prop :=
+  ∀ s returnAddress, s.pc = address → ready s → EntryFrame s returnAddress →
+    Eventually (historyStep fetch)
+      (fun t => Returned s t.machine returnAddress ∧
+        EqualOutside (writes s) s.data.dmem t.machine.data.dmem ∧
+        effect s t.machine ∧ NoAnchoredReentry t.history ∧ NoAllowedipsReentry t.history)
+      ⟨s, [s]⟩
+
+def AllowedipsTracePcContract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f31f0)
+    (KcovReady .pc) (KcovWrites .pc) (KcovEffect .pc)
+
+def AllowedipsTraceCmp1Contract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f4040)
+    (KcovReady .cmp1) (KcovWrites .cmp1) (KcovEffect .cmp1)
+
+def AllowedipsTraceCmp8Contract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f40a0)
+    (KcovReady .cmp8) (KcovWrites .cmp8) (KcovEffect .cmp8)
+
+def AllowedipsTraceConstCmp1Contract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f40c0)
+    (KcovReady .constCmp1) (KcovWrites .constCmp1) (KcovEffect .constCmp1)
+
+def AllowedipsTraceConstCmp4Contract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810f4100)
+    (KcovReady .constCmp4) (KcovWrites .constCmp4) (KcovEffect .constCmp4)
+
+/-- As in M1, this contract covers the no-pending-work BH-enable path.
+    M2's Pre must justify the actual read conditions and stack separation. -/
+def AllowedipsBhEnableContract (fetch : Int64 → Option Decoded) : Prop :=
+  AllowedipsServiceReturns fetch (.ofNat 0xffffffff810732c0) BhEnableReady
+    (fun _ => InRange preemptCountAddress 4)
+    (fun before after => ∀ old : BitVec 32,
+      before.data.dmem.loadInt preemptCountAddress 4 = some (old.toNat : Int) →
+      after.data.dmem.loadInt preemptCountAddress 4 =
+        some ((old - before.data.regs.get (.low .rsi .W32)).toNat : Int))
+
+/-- Whether the actual callback reads softirqEnabled before its mode test. -/
+def LookupSoftRead (preempt : BitVec 32) : Prop :=
+  preempt &&& 0xff0100 ≠ 0 ∧
+  ¬(preempt &&& 0x100 = 0 ∨ preempt &&& 0xff0000 ≠ 0)
+
+/-- The callback reaches its mode read only after the preemption/softirq gate. -/
+def LookupModeRead (coverage : KcovLayout) (preempt : BitVec 32) : Prop :=
+  if preempt &&& 0xff0100 ≠ 0 then
+    ¬(preempt &&& 0x100 = 0 ∨ preempt &&& 0xff0000 ≠ 0) ∧ coverage.softirqEnabled ≠ 0
+  else True
+
+/-- PC callbacks occur before and after BH-disable. Comparisons occur only
+    with a nonempty selected bucket, after the actual modular increment. -/
+def LookupBufferNeeded (coverage : KcovLayout) (preempt : BitVec 32)
+    (v : LookupRelation.View) : Prop :=
+  (coverage.mode = 2 ∧ (LookupModeRead coverage preempt ∨ LookupModeRead coverage (512+preempt))) ∨
+  (coverage.mode = 3 ∧ v.bucket ≠ [] ∧ LookupModeRead coverage (512+preempt))
+
+/-- Only callback metadata reached in one of this lookup's two contexts.
+    Unused layout values impose no equality on memory. The active coverage
+    allocation is mapped uniformly; a full buffer is permitted. -/
+def LookupCoverageAt (coverage : KcovLayout) (preempt : BitVec 32)
+    (v : LookupRelation.View) (memory : Mem 64) : Prop :=
+  load64 memory currentTaskAddress = some coverage.task ∧
+  ((LookupSoftRead preempt ∨ LookupSoftRead (512+preempt)) →
+    load32 memory (coverage.task+0x704) = some coverage.softirqEnabled) ∧
+  ((LookupModeRead coverage preempt ∨ LookupModeRead coverage (512+preempt)) →
+    load32 memory (coverage.task+0x6e0) = some coverage.mode) ∧
+  (LookupBufferNeeded coverage preempt v →
+    load32 memory (coverage.task+0x6e4) = some coverage.capacity ∧
+    load64 memory (coverage.task+0x6e8) = some coverage.area ∧ KcovBuffer coverage memory)
+
+def LookupMetadataBytes (coverage : KcovLayout) (preempt : BitVec 32)
+    (v : LookupRelation.View) (a : BitVec 64) : Prop :=
+  InRange currentTaskAddress 8 a ∨
+  ((LookupSoftRead preempt ∨ LookupSoftRead (512+preempt)) ∧ InRange (coverage.task+0x704) 4 a) ∨
+  ((LookupModeRead coverage preempt ∨ LookupModeRead coverage (512+preempt)) ∧ InRange (coverage.task+0x6e0) 4 a) ∨
+  (LookupBufferNeeded coverage preempt v ∧
+    (InRange (coverage.task+0x6e4) 4 a ∨ InRange (coverage.task+0x6e8) 8 a))
+
+def LookupCoverageWrites (coverage : KcovLayout) (preempt : BitVec 32)
+    (v : LookupRelation.View) (a : BitVec 64) : Prop :=
+  LookupBufferNeeded coverage preempt v ∧ KcovBufferBytes coverage a
+
+def LookupServiceBytes (coverage : KcovLayout) (preempt : BitVec 32)
+    (v : LookupRelation.View) (a : BitVec 64) : Prop :=
+  LookupMetadataBytes coverage preempt v a ∨ InRange preemptCountAddress 4 a ∨
+  (LookupBufferNeeded coverage preempt v ∧ KcovStorageBytes coverage a)
+
+/-- The helper is called for a selected owner even when its peer word is NULL. -/
+def LookupStackWords (c : LookupRelation.Config) : Nat := if c.focus.owner.isSome then 13 else 6
+
+def LookupStackWrites (c : LookupRelation.Config) (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec - .ofNat 64 (8*LookupStackWords c)) (8*LookupStackWords c)
+
+def LookupLiveStack (c : LookupRelation.Config) (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec - .ofNat 64 (8*LookupStackWords c)) (8*LookupStackWords c+8)
+
+def LookupBucketBytes (c : LookupRelation.Config) (v : LookupRelation.View) (a : BitVec 64) : Prop :=
+  InRange (c.table + .ofNat 64 (8*(c.query%8192))) 8 a ∨
+  ∃ e ∈ v.bucket, BucketShapeReads (LookupRelation.ownerAddress c e.owner) a
+
+def LookupOwnerBytes (c : LookupRelation.Config) (a : BitVec 64) : Prop :=
+  ∃ owner, c.focus.owner = some owner ∧ InRange (LookupRelation.ownerAddress c owner) 8 a
+
+def LookupCountBytes (c : LookupRelation.Config) (a : BitVec 64) : Prop :=
+  ∃ pid, c.focus.peer = some pid ∧ InRange (c.peers pid + .ofNat 64 Layouts.peer_refcount) 4 a
+
+def LookupDataWrites (c : LookupRelation.Config) (v : LookupRelation.View) (a : BitVec 64) : Prop :=
+  LookupOwnerBytes c a ∨ ((∃ n, v.count = some n ∧ n ≠ 0) ∧ LookupCountBytes c a)
+
+/-- A conditional output requirement, not a count bound on the entry domain.
+    Dead, NULL, miss and rejected-saturation inputs need no output storage. -/
+def LookupOutputNeeded (v : LookupRelation.View) : Prop :=
+  ∃ n, v.count = some n ∧ n ≠ 0 ∧ n+1 < 2^31
+
+def LookupOutputWrites (v : LookupRelation.View) (s : MachineState) (a : BitVec 64) : Prop :=
+  LookupOutputNeeded v ∧ InRange s.data.regs.rcx.toBitVec 8 a
+
+def LookupPendingRead (preempt : BitVec 32) : Prop := (preempt+1) &&& 0x00ffff00 = 0
+
+/-- Named physical entry obligations. Separation is an explicit allocation
+    discipline, not a claim that every safe x86 alias is admitted. No live-
+    peer or positive-count invariant is imposed. Every byte range belongs
+    to lookup, its helper, its stack or its named service callbacks. -/
+structure LookupEntry (c : LookupRelation.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState)
+    (world : Leanux.World) (v : LookupRelation.View) : Prop where
+  pc : s.pc = Image.Lookup.entry
+  frame : EntryFrame s returnAddress
+  table : s.data.regs.rdi.toBitVec = c.table
+  query : (s.data.regs.get (.low .rdx .W32)).toNat = c.query
+  kinds : KindMask (s.data.regs.get (.low .rsi .W32)) c.kinds
+  projected : LookupRelation.project c world = some v
+  focus : LookupRelation.EntryFocus c v
+  physical : LookupRelation.Physical c [s] [LookupObservation.call "wg_index_hashtable_lookup" s] s v
+  steps : world.steps.toList = c.incomingSteps
+  rxSection : world.netRxSection = c.rxSection
+  coverageAt : LookupCoverageAt coverage preempt v s.data.dmem
+  preemptAt : load32 s.data.dmem preemptCountAddress = some preempt
+  stackMapped : ∀ n < LookupStackWords c,
+    (s.data.dmem.loadInt (s.data.regs.rsp.toBitVec - .ofNat 64 ((n+1)*8)) 8).isSome = true
+  outputMapped : LookupOutputNeeded v → (s.data.dmem.loadInt s.data.regs.rcx.toBitVec 8).isSome = true
+  bhHardirq : (512+preempt) &&& 0x000f0000 = 0
+  bhPending : LookupPendingRead preempt → s.data.dmem.loadInt softirqPendingAddress 2 = some 0
+  readsScratch : ∀ a, LookupRelation.Reads c v a →
+    ¬(LookupStackWrites c s a ∨ LookupCoverageWrites coverage preempt v a ∨ InRange preemptCountAddress 4 a)
+  serviceStack : ∀ a, LookupServiceBytes coverage preempt v a → ¬LookupStackWrites c s a
+  coverageStack : ∀ a, LookupCoverageWrites coverage preempt v a → ¬LookupLiveStack c s a
+  coverageMetadata : ∀ a, LookupCoverageWrites coverage preempt v a → ¬LookupMetadataBytes coverage preempt v a
+  coveragePreempt : ∀ a, LookupCoverageWrites coverage preempt v a → ¬InRange preemptCountAddress 4 a
+  bhStack : ∀ a, InRange preemptCountAddress 4 a → ¬LookupLiveStack c s a
+  bhMetadata : ∀ a,
+    (LookupMetadataBytes coverage preempt v a ∨
+      (LookupBufferNeeded coverage preempt v ∧ KcovStorageBytes coverage a)) →
+    ¬InRange preemptCountAddress 4 a
+  dataService : ∀ a, LookupServiceBytes coverage preempt v a → ¬LookupDataWrites c v a
+  dataReturn : ∀ a, InRange s.data.regs.rsp.toBitVec 8 a → ¬LookupDataWrites c v a
+  dataBucket : ∀ a, LookupBucketBytes c v a → ¬LookupDataWrites c v a
+  ownerCount : ∀ a, LookupCountBytes c a → ¬LookupOwnerBytes c a
+  outputProtected : ∀ a, LookupOutputWrites v s a →
+    ¬(LookupRelation.Reads c v a ∨ LookupServiceBytes coverage preempt v a ∨
+      InRange (s.data.regs.rsp.toBitVec-48) 56 a ∨ LookupCoverageWrites coverage preempt v a)
+  pendingFrame : LookupPendingRead preempt → ∀ a, InRange softirqPendingAddress 2 a →
+    ¬(LookupStackWrites c s a ∨ LookupCoverageWrites coverage preempt v a ∨
+      LookupDataWrites c v a ∨ LookupOutputWrites v s a)
+
+/-- Entry domain relative to the supplied source World and fixed ABI/address
+    interpretation. Its machine-side domain existentially closes world and
+    these interpretation parameters. No execution or R-preservation premise
+    occurs here; LookupWitness supplies a concrete inhabitant and its test
+    executes that exact state to the recorded return. -/
+def Pre_lookup (c : LookupRelation.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState) (world : Leanux.World) : Prop :=
+  ∃ v, LookupEntry c coverage preempt returnAddress s world v
+
+
+/-- M2 calls PC and comparison instrumentation in both BH phases. Buffer
+    metadata is required only when the physical callback reads it. -/
+def AllowedipsCoverageNeeded (coverage : KcovLayout) (preempt : BitVec 32) : Prop :=
+  LookupModeRead coverage preempt ∧ (coverage.mode = 2 ∨ coverage.mode = 3)
+
+def AllowedipsCoverageAt (coverage : KcovLayout) (preempt : BitVec 32) (memory : Mem 64) : Prop :=
+  load64 memory currentTaskAddress = some coverage.task ∧
+  (LookupSoftRead preempt → load32 memory (coverage.task+0x704) = some coverage.softirqEnabled) ∧
+  (LookupModeRead coverage preempt → load32 memory (coverage.task+0x6e0) = some coverage.mode) ∧
+  (AllowedipsCoverageNeeded coverage preempt →
+    load32 memory (coverage.task+0x6e4) = some coverage.capacity ∧
+    load64 memory (coverage.task+0x6e8) = some coverage.area ∧ KcovBuffer coverage memory)
+
+def AllowedipsCoverageWrites (coverage : KcovLayout) (preempt : BitVec 32)
+    (a : BitVec 64) : Prop :=
+  (AllowedipsCoverageNeeded coverage preempt ∨ AllowedipsCoverageNeeded coverage (preempt+512)) ∧
+    KcovBufferBytes coverage a
+
+def AllowedipsMetadata (coverage : KcovLayout) (preempt : BitVec 32) (a : BitVec 64) : Prop :=
+  InRange currentTaskAddress 8 a ∨
+  ((LookupSoftRead preempt ∨ LookupSoftRead (preempt+512)) ∧ InRange (coverage.task+0x704) 4 a) ∨
+  ((LookupModeRead coverage preempt ∨ LookupModeRead coverage (preempt+512)) ∧ InRange (coverage.task+0x6e0) 4 a) ∨
+  ((AllowedipsCoverageNeeded coverage preempt ∨ AllowedipsCoverageNeeded coverage (preempt+512)) ∧
+    (InRange (coverage.task+0x6e4) 4 a ∨ InRange (coverage.task+0x6e8) 8 a)) ∨
+  (LookupPendingRead preempt ∧ InRange softirqPendingAddress 2 a)
+
+def AllowedipsServiceBytes (coverage : KcovLayout) (preempt : BitVec 32) (a : BitVec 64) : Prop :=
+  AllowedipsMetadata coverage preempt a ∨
+  ((AllowedipsCoverageNeeded coverage preempt ∨ AllowedipsCoverageNeeded coverage (preempt+512)) ∧
+    KcovStorageBytes coverage a)
+
+/-- Outer saves/local words, the shared call slot, and the deepest peer-get
+    saves/call: every word of this interval is used on a covered path. -/
+def AllowedipsStackWrites (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec-144) 144
+
+def AllowedipsLiveStack (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec-144) 152
+
+def AllowedipsCountWrites (c : AllowedipsRelation.Config) (v : AllowedipsRelation.View)
+    (a : BitVec 64) : Prop :=
+  ∃ pid count, c.focus.peer = some pid ∧ v.count = some count ∧ count ≠ 0 ∧
+    InRange (c.peers pid + .ofNat 64 Layouts.peer_refcount) 4 a
+
+/-- Physical entry domain for both IP families. Focus is a total pure source
+    selection, not an assumption that the binary or mirror terminates; a
+    refused source search gives no selected node. No peer positivity premise.
+    Both address families have executed concrete witnesses in AllowedipsWitnessPre. -/
+structure AllowedipsEntry (c : AllowedipsRelation.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState)
+    (world : Leanux.World) (v : AllowedipsRelation.View) : Prop where
+  pc : s.pc = AllowedipsImage.Lookup.entry
+  entry : EntryFrame s returnAddress
+  root : s.data.regs.rdi.toBitVec = AllowedipsRelation.pointer c.nodes c.root
+  bits : s.data.regs.get (.low .rsi .W8) = .ofNat 8 c.bits
+  projection : AllowedipsRelation.project c world = some v
+  related : AllowedipsRelation.R c [s] [LookupObservation.call "lookup" s] s world
+  focusNode : c.focus.node = (AllowedipsSource.select v.nodes c.root c.bits c.key).join
+  focusPeer : c.focus.peer = c.focus.node.bind (fun id => (v.nodes id).bind (·.peer))
+  input : Allowedips.NetworkKey s.data.dmem s.data.regs.rdx.toBitVec c.bits c.key
+  stack : ∀ i < 18,
+    (s.data.dmem.loadInt (s.data.regs.rsp.toBitVec-.ofNat 64 ((i+1)*8)) 8).isSome = true
+  preemptField : load32 s.data.dmem preemptCountAddress = some preempt
+  coverageBefore : AllowedipsCoverageAt coverage preempt s.data.dmem
+  coverageDuring : AllowedipsCoverageAt coverage (preempt+512) s.data.dmem
+  hardirq : (preempt+512) &&& 0x000f0000 = 0
+  pending : LookupPendingRead preempt → s.data.dmem.loadInt softirqPendingAddress 2 = some 0
+  stackData : ∀ a, AllowedipsRelation.Reads c v a → ¬AllowedipsStackWrites s a
+  stackInput : ∀ a, Allowedips.NetworkReads s.data.regs.rdx.toBitVec c.bits a → ¬AllowedipsStackWrites s a
+  stackServices : ∀ a, (AllowedipsServiceBytes coverage preempt a ∨ InRange preemptCountAddress 4 a) →
+    ¬AllowedipsStackWrites s a
+  bufferData : ∀ a, AllowedipsRelation.Reads c v a → ¬AllowedipsCoverageWrites coverage preempt a
+  bufferInput : ∀ a, Allowedips.NetworkReads s.data.regs.rdx.toBitVec c.bits a →
+    ¬(AllowedipsCoverageNeeded coverage preempt ∧ KcovBufferBytes coverage a)
+  bufferStack : ∀ a, AllowedipsCoverageWrites coverage preempt a → ¬AllowedipsLiveStack s a
+  bufferMetadata : ∀ a, AllowedipsCoverageWrites coverage preempt a →
+    ¬AllowedipsMetadata coverage preempt a
+  bufferPreempt : ∀ a, AllowedipsCoverageWrites coverage preempt a → ¬InRange preemptCountAddress 4 a
+  countStack : ∀ a, AllowedipsCountWrites c v a → ¬AllowedipsLiveStack s a
+  countTrie : ∀ a, AllowedipsCountWrites c v a →
+    ¬AllowedipsRelation.TrieReads c.nodes v.nodes c.root c.bits c.key a
+  countServices : ∀ a, AllowedipsCountWrites c v a →
+    ¬(AllowedipsServiceBytes coverage preempt a ∨ InRange preemptCountAddress 4 a)
+  preemptData : ∀ a, AllowedipsRelation.Reads c v a → ¬InRange preemptCountAddress 4 a
+  preemptStack : ∀ a, AllowedipsLiveStack s a → ¬InRange preemptCountAddress 4 a
+  preemptServices : ∀ a, AllowedipsServiceBytes coverage preempt a → ¬InRange preemptCountAddress 4 a
+
+/-- The function's named machine-entry domain, witnessed before it lands. -/
+def Pre_allowedips (c : AllowedipsRelation.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (returnAddress : UInt64) (s : MachineState) (world : Leanux.World) : Prop :=
+  ∃ v, AllowedipsEntry c coverage preempt returnAddress s world v
+
+/-- Literal instruction agreement for the anchored insertion image. Callback
+behavior and agreement with supplied random draws are separate obligations. -/
+def IndexInsertDecoderAgreement (fetch : Int64 → Option Decoded) : Prop :=
+  ∀ pc instruction, IndexInsertImage.Insert.fetch pc=some instruction → fetch pc=some instruction
+
+/-- Read locations of instrumentation in the random call's unchanged BH
+phase. Pending-work words and the insertion heap do not belong here. -/
+def RandomMetadata (coverage : KcovLayout) (preempt : BitVec 32) (a : BitVec 64) : Prop :=
+  InRange currentTaskAddress 8 a ∨ InRange preemptCountAddress 4 a ∨
+  (LookupSoftRead preempt ∧ InRange (coverage.task+0x704) 4 a) ∨
+  (LookupModeRead coverage preempt ∧ InRange (coverage.task+0x6e0) 4 a) ∨
+  (AllowedipsCoverageNeeded coverage preempt ∧
+    (InRange (coverage.task+0x6e4) 4 a ∨ InRange (coverage.task+0x6e8) 8 a))
+
+def RandomBuffer (coverage : KcovLayout) (preempt : BitVec 32) (a : BitVec 64) : Prop :=
+  AllowedipsCoverageNeeded coverage preempt ∧ KcovStorageBytes coverage a
+
+def RandomRecordingActive (coverage : KcovLayout) (preempt : BitVec 32) : Bool :=
+  @decide (AllowedipsCoverageNeeded coverage preempt) (by
+    unfold AllowedipsCoverageNeeded LookupModeRead
+    infer_instance)
+
+/-- A bounded physical stack reservation, not an instruction/draw budget.
+The live range also protects the service return word. -/
+def RandomStack (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec-1024) 1024
+def RandomLiveStack (s : MachineState) : BitVec 64 → Prop :=
+  InRange (s.data.regs.rsp.toBitVec-1024) 1032
+
+/-- Current initialized provider state, recording graph and physical call
+resources. This contains no World, source result or future execution premise.
+The entry theorem must additionally separate these private writes from its
+own represented objects and saved caller frame. -/
+structure RandomReady (privateState : RandomProvider.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (s : MachineState) : Prop where
+  coverageState : AllowedipsCoverageAt coverage preempt s.data.dmem
+  preemptState : load32 s.data.dmem preemptCountAddress=some preempt
+  capacity : AllowedipsCoverageNeeded coverage preempt → 0<coverage.capacity.toNat
+  privateCheck : RandomProvider.check privateState coverage.task.toNat
+    (RandomRecordingActive coverage preempt) s.data.dmem=.ok ()
+  kernelMode : s.data.system.cpl=0
+  forward : s.data.system.bits[10]=false
+  stackMapped : ∀ i<1024, (s.data.dmem.get? (s.data.regs.rsp.toBitVec-1024+.ofNat 64 i)).isSome=true
+  privateApart : ∀ a, RandomProvider.PrivateBytes privateState a →
+    ¬(RandomLiveStack s a ∨ RandomMetadata coverage preempt a ∨ RandomBuffer coverage preempt a)
+  stackApart : ∀ a, RandomLiveStack s a →
+    ¬(RandomMetadata coverage preempt a ∨ RandomBuffer coverage preempt a)
+  bufferApart : ∀ a, RandomBuffer coverage preempt a → ¬RandomMetadata coverage preempt a
+
+def RandomWrites (privateState : RandomProvider.Config) (coverage : KcovLayout)
+    (preempt : BitVec 32) (s : MachineState) (a : BitVec 64) : Prop :=
+  RandomProvider.PrivateBytes privateState a ∨ RandomStack s a ∨
+    (AllowedipsCoverageNeeded coverage preempt ∧ KcovBufferBytes coverage a)
+
+/-- Unproved physical get_random_u32 service specification for the initialized
+provider, including its recording hook. It executes the same fetched ISA as
+the caller and preserves physical private readiness, coverage and BH state.
+It promises no particular random value. Agreement with a recorded input tape
+is a separate safety hypothesis; this declaration cannot produce arbitrary
+requested draws from one fixed machine state. -/
+def RandomReturnContract (fetch : Int64 → Option Decoded) (privateState : RandomProvider.Config) : Prop :=
+  ∀ coverage preempt s returnAddress, s.pc=.ofNat 0xffffffff81375200 →
+    RandomReady privateState coverage preempt s → EntryFrame s returnAddress →
+    Eventually (historyStep fetch) (fun t =>
+      Returned s t.machine returnAddress ∧
+      EqualOutside (RandomWrites privateState coverage preempt s) s.data.dmem t.machine.data.dmem ∧
+      AllowedipsCoverageAt coverage preempt t.machine.data.dmem ∧
+      load32 t.machine.data.dmem preemptCountAddress=some preempt ∧
+      RandomProvider.check privateState coverage.task.toNat
+        (RandomRecordingActive coverage preempt) t.machine.data.dmem=.ok () ∧
+      t.machine.data.system.bits[9]=s.data.system.bits[9] ∧
+      (∀ point ∈ t.history.dropLast, IndexInsertImage.Insert.fetch point.pc=none))
+      ⟨s,[s]⟩
+
+/-- Safety coupling with an external recorded-input interpretation. The
+interpretation depends only on provider-private bytes, never the WireGuard
+heap. Recording context and return site are fixed parameters: changing either
+can change a steered result without changing private bytes. The current
+readiness and entry frame are premises of the return law, not conclusions.
+Its return law constrains existing actual service histories; it does
+not assert termination, physical readiness, a source insertion result or R.
+In particular `inputAt` is required before a draw can be prescribed. -/
+structure RandomInputCoupling (fetch : Int64 → Option Decoded) (privateState : RandomProvider.Config)
+    (coverage : KcovLayout) (preempt : BitVec 32) (returnAddress : UInt64)
+    (inputAt : DataMem → List Leanux.HiddenRecord → Prop) : Prop where
+  frame : ∀ before after records,
+    (∀ a, RandomProvider.PrivateBytes privateState a → before.get? a=after.get? a) →
+    inputAt before records → inputAt after records
+  returned : ∀ s t history records value rest,
+    s.pc=.ofNat 0xffffffff81375200 → RandomReady privateState coverage preempt s →
+    EntryFrame s returnAddress → inputAt s.data.dmem records →
+    Pair.Insert.draw records=.ok (value,rest) →
+    ActualHistory fetch s history → history.getLast?=some t →
+    Returned s t returnAddress →
+    (∀ point ∈ history.dropLast, IndexInsertImage.Insert.fetch point.pc=none) →
+    (t.data.regs.get (.low .rax .W32)).toNat=value ∧ inputAt t.data.dmem rest
+
+end Binary.TrustBase

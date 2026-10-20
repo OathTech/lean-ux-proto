@@ -81,8 +81,8 @@ def sources(names=None):
     for entry in selected:
         if entry.get("consumer") == "binary":
             if names is not None:
-                raise RuntimeError(f"{entry['name']} is an opt-in Git dependency: clone {entry['url']} "
-                                   f"at {entry['commit']} into .deps/{entry['name']}; binary/run.py verifies it")
+                raise RuntimeError(f"{entry['name']} is an opt-in Git dependency: run "
+                                   "python3 binary/run.py --bootstrap-only to clone its upstream and apply the locked patches")
             print(f"Not staged in the base bundle: {entry['name']} (binary/run.py dependency)", flush=True)
             continue
         archive = ROOT / entry["archive"]

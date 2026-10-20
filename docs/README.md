@@ -101,6 +101,11 @@ Read these before the README's claims are taken at face value:
 
 ## Proofs
 
+The [binary landing report](2026-10-19-binary-landing-assessment.md) records
+the paired experiment's carry to the split mirror and pinned s5 image, its
+separate build/gate and runtime validation, and the open milestone-1 review
+obligations. Current setup commands are in [binary/README.md](../binary/README.md).
+
 | Document | Contents |
 | --- | --- |
 | [2026-10-12-charter-window-proof.md](2026-10-12-charter-window-proof.md) | The first proof charter: replay freedom of the receive counter window, Rule Zero, the layered models |
@@ -119,6 +124,8 @@ Read these before the README's claims are taken at face value:
 | [2026-10-14-charter-binary-tv.md](2026-10-14-charter-binary-tv.md) | Charter for the scoping of binary-level translation validation: the mirror against the compiled oracle under Kraken's x86-64 semantics, a probe on one WireGuard function |
 | [2026-10-15-charter-binary-adequacy.md](2026-10-15-charter-binary-adequacy.md) | Charter for the binary-level adequacy grind: one theorem per anchored WireGuard function under Kraken, region lemmas between correspondence points, the trust base in one file |
 | [2026-10-15-binary-tv-scoping.md](2026-10-15-binary-tv-scoping.md) | Instruction census and executable three-way index-lookup probe under Kraken; blockers, state relation and checker estimates |
+| [2026-10-16-plan-executable-binary-correspondence.md](2026-10-16-plan-executable-binary-correspondence.md) | Build sequence for executable reconstruction, persistent paired Kraken/mirror execution, workload debugging and proof of the same assertions; index pilot followed by the unfinished allowed-IPs loop |
+| [2026-10-18-charter-paired-index-subsystem.md](2026-10-18-charter-paired-index-subsystem.md) | Next paired-execution increment: complete removal and replacement proofs, lookup under one executable reconstruction, and finite-sequence composition over a retained heap; fresh-function cost and reuse measurements |
 | [2026-10-15-design-state-split.md](2026-10-15-design-state-split.md) | Design for the state split (revision 2, against Codex#4's review): per-subsystem worlds (WireGuard with routing inside, the file layer, seccomp, one shared task store, the fixture, the ambient effects), `FS.M` and `Seccomp.M` stacked on a `TaskM` layer, the within-WireGuard components over existing owners, the compile-driven retrofit with the landed campaign-1 tree as its baseline, the staging and estimate; the review dispositions |
 | [2026-10-16-proof-state-split.md](2026-10-16-proof-state-split.md) | Completed campaign-1 state-split retrofit: theorem census, type-grounded deletions, full gate/replay and reconstructed runtime witnesses |
 | [2026-10-16-proof-state-split-findings.md](2026-10-16-proof-state-split-findings.md) | Checked obsolete-observer differences and commands that reproduce them |
@@ -171,3 +178,7 @@ Read these before the README's claims are taken at face value:
 [history/](history/README.md) holds the superseded proposals and the proof
 artefacts of the first prototype. They are not current direction and do not
 authorise recreating what they describe.
+
+- [2026-10-18-charter-paired-index-insertion.md](2026-10-18-charter-paired-index-insertion.md): insertion, recorded draws and finite retained-heap composition; [execution report](2026-10-18-paired-index-insertion.md), [fresh checkpoint review](2026-10-18-review-paired-index-insertion.md). Both review findings are repaired and local validation passes; paused with external acceptance pending.
+
+- [2026-10-19-charter-paired-callbacks.md](2026-10-19-charter-paired-callbacks.md): bounded shared callback image proofs and first-return permissions; [report](2026-10-19-paired-callbacks.md), [charter review](2026-10-19-review-paired-callback-charter.md), [closing review](2026-10-19-review-paired-callbacks.md).

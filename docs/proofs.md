@@ -1331,3 +1331,59 @@ the lag.
 
 The tree was restructured from `Leanux/Spikes/` on 2026-10-13; the dated
 documents above keep the historical names in their prose.
+
+
+## Binary adequacy (standalone charter target)
+
+The user-opened [binary charter](2026-10-15-charter-binary-adequacy.md)
+authorizes `binary/` separately from the mirror proof tree. Its current
+[report](2026-10-15-binary-adequacy.md#milestone-1-function-theorem-and-review-handoff)
+quotes the trust base and distinguishes proof acceptance from kernel-entry
+realism and physical frame premises.
+
+| Function | Headline theorem / transport | Decoded regions | Named service contracts | Mirror pin | Status |
+| --- | --- | --- | --- | --- | --- |
+| `wg_index_hashtable_lookup`, including `wg_peer_get_maybe_zero` | `Binary.LookupRelation.lookup_simulation`, `lookup_transport`, `lookup_framed_transport` | 54 (23 lookup, 31 helper) | `TracePcContract`, `TraceCmp4Contract`, `TraceConstCmp4Contract`, `TraceConstCmp1Contract`, `BhEnableContract` | `cb2348e` | Function and bucket-loop composition proved; original ABI return, all accepted helper paths, result and cut frames. Independent review: go with named fixes; F1/F3/F4/F5/F8/F10/F11 implemented for recheck at M2. External export gate PASS at 430ea90 only; updated surface awaits M2 export gate. |
+
+| Allowed-IPs `lookup` and `common_bits`, both families | In progress; no function theorem claimed | 56 (35 lookup, 21 common_bits), plus existing peer-get | Under construction; additional variable cmp1/cmp8 callbacks reached | `cb2348e` | Paused for replanning (2026-10-16). Both-family Pre witnesses execute to RET; complete entry/common_bits/peer-get/return-tail components checked with union cut frames. Bounded loop and function correspondence/transport remain open; recovery record is in the single adequacy report. M2 review will recheck M1 fixes. |
+
+On the separate `task/binary-proof-refactor` branch, the
+[sequential sibling experiment](2026-10-16-goal-binary-proof-refactoring.md#sibling-sequential-experiment-result)
+adds `Binary.Sequential.lookup_simulation` for the same full index lookup.
+It keeps Pre and the image fixed, but exports endpoint effects under
+sequential Kraken execution, without internal correspondence or M1's
+permission audit. This is an experiment in proof cost, not additional
+campaign function coverage or M2 completion; M1 remains available unchanged.
+
+The separate `task/binary-pair-runner` sibling has the following experimental results:
+
+| Result | Headline | Mirror pin | Status |
+| --- | --- | --- | --- |
+| Executable trie reconstruction and sequential allowed-IPs call | `Binary.Pair.Trie.lookup_checked` (`PairCallAdequacy.lean`); `findNode_checked` and positive `CallWitness.check4` / `check6` / `accepted` | `cb2348e` | Nonempty loop boundary to selected-node exit, both families, preserving the tested reconstruction. Setup and initial invariant now derived from the executable assertion; one interpretation from Names. Reuses existing physical regions and explicit callback/decoder contracts. Concrete headers pass in Lean; both paired suites and fresh kernel replay pass. The earlier boundary result alone did not establish function adequacy. Standard axioms; user external export gate accepted at `a33869e` on 2026-10-17 (`PairBoundaryProof`, `PairBoundaryWitness`). The stack generalization and flag-independence lemma pass fresh local replay; their external gate is pending. Actual captured IPv4/IPv6 entry/header/return tests pass with two seeds and five controls per family. The next increment composes `lookup_checked` from checked entry to return: empty roots, misses and accepted live hits, exact trie/count reconstruction, ABI/callback state and physical frame. Standard axioms; concrete entry and source-acceptance witnesses execute to return. Fresh replay passed; external gate pending. Fresh index-removal calibration adds 54 executed calls, a stale-predecessor counterexample, and three proved instructions in two physical regions; `PairRemoveOwnership.clear_ownership` proves the tested owner-flag update. Full bucket unlink/removal adequacy remains open. This is a sequential sibling, with dying-peer retry explicitly refused by the source; it does not advance the concurrent campaign coverage. [Increment](2026-10-18-plan-paired-call-increment.md). Lags main `77c9b55`. [Report](2026-10-16-plan-executable-binary-correspondence.md#executable-boundary-to-physical-loop-2026-10-17). |
+
+| Paired index-subsystem increment | `Remove.remove_checked`, `Remove.remove_simulation`, `Replace.replace_checked`, `Replace.replace_simulation`, `IndexLookup.lookup_checked`, `IndexLookup.lookup_simulation`, `Sequence.sequence_checked` | `cb2348e` | Complete locally: 25-instruction removal and 41-instruction replacement from tested executable assertions, exporting ABI/callback readiness, reconstruction, owner flags and write frames. Concrete linked/unhashed Pre witnesses and execution theorems check for both; their exact states execute to return, including repeat calls and saturation. 54 paired removal calls, 24 replacement calls and selected-prefix three-way comparisons pass, including collision chains. Lookup now derives the old physical premises from the common executable check and reestablishes all reconstruction/owner flags; 96 paired calls across two recordings pass. Arbitrary finite composition now checks from one executable initial resource check, with explicit caller setup and actual per-call histories. Eight ten-call retained-heap sequences and fresh headline replay pass. Actual removal/replacement captures pass under two seeds, with all captured bytes/registers/PCs and corruption controls. Full-closure fresh replay and the binary trust gate pass; the external export gate passed on 2026-10-18 at `fe596fd0`, root `PairSubsystemSurface` with its full closure, using only the three standard axioms. No new campaign function coverage. Standard axioms; local replay status and cost in the [increment report](2026-10-18-paired-index-subsystem.md). |
+| Paired input-driven insertion increment (paused; external gate pending) | `Insert.insert_checked`, `insert_simulation`, `InsertSequence.sequence_checked`, `Witness.check`, `Witness.executes`; `RandomService.return_recorded` | `cb2348e` | Conditional full insertion and arbitrary finite retained-heap composition, including reinsertion and arbitrary accepted retries. Every return exports reconstruction and remaining supplied input. Thirty-two mixed sequences pass (416 calls, 434,064 instructions); four exact formal-witness executions and the full captured replay pass. Fresh review found an internal private-role alias and missing replay identities; both are repaired and independently rechecked. Revised default/executable builds, trust gate, fresh full-closure kernel replay, provider regression and identity tests pass. Corrected export: `5433d778`, root `PairInsertionSurface` and full closure, `.tmp/binary-pair-insert-reviewed.ndjson`; external acceptance pending. Sequential environment, permission and universal service/coupling hypotheses remain explicit and unproved; no concurrent campaign or external-gate claim. Mirror lags main. [Charter](2026-10-18-charter-paired-index-insertion.md), [report](2026-10-18-paired-index-insertion.md), [review](2026-10-18-review-paired-index-insertion.md). |
+| Shared callback image proofs and first-return index clients | `Callback.{pc_contract,cmp4_contract,const_cmp4_contract,const_cmp1_contract,bh_contract}`; `IndexLookup.lookup_first_return`, `Remove.remove_first_return`, `Replace.replace_first_return`, `Sequence.First.sequence_checked`; insertion image corollaries | `cb2348e` | Five existing callback contracts proved from the pinned image, reused by the index family. Lookup/remove/replace and finite non-inserting sequences retain unchanged executable entry/reconstruction and export first-return histories with explicit environment/permission hypotheses. Insertion retains its broader permissions and random contracts. Code builds with standard axioms; generated callbacks, independent function comparisons, exact witnesses and 496 retained-heap sequence calls pass. Complete locally in about two elapsed hours: full trust gate, fresh full-closure replay, independent review and actual captured insertion replay pass; export at `86ea5488` is ready, external acceptance pending. No concurrent campaign coverage claim; mirror lags main. [Charter](2026-10-19-charter-paired-callbacks.md), [report](2026-10-19-paired-callbacks.md), [review](2026-10-19-review-paired-callbacks.md). |
+
+The isolated landing carry is `task/binary-pair-landing`, rebased onto main
+`3308c49a`. It invokes the split mirror through transparent source adapters;
+there is no legacy operational mirror copy. Its s5 relocation and current
+validation are tracked in the [landing report](2026-10-19-binary-landing-assessment.md).
+The rows above describe their original checkpoints, rather than claiming
+that their old external gates accept the landing carry. On 2026-10-19 the user
+ran the external `lake check --from-export` gate outside Nono on the new export
+at code commit `736492453c292ba9caafa78b353ae19f4ce9671b`, rooted at
+`LookupSnapshotTransport`, `LookupWitness`, `LookupHitWitness`,
+`AllowedipsWitnessPre`, `PairCallbackSurface`, and `PairCallWitness`, including
+their complete declaration closure. The Lean default kernel accepted it using
+only `propext`, `Quot.sound`, and `Classical.choice`. The standalone gate
+is `scripts/binary-proof-gate`; outstanding M1 obligations (including realism,
+initial frame representation, and witnesses for the NULL-owner and mode-3
+wrong-kind cases) remain open. No concurrent or whole-WireGuard result is added.
+
+The concrete frame instance `lookup_snapshot_transport` carries exact
+frontier and source-live lifetime/replay fields through lookup, conditional
+on their initial representation and untouched-byte separation. It does not
+prove physical allocation membership/absence or whole-trace S1–S3/R1–R6/H1–H6.
+Those results need their remaining anchors and the milestone-4 entry-realism
+check. The mirror proof register's existing lag is unchanged by this work.

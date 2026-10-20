@@ -1,0 +1,317 @@
+From 7ebba06a30eaf08c10b26b28ca14bfee1c791576 Mon Sep 17 00:00:00 2001
+From: Codex <codex@localhost>
+Date: Thu, 15 Oct 2026 20:48:22 +0000
+Subject: [PATCH] Add conservative x86-64 BSR semantics and tests
+
+[AGENT 2026-10-15] Model BSR for 16/32/64-bit operands using Nat.log2
+for nonzero inputs. Preserve zero-input destinations, allowing either full
+preservation or upper-half clearing for zero-input 32-bit operations.
+Keep all five non-ZF arithmetic flags universally undefined. This covers
+the current Intel and AMD specifications without excluding equal keys in
+the WireGuard common_bits proof or assuming a particular CPU vendor.
+
+References: Intel SDM rev089, volume2A page3-109 and its older-processor
+footnotes; AMD APM24594 rev3.37, BSR. The older Intel wording quoted in
+Linux's bitops.h has been superseded.
+https://cdrdv2-public.intel.com/868137/325462-089-sdm-vol-1-2abcd-3abcd-4.pdf
+https://docs.amd.com/api/khub/documents/j44LvPXzuuXgM0WyHKQfeQ/content
+
+Add register/memory parsing, both printers, width/operand rejection tests,
+26 executable guards, four AT&T round trips, two symbolic universal
+execution tests, and a native assembly comparison. Both zero-W32 outcomes
+are exercised; the native test avoids unspecified upper-half differences.
+
+Validation (all heavy commands capped, toolchain selected per command with
+ELAN_TOOLCHAIN=leanprover/lean4:v4.35.0):
+- lake build: PASS, 68 jobs.
+- lake build Kraken.X64.BsrTests: PASS; both printed axiom sets contain
+  only propext, Classical.choice, and Quot.sound.
+- lake env leanchecker --fresh Kraken.X64.BsrTests: PASS.
+- python3 -B Kraken/X64/Test/asm_tests.py Kraken/X64/Test/asm/test_bsr.S:
+  PASS, 1/1 native comparison.
+- git diff --check: PASS.
+
+Failed incidental invocation, not a pass: lake env leanchecker --help
+ignored the unknown flag and attempted a broad check, then was KILLED
+at the unchanged32GB cap (exit137). The subsequent fresh check above
+has a different, explicit module scope. Development elaboration errors
+in the new tests were corrected before the final passes.
+
+AI provenance: Codex generated and locally reviewed the implementation,
+tests, and this explanation. No generated source-code comments were
+added. This private commit is not an upstream maintainer review or release.
+---
+ Kraken/X64/BsrTests.lean       | 132 +++++++++++++++++++++++++++++++++
+ Kraken/X64/Parser/Basic.lean   |   7 ++
+ Kraken/X64/PrintATT.lean       |   1 +
+ Kraken/X64/PrintATTTests.lean  |   1 +
+ Kraken/X64/PrintIntel.lean     |   1 +
+ Kraken/X64/Semantics.lean      |  13 ++++
+ Kraken/X64/Syntax.lean         |   1 +
+ Kraken/X64/Test/asm/test_bsr.S |  25 +++++++
+ 8 files changed, 181 insertions(+)
+ create mode 100644 Kraken/X64/BsrTests.lean
+ create mode 100644 Kraken/X64/Test/asm/test_bsr.S
+
+diff --git a/Kraken/X64/BsrTests.lean b/Kraken/X64/BsrTests.lean
+new file mode 100644
+index 0000000..7e92d91
+--- /dev/null
++++ b/Kraken/X64/BsrTests.lean
+@@ -0,0 +1,132 @@
++module
++
++import Kraken.X64.OmniSemantics
++import Kraken.X64.Parser
++import Kraken.X64.PrintIntel
++meta import Kraken.X64.Semantics
++meta import Kraken.Mem
++meta import Kraken.X64.PrintIntel
++
++namespace Kraken.X64.BsrTests
++
++private instance : Labels := ⟨fun _ => 0⟩
++
++private def execute (i : Instr) (s : MachineData) : Effects :=
++  i.interp s ⟨0, 4⟩ (fun d => .done ⟨d, 4⟩) (fun pc d => .done ⟨d, pc⟩)
++
++private def checkAllBools (post : MachineState → Bool) : Effects → Bool
++  | .done s => post s
++  | @Effects.undefined _ .bool next =>
++      checkAllBools post (next false) && checkAllBools post (next true)
++  | .require_exec_access _ next => checkAllBools post (next ())
++  | .require_read_access _ _ next => checkAllBools post (next ())
++  | _ => false
++
++private def regInstruction (w : Width) : Instr :=
++  .regular .W64 w (.bsr (.low .rbx w) (.reg (.low .rax w)))
++
++private def someBoolOutcome (post : MachineState → Bool) : Effects → Bool
++  | .done s => post s
++  | @Effects.undefined _ .bool next =>
++      someBoolOutcome post (next false) || someBoolOutcome post (next true)
++  | .require_exec_access _ next => someBoolOutcome post (next ())
++  | .require_read_access _ _ next => someBoolOutcome post (next ())
++  | _ => false
++
++#guard someBoolOutcome (fun t => t.data.regs.rbx == 0x123456789abcdef0)
++  (execute (regInstruction .W32) {regs := {rax := 0, rbx := 0x123456789abcdef0}})
++#guard someBoolOutcome (fun t => t.data.regs.rbx == 0x9abcdef0)
++  (execute (regInstruction .W32) {regs := {rax := 0, rbx := 0x123456789abcdef0}})
++#guard someBoolOutcome (fun t => t.data.status.cf && t.data.status.pf &&
++    t.data.status.af && t.data.status.sf && t.data.status.of)
++  (execute (regInstruction .W64) {regs := {rax := 1}})
++#guard someBoolOutcome (fun t => !t.data.status.cf && !t.data.status.pf &&
++    !t.data.status.af && !t.data.status.sf && !t.data.status.of)
++  (execute (regInstruction .W64) {regs := {rax := 1}})
++
++#guard checkAllBools (fun t => t.pc == 4 && t.data.regs.rbx == 63 &&
++    !t.data.status.zf && t.data.regs.rax == 0x8000000000000000)
++  (execute (regInstruction .W64) {regs := {rax := 0x8000000000000000, rbx := 99}})
++
++#guard checkAllBools (fun t => t.data.regs.rbx == 0 && !t.data.status.zf)
++  (execute (regInstruction .W64) {regs := {rax := 1, rbx := 99}})
++
++#guard checkAllBools (fun t => t.data.regs.rbx == 31 && !t.data.status.zf)
++  (execute (regInstruction .W32) {regs := {rax := 0x80000000, rbx := 0xffffffffffffffff}})
++
++#guard checkAllBools (fun t => t.data.regs.rbx == 0x123456789abc000f && !t.data.status.zf)
++  (execute (regInstruction .W16) {regs := {rax := 0x8000, rbx := 0x123456789abcdef0}})
++
++#guard checkAllBools (fun t => t.data.regs.rbx == 0x123456789abcdef0 && t.data.status.zf)
++  (execute (regInstruction .W64) {regs := {rax := 0, rbx := 0x123456789abcdef0}})
++
++#guard checkAllBools (fun t => t.data.regs.rbx == 0x123456789abcdef0 && t.data.status.zf)
++  (execute (regInstruction .W16) {regs := {rax := 0x10000, rbx := 0x123456789abcdef0}})
++
++#guard checkAllBools (fun t =>
++    (t.data.regs.rbx == 0x123456789abcdef0 || t.data.regs.rbx == 0x9abcdef0) && t.data.status.zf)
++  (execute (regInstruction .W32) {regs := {rax := 0x100000000, rbx := 0x123456789abcdef0}})
++
++#guard checkAllBools (fun t => t.data.regs.rax == 8 && !t.data.status.zf)
++  (execute (.regular .W64 .W64 (.bsr (.low .rax .W64) (.reg (.low .rax .W64))))
++    {regs := {rax := 0x101}})
++
++#guard checkAllBools (fun t => t.data.regs.rax == 7 && !t.data.status.zf &&
++    t.data.dmem.loadInt 0x1000 8 == some 128)
++  (execute (.regular .W64 .W64 (.bsr (.low .rax .W64)
++    (.mem {base := some (.reg .rax), idx := none})))
++    {regs := {rax := 0x1000}, dmem := (Int.toBytes 8 128).At 0x1000})
++
++#guard !checkAllBools (fun _ => true)
++  (execute (.regular .W64 .W64 (.bsr (.low .rax .W64)
++    (.mem {base := some (.reg .rax), idx := none}))) {regs := {rax := 0x1000}})
++
++#guard !checkAllBools (fun _ => true) (execute (regInstruction .W8) {})
++
++#guard match Parser.parse "bsr %edx,%eax" with
++  | .ok p => p == [.instr (.regular .W64 .W32
++      (.bsr (.low .rax .W32) (.reg (.low .rdx .W32))))]
++  | .error _ => false
++#guard match Parser.parse "bsrq 8(%r12),%rbx" with
++  | .ok p => p == [.instr (.regular .W64 .W64 (.bsr (.low .rbx .W64)
++      (.mem {base := some (.reg .r12), idx := none, disp := .int64 8})))]
++  | .error _ => false
++#guard !(Parser.parse "bsr %al,%bl").isOk
++#guard !(Parser.parse "bsrb %al,%bl").isOk
++#guard !(Parser.parse "bsr $1,%eax").isOk
++#guard !(Parser.parse "bsr %eax,(%rbx)").isOk
++#guard !(Parser.parse "bsr %eax,%rbx").isOk
++#guard !(Parser.parse "bsrq %eax,%ebx").isOk
++#guard !(Parser.parse "lock bsr %eax,%ebx").isOk
++
++#guard toString (regInstruction .W64) == "bsr rbx, rax"
++#guard toString (regInstruction .W32) == "bsr ebx, eax"
++
++theorem zero64_preserves (s : MachineData)
++    (zero : s.regs.get (.low .rax .W64) = 0) :
++    (execute (regInstruction .W64) s).All (fun t =>
++      t.pc = 4 ∧ t.data.regs = s.regs ∧ t.data.dmem = s.dmem ∧ t.data.status.zf = true) := by
++  have width8 : (Width.W64 == Width.W8) = false := rfl
++  have width32 : (Width.W64 == Width.W32) = false := rfl
++  simp [execute, regInstruction, Instr.interp, Operation.interp, RegOrMem.interp,
++    zero, Effects.All, width8, width32]
++
++#print axioms zero64_preserves
++
++theorem nonzero64_index (s : MachineData)
++    (nonzero : s.regs.get (.low .rax .W64) ≠ 0) :
++    (execute (regInstruction .W64) s).All (fun t =>
++      t.pc = 4 ∧ t.data.regs.get (.low .rbx .W64) =
++        BitVec.ofNat 64 (s.regs.get (.low .rax .W64)).toNat.log2 ∧
++      t.data.dmem = s.dmem ∧ t.data.status.zf = false) := by
++  have width8 : (Width.W64 == Width.W8) = false := rfl
++  simp [execute, regInstruction, Instr.interp, Operation.interp, RegOrMem.interp,
++    Effects.All, width8]
++  simp [MachineData.setReg, Reg64s.set, Reg64s.get,
++    Reg64s.set64, Reg64s.get64, Reg.base, Reg.offset, BitVec.take, BitVec.drop]
++  simp [Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.take, BitVec.drop] at nonzero
++  simp [nonzero, Effects.All]
++
++#print axioms nonzero64_index
++
++end Kraken.X64.BsrTests
+diff --git a/Kraken/X64/Parser/Basic.lean b/Kraken/X64/Parser/Basic.lean
+index 6afc292..38793e9 100644
+--- a/Kraken/X64/Parser/Basic.lean
++++ b/Kraken/X64/Parser/Basic.lean
+@@ -1009,6 +1009,13 @@ def parseInstr : Parser Instr := do
+     pure (toInstr addr_w (.rcr dst cnt))
+ 
+   -- Byte swap
++  | "bsr" | "bsrw" | "bsrl" | "bsrq" => do
++    let width ← if mn == "bsr" then pure none else some <$> instrWidth mn
++    let instruction ← commaSeparated width parseRegOrMem parseRegA .bsr
++    match instruction with
++    | .regular _ .W8 _ => fail "BSR has no 8-bit form"
++    | _ => pure instruction
++
+   | "bswap" =>
+     let ⟨ _w, dst ⟩ ← parseRegW
+     pure (toInstr .none (.bswap dst))
+diff --git a/Kraken/X64/PrintATT.lean b/Kraken/X64/PrintATT.lean
+index 0c7f108..7622c7e 100644
+--- a/Kraken/X64/PrintATT.lean
++++ b/Kraken/X64/PrintATT.lean
+@@ -113,6 +113,7 @@ def operation {w} (aw : Width) (op : Operation w) : String :=
+   | .rcl d c => two "rcl" (count c) (rm aw d)
+   | .rcr d c => two "rcr" (count c) (rm aw d)
+   | .bswap d => s!"bswap {reg d}"
++  | .bsr d x => two "bsr" (rm aw x) (reg d)
+   | .jcc cc l => s!"j{cc} {l}"
+   | .jmp t => s!"jmp {target aw t}"
+   | .call t => s!"call {target aw t}"
+diff --git a/Kraken/X64/PrintATTTests.lean b/Kraken/X64/PrintATTTests.lean
+index 86b75c4..98e69b7 100644
+--- a/Kraken/X64/PrintATTTests.lean
++++ b/Kraken/X64/PrintATTTests.lean
+@@ -48,6 +48,7 @@ def corpus : List String := [
+   "shrw $2, %ax", "sarl %cl, %eax", "shldq $4, %rax, %rbx", "shrd %cl, %ax, (%rsp)",
+   "rolq $1, %rax", "rorb %cl, %al", "rclq $1, %rax", "rcrl %cl, (%rsp)",
+   "bswap %eax", "bswapq %rax",
++  "bsr %edx, %eax", "bsrw %ax, %r15w", "bsrl (%rax), %ecx", "bsrq 8(%r12), %rbx",
+   -- control flow
+   "foo:\n  jmp foo", "je foo", "jne .L1", "jb foo", "jae foo", "ja foo", "jbe foo",
+   "jl foo", "jle foo", "call foo", "call %rax", "jmp %rax",
+diff --git a/Kraken/X64/PrintIntel.lean b/Kraken/X64/PrintIntel.lean
+index a0353e5..c22571e 100644
+--- a/Kraken/X64/PrintIntel.lean
++++ b/Kraken/X64/PrintIntel.lean
+@@ -166,6 +166,7 @@ def Operation.toStr {w} (op : Operation w) (addr_w : Width := .W64) : String :=
+   | .rcl dst cnt => s!"rcl {dst.toStr addr_w}, {cnt}"
+   | .rcr dst cnt => s!"rcr {dst.toStr addr_w}, {cnt}"
+   | .bswap dst => s!"bswap {dst}"
++  | .bsr dst src => s!"bsr {dst}, {src.toStr addr_w}"
+   | .jcc cc l => s!"j{cc} {l}"
+   | .jmp tgt => s!"jmp {tgt.toStr addr_w}"
+   | .call tgt => s!"call {tgt.toStr addr_w}"
+diff --git a/Kraken/X64/Semantics.lean b/Kraken/X64/Semantics.lean
+index 8bb2855..e2565e8 100644
+--- a/Kraken/X64/Semantics.lean
++++ b/Kraken/X64/Semantics.lean
+@@ -736,6 +736,19 @@ set_option maxHeartbeats 1000000
+     let (cf, v) := (t.msb, t.take w.bits)
+     (λ setof => if count == 1 then setof (v.msb != a.msb) else undefined setof) (λ of =>
+     { s with status := { s.status with cf, of } }.set dst v p next))
++  | .bsr dst src =>
++    if w == .W8 then unimplemented "BSR has no 8-bit form" else
++    src.interp s p (fun a s =>
++      let finish (s : MachineData) :=
++        undefined (fun cf => undefined (fun pf => undefined (fun af =>
++        undefined (fun sf => undefined (fun of =>
++          next { s with status := { cf, pf, af, zf := a == 0, sf, of } })))))
++      if a == 0 then
++        if w == .W32 then
++          undefined (fun clearUpper : Bool =>
++            finish (if clearUpper then s.setReg dst (s.regs.get dst) else s))
++        else finish s
++      else finish (s.setReg dst (.ofNat w.bits a.toNat.log2)))
+   | .bswap dst =>
+     let a := s.regs.get dst
+     match (generalizing := false) (motive := Width → Effects) w with
+diff --git a/Kraken/X64/Syntax.lean b/Kraken/X64/Syntax.lean
+index a8d6d88..49d524a 100644
+--- a/Kraken/X64/Syntax.lean
++++ b/Kraken/X64/Syntax.lean
+@@ -230,6 +230,7 @@ inductive Operation (w : Width)
+   | rcl  (_ : Dst w) (_ : ShiftCountExpr)
+   | rcr  (_ : Dst w) (_ : ShiftCountExpr)
+   | bswap  (dst : Reg w) -- (_ : w = .W32 ∨ w = .W64)
++  | bsr (dst : Reg w) (src : RegOrMem w)
+   -- Control flow
+   | jcc (cc : CondCode) (target : Label)
+   | jmp (target : RelRegOrMem)
+diff --git a/Kraken/X64/Test/asm/test_bsr.S b/Kraken/X64/Test/asm/test_bsr.S
+new file mode 100644
+index 0000000..5fe4f46
+--- /dev/null
++++ b/Kraken/X64/Test/asm/test_bsr.S
+@@ -0,0 +1,25 @@
++movq $0x8000000000000000, %rax
++bsrq %rax, %rbx
++setz %r8b
++movq $0x123456789abcdef0, %rdx
++movq $0x8000, %rcx
++bsrw %cx, %dx
++movq $0, %rsi
++movq $0x123456789abcdef0, %rdi
++bsrq %rsi, %rdi
++setz %r9b
++movl $-1, %r10d
++bsrl %esi, %r10d
++addl $1, %r10d
++movq $0x123456789abcdef0, %r11
++bsrl %eax, %r11d
++movq $0x80000000, %r12
++bsrl %r12d, %r11d
++movq $0x101, %r12
++bsrq %r12, %r12
++movq $0x100, -8(%rsp)
++movq %rsp, %r13
++bsrq -8(%r13), %r13
++movq $0x123456789abcdef0, %r14
++bsrw %si, %r14w
++addq $0, %r15
+-- 
+2.43.0
+

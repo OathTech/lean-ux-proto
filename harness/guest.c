@@ -1241,6 +1241,67 @@ static void print_pcs(const char *tag, const char *id, unsigned i, const unsigne
     printf("]}\n");
 }
 
+/* Optional binary adequacy stream. Ranges come from the host's verified
+ * ELF, never from addresses compiled into this guest. KCOV records return
+ * PCs, so preserve the established lo < PC <= hi convention. */
+static struct { unsigned long lo, hi; } binary_ranges[32];
+static unsigned binary_range_count;
+
+static void read_binary_ranges(const char *path)
+{
+    FILE *input = fopen(path, "r");
+    if (!input) fail("batch", -1, "invalid_input", "open_binary_ranges");
+    char row[128], extra;
+    while (fgets(row, sizeof(row), input)) {
+        unsigned long lo, hi;
+        if (binary_range_count == 32 || sscanf(row, "%lx %lx %c", &lo, &hi, &extra) != 2 || lo >= hi)
+            fail("batch", -1, "invalid_input", "binary_ranges");
+        binary_ranges[binary_range_count].lo = lo;
+        binary_ranges[binary_range_count++].hi = hi;
+    }
+    if (ferror(input) || !binary_range_count)
+        fail("batch", -1, "invalid_input", "binary_ranges");
+    if (fclose(input)) fail("batch", -1, "invalid_input", "close_binary_ranges");
+}
+
+static int binary_pc(unsigned long pc)
+{
+    for (unsigned n = 0; n < binary_range_count; ++n)
+        if (pc > binary_ranges[n].lo && pc <= binary_ranges[n].hi) return 1;
+    return 0;
+}
+
+static void print_binary_pcs(const char *stream, const char *id, unsigned i,
+                             const unsigned long *area, unsigned long count)
+{
+    if (!binary_range_count) return;
+    printf("LEANUX_BINARY_PCS {\"id\":\"%s\",\"index\":%u,\"stream\":\"%s\",\"pcs\":[", id, i, stream);
+    int comma = 0;
+    for (unsigned long j = 1; j <= count; ++j) {
+        unsigned long pc = area[j];
+        if (!binary_pc(pc)) continue;
+        printf("%s\"0x%lx\"", comma ? "," : "", pc);
+        comma = 1;
+    }
+    printf("]}\n");
+}
+
+static void print_binary_comparisons(const char *stream, const char *id, unsigned i,
+                                    const unsigned long *area, unsigned long count)
+{
+    if (!binary_range_count) return;
+    printf("LEANUX_BINARY_CMP {\"id\":\"%s\",\"index\":%u,\"stream\":\"%s\",\"records\":[", id, i, stream);
+    int comma = 0;
+    for (unsigned long j = 0; j < count; ++j) {
+        const unsigned long *r = area + 1 + 4 * j;
+        unsigned long pc = r[3];
+        if (!binary_pc(pc)) continue;
+        printf("%s[%lu,\"0x%lx\",\"0x%lx\",\"0x%lx\"]", comma ? "," : "", r[0], r[1], r[2], pc);
+        comma = 1;
+    }
+    printf("]}\n");
+}
+
 static unsigned char observe_buffer[2048];
 static struct timespec went_up;
 /* the clock read before a candidate first up's window (becomes went_up) */
@@ -3002,6 +3063,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         if (comparisons) {
             /* The remote stream's comparisons: the handshake worker's peer
              * reference counts (stage C) are declared comparisons. */
+            print_binary_comparisons("task", t->id, i, coverage, count);
+            if (remote) print_binary_comparisons("remote", t->id, i, remote, remote_count);
             print_records("LEANUX_CMP", t->id, i, coverage, count, NULL);
             if (remote) print_records("LEANUX_RCMP", t->id, i, remote, remote_count, cmp_block);
             seccomp_child_streams(t, i, &result[i], comparisons);
@@ -3009,6 +3072,8 @@ static void execute(const struct trace *t, int input_fd, int comparisons)
         }
         print_pcs("LEANUX_COVERAGE", t->id, i, coverage, count);
         if (remote) print_pcs("LEANUX_RCOVERAGE", t->id, i, remote, remote_count);
+        print_binary_pcs("task", t->id, i, coverage, count);
+        if (remote) print_binary_pcs("remote", t->id, i, remote, remote_count);
         seccomp_child_streams(t, i, &result[i], comparisons);
     }
     if (up_seen)
@@ -3148,7 +3213,9 @@ int main(int argc, char **argv)
     struct sigaction watchdog = {.sa_handler = on_watchdog, .sa_flags = SA_RESTART};
     if (sigemptyset(&watchdog.sa_mask) || sigaction(SIGALRM, &watchdog, NULL))
         fail("batch", -1, "environment_failure", "watchdog_handler");
-    if (argc != 2) fail("batch", -1, "invalid_input", "wire_argument");
+    if (argc != 2 && !(argc == 4 && !strcmp(argv[2], "--binary-ranges")))
+        fail("batch", -1, "invalid_input", "wire_argument");
+    if (argc == 4) read_binary_ranges(argv[3]);
     FILE *input = fopen(argv[1], "r");
     if (!input) fail("batch", -1, "environment_failure", "open_wire");
     unsigned total;
