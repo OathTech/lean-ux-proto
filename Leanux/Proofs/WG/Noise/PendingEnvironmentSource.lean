@@ -1,5 +1,4 @@
 import Leanux.Proofs.WG.Noise.PendingEnvironmentFrames
-import Leanux.Proofs.Framing.BatchRefills
 
 set_option autoImplicit false
 set_option pp.structureInstances false
@@ -26,8 +25,6 @@ theorem preexit_native (seen : List Nat) :
     | pending_native_step seen
 
 macro "pending_environment_step " seen:term : tactic => `(tactic| first
-  | (rx_retention_head Env.pendingDevice; exact PendingScheduler.product_store _
-      (pendingDevice_sameKernel _ _) $seen)
   | (rx_retention_head getWG; exact PendingScheduler.product_store _
       (fun initial => productGetWG_spec (fun s => s = initial)) $seen)
   | (rx_retention_head getRouting; exact PendingScheduler.product_store _ (by

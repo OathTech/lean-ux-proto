@@ -2,9 +2,10 @@
 
 ## Namespace-pin closure, 2026-10-20
 
-The branch is rebased onto namespace-pin landing `218d3ffd`. The earlier
-fixed-width carry is already on main with the shared repair at `eba3c2b6`;
-its former lag paragraph is superseded. No mirror change is made here.
+The branch is rebased onto main `ac55c7d5`, including shared namespace-pin
+carry `7f89077d` and integration record `66188b74`, over mirror `218d3ffd`.
+The earlier fixed-width carry is already on main with the shared repair at
+`eba3c2b6`. No mirror or shared-layer change is made here.
 
 Request 5 is closed. Its original JSON is retained as a refusal regression:
 both parser and validator now exclude the fixture's literal pin descriptor.
@@ -20,51 +21,37 @@ premise is added. The theorem applies beyond the parser's stated domain;
 queue emptiness, scheduled NAPI and budget adequacy remain separate claims.
 The source equations preserve the native hidden-record and invariant Stops.
 
-The owned boundary/namespace build passes 93 jobs; all four checked boundary
-and audit theorems use only the three standard axioms. The three existing
-fixture-descriptor validator tests pass, and the namespace recipe checks its
-exact parser and native/audited refusals. Aggregate validation still needs
-the namespace carry of campaign 1's existing shared layers. Source inspection
-finds 14 runner-guard copies in seven shared modules, plus the namespace
-frames/observer and the parser's new validation loop. This exceeds the
-charter's small-local-variant allowance; none of those layers is copied or
-edited here. The initial whole-tree build failed in the following shared
-modules, plus the two owned sources since repaired by the 93-job build:
+The three isolated source adaptations are subsumed by the landed carry:
+`Progress/RunnerFiniteSource` already has the same unconditional completion
+guard, and `Noise/PendingEnvironmentSource` and
+`Index/LifecycleCleanupRuleSource` use its proved cleanup walk. The latter
+two unfold the pending-device query before walking its reads, so the local
+query-head branches and their extra imports are redundant and removed.
+Their statements are unchanged; the Noise cleanup docstring is corrected.
+The boundary-audit overlap keeps the landed proof formatting. All six results
+are current over mirror `218d3ffd` against the shared carry, with H5's
+stronger boundary predicate and refusal recipe retained. The three former
+WIP source adaptations are validated in their landed form.
 
-| Shared module | Required namespace carry |
-| --- | --- |
-| `Framing/Syscalls` | Extend the fixed close continuation with holder clearing and the queued-cleanup check. |
-| `Logged/Checkpoints` | Retain the new unconditional pending guard and its mode-specific Stop. |
-| `WG/Keypairs/Frames/Env` | Frame the pending-device query and invariant refusal in namespace cleanup. |
-| `WG/Configuration/ParserShape` | Include reserved-descriptor validation in the parser source factor. |
-| `WG/Lifetimes/EnvControlsAudit` | Move holder clearing to the close and retain the queue check in the cleanup observer. |
+Aggregate validation passes: `scripts/proof-gate` completes all 3,141 build
+jobs and checks 1,774 terminal declarations across 15 root modules; only
+`propext`, `Classical.choice` and `Quot.sound` occur. The forbidden-token and
+import/target checks pass. `scripts/proof-counterexamples` passes all 15
+recipes, including the retained H5 refusal regression. This supersedes the
+previous inherited build/import failures. The earlier four scoped boundary
+axiom checks and three existing fixture-validator tests also passed.
 
-The stale private parser source equation exhausts its existing 1,000,000
-heartbeats comparing different implementations. Its missing validation loop
-must be carried; raising the limit would not repair the equation. The public
-parser-shape claim needs no new premise. Further shared runner factors and
-cleanup frames identified by source inspection remain behind these failures.
-The owned `RunnerFiniteSource`, `Noise/PendingEnvironmentSource` and
-`Index/LifecycleCleanupRuleSource` adaptations are prepared separately; their
-imports still prevent validation until the shared carry is available.
+Reproduction commands:
 
-Final owned validation covers 1,273 independent modules through 293 maximal
-targets: all 1,672 Lake jobs pass. The requested full proof gate fails its
-build check on exactly the five shared modules above (one gate finding);
-forbidden-token and import/target checks pass, and aggregate axiom checking
-is skipped after the build failure. The counterexample speedbump fails:
-two recipes pass, including the corrected namespace-pin regression, and
-13 cannot import missing `Logged/Checkpoints` or `Lifetimes/EnvControlsAudit`
-build products. These are not new behavioral counterexamples. Both commands
-ran with `LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16` through
-`capped -- scripts/in-bundle`; no resource limit was raised, no KILLED banner
-or guest timeout occurred, and there was no infrastructure rerun.
+```sh
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-gate
+LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/proof-counterexamples
+```
 
-The checked closure is `2655a2f4`; the three dependent owned adaptations are
-isolated in WIP commit `ddb054cf`. A read-only review found no defect in the
-proof or refusal regression. The coordinator's shared carry is to land first;
-this owned head follows it, with aggregate validation repeated over both
-carries. The historical landing counts below remain historical.
+Both aggregate commands exit zero. The existing memory cap is unchanged;
+there were no compiler warnings, KILLED banners, guest timeouts or retries.
+All six result directories retain grandfathered Lean resource-limit settings;
+this carry changes none, and none of its edited Lean files contains a raise.
 
 The six summaries below describe the landing scope, with H5's pending-unit
 clause strengthened over `218d3ffd`, and supersede broader completion wording

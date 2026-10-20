@@ -1,5 +1,4 @@
 import Leanux.Proofs.WG.Noise.PendingTimerFrames
-import Leanux.Proofs.Framing.BatchRefills
 
 set_option autoImplicit false
 namespace Leanux.Proofs.WG.Noise.LifecycleSource
@@ -13,8 +12,6 @@ theorem cleanup_preserves (P : WGWorld → Prop)
     Preserves (fun w : World=>P w.wg) Env.netnsCleanup := by
   unfold Env.netnsCleanup Env.pendingDevice
   repeat' first
-    | (rx_retention_head Env.pendingDevice
-       exact frames _ (pendingDevice_sameKernel _ _))
     | (rx_retention_head Env.runWorker
        apply TimerDiscipline.runWorker_kernel_contract _ _
          (fun wg _ _ _=>P wg) (fun wg _ _ _=>P wg)
