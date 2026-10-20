@@ -259,6 +259,19 @@ statement changes. Combined C3 validation passes at source-79 `8d9bfbca`, includ
 
 ## C3-F1: invalidation and clearing do not cancel previously admitted encryption
 
+**Target amendment [USER 2026-10-18], recorded for S5.** Before the amendment,
+T1's limit clause forbade later encryption under a key once its sending limit
+was reached. The replacement forbids further staging admission, invalidates
+the key and restores the batch, while permitting earlier admissions to encrypt
+with their unique, below-limit reservations. Before the amendment, T6 forbade
+encryption with an invalid or expired key, including already admitted work.
+The replacement enforces TX validity/age at admission and RX validity/age/count
+at the check before decryption; unpublication and final reference release are
+separate retirement steps. These are narrower timing/cancellation claims,
+adopted on October 18, not a claim that the original statements were proved.
+Nonce uniqueness and the bound on encrypted nonces remain unchanged. The
+decision and its provenance are in [decisions.md](decisions.md).
+
 **Claim under examination.** Charter section 4, T6, lines 395–409 at
 `783510e8`, prohibits transport encryption using an invalid or expired
 sending key and extends that prohibition to retained work. Its introductory

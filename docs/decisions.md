@@ -953,3 +953,22 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   file makes that file conformant as it goes. The rule is new, which is why
   earlier landings did not check it; the campaign 3 report's statement that
   no limit was raised is corrected as a named change of that landing.
+
+- **Campaign 3 amendment [USER 2026-10-18]**, recorded explicitly during the
+  2026-10-20 landing-review repair (S5). T1 previously required that reaching
+  the sending limit prevent any subsequent encryption under that key. Its
+  replacement requires refusal of further admission, invalidation and batch
+  restoration at the staging check; previously admitted packets may encrypt
+  with their reserved, unique, below-limit nonces. T6 previously prohibited
+  encryption with invalid or expired keys even for work already admitted.
+  Its replacement checks sending validity and age at admission, and receiving
+  validity, age and message count immediately before decryption. Retirement
+  unpublishes the key, permits packets with earlier references to continue,
+  and completes at the last reference release, using R2 for lifetime discipline.
+  This narrows the timing/cancellation clauses; nonce uniqueness and the bound
+  on each encrypted nonce are retained. R5's delayed-encryption and coherent
+  post-clear witnesses, retained as C3-F1's prior record, demonstrate why the
+  original T6 clause was false of the mirror and why a cancellation promise
+  does not describe the C. No initialized T1 limit counterexample was claimed.
+  The counterexamples remain, and the mirror is unchanged. See the campaign-3
+  report for the per-result claims and limitations.
