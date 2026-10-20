@@ -57,7 +57,7 @@ sandbox. A sandbox such as nono is optional.
 ## 2. Build and try the model
 
 ```sh
-scripts/in-bundle lake build leanux-model
+scripts/in-bundle lake build leanux-model leanux-fixed-width-tests
 scripts/in-bundle .lake/build/bin/leanux-model <<'EOF'
 {"version":1,"id":"first_eventfd","ops":[{"op":"eventfd2","init":5,"flags":2048},{"op":"read","fd":{"ref":0},"count":8}]}
 EOF
@@ -67,7 +67,8 @@ The model reads one JSON trace per line and emits one result per trace. This
 example creates a nonblocking eventfd at descriptor 8 and reads its initial
 value, 5; the read bytes are `0500000000000000`. It needs no guest kernel.
 Build the explicit `leanux-model` target: plain `lake build` builds only the
-library.
+library. The second target is the fixed-width counters' witness the model
+replays run (`tests/FixedWidthTests.lean`).
 
 After building, run the unit tests, including recorded model replays:
 

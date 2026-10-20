@@ -35,3 +35,12 @@ srcDir = "tests"
 name = "leanux-netlink-dump-tests"
 root = "NetlinkDumpTests"
 srcDir = "tests"
+
+# The fixed-width counters' wraps (docs/2026-10-20-fixed-width-audit.md): from
+# each word's maximum one increment leaves 0, as the C does; found by the
+# binary track's executed comparison, out of the differential check's reach;
+# `lake build leanux-fixed-width-tests && .lake/build/bin/leanux-fixed-width-tests`
+[[lean_exe]]
+name = "leanux-fixed-width-tests"
+root = "FixedWidthTests"
+srcDir = "tests"

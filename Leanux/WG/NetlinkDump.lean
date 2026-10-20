@@ -178,7 +178,7 @@ structure DumpCall where
   ret : Int
   skb : NlSkb
   ctx : DumpCtx
-  prevSeq : Nat
+  prevSeq : UInt32
 
 /-- wg_get_device_dump (netlink.c:210-302): one call, one chunk (`skb0`,
     fresh from `netlink_dump`). The device part goes in while
@@ -186,9 +186,9 @@ structure DumpCall where
     (:269-276), each put reserving from the room. A header or device-part
     put that fails is unreachable with 3776 bytes of room (2.3): the mirror
     stops rather than model the `-EMSGSIZE` return. -/
-def wgGetDeviceDump (ctx0 : DumpCtx) (prevSeq0 : Nat) (skb0 : NlSkb) : M DumpCall := do
+def wgGetDeviceDump (ctx0 : DumpCtx) (prevSeq0 : UInt32) (skb0 : NlSkb) : M DumpCall := do
   let d ← getDev
-  let seq := d.deviceUpdateGen   -- cb->seq (:222)
+  let seq := d.deviceUpdateGen   -- cb->seq (:222), the callback's `unsigned int`
   let mut ctx := ctx0
   let mut nextCursor := ctx.nextPeer
   let (fail, skb) := skb0.put (nlmsgTotal 4)   -- genlmsg_put: nlmsghdr + genlmsghdr

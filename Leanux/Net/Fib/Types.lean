@@ -289,9 +289,10 @@ structure Table where
   nextInfo : FibInfoId := 0
   /-- `net->ipv4.fib_has_custom_local_routes` (fib_frontend.c:918-919). -/
   customLocalRoutes : Bool := false
-  /-- `net->ipv4.rt_genid` (`rt_cache_flush`, route.c:406-409), the
-      generation the dst caches compare. -/
-  rtGenid4 : Nat := 0
+  /-- `net->ipv4.rt_genid`, an `atomic_t` (include/net/netns/ipv4.h:276)
+      incremented with the word's wrap by `rt_cache_flush` (route.c:406-409),
+      the generation the dst caches compare. -/
+  rtGenid4 : UInt32 := 0
   /-- `net->ipv4.dev_addr_genid` (fib_frontend.c:1458/1463/1505; a random
       start the mirror counts from 0, its comparison's operands excluded). -/
   devAddrGenid : Nat := 0

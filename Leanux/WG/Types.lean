@@ -42,11 +42,13 @@ structure AipNode where
   parent : Slot
   deriving Repr, BEq
 
-/-- `struct allowedips`. -/
+/-- `struct allowedips` (allowedips.h:29-32): `seq` is the C's `u64`, set
+    to 1 by `wg_allowedips_init` (allowedips.c:255) and incremented, with
+    the word's wrap, by every free, insert and remove-by-peer. -/
 structure AllowedIps where
   root4 : Option NodeId := none
   root6 : Option NodeId := none
-  seq : Nat := 1
+  seq : UInt64 := 1
   deriving Repr, BEq
 
 /-- `struct endpoint`: `sa_family` 0 means no endpoint. -/
@@ -527,8 +529,10 @@ structure Device where
   staticIdentity : StaticIdentity := {}
   incomingPort : Nat := 0
   fwmark : Nat := 0
-  /-- `device_update_gen`: 1 at `wg_newlink` (device.c:323). -/
-  deviceUpdateGen : Nat := 1
+  /-- `device_update_gen`, the C's `unsigned int` (device.h:54): 1 at
+      `wg_newlink` (device.c:323), pre-incremented with the word's wrap by
+      every `wg_set_device` past its permission checks (netlink.c:523). -/
+  deviceUpdateGen : UInt32 := 1
   numPeers : Nat := 0
   peerList : List PeerId := []
   peers : TreeMap PeerId Peer := {}
@@ -635,7 +639,9 @@ structure NlSkb where
     a split peer's first visit, and the node the split peer resumes from. -/
 structure DumpCtx where
   nextPeer : Option PeerId := none
-  allowedipsSeq : Nat := 0
+  /-- `ctx->allowedips_seq` (netlink.c:99), the `u64` compared with the
+      table's `seq`; 0 is the C's "not taken". -/
+  allowedipsSeq : UInt64 := 0
   nextAllowedip : Option NodeId := none
   /-- `ctx->wg`: set by `wg_get_device_start`. -/
   hasWg : Bool := false
@@ -648,7 +654,9 @@ structure NlSock where
   queue : List NlSkb := []
   cbRunning : Bool := false
   dumpDoneErrno : Int := 0
-  prevSeq : Nat := 0
+  /-- `cb->prev_seq`, the C's `unsigned int` (include/linux/netlink.h:292),
+      the generation the last chunk saw; 0 before any. -/
+  prevSeq : UInt32 := 0
   ctx : DumpCtx := {}
   /-- `netlink_autobind` ran (the socket's first `sendmsg`); the fixture's
       socket at 7 binds in the fixture, the stepped one at 8 in its first

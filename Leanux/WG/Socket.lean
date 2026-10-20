@@ -202,7 +202,7 @@ private def tunnelXmit (e : Endpoint) (bytes : List UInt8) (ds : Nat) (r : Route
 def send4 (e : Endpoint) (cache : Option PeerId) (bytes : List UInt8) (ds : Nat) (exactRx : Bool) : M Int := do
   let d ← getDev
   if ← branch .send4SockNull d.sock4.isNone then return -ENONET   -- err: kfree_skb
-  let gen := (← Net.Fib.inSocketNs Net.Fib.getTable).rtGenid4   -- lane C: `rt_genid` (rt_cache_valid, route.c:1602-1607)
+  let gen := (← Net.Fib.inSocketNs Net.Fib.getTable).rtGenid4.toNat   -- lane C: `rt_genid` (rt_cache_valid, route.c:1602-1607), the word's value
   let mut saddr := e.src
   let mut srcIf := e.srcIf
   let mut route : Option Route := none

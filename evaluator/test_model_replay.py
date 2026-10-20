@@ -724,3 +724,23 @@ class FibBoot(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr.decode())
         self.assertEqual(json.loads(result.stdout.decode()), EXPECTED_FIB_TRIE_BOOT)
 
+
+
+# The fixed-width counters (docs/2026-10-20-fixed-width-audit.md): the
+# allowed-IPs table's `u64 seq`, the device's `unsigned int
+# device_update_gen` and the namespace's `atomic_t rt_genid` wrap at their
+# words' maxima, as the mirror's words do since 2026-10-20
+# (tests/FixedWidthTests.lean). The witness constructs each world directly:
+# the counters need 2^32 configuration calls or 2^64 table mutations to
+# reach the wrap, which no trace on this fixture does, so the differential
+# check cannot show it. The first was found 2026-10-20 by the binary
+# track's executed comparison of the mirror with the compiled kernel.
+FIXED_WIDTH_TESTS = MODEL.parent / 'leanux-fixed-width-tests'
+
+
+class FixedWidthCounters(unittest.TestCase):
+    def test_the_counters_wrap_at_their_maxima(self):
+        if not FIXED_WIDTH_TESTS.is_file():
+            raise AssertionError(f'{FIXED_WIDTH_TESTS} is missing: run `lake build leanux-fixed-width-tests` first')
+        result = subprocess.run([FIXED_WIDTH_TESTS], capture_output=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr.decode())
