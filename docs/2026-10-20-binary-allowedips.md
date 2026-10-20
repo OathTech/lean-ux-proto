@@ -617,3 +617,67 @@ mutation, allocation failures/rollback, wrapper and return composition.
 Checkpoint B has not begun. The sequence-counter correction remains pending its
 landing notice; the failing witness and unrestricted intended Pre/R are
 unchanged. No completed-function coverage is added at this checkpoint.
+
+## Four-hour calibration (05:25 UTC)
+
+The charter's first calibration point is reached four elapsed hours after
+01:25:17 UTC. Checkpoints A and B remain incomplete. The observed count is
+**zero newly completed functions**, so this increment does not yet supply a
+new-function completion rate. The strengthened existing lookup, placement
+loop, exact reassignment and empty-root physical tail are partial component
+results, not substitutes for that measure.
+
+At committed head `7b8b257c`, the increment adds 9,845 Lean lines and deletes
+31 across 110 files. Excluding the three generated mutation image/layout
+modules gives 8,290 added lines across 107 files. Those figures include
+executable reconstruction, tests and supporting proofs; they are neither a
+proof-obligation count nor a productivity forecast. New record-reconstruction
+lemmas under development at this calibration point are excluded from that
+committed-tree count.
+
+Testing delivered useful feedback before universal composition: it exposed the
+counter defect, exercised split/failure/rollback cases on a retained heap, and
+compared a real captured entry and return. Segment effects also support compact
+physical composition: the full empty-root tail composes in 83 lines. The main
+remaining cost is proving allocation identity extension, fresh-node decoding,
+mutation frames and structural invariants, then composing the complete call.
+The earlier normalization failure shows that elaborator costs remain a separate
+source of wasted time; the explicit word-representation rewrite repaired that
+case without changing its statement.
+
+[AGENT 2026-10-20] Continue the charter's independent insertion obligations.
+The evidence justifies further calibration at the first completed function,
+but does not yet justify a claim that whole-WireGuard proof cost is viable.
+The next concrete obligation is reconstructing and linking a fresh allocated
+node from the already tested initialization tail. Nonempty structural paths,
+allocation failures/rollback, wrappers and returns follow. The counter fix is
+still awaiting the coordinator's landing notice. No precondition restriction,
+target weakening or additional environment assumption is introduced to close
+that discrepancy.
+
+## Fresh-record reconstruction support (05:29 UTC)
+
+Five modules (429 lines) connect the tested initialization phases to the
+actual record decoder: packed header bytes, both key-copy paths, and packed
+parent/root publication. `Root.header_copy_core` reconstructs the actual
+mirror's `newNode` fields from owner/zero-child facts and the executed copy;
+`Root.publish_node` preserves that core, decodes the parent and reads back the
+published root word. The allocation-name extension now also preserves all
+successfully decoded old parents and node records. No mirror definition was
+changed.
+
+These are local lemmas. Their allocation extent, query/table separation and
+preceding-phase field facts still need to follow from the complete entry and
+allocation resources. They are not new environmental contracts, a narrowed
+function precondition or a completed whole-heap reconstruction. The next use
+is the existing allocation/attachment phase; structural mutation and complete
+function composition remain open.
+
+The default package build, explicit standard-axiom checks, fresh kernel replay
+of the enlarged `AllowedipsInsertionSurface` closure and the unchanged printed
+trust-surface diff pass. The fast unit tier passes 136 tests, one skipped,
+in 24.832 seconds. Ordinary elaboration and syntax failures were repaired
+before these checks; no resource-limit increase, KILLED run or timeout occurred
+in this step. Disposable normalization probe sources were removed after their
+conclusion was recorded. `TrustBase.lean` and the runtime runner are unchanged;
+no new external export acceptance is claimed.
