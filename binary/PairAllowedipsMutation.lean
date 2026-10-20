@@ -1,4 +1,5 @@
-import PairAllowedipsState
+import PairAllowedipsLookupCheck
+import PairAllowedipsPlacement
 import PairAllowedips
 
 namespace Binary.Pair.Allowedips
@@ -119,7 +120,7 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
   for _ in [:4] do
     r ← runUntil input.lookup.instructions input.lookup.labels input.lookup.hooks input.lookup.preempt
       r.state seed true input.lookup.budget input.lookup.entryPreempt #[input.alloc,input.free]
-      (some r) frame.returnPC (some #[])
+      (some r) frame.returnPC (some #[input.add+0xf7,input.add+0x120,input.add+0x3ca])
       (some fun t => match TrustBase.KcovPlan .pc t with
         | none => .error "insert.coverage-inputs"
         | some writes => .ok (!writes.isEmpty))
@@ -130,6 +131,7 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
     r := after; names := next; released := freed; remaining := rest
     services := services.push (pc,ra)
   unless r.state.pc.toBitVec.toNat == frame.returnPC do throw "insert.service-budget"
+  let visits ← Placement.check s.names input.lookup.offsets input.add s.world family key cidr pid frame.stack r.history
   let ambient := {s.world.ambient with
     hidden := some records, allocArmed := ["allocNode190","allocNode205","allocNode234"]}
   let w := {s.world with ambient}
@@ -147,7 +149,7 @@ def invokeFrom (input : Input) (seed : UInt64) (s : Session)
     unless (← readNat r.state (frame.coverage+8*(i+1)) 8) == r.coverage[i]! do throw "insert.coverage-word"
   assertAt names input.lookup.offsets r.state.data.dmem world
   return (⟨names,world,r,released⟩,Json.mkObj [("family",toJson family),("cidr",toJson cidr),
-    ("result",toJson answer),("instructions",toJson r.pcs.size),("services",toJson services),
+    ("result",toJson answer),("placementVisits",toJson visits),("instructions",toJson r.pcs.size),("services",toJson services),
     ("coverage",toJson (r.coverage.toList.drop s.binary.coverage.size)),
     ("comparisons",toJson (r.comparisons.toList.drop s.binary.comparisons.size)),
     ("decisions",toJson ((world.steps.toList.drop s.world.steps.size).map Step.label))])
@@ -173,7 +175,16 @@ def lookup (input : Input) (seed : UInt64) (s : Session) (family key : Nat) : Ex
   let network := (List.range (width/8)).map fun i => UInt8.ofNat (key / 256^(width/8-1-i) % 256)
   let memory := (put s.binary.state.data.dmem stackAddr 8 stopAddr).storeBytes
     (.ofNat 64 AllowedipsProbe.keyAddr) network
-  let (world,binary,report) ← Trie.lookup s.names.trie input.lookup seed memory s.binary.coverage s.world root width key
+  let regs : Reg64s := {
+    rdi := .ofNat (← Trie.address s.names.trie.nodes root),rsi := .ofNat width,
+    rdx := .ofNat AllowedipsProbe.keyAddr,rsp := .ofNat stackAddr,
+    rbx := 0x11,rbp := 0x22,r12 := 0x33,r13 := 0x44,r14 := 0x55,r15 := 0x66}
+  let initial : MachineState := ⟨{regs,dmem := memory},.ofNat input.lookup.entry⟩
+  let context := Trie.fixtureLoopContext input.lookup
+  lookupBoundary s.names input.lookup ⟨context.coverage,.ofNat 32 input.lookup.entryPreempt⟩
+    initial s.world family key (.ofNat stopAddr)
+  let (world,binary,report) ← Trie.lookupFrom s.names.trie input.lookup seed initial {} context
+    s.binary.coverage s.world root width key
   assertAt s.names input.lookup.offsets binary.state.data.dmem world
   return ({s with world,binary},report)
 

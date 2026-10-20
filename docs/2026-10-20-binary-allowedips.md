@@ -220,9 +220,46 @@ at the default limits. This changed the binary-side decoder's expression shape,
 not the mirror or the accepted heap invariant. It is a concrete instance where
 small executable-definition choices affect proof cost substantially.
 
-The next composition obligation is the old lookup theorem lifted to roots,
-counter, parents and ordered ownership lists using its existing write frame.
-Insertion's placement loop and mutation regions, then the function theorem,
+The lookup composition obligation now checks. `Allowedips.lookup_checked` in
+`PairAllowedipsLookupAdequacy` lifts the existing complete lookup theorem to the
+extended executable assertion, including table roots and sequence, packed
+parents, ordered ownership lists, peer counts and the heap invariant. Its
+entry check derives the root from the source table related to the bytes and
+checks separation of metadata from the actual lookup write footprint. The
+existing physical theorem and its frame establish the extended postcondition;
+no new instruction proof or assumed post-correspondence is introduced. The
+retained-heap runner now executes this stronger boundary check on every lookup.
+This strengthens an existing function result and adds no completed-function
+coverage. The same accepted-source-run restriction and explicit callback and
+decoder hypotheses remain.
+
+The new support and headline occupy approximately 570 lines. From the captured
+replay checkpoint at 02:12:37 UTC to the successful lookup build at 02:25:24 UTC
+was about thirteen elapsed minutes, including other work; this is composition
+cost, not a new-function throughput measurement. A fresh full-closure kernel
+replay of `PairAllowedipsLookupAdequacy` passes, and the headline prints only the
+three standard axioms. External export acceptance of this new surface remains
+pending.
+
+`PairAllowedipsPlacement` exposes the mirror's actual placement iteration as an
+executable accumulator and checks its binary locals and full reconstruction at
+the loop header and both exits. `Placement.run_eq_source` proves that this
+exposed loop is the mirror's `nodePlacement`. The first assertion run failed:
+a saved stack word was incorrectly identified as the requested prefix rather
+than the address width. Correcting that binary-local assertion gives 82 checked
+loop-header visits across 54 generated insertions and 54 retained-heap lookups
+in about 2.2 seconds. The eight-call recorded three-way comparison also passes
+under both seeds, in 0.227 seconds. These are tested invariant candidates and a
+source-identity lemma; the physical placement-loop proof is still open.
+
+Reproduce the new proof checks with:
+
+```sh
+capped lake -d binary build PairAllowedipsLookupAdequacy PairAllowedipsPlacementSource
+capped lake -d binary env leanchecker --fresh PairAllowedipsLookupAdequacy
+```
+
+Insertion's placement loop and mutation regions, then its function theorem,
 remain open. F1 is independently confirmed; the coordinator's `task/seq-wrap`
 correction is pending its claim point and landing notice. The failing witness,
 exact target and unrestricted wrapping case remain unchanged on this branch.

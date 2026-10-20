@@ -99,6 +99,12 @@ def reconstruct (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) : De
   let peers ← names.trie.peers.mapM fun (id,a) => decodePeer names o m id a
   return ⟨{root4,root6,seq},nodes,peers,names.nextNode⟩
 
+def internalListCheck (names : Names) (m : DataMem) (id : NodeId) : Except String Unit := do
+  let a ← Trie.address names.trie.nodes (some id)
+  let head := a+AllowedipsMutationLayout.peer_list
+  unless (← readNat ⟨{dmem := m},0⟩ head 8) == head &&
+      (← readNat ⟨{dmem := m},0⟩ (head+8) 8) == head do throw "heap.internal-list"
+
 /-- Structural assertion, separate from the reconstruction equation. Every live
 node has exactly one incoming root/child edge, with the matching packed parent;
 peer membership is exact, and internal-node list heads are initialized. -/
@@ -118,11 +124,7 @@ def heap (names : Names) (s : State) (m : DataMem) : Except String Unit := do
     unless incoming == [n.parent] do throw s!"heap.parent[{id}]: {repr incoming}"
     let owners := s.peers.flatMap fun (pid,_,xs) => xs.filterMap fun x => if x == id then some pid else none
     unless owners == n.peer.toList do throw s!"heap.peer-membership[{id}]"
-    if n.peer.isNone then
-      let a ← Trie.address names.trie.nodes (some id)
-      let head := a+AllowedipsMutationLayout.peer_list
-      unless (← readNat ⟨{dmem := m},0⟩ head 8) == head &&
-          (← readNat ⟨{dmem := m},0⟩ (head+8) 8) == head do throw "heap.internal-list"
+    if n.peer.isNone then internalListCheck names m id
 
 def Corresponds (names : Names) (o : AllowedipsProbe.Offsets) (m : DataMem) (d : Device) : Prop :=
   reconstruct names o m = .ok (target d)
