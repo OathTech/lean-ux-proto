@@ -1,3 +1,5 @@
+import Leanux.Proofs.WG.Progress.AmbientRetentionFrames
+import Leanux.Proofs.WG.Progress.SuppliedRecordSource
 import Leanux.Proofs.WG.Progress.CommittedCaptureClaims
 import Leanux.Proofs.WG.Progress.CommittedInitializedCompletionClaims
 import Leanux.Proofs.WG.Progress.RunnerFiniteClaims

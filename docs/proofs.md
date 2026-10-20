@@ -1063,11 +1063,11 @@ carrying each result's claim are these:
 
 The speedbump beside the gate, run at claim points and never blocking:
 `capped -- scripts/in-bundle scripts/proof-counterexamples`, which replays
-the twelve published counterexample and witness recipes (R1's floor, R2's
-two, the W7 scheduler regression, R4's GRO order, R5's five, R6's retry
-limit, the W7 full ring) through `lake env lean --run`; these run in the
-interpreter outside the kernel and their modules are outside the gate's
-build, so the speedbump is what keeps them reproducible.
+the fifteen published counterexample and witness recipes: campaign 1's twelve
+and campaign 2's confirmation-incarnation, namespace-pin and initialized
+give-up witnesses. They use `lake env lean --run` or a self-checking `#eval`
+for the standalone pin recipe. These interpreter runs sit outside the kernel
+and the gate's build closure; the speedbump keeps them reproducible.
 
 The following validation history predates the split. Its checkout mirror was
 byte-identical to `cb2348e`. The rows above instead reflect the completed
