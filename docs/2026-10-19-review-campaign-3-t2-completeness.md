@@ -216,3 +216,6 @@ Source-118 `67607187` joins protocol socket interiors to initialized handshake a
 
 
 Source-119 `e9f496fb` joins native session creation/rotation and outgoing initiation/MAC/socket points. The two session receipts retain their original run and order. Compound consumer, cookie, configuration and lifecycle interiors remain open; the campaign report records scoped validation and the latest aggregate checkpoint.
+
+
+Source-120 `cdf1eda8` joins captured MAC validation, load/rate-limit writes and endpoint metadata to the initialized source relation. Ordinary handshake fallback atoms are expanded. Compound consumers, cookie emission and administrative interiors remain open; the campaign report records scoped validation.
