@@ -919,3 +919,28 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   proof tree's H5 recipe that asserted the parser's former acceptance lags
   until campaign 2 repairs it.
 
+- **2026-10-20 [USER]** On the fresh-eyes scope review
+  (docs/2026-10-20-fresh-eyes-scope-review.md, an independent directional
+  assessment commissioned by the user): its success criterion is adopted for
+  the next phase. The next substantial investment is one bounded result
+  connecting actual Linux code, an explicit execution contract and a useful
+  property, reassessed after two weeks against the review's three outcomes
+  (narrow and continue; keep the mirror as an executable specification and
+  bug-finding laboratory; or stop the verification route). The typed heap
+  view's lookup calibration (docs/2026-10-20-design-heap-view-overlay.md,
+  not yet landed) is that experiment. A fourth property campaign, new
+  subsystem mirrors and a protocol-model transcription are deferred until it
+  reports. Three small probes are queued after campaign 3 lands: a
+  fault-exclusion goal for the lifetime result over a named admissible
+  class, or observed access attempts including failures; the one-event
+  removal test of observer coverage; an independently chosen input sample
+  classified as scope findings, with an audit of one omitted single-CPU
+  interference point (upstream-tray 04). The review's proposal to permit
+  reviewed, semantics-preserving factoring of the mirror is not adopted now.
+  First a pilot on the proof side, in the shape the user's raft-proofs
+  project used: a high-level mirror of one subsystem, ideally executable for
+  the same reason the low-level mirror is, refined once from the executable
+  mirror, one landed property restated over it, one real mirror change
+  replayed and the repair effort measured against the current tree. The
+  mirror rule is revisited only on that evidence [AGENT, coordinator: the
+  pilot's details].
