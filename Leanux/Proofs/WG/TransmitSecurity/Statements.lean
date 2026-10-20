@@ -1,5 +1,6 @@
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeInterpretation
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeFrontier
+import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeCutConsequences
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeReceiptStaging
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedNativeReceiptDisposal
 import Leanux.Proofs.WG.AuthenticatedEffects.StagedCompleteReachedTrafficConcreteInitialized
@@ -2739,6 +2740,24 @@ theorem initialized_source_points_have_current_account_or_fixed_completion
       (fun h w=>NativeAccounting.Frontier h w.wg)
       (Reached.Runner.Points.executeShape trace placeholders) [] :=
   NativeAccounting.initialized_frontier trace placeholders
+
+/-- Security: every declared initialized source point has one semantic ledger
+account now or after its original pending records on the same native world.
+Each account gives every admitted ticket a unique status, every resident cell
+its native owner and recorded backing or selected-ticket allocation alias,
+and every receipt its exact terminal count. Active trim retains the precise
+removed cohort until the overflow receipt. No semantic premise is supplied;
+coverage of finer native source points is still a separate obligation. -/
+theorem initialized_source_points_have_semantic_ticket_accounts
+    (trace : Leanux.Runner.Trace) (placeholders : Bool)
+    {nativeConsume : Consume.Points.ChildPoints} {nativeNapi : Napi.Points.ChildPoints}
+    {nativeWorker : Iteration.Points.ChildPoints} {nativeWork : WorkService.Points.ChildPoints}
+    {nativeDispatch : Dispatch.Points.ChildPoints} :
+    Reached.Runner.Points.Covered
+      (NativeAccounting.children nativeConsume nativeNapi nativeWorker nativeWork nativeDispatch)
+      (fun h w=>NativeAccounting.AccountOrRecords h w.wg)
+      (Reached.Runner.Points.executeShape trace placeholders) [] :=
+  NativeAccounting.initialized_account_or_records trace placeholders
 
 end
 
