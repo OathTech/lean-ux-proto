@@ -17,6 +17,11 @@ mirror. No resource options are needed for these declarations.
 | Same declarations after deleting the read emission | FAIL, exit 1, precisely at `getPeerPrefix_run`: its successful branch still promises the appended read |
 | Mutated getter with unchanged erasure proof and a proof that a safe input history stays safe | PASS, exit 0, no warnings; only `propext`, `Classical.choice`, `Quot.sound` |
 
+The temporary `missing_read` proof also shows that the mutated history cannot
+equal the old history followed by the promised read: their lengths differ.
+Thus this is a false successful-branch coverage claim after mutation, not
+merely a need to replace its old reflexivity proof.
+
 The lost connection is **successful original peer access → corresponding
 ordered read observation**. Erasure still connects results and states. History
 safety still constrains the remaining events. Neither alone establishes that

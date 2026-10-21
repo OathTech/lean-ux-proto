@@ -40,8 +40,17 @@ theorem safe_history (pid : PeerId) (w : WGWorld) (a : Ambient) (h : List PeerEv
     AccessEvent.Safe (runStatePrefix (getPeerPrefix pid) w a h).2 := by
   rw [retained_history]
   exact safe
+theorem missing_read (pid : PeerId) (w : WGWorld) (a : Ambient)
+    (h : List PeerEvent) (stamp : Nat) :
+    (runStatePrefix (getPeerPrefix pid) w a h).2 ≠ h ++ [.read pid stamp] := by
+  rw [retained_history]
+  intro equal
+  have lengths := congrArg List.length equal
+  simp only [List.length_append, List.length_singleton] at lengths
+  omega
 #print axioms RemovalProbe.getPeerPrefix_erases
 #print axioms RemovalProbe.safe_history
+#print axioms RemovalProbe.missing_read
 """
 
 (root / ".tmp").mkdir(exist_ok=True)
