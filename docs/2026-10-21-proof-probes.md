@@ -68,4 +68,3 @@ Set `LEANUX_KERNEL_DIR` to the approved build if it is not at the harness's
 default project artifact path. On the shared box, run each build/check through
 `capped -- scripts/in-bundle`. Large output, binaries and temporary copies are
 reconstructible worktree artifacts, not committed evidence bundles.
-
