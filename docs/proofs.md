@@ -8,6 +8,17 @@ the mirror is never edited to let a proof close. The standing rule and gate
 are in [AGENTS.md](../AGENTS.md); this file maps the tree and registers its
 claims, premises and mirror pins.
 
+## Bounded scope probes
+
+The [lifetime fault-exclusion probe](2026-10-21-lifetime-fault-probe.md), over
+main `c63423ef` (unchanged mirror `218d3ffd`), states the open initialized goal
+for independently parser-admitted default WireGuard fixtures. Its checked
+`LifetimeSafety.FaultProbe.allocation_invariant_does_not_exclude_lookup_faults`
+countermodel refutes a local bridge from R2's `AllocationInv` to absence of
+peer/keypair lookup faults. It is not an initialized counterexample or a new
+security result. R2's lookup history, C3's normal-endpoint reference accounting,
+invalid-dereference exclusion and eventual reclamation remain distinct claims.
+
 ## Campaign 3
 
 The six outcome rows are in [Results](#results), with per-result architecture,

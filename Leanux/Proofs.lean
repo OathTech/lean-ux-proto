@@ -9,6 +9,7 @@ import Leanux.Proofs.WG.ReplayWindow.Counterexamples
 import Leanux.Proofs.WG.Queues.RxCleanupFindings
 import Leanux.Proofs.WG.AntiReplay.Statements
 import Leanux.Proofs.WG.LifetimeSafety.Statements
+import Leanux.Proofs.WG.LifetimeSafety.FaultProbe
 import Leanux.Proofs.WG.CryptokeyRouting.Statements
 import Leanux.Proofs.WG.DeliveryOrder.Statements
 import Leanux.Proofs.WG.KeyLifetime.Statements
