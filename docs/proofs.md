@@ -10,6 +10,9 @@ claims, premises and mirror pins.
 
 ## Bounded scope probes
 
+The [three-probe report](2026-10-21-proof-probes.md) records scope, validation
+and the remaining obligations after campaign 3's landing.
+
 The [lifetime fault-exclusion probe](2026-10-21-lifetime-fault-probe.md), over
 main `c63423ef` (unchanged mirror `218d3ffd`), states the open initialized goal
 for independently parser-admitted default WireGuard fixtures. Its checked
