@@ -1,9 +1,12 @@
 # WireGuard proof campaign 2
 
-## Namespace-pin closure, 2026-10-20
+## Namespace-pin closure and campaign-3 aggregate, 2026-10-21
 
-The branch is rebased onto main `ac55c7d5`, including shared namespace-pin
-carry `7f89077d` and integration record `66188b74`, over mirror `218d3ffd`.
+The branch is rebased onto main `c63423ef`, including campaign 3
+(record `3361fb77`) and the earlier shared namespace-pin carry `7f89077d`
+(record `66188b74`), over mirror `218d3ffd`. Campaign 2's Lean files are
+unchanged from the validated `c414e3d0`; campaign 3's rows and claim scopes
+are retained in the combined register.
 The earlier fixed-width carry is already on main with the shared repair at
 `eba3c2b6`. No mirror or shared-layer change is made here.
 
@@ -33,13 +36,15 @@ are current over mirror `218d3ffd` against the shared carry, with H5's
 stronger boundary predicate and refusal recipe retained. The three former
 WIP source adaptations are validated in their landed form.
 
-Aggregate validation passes: `scripts/proof-gate` completes all 3,141 build
-jobs and checks 1,774 terminal declarations across 15 root modules; only
-`propext`, `Classical.choice` and `Quot.sound` occur. The forbidden-token and
-import/target checks pass. `scripts/proof-counterexamples` passes all 15
-recipes, including the retained H5 refusal regression. This supersedes the
-previous inherited build/import failures. The earlier four scoped boundary
-axiom checks and three existing fixture-validator tests also passed.
+The combined C1/C2/C3 proof gate passes: all 6,680 build jobs and 2,448
+terminal declarations across 19 root modules, using only `propext`,
+`Classical.choice` and `Quot.sound`. The forbidden-token and import/target
+checks pass. The counterexample speedbump passes all 15 recipes, including
+the repaired H5 namespace-pin regression. These counts supersede the prior
+C1/C2 aggregate (3,141 jobs and 1,774 terminal declarations). Campaign 3's
+six claim rows retain their scopes and named premises; their inherited H5
+recipe lag is resolved. Request 5 remains closed, and all rows are current
+over mirror `218d3ffd`.
 
 Reproduction commands:
 
@@ -50,6 +55,7 @@ LEAN_NUM_THREADS=32 LEANUX_QEMU_SLOTS=16 capped -- scripts/in-bundle scripts/pro
 
 Both aggregate commands exit zero. The existing memory cap is unchanged;
 there were no compiler warnings, KILLED banners, guest timeouts or retries.
+No campaign-2 Lean source changed during this rebase.
 All six result directories retain grandfathered Lean resource-limit settings;
 this carry changes none, and none of its edited Lean files contains a raise.
 
