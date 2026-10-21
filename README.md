@@ -1,5 +1,14 @@
 # Lean-ux
 
+> **Health warning.** This is an agent-built research prototype: its model,
+> tests, proofs and documents were written largely by AI coding agents,
+> directed and reviewed by the maintainer. It is published for research
+> purposes only. It is not a verified implementation, not a security tool and
+> not intended for use in any product or deployment, and nothing here is a
+> claim about the correctness or security of Linux or WireGuard. Read the
+> [scope table](#scope) and the [register](docs/proofs.md#results) before
+> relying on any statement in this repository.
+
 > An executable Lean mirror of selected paths in a pinned, instrumented,
 > single-CPU Linux configuration. Differential tests compare observations,
 > declared branch witnesses and comparison operands, replaying recorded inputs
@@ -26,8 +35,9 @@ each; the [scope table](#scope) below is its summary.
 
 - **A Lean model:** file descriptors, eventfd, pipes and epoll; WireGuard
   configuration, handshakes, encrypted traffic, timers, device and peer
-  lifecycle, routing and allocation-failure paths, with the packet queues and
-  worker scheduling represented as the kernel keeps them. Single-task seccomp
+  lifecycle, the IPv4 FIB trie behind its routing lookups, and
+  allocation-failure paths, with the packet queues and worker scheduling
+  represented as the kernel keeps them. Single-task seccomp
   with classic-BPF translation and an interpreter service, landed on
   2026-10-13: the filter chain and its cache, the classic-BPF checker and
   translation, strict mode, and the sandboxed child probe; excluded: the
@@ -49,20 +59,47 @@ each; the [scope table](#scope) below is its summary.
   model's own domain (the candidate and selection counts are reported with
   every run, after the finding-3 fix on task/review-checker), negative
   controls and sentinel mutants.
-- **A proof tree:** theorems about the model, in `Leanux/Proofs/`, with their
-  own build target and gate. The first result, replay freedom of WireGuard's
-  receive counter window, is current over the state split.
-  The [register](docs/proofs.md#results) records the six campaign results and
-  their exact scope: R1, R2 and R3 have positive proofs; R4 has initialized
-  ingress conservation proved, the C's first-in-first-out order up to GRO
-  proved within one poll, and a post-GRO order counterexample; R5 and R6
-  include counterexamples.
+- **A proof tree:** theorems about the model, in `Leanux/Proofs/`, with
+  their own build target and gate. The [register](docs/proofs.md#results) is
+  the authority on what each result says and the mirror commit it holds
+  over; the summary here is coarser than the rows. Three campaigns have
+  landed, each with an independent landing review in `docs/`.
+  Campaign 1 (R1 to R6): anti-replay uniqueness with the inclusive floor;
+  initialized lifetime safety, meaning no released identity is resolved by a
+  later committed access, with failed lookups outside the statement;
+  cryptokey routing against an independent longest-prefix history; ingress
+  conservation, with the order after GRO as a counterexample; key lifetime
+  as thirteen local contracts; and the cookie gate. Campaign 2 (H1 to H6):
+  the Noise session state machine function by function; session index
+  uniqueness at normal endpoints; endpoint roaming provenance; configuration
+  readback over four peer fields; finite evaluation of every operation, with
+  empty pending work at every accepted operation boundary in both record
+  modes; and timer discipline as guarded contracts with at most one session
+  arming. Campaign 3 (T1 to T6, the targets with security consequences):
+  per-allocation nonce uniqueness with exact encoding; transmit conservation
+  at the tree's declared cut points; authenticated effects and silence under
+  stated scopes; reference-aware key retirement; handshake replay resistance
+  (T4) and responder confirmation (T5) are conditional on named premises not
+  yet constructed. Several findings along the way were mirror defects, fixed
+  on the mirror side and recorded. In all three campaigns, that the
+  proof-side observers record every relevant event rests on construction
+  and review, not proof, and no theorem is about the C or the compiled
+  kernel.
 - **A separate binary refinement experiment:** [binary/](binary/README.md)
-  connects selected compiled WireGuard index and allowed-IPs functions under
-  Kraken to the executable mirror, using tested reconstruction functions and
-  conditional Lean proofs. It assumes an unrealistic sequential environment,
-  has its own build and trust gate, and does not establish whole-subsystem or
-  kernel-context refinement.
+  relates selected compiled WireGuard functions in the pinned image, under
+  the Kraken x86-64 semantics, to the executable mirror, with its own build
+  and trust gate. Two intentionally early results have landed: a refinement
+  of the index lookup, and an allowed-IPs scaling attempt that closed at its
+  calibration with zero completed functions and component results only. Its
+  instrument found a mirror defect (counters held wider than the C's words),
+  since fixed. The track is being redirected to a typed heap view over the
+  machine semantics, on a branch. It assumes a sequential environment and
+  establishes no whole-subsystem or kernel-context refinement.
+- **A directional assessment:** the
+  [fresh-eyes scope review](docs/2026-10-20-fresh-eyes-scope-review.md)
+  states the project's main open problem, the unproved connection between
+  the mirror and the Linux implementation, and the next phase's success
+  criterion adopted from it is in [docs/decisions.md](docs/decisions.md).
 - **A tray of kernel findings:** [docs/upstream-tray/](docs/upstream-tray/INDEX.md),
   reports on kernel behaviour that might concern its maintainers, drafted for
   future filing; reports only, no patches.
@@ -112,8 +149,9 @@ scripts/in-bundle python3 -m evaluator.check --suite wireguard
 # All default suites, including generated cases; allow roughly an hour
 scripts/in-bundle python3 -m evaluator.check
 
-# The proof tree: build and axiom check
+# The proof tree: build and axiom check, then the published counterexample recipes
 scripts/in-bundle scripts/proof-gate
+scripts/in-bundle scripts/proof-counterexamples
 ```
 
 The checker builds the model, boots the guest, and writes
@@ -157,7 +195,7 @@ constant time and the physical erasure of secrets are outside the model.
 
 | Location | Contents |
 | --- | --- |
-| [Leanux/](Leanux/) | Model: `FS/`, `WG/`, `Seccomp/`, shared state in `Kernel/`, fixture and scheduling in `Env.lean` and `Env/` |
+| [Leanux/](Leanux/) | Model: `FS/`, `WG/`, `Net/` (the FIB trie), `Seccomp/`, shared state in `Kernel/`, fixture and scheduling in `Env.lean` and `Env/` |
 | [Leanux/Proofs/](Leanux/Proofs/) | Theorems about the model; the map, the register and the result table are in [docs/proofs.md](docs/proofs.md) |
 | [harness/](harness/README.md) | Guest runner, trace validation and packet construction |
 | [evaluator/](evaluator/) | Trace generation and comparison with Linux |
