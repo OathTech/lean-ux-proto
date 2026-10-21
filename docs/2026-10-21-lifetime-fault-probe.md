@@ -19,6 +19,10 @@ dangling keypair. Other invariant failures, unsupported paths and record
 mismatches remain possible. This is committed execution only: faults discarded
 inside speculative schedule trials require a separate attempted-access claim.
 The definition is an open proposition, not an exported theorem.
+Even closing it would not establish every form of C dereference safety:
+`IndexOwner.peerDeref` reports a NULL peer word as an unsupported path, outside
+this invariant-fault predicate. Excluding that arm and relating logical IDs
+to C pointers/RCU lifetime are additional obligations.
 
 ## Attempt and obstruction
 
