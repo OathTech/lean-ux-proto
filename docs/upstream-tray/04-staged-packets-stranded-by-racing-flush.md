@@ -9,6 +9,17 @@ window does not open. State: **Draft**, not filed. Drafted 2026-10-15.
 
 No patch branch (README §5).
 
+**2026-10-21 scope-audit qualification:** the single-CPU race remains a
+conditional source analysis, with no initialized UP reproducer. Confirmation
+at the first unlock (`send.c:352`) alone is insufficient: the caller reads its
+key afterward. The critical candidate is after the unusable key snapshot,
+including `rcu_read_unlock_bh` at `:360`. Already-decrypted NAPI work must be
+pending there and survive earlier BH-enable points. See the
+[single-CPU interference audit](../2026-10-21-independent-input-probe.md#single-cpu-interference-audit-of-tray-04)
+for the source chain and the outstanding reachability obligation. The
+unqualified expected/actual description below is conditional on that window;
+it is not evidence of a reproduced single-CPU execution.
+
 ## Affected code (pristine 6.12.110)
 
 - `send.c:342-414`, `wg_packet_send_staged_packets`: steals the whole
