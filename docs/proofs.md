@@ -18,6 +18,9 @@ countermodel refutes a local bridge from R2's `AllocationInv` to absence of
 peer/keypair lookup faults. It is not an initialized counterexample or a new
 security result. R2's lookup history, C3's normal-endpoint reference accounting,
 invalid-dereference exclusion and eventual reclamation remain distinct claims.
+The [one-event removal probe](2026-10-21-observer-removal-probe.md) confirms that
+the peer getter's unchanged source equation rejects deletion of its read event,
+while erasure and safety of the remaining history survive.
 
 ## Campaign 3
 
