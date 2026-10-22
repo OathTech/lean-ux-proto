@@ -59,6 +59,10 @@ and mirror revision for each result.
 | [3: transmit and security-related properties](docs/2026-10-18-proof-campaign-3.md) | Per-allocation nonce uniqueness, transmit accounting at declared points, scoped authenticated-effect/silence claims and reference-aware retirement. Separate proofs connect packets to peers, keys and endpoints; they are not yet combined into one transmit-authorization result. Handshake replay resistance (T4) and responder confirmation (T5) still depend on named premises that have not been constructed. |
 
 These theorems concern the Lean definitions and their stated observations.
+In particular, **R2's lifetime safety does not establish absence of invalid
+dereferences**. The [lifetime fault probe](docs/2026-10-21-lifetime-fault-probe.md)
+shows that its allocation invariant alone does not exclude peer/keypair
+lookup faults; the initialized fault-exclusion goal remains open.
 Completeness of the proof-side event logs (journals) rests on construction and review,
 not a general theorem that every relevant event is recorded. Cryptographic
 primitives are treated as services; the campaigns do not prove cryptographic

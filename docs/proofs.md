@@ -28,6 +28,12 @@ than the charter that motivated it.
 - **Current/lagging** describes whether a result has been carried to the
   named mirror revision. It does not express proof strength or kernel coverage.
 
+R2's lifetime-safety result concerns recorded committed accesses; it does
+**not establish absence of invalid dereferences**. The
+[lifetime fault probe](2026-10-21-lifetime-fault-probe.md) shows that R2's
+allocation invariant alone does not exclude peer/keypair lookup faults.
+The initialized fault-exclusion goal remains open.
+
 Proof-side observer erasure relates the instrumented proof model back to the
 executable model. Completeness of the relevant event journals still rests on
 construction and review, not a general event-coverage theorem. Cryptographic
