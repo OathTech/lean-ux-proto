@@ -48,6 +48,25 @@ the original failure and its investigation, not the current fast tier.
 [harness/linux.py](../harness/linux.py), `AGENTS.md` and the shop-window guides.
 The former value of 8 was a documentation error; runtime concurrency is unchanged.
 
+## F3: the former Lean setup could not supply the pinned toolchain
+
+**Resolved by launcher change `2933b4e9`, landed on main at `fe9c755b`.**
+The old first-run guide used `scripts/restore-toolchains.py --only lean`.
+The [toolchain lock](../dependencies/toolchains.lock.json) has two Lean rows:
+4.33.1 has an upstream source, but the required 4.35.0 has only a local
+snapshot that is not in Git. From a fresh clone, the old command downloaded
+4.33.1 and then failed with `No snapshot and no upstream release for lean`.
+The former launcher also required a staged toolchain, so installing Lean
+through elan alone did not make that setup work.
+
+The [first-run guide](../REPRODUCING.md#1-prepare-the-environment) now installs
+the exact `lean-toolchain` pin through elan. The launcher accepts that
+installed toolchain after trying a matching staged snapshot, checks its
+version and refuses an unversioned Lean from `PATH`. It does not install or
+download a toolchain itself. The lock is unchanged: snapshot restoration
+remains the devboxes' [offline mechanism](offline-usage.md#restore-the-devboxes-lean-snapshots),
+with its two-row and archive requirements stated there.
+
 ## F4: working-practices example names an absent oracle directory
 
 **Open documentation proposal; source and artifact checked.**

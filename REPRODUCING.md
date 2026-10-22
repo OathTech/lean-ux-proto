@@ -9,8 +9,9 @@ for staging; the mirror builds and tests then run locally.
 
 Use Linux x86-64 with glibc 2.39 or newer; Ubuntu 24.04 is the reference host.
 The bootstrap needs Python 3.12+ at `/usr/bin/python3`, `/bin/sh`, Git, curl,
-GNU tar, zstd and `dpkg-deb`. Lean, GCC, QEMU and the kernel build tools come
-from the pinned bundle. KVM and root access are not needed to run the tests.
+GNU tar, zstd and `dpkg-deb`. GCC, QEMU and the kernel build tools come
+from the pinned bundle; install Lean through elan as described below.
+KVM and root access are not needed to run the tests.
 Allow roughly 10 GiB for the basic tools, sources, downloads and model build,
 or at least 20 GiB of free space if building the test kernel. For scale, the
 current extracted Lean toolchain uses about 3 GiB, the packaged tools 1 GiB,
