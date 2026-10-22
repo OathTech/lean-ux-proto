@@ -39,6 +39,7 @@ of [device](2026-10-13-audit-device.md),
 | [worktree-practices.md](worktree-practices.md) | Shared inputs, private outputs and cleanup |
 | [offline-usage.md](offline-usage.md) | Staged dependencies and offline use |
 | [2026-10-22-setup-findings.md](2026-10-22-setup-findings.md) | Setup defects, repairs and reproduction commands for maintainer follow-up |
+| [2026-10-22-review-shop-window.md](2026-10-22-review-shop-window.md) | The independent review of the shop-window documentation pass: land with named changes; the Lean setup gap (B1), register rows carried ahead of their landing (B2), and the claim-boundary wording for lifetime safety and nonce uniqueness; all applied before landing |
 | [nono-profile-proposal.md](nono-profile-proposal.md) | Devbox-specific sandbox proposal; not a prerequisite for ordinary setup |
 
 ## Dated designs and reports
