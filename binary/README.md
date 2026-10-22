@@ -37,27 +37,24 @@ and reports below name statements, premises and historical validation commits.
 
 Use a non-main worktree as described in [setup](../REPRODUCING.md). The
 package needs Git, the Lean toolchain named by
-[`lean-toolchain`](lean-toolchain), and Python 3.12+ with pyelftools available
-to the interpreter launching `run.py`. The mirror's staged tools are also
-needed for QEMU-backed tests. Select the host Python before entering the
-bundle: the staged Python does not include pyelftools. The commands below use that interpreter with the
-staged Lean and build tools; no host Lean installation is required.
+[`lean-toolchain`](lean-toolchain), and Python 3.12+. Bootstrap, proof builds
+and the binary proof gate do not need pyelftools; image generators and
+pairing/capture scripts do. The mirror's staged tools are also needed for
+QEMU-backed tests. Select the host Python before entering the bundle; the
+commands below use that interpreter with the selected Lean and build tools.
 
 Check the interpreters before bootstrapping, from the worktree root:
 
 ```sh
 binary_python=$(command -v python3)
 cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
-scripts/in-bundle "$binary_python" -c 'import elftools; print(elftools.__version__)'
 scripts/in-bundle lean --version
 cap scripts/in-bundle "$binary_python" -B binary/run.py --bootstrap-only
 cap scripts/in-bundle lake -d binary build
 cap scripts/in-bundle "$binary_python" scripts/binary-proof-gate
 ```
 
-If the import check fails, select a project-local Python environment with
-pyelftools installed and set `binary_python` to its interpreter before
-continuing. The root and binary toolchain pins currently agree; compare them
+The root and binary toolchain pins currently agree; compare them
 before reusing these commands after a toolchain change.
 Bootstrap creates a private patched Kraken checkout at `.deps/kraken`, using
 a shared upstream clone when available and the locked upstream URL otherwise.
@@ -128,6 +125,18 @@ records local validation and pending external acceptance.
 insertion theorem.
 
 ## Run image tests with the saved ELF
+
+First install the pinned [Python requirements](requirements.txt) in a local
+virtual environment using the [optional image-dependency setup](../REPRODUCING.md#6-optional-binary-image-dependencies).
+From the worktree root, select that interpreter before entering the bundle:
+
+```sh
+binary_python="$PWD/.tmp/binary-python/bin/python"
+scripts/in-bundle "$binary_python" -c 'import elftools; print(elftools.__version__)'
+```
+
+The bundle's staged Python does not include pyelftools. Keep `binary_python`
+set for the image generators, paired executions and capture recipes below.
 
 Set `LEANUX_BINARY_KERNEL_DIR` to the directory containing the s5 `vmlinux`.
 [`target.py`](target.py) checks its exact SHA-256 against

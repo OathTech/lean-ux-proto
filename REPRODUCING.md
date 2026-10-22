@@ -54,9 +54,11 @@ install system packages. Go, syzkaller, Firecracker and the Lean MCP helper
 are optional and not needed here.
 
 The [binary refinement package](binary/README.md) is optional and has a
-separate setup. In particular, its Python entry points need pyelftools in
-the interpreter used to launch them, and its image-execution tests need a
-specific saved kernel ELF. The mirror setup below does not provide that artifact.
+separate setup. Its image generators and pairing/capture scripts need the
+[optional Python dependencies](#6-optional-binary-image-dependencies), and
+its image-execution tests need a specific saved kernel ELF. Bootstrap,
+proof builds and the binary proof gate need no pyelftools. The mirror setup
+below does not provide the saved ELF.
 
 Create a worktree for builds and experiments:
 
@@ -197,3 +199,23 @@ whether their assumptions describe Linux. Read the
 [claim register](docs/proofs.md#results) for each result's premises and mirror
 pin. Campaigns 2 and 3 include scoped and conditional claims as well as
 counterexamples; the number of theorems is not a measure of kernel coverage.
+
+## 6. Optional binary image dependencies
+
+Only the binary package's image generators and pairing/capture scripts need
+pyelftools. Install the version declared in
+[`binary/requirements.txt`](binary/requirements.txt) using a project-local
+virtual environment. This step needs a host Python 3.12+ with `venv` and
+pip support, plus network access or a local package cache:
+
+```sh
+python3 -m venv .tmp/binary-python
+binary_python="$PWD/.tmp/binary-python/bin/python"
+"$binary_python" -m pip install -r binary/requirements.txt
+```
+
+Keep this interpreter selected when following the
+[binary image-test instructions](binary/README.md#run-image-tests-with-the-saved-elf).
+These Python dependencies supply no kernel artifact; the exact saved s5 ELF
+is a separate requirement. The virtual environment can be deleted and
+recreated from the requirements file.
