@@ -52,10 +52,17 @@ campaigns cover the following areas; this summary does not replace their
 [claim register](docs/proofs.md#results), which names the statements, premises
 and mirror revision for each result.
 
+The earlier [receive replay-window result (S1–S3)](docs/2026-10-13-spike-window.md)
+establishes an exact acceptance history with no repeated counter in one
+allocation lifetime, refines the validator to a Lean specification of the
+receive rule, and proves that unrelated keypairs' windows are preserved under
+the stated lifetime-aware invariant. Identifying that specification with the
+C rule remains a source-correspondence claim.
+
 | Campaign | Results and boundaries |
 | --- | --- |
 | [1: receive and lifetime](docs/2026-10-13-proof-campaign.md) | Anti-replay uniqueness, lifetime safety for recorded committed accesses (failed lookups are outside the statement), routing authorization and ingress conservation; local key-lifetime and cookie-gate contracts. Chronological delivery order after receive aggregation (GRO) and some proposed lifetime/retry claims were refuted. |
-| [2: handshake and configuration](docs/2026-10-14-proof-campaign-2.md) | Noise state-machine contracts, session-index uniqueness, endpoint-roaming provenance, readback for four peer fields, finite operation evaluation and guarded timer discipline. Accepted operation boundaries have no pending work units in either record mode; this does not imply empty packet queues, eventual delivery or absence of scheduled NAPI polls. |
+| [2: handshake and configuration](docs/2026-10-14-proof-campaign-2.md) | Noise state-machine contracts; session-index uniqueness at normal initialized endpoints (H2); endpoint-roaming provenance; one-directional readback for four peer fields, under an entry invariant not derived at initialized endpoints (H4); finite operation evaluation and guarded timer discipline. Accepted operation boundaries have no pending work units in either record mode; this does not imply empty packet queues, eventual delivery or absence of scheduled NAPI polls. |
 | [3: transmit and security-related properties](docs/2026-10-18-proof-campaign-3.md) | Per-allocation nonce uniqueness (keyed by key allocation, not by key material), transmit accounting at declared points, scoped authenticated-effect/silence claims and reference-aware retirement. Separate proofs connect packets to peers, keys and endpoints; they are not yet combined into one transmit-authorization result. Handshake replay resistance (T4) and responder confirmation (T5) still depend on named premises that have not been constructed. |
 
 These theorems concern the Lean definitions and their stated observations.
