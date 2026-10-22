@@ -38,7 +38,7 @@ of [device](2026-10-13-audit-device.md),
 | [2026-10-11-interface.md](2026-10-11-interface.md) | Wire opcodes, record kinds, site IDs and fixture flags |
 | [worktree-practices.md](worktree-practices.md) | Shared inputs, private outputs and cleanup |
 | [offline-usage.md](offline-usage.md) | Staged dependencies and offline use |
-| [2026-10-22-setup-findings.md](2026-10-22-setup-findings.md) | Open setup defects and reproduction commands for overseer follow-up |
+| [2026-10-22-setup-findings.md](2026-10-22-setup-findings.md) | Setup defects, repairs and reproduction commands for maintainer follow-up |
 | [nono-profile-proposal.md](nono-profile-proposal.md) | Devbox-specific sandbox proposal; not a prerequisite for ordinary setup |
 
 ## Dated designs and reports

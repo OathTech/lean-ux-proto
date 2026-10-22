@@ -1,11 +1,11 @@
-# Setup findings for overseer follow-up
+# Setup findings and follow-up
 
-These setup findings were discovered while reviewing the
-front-facing documentation against main `c63423ef`. Documentation corrections
-are on `task/shop-window`; the harness and build scripts are unchanged.
+These findings were discovered during the front-facing documentation review,
+starting at main `c63423ef`. Each entry distinguishes an open repair from a
+fix carried into this documentation branch from main.
 
 [USER 2026-10-22] Track setup defects found during the documentation review for
-repair by the overseer. Keep reproduction commands and the diagnosis here;
+separate repair by the coordinating agent. Keep reproduction commands and the diagnosis here;
 transient test output is not retained.
 
 ## F1: D1 key test failed after the state split

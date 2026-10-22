@@ -11,9 +11,13 @@ Use Linux x86-64 with glibc 2.39 or newer; Ubuntu 24.04 is the reference host.
 The bootstrap needs Python 3.12+ at `/usr/bin/python3`, `/bin/sh`, Git, curl,
 GNU tar, zstd and `dpkg-deb`. Lean, GCC, QEMU and the kernel build tools come
 from the pinned bundle. KVM and root access are not needed to run the tests.
-Allow space for the tool bundle, Linux sources, a kernel build and test
-output; full proof builds and the optional binary package need additional
-space beyond the first run.
+Allow roughly 10 GiB for the basic tools, sources, downloads and model build,
+or at least 20 GiB of free space if building the test kernel. For scale, the
+current extracted Lean toolchain uses about 3 GiB, the packaged tools 1 GiB,
+Linux sources 1.6 GiB and the model build 0.6 GiB. A kernel build adds a
+private source copy and about 1 GiB of output. These are planning estimates,
+not limits; full proof builds, the optional binary package and proof exports
+need additional space.
 
 On shared devboxes, wrap heavy commands with the installed `capped` tool.
 The following shell helper also works on ordinary hosts where it is absent:
@@ -41,7 +45,7 @@ toolchain installed the same way. (The project's shared devboxes keep a staged
 snapshot under `.tools/`, which the launcher uses first; see
 [offline usage](docs/offline-usage.md).)
 
-Stage the locked tools and Linux source in the main checkout:
+Stage the locked tools and Linux source in the original clone:
 
 ```sh
 python3 scripts/stage-resources.py packages
@@ -68,7 +72,7 @@ cd .worktrees/first-run
 scripts/in-bundle lean --version
 ```
 
-`scripts/in-bundle` uses the main checkout's tools and sources, with build
+`scripts/in-bundle` uses the original clone's tools and sources, with build
 outputs and caches private to this worktree. It selects tools; it is not a
 sandbox. A sandbox such as nono is optional.
 
@@ -104,11 +108,13 @@ and `harness.test_d1_keepalive`.
 
 ```sh
 export LEANUX_KERNEL_DIR="$PWD/.artifacts/kernel-net-choice"
-LEANUX_KERNEL_PROFILE=net-choice LEANUX_KERNEL_BUILD="$LEANUX_KERNEL_DIR" \
+CAPPED_MEM_MAX=64G LEANUX_KERNEL_PROFILE=net-choice LEANUX_KERNEL_BUILD="$LEANUX_KERNEL_DIR" \
   cap scripts/in-bundle scripts/build-kernel
 ```
 
-This extracts a private copy of Linux 6.12.110, applies the pinned
+The 64 GiB cap matches [AGENTS.md](AGENTS.md) on machines with `capped`; it
+has no effect when that optional wrapper is absent. This extracts a private
+copy of Linux 6.12.110, applies the pinned
 `choice-stream.patch` and builds the `net-choice` profile. The patch records
 coverage, hidden inputs and dispatches, and provides steering and virtual-time
 facilities. The builder uses four jobs by default (`LEANUX_JOBS` overrides
@@ -124,7 +130,7 @@ that it behaves exactly like stock Linux.
 
 To reuse an existing matching build, skip the build command and set
 `LEANUX_KERNEL_DIR` to its absolute path inside a checkout's `.artifacts/`
-(the current worktree or its main checkout). The negative controls also use
+(the current worktree or the original clone). The negative controls also use
 profile `net-choice-actl`, with its separate identity file; the first run
 does not need it. Explicit alternative identities are for separately labeled
 experiments and controls, not a way to pass the normal oracle check.
@@ -167,7 +173,7 @@ run directories when finished.
 If a run fails, inspect `aborted` and `failures` in the report, then the named
 build or guest log. A kernel identity mismatch, timeout, `KILLED` banner or
 model error is a failed run. `LEANUX_QEMU_SLOTS` bounds the guests running at
-once across every checkout, through lock files in the main checkout's
+once across every checkout, through lock files in the original clone's
 `.artifacts/runs/`; the default is 16. Set a lower value on a smaller or busier
 machine. Heavy contention can exhaust timing budgets.
 
