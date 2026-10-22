@@ -18,18 +18,32 @@ scripts use it automatically, printing a notice when it is absent; nothing is
 needed elsewhere. Commands in [AGENTS.md](AGENTS.md) are written with the
 wrapper in front; drop the `capped --` prefix on any other host.
 
-Stage the locked tools and Linux source in the main checkout:
+Lean comes from [elan](https://github.com/leanprover/elan), the Lean
+toolchain manager. Install elan, then install the toolchain this checkout
+pins in `lean-toolchain` (4.35.0):
+
+```sh
+elan toolchain install "$(cat lean-toolchain)"
+```
+
+`scripts/in-bundle` locates that toolchain through elan and checks that its
+`lean --version` reports the pinned version; it never builds with an
+unversioned `lean` from `PATH`, and a checkout on another pin needs that
+toolchain installed the same way. (The project's shared devboxes keep a staged
+snapshot under `.tools/`, which the launcher uses first; see
+[offline usage](docs/offline-usage.md).)
+
+Then stage the locked packages and Linux source in the main checkout:
 
 ```sh
 python3 scripts/stage-resources.py packages
 python3 scripts/stage-resources.py sources --sources linux
-python3 scripts/restore-toolchains.py --only lean
 ```
 
-These download from the Ubuntu snapshot service, kernel.org and GitHub, verify
-the locked SHA-256 hashes, and extract into `.tools/` and `.deps/`. They do not
-install system packages. Lean is pinned to 4.35.0 (`lean-toolchain`; a checkout on an older pin keeps its own staged toolchain, see `scripts/in-bundle`). Go, syzkaller, Firecracker
-and the Lean MCP helper are optional and not needed here.
+These download from the Ubuntu snapshot service and kernel.org, verify the
+locked SHA-256 hashes, and extract into `.tools/` and `.deps/`. They do not
+install system packages. Go, syzkaller, Firecracker and the Lean MCP helper
+are optional and not needed here.
 
 The optional [`binary/` refinement package](binary/README.md) also needs a
 host/system Python 3.12+ with **pyelftools** (`elftools`) installed for the

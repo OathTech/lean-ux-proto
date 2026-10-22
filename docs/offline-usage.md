@@ -25,7 +25,7 @@ downloads tools nor provides sandboxing.
 
 | Path | Purpose |
 | --- | --- |
-| `.tools/lean`, `.tools/sysroot` | Lean and the packaged compiler, Python, QEMU and build tools |
+| `.tools/lean-<version>`, `.tools/sysroot` | The staged Lean snapshot (`.tools/lean` is the legacy name of the 4.33.1 stage) and the packaged compiler, Python, QEMU and build tools |
 | `.deps/linux`, `.deps/downloads` | Locked Linux source and archives needed to rebuild the patched kernel |
 | A matching build under `.artifacts/` (optional, `kernel-net-choice-e2` at this revision) | Saves a kernel rebuild; the check recomputes its identity on the destination |
 
@@ -38,6 +38,16 @@ The staging scripts reuse hash-checked cached downloads. With the appropriate
 snapshot archive in `.deps/downloads`, `scripts/restore-toolchains.py --only
 lean` restores a missing Lean installation without a download. It leaves an
 existing installation untouched.
+
+The staged snapshot is the devboxes' offline mechanism for Lean, and
+`scripts/in-bundle` uses it first when it is present and reports the pinned
+version. On a connected machine the ordinary route is elan: install the
+toolchain `lean-toolchain` names (`elan toolchain install "$(cat
+lean-toolchain)"`, see [REPRODUCING.md](../REPRODUCING.md)), and the launcher
+locates it through elan (`elan toolchain list`, then `elan run <name> lean
+--print-prefix`) and checks its version; it never installs or downloads, and
+never uses an unversioned `lean` from `PATH`. `LEANUX_LEAN_SOURCE=staged` or
+`=elan` forces one route; the default `auto` tries the snapshot, then elan.
 
 ## Optional tools
 
