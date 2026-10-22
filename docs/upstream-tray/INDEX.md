@@ -5,7 +5,10 @@
 Draft reports against Linux 6.12.110 (`.deps/linux`, the pristine source)
 found while mirroring and checking the kernel in this repository. Reports
 01 and 02 have corpus evidence on the instrumented single-CPU x86-64 oracle;
-03 and 04 are source-analysis questions with no corpus reproducer. The
+03 and 04 are source-analysis questions with no corpus reproducer. Report
+04's single-CPU race is conditional on an interference window whose
+reachability remains unproved; the [scope audit](../2026-10-21-independent-input-probe.md#single-cpu-interference-audit-of-tray-04)
+does not supply an initialized single-CPU reproducer. The
 classifications below are provisional assessments. Filing is the user's call;
 no submission is recorded here.
 
