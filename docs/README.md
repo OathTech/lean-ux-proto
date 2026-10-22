@@ -14,7 +14,7 @@ revision and scope it names.
 | Assess a theorem claim | [Proof register](proofs.md#results): statements, premises, mirror pins and current/lagging status |
 | Understand the three proof campaigns | [Campaign 1](2026-10-13-proof-campaign.md), [Campaign 2](2026-10-14-proof-campaign-2.md), [Campaign 3](2026-10-18-proof-campaign-3.md); use the register for subsequent repairs |
 | Evaluate the link to compiled Linux | [Binary experiment](../binary/README.md): function/component results, trust premises and the saved-ELF requirement |
-| Read the strongest concerns | [Scope review](2026-10-20-fresh-eyes-scope-review.md) and [pre-release review](2026-10-14-pre-release-review.md), with their dates and dispositions |
+| Read the strongest concerns | [Scope review](2026-10-20-fresh-eyes-scope-review.md), [bounded probes](2026-10-21-proof-probes.md) and [pre-release review](2026-10-14-pre-release-review.md), with their dates and dispositions |
 | Inspect potential kernel findings | [Report tray](upstream-tray/INDEX.md): draft observations and questions, with the evidence level for each |
 | Reuse an existing environment | [Offline usage](offline-usage.md) |
 | Contribute or understand project direction | [Working rules](../AGENTS.md), [worktrees](worktree-practices.md) and [decisions](decisions.md) |
@@ -63,6 +63,8 @@ correction is recorded. Use the guides above for current setup and claim scope.
 | [2026-10-12-kernel-scout.md](2026-10-12-kernel-scout.md) | Candidate next mirror targets scored; epoll and seccomp chosen |
 | [2026-10-12-simulation-target-review.md](2026-10-12-simulation-target-review.md) | Whether the mirror is a suitable target for a later simulation proof: suitable with named representation changes, since landed |
 | [2026-10-15-state-split-companion.md](2026-10-15-state-split-companion.md) | Proposed revision of the state split after independent review: shared task services, localized worlds, cheap leaf narrowing and staged proof repair |
+| [2026-10-14-wireguard-parallel-plan.md](2026-10-14-wireguard-parallel-plan.md) | Historical sequencing plan for representation changes, mirror extensions and proof carries |
+| [2026-10-15-review-state-split.md](2026-10-15-review-state-split.md) | Independent review of the state-split design, footprint evidence and proof-migration scope |
 
 ## WireGuard
 
@@ -96,6 +98,13 @@ correction is recorded. Use the guides above for current setup and claim scope.
 | [2026-10-13-decision-census.md](2026-10-13-decision-census.md) | The decision census: 1382 decisions and their outcomes by anchored file, every exclusion in force with its justification, the anchored-file boundary, the W13 scope; its denominator is declared mirror decisions, not independently enumerated C choices |
 | [2026-10-13-compiler-experiment.md](2026-10-13-compiler-experiment.md) | Witness-location stability across two optimisation levels of GCC 13.3: what refused the size-optimised image and what the static comparison shows; not evidence about the C's semantics |
 | [2026-10-13-mutation-campaign.md](2026-10-13-mutation-campaign.md) | The mutation campaign: 308 sampled mechanical mutants of the mirror against the check on s2 (`scripts/mutate.py`), every survivor classified (equivalent projection, logging-only, corpus boundary, real), four check-reach findings, the channels' shares; power kept apart from presence |
+| [2026-10-15-audit-peer.md](2026-10-15-audit-peer.md) | Source audit of peer lifetime, removal and lookup paths against peer.c and peerlookup.c |
+| [2026-10-15-audit-send.md](2026-10-15-audit-send.md) | Source audit of transmit, queueing and handshake-send paths against send.c and its callees |
+| [2026-10-15-design-b1-handshake-ring.md](2026-10-15-design-b1-handshake-ring.md) | Handshake PtrRing design, probe evidence and dispositions of its independent review |
+| [2026-10-15-design-b1-review.md](2026-10-15-design-b1-review.md) | Independent review of the handshake-ring design and its evidence plan |
+| [2026-10-15-design-b3-review.md](2026-10-15-design-b3-review.md) | Independent source review of the timer-wheel design |
+| [2026-10-15-design-b3-timer-wheel.md](2026-10-15-design-b3-timer-wheel.md) | Timer-wheel design and the proposed boundary between kernel and environment modeling |
+| [2026-10-15-design-c-review.md](2026-10-15-design-c-review.md) | Independent review of the IPv4 FIB trie design and its probe evidence |
 
 ## Pipes, epoll and seccomp
 
@@ -186,6 +195,27 @@ obligations. Current setup commands are in [binary/README.md](../binary/README.m
 | [2026-10-13-review-r5-counterexamples.md](2026-10-13-review-r5-counterexamples.md) | The independent review of the campaign's R5 counterexamples: three statement artefacts, design nuances at most, no tray entry |
 | [2026-10-17-review-campaign-1-landing.md](2026-10-17-review-campaign-1-landing.md) | The independent review of proof campaign 1's landing (`proofs/campaign` at 6a357a90): land with named changes; gate, kernel replay and all eleven witnesses rerun; 13 findings, none blocking |
 | [2026-10-18-proof-gro-carry.md](2026-10-18-proof-gro-carry.md) | Campaign 1 carried over corrected GRO classification and same-flow completion: changed order contracts, theorem counts and validation |
+| [2026-10-14-campaign-2-mirror-requests.md](2026-10-14-campaign-2-mirror-requests.md) | Campaign 2 mirror requests and subsequent dispositions; historical acceptance witnesses retain their original pins |
+| [2026-10-15-campaign-2-shared-frame-followup.md](2026-10-15-campaign-2-shared-frame-followup.md) | Historical request for additional shared proof-frame dependencies |
+| [2026-10-15-campaign-2-shared-frame-request.md](2026-10-15-campaign-2-shared-frame-request.md) | Outer-removal frame request, closed for table safety rather than whole-driver coherence |
+| [2026-10-17-proof-campaign-2-backlog-carry.md](2026-10-17-proof-campaign-2-backlog-carry.md) | Historical backlog fixture carried to a corrected refusal |
+| [2026-10-17-proof-campaign-2-cookie-bound.md](2026-10-17-proof-campaign-2-cookie-bound.md) | Arbitrary-state counterexample to bounding receive-ring metadata by its count |
+| [2026-10-17-proof-campaign-2-missing-clock.md](2026-10-17-proof-campaign-2-missing-clock.md) | Legacy give-up records omit a base-clock input; counterexample to the old totality domain |
+| [2026-10-17-proof-campaign-2-peer-release.md](2026-10-17-proof-campaign-2-peer-release.md) | Peer-release totality needs cleanup guards for queued work and timers |
+| [2026-10-17-proof-campaign-2-persistent-owner.md](2026-10-17-proof-campaign-2-persistent-owner.md) | Arbitrary-state counterexample: local hashed-owner coherence does not suffice for persistent keepalive |
+| [2026-10-17-proof-campaign-2-placeholder-pending.md](2026-10-17-proof-campaign-2-placeholder-pending.md) | Historical initialized placeholder-mode pending-work witness; read with the later H5 repair |
+| [2026-10-17-proof-campaign-2-queued-handshake.md](2026-10-17-proof-campaign-2-queued-handshake.md) | Statement correction after the queued-handshake record change |
+| [2026-10-17-proof-campaign-2-removal-carry.md](2026-10-17-proof-campaign-2-removal-carry.md) | Peer-removal contracts restored to include the crypt-work guard |
+| [2026-10-17-proof-campaign-2-session-alias.md](2026-10-17-proof-campaign-2-session-alias.md) | Arbitrary-state session-publication counterexample requiring slot and cursor freshness |
+| [2026-10-17-proof-campaign-2-timer-carry.md](2026-10-17-proof-campaign-2-timer-carry.md) | Timer arming and deletion statements carried to the timer-wheel state |
+| [2026-10-19-campaign-2-environment-carry.md](2026-10-19-campaign-2-environment-carry.md) | Campaign 2 carry over environment fixes, with checkpoint validation and inherited failures recorded |
+| [2026-10-19-campaign-2-getter-frame-followup.md](2026-10-19-campaign-2-getter-frame-followup.md) | Getter metadata framing resolved within the owned campaign proofs |
+| [2026-10-19-proof-campaign-2-prefill-blocker.md](2026-10-19-proof-campaign-2-prefill-blocker.md) | Historical Prefill specialization failure and the subsequently adopted staged bridge |
+| [2026-10-19-review-campaign-3-staged-origin.md](2026-10-19-review-campaign-3-staged-origin.md) | Source review of staged provenance and the remaining transmit-binding joins |
+| [2026-10-19-review-campaign-3-t2-completeness.md](2026-10-19-review-campaign-3-t2-completeness.md) | Source review of gaps in forward transmit conservation at its checkpoint |
+| [2026-10-19-review-campaign-3-t2-cuts.md](2026-10-19-review-campaign-3-t2-cuts.md) | Source review of T2 conservation boundaries and coverage premises |
+| [2026-10-19-review-campaign-3-t2-native-cut-closure.md](2026-10-19-review-campaign-3-t2-native-cut-closure.md) | Follow-up source review of remaining native-cut coverage for T2 |
+| [2026-10-20-proof-campaign-2-prefill-investigation.md](2026-10-20-proof-campaign-2-prefill-investigation.md) | Prefill proof factoring at stock resource limits, later integrated with initialization |
 
 ## Reviews of the whole
 
@@ -214,9 +244,25 @@ obligations. Current setup commands are in [binary/README.md](../binary/README.m
 See [binary/README.md](../binary/README.md) for the current build procedure,
 artifact limitations and the distinction between local and external checks.
 
+| Document | Contents |
+| --- | --- |
+| [2026-10-15-binary-adequacy.md](2026-10-15-binary-adequacy.md) | Milestone-1 lookup theorem, transport premises and chronological validation checkpoints |
+| [2026-10-15-review-binary-milestone-1.md](2026-10-15-review-binary-milestone-1.md) | Independent milestone-1 trust-surface review; see the s5 landing assessment for later dispositions |
+| [2026-10-16-goal-binary-proof-refactoring.md](2026-10-16-goal-binary-proof-refactoring.md) | Proof-refactoring experiment and the sequential relational sibling to milestone 1 |
+| [2026-10-18-paired-index-subsystem.md](2026-10-18-paired-index-subsystem.md) | Sequential index-function and retained-heap composition report; later acceptance is recorded in the s5 assessment |
+| [2026-10-18-plan-paired-call-increment.md](2026-10-18-plan-paired-call-increment.md) | Complete-call experiment, proof-cost measurements and remaining removal/capture work |
+| [2026-10-18-review-paired-index-subsystem.md](2026-10-18-review-paired-index-subsystem.md) | Independent review of the sequential fixed-allocation index subsystem |
+| [2026-10-19-review-paired-callback-charter.md](2026-10-19-review-paired-callback-charter.md) | Review of the callback charter and first-return permission dependencies |
+| [2026-10-20-review-binary-allowedips-charter.md](2026-10-20-review-binary-allowedips-charter.md) | Review of the allowed-IPs mutation charter and its composition scope |
+
 ## Retired
 
 [history/](history/README.md) holds superseded proposals and first-prototype
 proof artifacts. The [old machine setup](history/SETUP-new-machine.md) is also
 historical. These documents are not current setup instructions or project
 direction.
+
+| Document | Contents |
+| --- | --- |
+| [history/2026-09-19-rough-plan.md](history/2026-09-19-rough-plan.md) | Initial prototype sketch; superseded |
+| [history/2026-09-20-prototype-proposal.md](history/2026-09-20-prototype-proposal.md) | First prototype proposal; superseded |
