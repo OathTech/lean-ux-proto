@@ -91,18 +91,12 @@ After building, run the unit tests, including recorded model replays:
 ```sh
 cap scripts/in-bundle python3 -B -m unittest \
   evaluator.test_evaluation evaluator.test_model_replay \
-  harness.test_trace harness.test_wg harness.test_linux
+  harness.test_trace harness.test_wg harness.test_linux harness.test_d1_keys
 ```
 
-This is the five-module fast tier named in [AGENTS.md](AGENTS.md).
+This is the six-module fast tier named in [AGENTS.md](AGENTS.md).
 Additional Noise and keepalive vectors are available in `harness.test_noise`
 and `harness.test_d1_keepalive`.
-
-Known failure ([overseer follow-up](docs/2026-10-22-setup-findings.md)): the
-optional `harness.test_d1_keys` test still constructs the
-pre-split Lean state and fails to compile (ambiguous `M` and obsolete `World`
-fields). The broader command previously listed here therefore fails. Repairing
-that test is separate from the passing fast tier; do not count it as validated.
 
 ## 3. Build the Linux test kernel
 

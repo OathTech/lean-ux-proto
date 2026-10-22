@@ -8,17 +8,20 @@ are on `task/shop-window`; the harness and build scripts are unchanged.
 repair by the overseer. Keep reproduction commands and the diagnosis here;
 transient test output is not retained.
 
-## F1: optional D1 key test fails after the state split
+## F1: D1 key test failed after the state split
 
-**Open; reproduced.** `harness.test_d1_keys.D1KeysTest.setUpClass` generates a
-Lean driver using the old state representation. Its unqualified `M` is
-ambiguous between `WG.M` and `Leanux.M`, and it constructs a `World` with
+**Resolved on main at `c65cf6ae` (repair `ec5d25e8`).**
+`harness.test_d1_keys.D1KeysTest.setUpClass` generated a
+Lean driver using the old state representation. Its unqualified `M` was
+ambiguous between `WG.M` and `Leanux.M`, and it constructed a `World` with
 obsolete `k`, `env`, `timing` and `hidden` fields while omitting the new
-`ambient`, `tasks` and `fs` fields. The driver fails to elaborate, so this
-suite does not run its key vectors. This is a test failure, not a successful
-cryptographic validation.
+`ambient`, `tasks` and `fs` fields. The driver failed to elaborate, so the
+suite did not run its key vectors. That was a test failure, not a successful
+cryptographic validation. The repair qualifies `WG.M`, constructs the current
+subsystem worlds and serializes the fixed-width birthdates; it preserves the
+vectors and their assertions.
 
-From a prepared task worktree, reproduce with:
+From a prepared task worktree, check the repaired suite with:
 
 ```sh
 cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
@@ -32,13 +35,10 @@ five-module fast tier was then checked independently: 144 tests, zero failures
 and one skip because its default kernel path had no build. Model/default
 library builds passed without warnings.
 
-Repair the generated Lean driver in [harness/test_d1_keys.py](../harness/test_d1_keys.py)
-to use the current subsystem worlds and monads while preserving the vectors'
-assertions. Re-run the isolated suite and the expanded setup command. Do not
-skip the suite or weaken its expected key values to make it pass.
-
-The first-run guide now uses the required five-module tier and explicitly
-names this outstanding failure. Remove that caveat once the repair passes.
+The [repaired suite](../harness/test_d1_keys.py) now belongs to the required
+six-module fast tier in `AGENTS.md` and the first-run guide. The integration
+record reports its five isolated tests passing. The counts above describe
+the original failure and its investigation, not the current fast tier.
 
 ## F2: worktree guide gives an obsolete guest-slot default
 
