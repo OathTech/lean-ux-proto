@@ -16,10 +16,16 @@ recipe here that promises to regenerate it from a fresh clone.
 
 | Part | What is established | What remains outside the claim |
 | --- | --- | --- |
-| Index lookup | `LookupAdequacy.lookup_simulation` relates the complete lookup and bucket loop to an accepted mirror run, including NULL, zero-count and live peer-get paths; transport lemmas carry properties through the relation | Named service, serialization, permission and initial-memory premises; kernel-entry realism is not proved |
+| Index lookup | `LookupAdequacy.lookup_simulation` relates the complete lookup and bucket loop to an accepted mirror run, including NULL, zero-count and live peer-get paths; transport lemmas carry properties through the relation | Named service, serialization, permission and initial-memory premises; only the hit paths have theorem witnesses showing the lookup premises can be met. A NULL-owner witness and general kernel-entry realism remain unproved |
 | Replay-state frame | `LookupSnapshotTransport.lookup_snapshot_transport` preserves the represented frontier and source-live lifetime/replay fields through lookup | Initial representation and separation are extra premises, not supplied by the existing lookup Pre witness; no physical allocator-membership or whole-receive theorem |
 | Sequential paired execution | Checked entry assertions and retained-heap composition for selected index operations, plus a sequential allowed-IPs lookup and bounded callback proofs | No concurrent-context result; input coupling and service/permission contracts remain where stated. A dying-peer retry is a source refusal in the trie experiment |
 | Allowed-IPs mutation scaling | Tested component proofs for placement, reassignment and initialization/publication segments; an extended lookup reconstruction | Zero newly completed functions in this increment. Insertion, allocation/failure handling and full function/sequence composition remain open |
+
+The milestone-1 [review obligations at landing](../docs/2026-10-19-binary-landing-assessment.md#outstanding-review-obligations-at-landing)
+remain open as stated there, including the NULL-owner `Pre_lookup` witness,
+callback assumptions in the original headline, transport representation and
+separation premises, general entry realism and subsystem-wide scaling.
+Concrete NULL-owner execution tests do not supply the missing theorem witness.
 
 The two allowed-IPs rows describe different stages: the sequential lookup
 experiment predates the unfinished mutation work. Passing a component proof
@@ -63,7 +69,8 @@ The semantics pin is declared in
 [`dependencies/sources.lock.json`](../dependencies/sources.lock.json) and
 [`TrustBase.lean`](TrustBase.lean), including nine committed Kraken patches.
 Patch nine adds the register BT forms needed by the insertion image. Those
-semantics are part of the trust boundary; their tests are not a proof of ISA
+forms deliberately leave the zero flag (ZF) undefined, along with BT's other
+undefined flags. These semantics are part of the trust boundary; their tests are not a proof of ISA
 fidelity. Unsupported forms fail explicitly.
 
 The package imports the operational mirror by path and does not import
