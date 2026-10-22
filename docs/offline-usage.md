@@ -1,8 +1,10 @@
 # Using a staged environment offline
 
-Follow [setup and first run](../REPRODUCING.md) to obtain the required bundle.
-A Git clone contains the code and dependency locks, but not the downloaded
-tools, Linux sources or kernel build. Once staged, the normal build and check
+The shared development machines use a staged Lean snapshot for offline work.
+This is an alternative to the elan setup in
+[setup and first run](../REPRODUCING.md). A Git clone contains the code and
+dependency locks, but not the snapshots, downloaded tools, Linux sources or
+kernel build. Once the dependencies are present, the normal build and check
 commands need no network access.
 
 Run commands through `scripts/in-bundle`, using the portable `cap` helper
@@ -37,10 +39,28 @@ Keep the checked-in `dependencies/*.lock.json` files. Do not copy `.cache`:
 its generated links contain absolute paths, and `scripts/in-bundle` recreates
 it. Model builds in `.lake` and test reports are disposable too.
 
-The staging scripts reuse hash-checked cached downloads. With the appropriate
-snapshot archive in `.deps/downloads`, `scripts/restore-toolchains.py --only
-lean` restores a missing Lean installation without a download. It leaves an
-existing installation untouched.
+## Restore the devboxes' Lean snapshots
+
+Run this in the original clone, where the shared `.tools/` and `.deps/` live:
+
+```sh
+python3 scripts/restore-toolchains.py --only lean
+```
+
+The restore script checks the snapshots against
+[`dependencies/toolchains.lock.json`](../dependencies/toolchains.lock.json)
+and restores missing installations. It leaves existing directories untouched.
+The lock's Lean 4.35.0 row has only a local snapshot archive, which is not in
+Git, and no upstream source. This command is therefore not a fresh-clone
+installer: without that snapshot it fails. It also visits the legacy 4.33.1
+row and downloads that release if neither its installation nor archive is
+present. For a fully offline restore, both rows need an existing installation
+or their cached archives. Copying the matching extracted 4.35.0 stage instead
+does not require the legacy stage.
+
+The two compressed Lean snapshots total about 1.5 GB; extracted, their two
+toolchains occupy roughly 6 GiB. An offline bundle that only needs the current
+pin can omit the older extracted stage.
 
 The staged snapshot is the devboxes' offline mechanism for Lean, and
 `scripts/in-bundle` uses it first when it is present and reports the pinned
