@@ -59,8 +59,9 @@ statement amendments, effort and boundaries in the
 `c63423ef`. At source head `0c6927b8`, the full gate passed (6,680 jobs; 2,448
 terminal statements; 19 root modules), while the counterexample speedbump
 failed on the inherited C2 `h5-namespace-pin` recipe (14/15 passed). That recipe
-is repaired here: the combined gate passes all 6,680 jobs and 2,448 terminal
-checks, and the counterexample speedbump passes all 15 recipes.
+was repaired in the Campaign 2 follow-on checkpoint: the combined gate
+passed all 6,680 jobs and 2,448 terminal checks, and the counterexample
+speedbump passed all 15 recipes. The later probe checkpoint is recorded below.
 C3-F1's two R5 witnesses and fresh root kernel replay passed at that source head.
 T4/T5 retain named conditional premises. T2 quantifies over declared source cuts
 and provides binding in separate pieces. C3's files carry resource raises,
@@ -76,13 +77,17 @@ closes H5's pending-unit boundary claim in both record modes and turns the
 historical namespace-pin input into a refusal regression. Empty pending work
 units do not imply empty packet queues or absence of scheduled NAPI.
 
-The [Campaign 2 report](2026-10-14-proof-campaign-2.md) records its combined
-C1/C2/C3 checkpoint validation, excluding the bounded probes: 6,680 build
-jobs, 2,448 terminal axiom checks and all 15 counterexample recipes pass.
-This supersedes Campaign 3's earlier 14/15 recipe result; it does not discharge T4/T5's remaining premises or enlarge
-T2's scope. All mirror-result rows are current at that checkpoint within their
-stated boundaries. The probes have their own validation report above;
-historical counts and pins below are not newer claims.
+Main's latest combined proof checkpoint, including the bounded probes, is
+recorded in the integration commit `8702e79f`: **6,681 build jobs, 2,455
+terminal statements and 15 of 15 counterexample recipes pass**. The
+[probe report](2026-10-21-proof-probes.md) records an earlier 14/15 recipe
+failure, before the Campaign 2 repair was included; the integration record
+supersedes that result. These are recorded checks, not a new proof-gate run
+by this documentation pass.
+
+All mirror-result rows are current over `218d3ffd` within their stated
+boundaries. The checkpoint does not discharge T4/T5's remaining premises or
+enlarge T2's scope. Historical counts and pins below are not newer claims.
 
 Use [setup](../REPRODUCING.md#5-build-and-check-the-proofs) to run the proof gate
 and the separate counterexample recipes. Standing practices are in
