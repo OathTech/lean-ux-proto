@@ -47,3 +47,19 @@ names this outstanding failure. Remove that caveat once the repair passes.
 `LEANUX_QEMU_SLOTS` defaults to 16, matching
 [harness/linux.py](../harness/linux.py), `AGENTS.md` and the shop-window guides.
 The former value of 8 was a documentation error; runtime concurrency is unchanged.
+
+## F4: working-practices example names an absent oracle directory
+
+**Open documentation proposal; source and artifact checked.**
+[AGENTS.md](../AGENTS.md#build-test-and-check) gives
+`.artifacts/kernel-net-choice-e2` in the original clone as an example oracle
+path. That directory is absent on the shared development machine. The approved
+build is in `.artifacts/kernel-net-choice-s5`; its `vmlinux` SHA-256 is
+`06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e`, matching
+the [pinned identity](../kernel/identity-x86_64-net-choice.txt).
+
+Proposed correction for the maintainer to approve: replace the obsolete
+example with the `-s5` directory, while retaining the requirement to set an
+absolute `LEANUX_KERNEL_DIR` and verify the identity. The directory name is
+not an identity check or a promise that a clone contains the build. This
+documentation pass does not edit `AGENTS.md`.
