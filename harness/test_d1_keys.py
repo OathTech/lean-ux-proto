@@ -116,16 +116,16 @@ def rec (s : HiddenSite) (hex : String) : HiddenRecord :=
   let bs := hx hex
   ⟨s.info.id, bs ++ List.replicate ((8 - bs.length % 8) % 8) 0⟩
 
-def keypairJson (id : KeypairId) : M Json := do
+def keypairJson (id : KeypairId) : WG.M Json := do
   let k ← getKeypair id
   return Json.mkObj [("id", toJson id), ("sending", toJson (hs k.sending.key)),
     ("receiving", toJson (hs k.receiving.key)),
-    ("birthdates", toJson [k.sending.birthdate, k.receiving.birthdate]),
+    ("birthdates", toJson [k.sending.birthdate.toInt, k.receiving.birthdate.toInt]),
     ("valid", toJson [k.sending.isValid, k.receiving.isValid]),
     ("initiator", toJson k.iAmTheInitiator), ("remote_index", toJson k.remoteIndex),
     ("refcount", toJson k.refcount), ("internal_id", toJson k.internalId), ("counter", toJson k.sendingCounter)]
 
-def stateJson (pid : PeerId) : M Json := do
+def stateJson (pid : PeerId) : WG.M Json := do
   let p ← getPeer pid
   let d ← getDev
   let kps ← d.keypairs.toList.mapM fun (id, _) => keypairJson id
@@ -139,20 +139,24 @@ def stateJson (pid : PeerId) : M Json := do
     ("chaining_key", toJson (hs p.chainingKey)),
     ("walltime", toJson (timespec p.walltimeLastHandshake)), ("refcount", toJson p.refcount)]
 
-def runM (records : List HiddenRecord) (act : M Json) : String :=
-  let w : World := { k := Runner.initialKernel 1024 true, env := Runner.harnessEnv, timing := Env.timing,
-                     hidden := some records }
-  match act.run w with
-  | .ok (j, w) => (Json.mkObj [("result", j), ("steps", toJson (w.steps.toList.map (·.label))),
-                               ("left", toJson (w.hidden.getD []).length)]).compress
+/-- The WireGuard world of a network trace (wg0 present, as `Runner.executeTrace`
+builds it) over an ambient holding the supplied records: the handshake
+functions run in `WG.M`, which reaches only those two (the state split). -/
+def runM (records : List HiddenRecord) (act : WG.M Json) : String :=
+  let ambient : Ambient := { env := Runner.harnessEnv, timing := Env.timing, hidden := some records }
+  let wg : WGWorld := { Runner.initialWG true with portBound := Env.portBound,
+                                                   fixtureNetDevices := Env.fixtureNetDevices }
+  match (act.run wg).run ambient with
+  | .ok ((j, _), a) => (Json.mkObj [("result", j), ("steps", toJson (a.steps.toList.map (·.label))),
+                                    ("left", toJson (a.hidden.getD []).length)]).compress
   | .error e => (Json.mkObj [("stop", toJson e.message)]).compress
 
-def setup (wg0 peer psk : String) : M PeerId := do
+def setup (wg0 peer psk : String) : WG.M PeerId := do
   setStaticIdentityPrivateKey (hx wg0)
   let .ok pid ← peerCreate (hx peer) (some (hx psk)) | invariant "wg_peer_create failed"
   return pid
 
-def initiateThenConsume (wg0 peer psk resp : String) : M Json := do
+def initiateThenConsume (wg0 peer psk resp : String) : WG.M Json := do
   let pid ← setup wg0 peer psk
   let some init ← createInitiation pid | invariant "no initiation"
   let init ← addMacToPacket pid init
@@ -166,7 +170,7 @@ def initiateThenConsume (wg0 peer psk resp : String) : M Json := do
   return Json.mkObj [("initiation", toJson (hs init)), ("consumed", toJson consumed.isSome),
     ("begun", toJson begun), ("state", ← stateJson pid)]
 
-def respondThenInitiate (wg0 peer psk peerInit resp : String) : M Json := do
+def respondThenInitiate (wg0 peer psk peerInit resp : String) : WG.M Json := do
   let pid ← setup wg0 peer psk
   let some _ ← consumeInitiation (hx peerInit) | invariant "initiation not consumed"
   let some r ← createResponse pid | invariant "no response"
