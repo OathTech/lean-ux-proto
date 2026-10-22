@@ -3,7 +3,8 @@
 Lean-ux aims to preserve the data structures and control-flow choices of the
 configured Linux code, while abstracting away C memory representation. The
 checker tests this correspondence on operation traces; it does not prove it.
-All checks refer to the kernel build pinned by
+The [project health warning](../README.md) applies. Normal oracle checks use
+the kernel build pinned by
 [`identity-x86_64-net-choice.txt`](../kernel/identity-x86_64-net-choice.txt).
 
 ## Where to look
@@ -11,7 +12,7 @@ All checks refer to the kernel build pinned by
 | Part | Location |
 | --- | --- |
 | Kernel-shaped state, with identities in place of pointers | [`Leanux/Kernel/Defs.lean`](../Leanux/Kernel/Defs.lean), [`Leanux/WG/Types.lean`](../Leanux/WG/Types.lean), [`Leanux/WG/State.lean`](../Leanux/WG/State.lean) |
-| Functions following the C, with source sites and abstraction boundaries in comments | [`Leanux/FS/`](../Leanux/FS/), [`Leanux/WG/`](../Leanux/WG/) |
+| Functions following the C, with source sites and abstraction boundaries in comments | [`Leanux/FS/`](../Leanux/FS/), [`Leanux/WG/`](../Leanux/WG/), [`Leanux/Net/`](../Leanux/Net/), [`Leanux/Seccomp/`](../Leanux/Seccomp/) |
 | Branch labels, condition sites and outcome source spans | [`Leanux/Kernel/Decision.lean`](../Leanux/Kernel/Decision.lean) |
 | Fixture, timing, stack and scheduling assumptions | [`Leanux/Env.lean`](../Leanux/Env.lean), [`Leanux/Env/`](../Leanux/Env/) |
 | Anchored C files, functions and declared coverage exceptions | [`kcov.json`](kcov.json) |
@@ -42,6 +43,29 @@ results must agree between those runs. Unknown sites, missing records,
 unconsumed modeled inputs and execution failures fail the check. Explicitly
 declared records below an abstraction boundary are handled separately and
 reported in `choice_records_skipped`.
+
+## Recorded inputs and reconstructed schedules
+
+Recording dispatch order does not capture every scheduling choice. Two
+reconstructions matter when interpreting agreement:
+
+- **NAPI poll placement.** Some records leave open whether a receive poll
+  happened before or after a peer reference was released. The checker tries
+  the allowed placements, uses comparison operands to select them, and
+  replays the selected combination. It requires matching results and control
+  flow and the rule's independence conditions; otherwise it fails. The report
+  names selected before-release sections in `napi_before_put_sections`.
+- **Encrypt-worker yield position.** A reschedule record says a worker
+  yielded, but not how many items it processed first. `Leanux/Env/Batch.lean`
+  reconstructs this from the recorded transmit work under a restricted rule.
+  A schedule outside the rule is refused.
+
+These are explicit inferences from execution evidence, not independently
+recorded inputs. In particular, comparison operands used to select a schedule
+are also part of the agreement check. See
+[`evaluator/check.py`](../evaluator/check.py) (`section_agreement` and `replay_problem`),
+[`Leanux/Env/Batch.lean`](../Leanux/Env/Batch.lean), and the
+[dispatch-order design](../docs/2026-10-11-dispatch-order.md).
 
 ## Limits of the evidence
 
@@ -91,3 +115,11 @@ Structural review against the C remains necessary. The
 [choice-stream design](../docs/2026-10-03-choice-stream-strategy.md) explains
 the recording approach; dated design documents contain the detailed rationale
 and development history.
+
+The oracle itself is instrumented and supports value steering and virtual
+time. Its identity check pins the build; it does not prove that instrumentation
+preserves stock behavior. Negative controls and mutants test whether selected
+faults are detected, not whether the checker catches every possible defect.
+The separate [mirror proofs](../docs/proofs.md) and
+[binary experiment](../binary/README.md) have their own statements and trust
+boundaries; a differential pass does not establish their premises.

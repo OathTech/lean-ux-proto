@@ -1,12 +1,37 @@
-# Proofs about the mirrors
+# Proofs about the mirror
 
-`Leanux/Proofs/` is the repository's proof tree: every theorem about the
-executable mirrors lives there and nowhere else. It includes the shared
-layers and results of all three WireGuard campaigns. Proofs are a validation
-channel beside the differential check, under Rule Zero:
-the mirror is never edited to let a proof close. The standing rule and gate
-are in [AGENTS.md](../AGENTS.md); this file maps the tree and registers its
-claims, premises and mirror pins.
+This is the claim register and implementation map for `Leanux/Proofs/`.
+The [project health warning](../README.md) applies. These are theorems about
+the executable Lean model and models layered on it; they are not a proof
+that Linux or WireGuard satisfies the same properties. The separate
+[binary experiment](../binary/README.md) has its own premises and checks.
+
+## Reading the claims
+
+Start with [Results](#results), rather than the historical counts or module
+map. Each row gives the actual statement, its source, the mirror revision
+and its status. A result can be current and still conditional or narrower
+than the charter that motivated it.
+
+- **Initialized** results start from the model's fixture and compose through
+  its runner. They do not cover arbitrary Linux states or schedules.
+- **Local** contracts apply at named function or observation boundaries with
+  their stated inputs. They do not automatically compose into a whole-run
+  property.
+- **Conditional** results retain named premises. In particular, Campaign 3's
+  T4/T5 still depend on source-transition premises not constructed here. T2
+  accounts at declared cuts and provides separate binding pieces, with joins
+  still open.
+- **Counterexamples** refute the stated property at their recorded scope.
+  A counterexample in Lean first raises a question about the statement or
+  mirror; a claim about Linux needs additional implementation evidence.
+- **Current/lagging** describes whether a result has been carried to the
+  named mirror revision. It does not express proof strength or kernel coverage.
+
+Proof-side observer erasure relates the instrumented proof model back to the
+executable model. Completeness of the relevant event journals still rests on
+construction and review, not a general event-coverage theorem. Cryptographic
+services and execution-domain assumptions remain part of the boundary.
 
 ## Bounded scope probes
 
@@ -45,25 +70,31 @@ the per-result reports; historical commits are not current claim points.
 
 ## Current register
 
-The shared namespace-pin carry is landed on main at `ac55c7d5` over mirror
-`218d3ffd`, following the fixed-width carries at `eba3c2b6`. Campaign 2's
-owned carry strengthens H5's pending-unit boundary clause to both record
-modes without additional premises, closes request 5, and retains the
-historical input as a refusal regression. The full proof gate and all fifteen
-counterexample recipes pass after rebasing onto `c63423ef`, including
-campaign 3. Every result is current over mirror `218d3ffd`, within the scope
-and premises stated in its row.
+The register includes all three WireGuard campaigns over mirror `218d3ffd`,
+with Campaign 2's namespace-pin repair landed at `6bfde8bb`. That repair
+closes H5's pending-unit boundary claim in both record modes and turns the
+historical namespace-pin input into a refusal regression. Empty pending work
+units do not imply empty packet queues or absence of scheduled NAPI.
 
-The Results table is the current claim register; historical validation
-counts below it are not current pins. Campaign 1's [GRO report](2026-10-18-proof-gro-carry.md)
-and [state-split report](2026-10-16-proof-state-split.md) describe the shared
-layers, including the environment carry landed at `3308c49a`. Campaign 2's
-[report](2026-10-14-proof-campaign-2.md) and [landing review](2026-10-20-review-campaign-2-landing.md)
-describe the original scope over `1a69cebb` and its subsequent carries. H5's
-unrestricted pending-unit clause is now proved over `218d3ffd`, and request 5
-is closed with its historical counterexample retained as a refusal regression.
-This does not assert empty queues or absence of scheduled NAPI. Each result's
-row below names its mirror pin.
+The [Campaign 2 report](2026-10-14-proof-campaign-2.md) records its combined
+C1/C2/C3 checkpoint validation, before the bounded probes: 6,680 build jobs, 2,448 terminal axiom checks and all
+15 counterexample recipes pass. This supersedes Campaign 3's earlier 14/15
+recipe result; it does not discharge T4/T5's remaining premises or enlarge
+T2's scope. All mirror-result rows are current at that checkpoint within their
+stated boundaries. The probes have their own validation report above; historical counts and pins
+below are not newer claims.
+
+Use [setup](../REPRODUCING.md#5-build-and-check-the-proofs) to run the proof gate
+and the separate counterexample recipes. Standing practices are in
+[AGENTS.md](../AGENTS.md). Result files retain grandfathered resource-limit
+raises as reported in the campaign documents; those settings are not evidence
+of stronger statements.
+
+The remainder is a technical reference: [historical carries](#historical-state-split-retrofit),
+[layer map](#layers), [claim register](#results),
+[historical contract table](#historical-pre-split-contract-table),
+[result maintenance](#adding-a-result) and
+[binary checkpoint register](#binary-adequacy-standalone-charter-target).
 
 ## Historical state-split retrofit
 

@@ -1,8 +1,8 @@
 # Superseded documents
 
 These documents are kept for design history. They are **not** current direction.
-The current plan is [the way-forward plan](../2026-09-29-way-forward.md), adopted
-by the user on 2026-09-29. The rules in [AGENTS.md](../../AGENTS.md) take
+For current scope and direction, use the [project overview](../../README.md),
+[documentation guide](../README.md) and [decisions](../decisions.md). The rules in [AGENTS.md](../../AGENTS.md) take
 precedence over anything here. Relative links inside these files may point to
 their former locations.
 

@@ -5,18 +5,19 @@ A Git clone contains the code and dependency locks, but not the downloaded
 tools, Linux sources or kernel build. Once staged, the normal build and check
 commands need no network access.
 
-Run commands through `scripts/in-bundle`:
+Run commands through `scripts/in-bundle`, using the portable `cap` helper
+from the setup guide for heavy work:
 
 ```sh
 scripts/in-bundle lean --version
-scripts/in-bundle lake build leanux-model
-scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_close
+cap scripts/in-bundle lake build leanux-model
+cap scripts/in-bundle python3 -m evaluator.check --suite handwritten --trace alias_close
 ```
 
 The check requires `LEANUX_KERNEL_DIR` to name a build matching this revision's
 kernel identity (`kernel/identity-x86_64-net-choice.txt`). The proof tree
-needs no guest: `scripts/in-bundle lake build LeanuxProofs` and
-`scripts/in-bundle scripts/proof-gate` work offline once Lean is staged. The
+needs no guest: `cap scripts/in-bundle lake build LeanuxProofs` and
+`cap scripts/in-bundle scripts/proof-gate` work offline once Lean is staged. The
 host requirements still apply offline. `scripts/in-bundle` configures tool
 paths, compiler libraries, QEMU firmware and local caches. It neither
 downloads tools nor provides sandboxing.
@@ -25,11 +26,13 @@ downloads tools nor provides sandboxing.
 
 | Path | Purpose |
 | --- | --- |
-| `.tools/lean-<version>`, `.tools/sysroot` | The staged Lean snapshot (`.tools/lean` is the legacy name of the 4.33.1 stage) and the packaged compiler, Python, QEMU and build tools |
+| `.tools/lean-<version>` (or the matching legacy `.tools/lean`), `.tools/sysroot` | Lean and the packaged compiler, Python, QEMU and build tools |
 | `.deps/linux`, `.deps/downloads` | Locked Linux source and archives needed to rebuild the patched kernel |
-| A matching build under `.artifacts/` (optional, `kernel-net-choice-e2` at this revision) | Saves a kernel rebuild; the check recomputes its identity on the destination |
+| A matching build under `.artifacts/` (optional) | Saves a kernel rebuild; the check recomputes its identity on the destination |
 
 Copy these alongside a checkout of the same revision, preserving symlinks.
+The Lean stage must match `lean-toolchain`; copying only an older
+`.tools/lean` stage is insufficient.
 Keep the checked-in `dependencies/*.lock.json` files. Do not copy `.cache`:
 its generated links contain absolute paths, and `scripts/in-bundle` recreates
 it. Model builds in `.lake` and test reports are disposable too.
@@ -64,3 +67,8 @@ starts it without a global registration. For ordinary Lean editor support,
 Worktrees share the main checkout's `.tools/`, `.deps/` and selected kernel
 build. Their `.cache/`, `.lake/` and test output are private; see
 [worktree practices](worktree-practices.md).
+
+The optional [binary experiment](../binary/README.md) needs its own private
+patched Kraken dependency. Its proof builds can run offline after bootstrap;
+its image tests additionally require the exact saved s5 ELF, which this
+mirror bundle does not reproduce.

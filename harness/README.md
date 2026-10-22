@@ -1,18 +1,20 @@
 # Linux test runner
 
 The harness executes JSON operation traces in QEMU and collects Linux results
-and coverage. For a comparison with the Lean model, use
+and coverage and recorded inputs. This is a research harness, with the
+[project's health warning and scope](../README.md). For a comparison with the Lean model, use
 [`evaluator.check`](../REPRODUCING.md); this runner collects only the Linux side.
 
 ## Run a trace
 
 Complete the [setup](../REPRODUCING.md) and export `LEANUX_KERNEL_DIR` to the
-matching `net-choice` build. From your worktree:
+matching `net-choice` build. From your worktree, using the portable `cap`
+helper from the setup guide:
 
 ```sh
 mkdir -p .tmp
 python3 -c 'import json; print(json.dumps(json.load(open("corpus/handwritten/alias_close.json"))))' > .tmp/alias_close.jsonl
-capped -- scripts/in-bundle python3 -m harness.linux .tmp/alias_close.jsonl --out .artifacts/run-alias-close
+cap scripts/in-bundle python3 -m harness.linux .tmp/alias_close.jsonl --out .artifacts/run-alias-close
 ```
 
 Input is JSONL: one complete trace per line. Corpus `.json` files are formatted
@@ -36,8 +38,8 @@ the harness never rebuilds the kernel.
 Each trace runs in fresh children for PC coverage and comparison coverage.
 Their observable results must agree. WireGuard traces use network-namespace
 fixtures; fixture and timing assumptions are reflected in the model's
-`Leanux/Env.lean` and `Leanux/Env/`. Three QEMU slots are shared across the
-checkout's worktrees by default (`LEANUX_QEMU_SLOTS`).
+`Leanux/Env.lean` and `Leanux/Env/`. Up to 16 QEMU guests share slots across all worktrees by default
+(`LEANUX_QEMU_SLOTS`); use a smaller value on a smaller host.
 
 Run output includes validated input, the serialized guest input, observations,
 coverage and hidden-input records, build and boot logs, and the QEMU command.

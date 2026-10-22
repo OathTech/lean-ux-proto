@@ -1,44 +1,51 @@
-# Documents
+# Documentation guide
 
-Living documents first, then the dated ones grouped by subject. A dated
-document records a design, a review or a decision as it stood on its date;
-it is history, not setup instructions. Setup is
-[REPRODUCING.md](../REPRODUCING.md); the standing rules are
-[AGENTS.md](../AGENTS.md).
+Start with the [project overview and health warning](../README.md). For a
+first run, follow [REPRODUCING.md](../REPRODUCING.md). This directory contains
+both maintained reference documents and dated research reports. A charter is
+a target, not a completed result; a historical passing run applies to the
+revision and scope it names.
 
-## The documents the broad claims rest on
+## Choose a starting point
 
-Read these before the README's claims are taken at face value:
+| If you want to… | Read |
+| --- | --- |
+| Understand what a passing comparison means | [Correspondence guide](../correspondence/README.md): observations, branch/operand witnesses, scheduling reconstruction and gaps |
+| Assess a theorem claim | [Proof register](proofs.md#results): statements, premises, mirror pins and current/lagging status |
+| Understand the three proof campaigns | [Campaign 1](2026-10-13-proof-campaign.md), [Campaign 2](2026-10-14-proof-campaign-2.md), [Campaign 3](2026-10-18-proof-campaign-3.md); use the register for subsequent repairs |
+| Evaluate the link to compiled Linux | [Binary experiment](../binary/README.md): function/component results, trust premises and the saved-ELF requirement |
+| Read the strongest concerns | [Scope review](2026-10-20-fresh-eyes-scope-review.md) and [pre-release review](2026-10-14-pre-release-review.md), with their dates and dispositions |
+| Inspect potential kernel findings | [Report tray](upstream-tray/INDEX.md): draft observations and questions, with the evidence level for each |
+| Reuse an existing environment | [Offline usage](offline-usage.md) |
+| Contribute or understand project direction | [Working rules](../AGENTS.md), [worktrees](worktree-practices.md) and [decisions](decisions.md) |
 
-- [2026-10-14-pre-release-review.md](2026-10-14-pre-release-review.md): the
-  critiques an outside expert would make, ranked, with the fix for each.
-- [2026-10-13-decision-census.md](2026-10-13-decision-census.md): every
-  declared decision outcome, exercised or not, with the reason or its absence;
-  every exclusion in force; the anchored-file boundary.
-- [2026-10-13-compiler-experiment.md](2026-10-13-compiler-experiment.md):
-  which declarations are stable across two optimisation levels, and what that
-  does not show.
-- The four correspondence audits of the WireGuard mirror against the C:
-  [device](2026-10-13-audit-device.md), [handshake](2026-10-13-audit-handshake.md),
-  [receive](2026-10-13-audit-receive.md), [netlink](2026-10-13-audit-netlink.md),
-  each with its findings' disposition.
-- [2026-10-12-simulation-target-review.md](2026-10-12-simulation-target-review.md):
-  whether the mirror's altitude suits a later simulation proof.
-- [2026-10-13-review-r5-counterexamples.md](2026-10-13-review-r5-counterexamples.md):
-  the independent reading of the proof campaign's first Rule Zero counterexamples.
+The [decision census](2026-10-13-decision-census.md) measures declared mirror
+choices, not an independent enumeration of every C choice. The
+[compiler experiment](2026-10-13-compiler-experiment.md) examines witness
+stability across optimization levels, not semantic equivalence. Source audits
+of [device](2026-10-13-audit-device.md),
+[handshake](2026-10-13-audit-handshake.md),
+[receive](2026-10-13-audit-receive.md) and
+[netlink](2026-10-13-audit-netlink.md) are dated reviews, not completeness proofs.
 
-## Living documents
+## Reference documents
 
 | Document | Contents |
 | --- | --- |
-| [decisions.md](decisions.md) | The register of decisions, dated, each tagged with its provenance (user or agent) |
-| [upstream-tray/INDEX.md](upstream-tray/INDEX.md) | The tray of kernel findings: numbered reports on kernel behaviour that might concern its maintainers, for future analysis and filing; reports only, no patches |
-| [proofs.md](proofs.md) | The proof tree's map, the register of proved results with the mirror commit each holds over, how a result is added |
-| [2026-10-11-interface.md](2026-10-11-interface.md) | The shared tables: wire opcodes, record kinds, hidden-site and allocation-site ids, fixture flags, file ownership by stream |
-| [worktree-practices.md](worktree-practices.md) | Worktrees, shared inputs, private outputs, cleanup |
-| [offline-usage.md](offline-usage.md) | Reusing a staged environment without network access |
-| [history/SETUP-new-machine.md](history/SETUP-new-machine.md) | Retired on 2026-10-13: the October 2026 machine migration notes, kept for their checklist; the commands and counts in it are of that date |
-| [nono-profile-proposal.md](nono-profile-proposal.md) | The sandbox profile the project's devboxes run under; devbox-specific |
+| [decisions.md](decisions.md) | Decisions with dates and provenance |
+| [proofs.md](proofs.md) | Claim register, proof-tree map and result maintenance |
+| [upstream-tray/INDEX.md](upstream-tray/INDEX.md) | Report drafts and their evidence/status |
+| [2026-10-11-interface.md](2026-10-11-interface.md) | Wire opcodes, record kinds, site IDs and fixture flags |
+| [worktree-practices.md](worktree-practices.md) | Shared inputs, private outputs and cleanup |
+| [offline-usage.md](offline-usage.md) | Staged dependencies and offline use |
+| [2026-10-22-setup-findings.md](2026-10-22-setup-findings.md) | Open setup defects and reproduction commands for overseer follow-up |
+| [nono-profile-proposal.md](nono-profile-proposal.md) | Devbox-specific sandbox proposal; not a prerequisite for ordinary setup |
+
+## Dated designs and reports
+
+The tables below index development history. Counts, exclusions, pending gates
+and branch statuses belong to the document's stated checkpoint unless a later
+correction is recorded. Use the guides above for current setup and claim scope.
 
 ## Plans and strategy
 
@@ -70,7 +77,7 @@ Read these before the README's claims are taken at face value:
 | [2026-10-04-d2-sprint.md](2026-10-04-d2-sprint.md) | D2 sprint record |
 | [2026-10-05-d3-timers.md](2026-10-05-d3-timers.md) | D3: timers, timer sections and virtual time |
 | [2026-10-05-a-alloc.md](2026-10-05-a-alloc.md) | A: allocation outcomes recorded and steered |
-| [2026-10-05-e-dos.md](2026-10-05-e-dos.md) | E: cookies and the rate limiter under load; its §11 exclusion reasons were corrected in place on 2026-10-13 by the receive fixes; IPv6 rate limiting remains excluded with the old stage reason (see the pre-release review §8) |
+| [2026-10-05-e-dos.md](2026-10-05-e-dos.md) | E: cookies and rate limiting under load; historical exclusions were revised later. IPv6 rate limiting is now modeled; periodic GC remains excluded |
 | [2026-10-05-e-probe-results.md](2026-10-05-e-probe-results.md) | E: the under-load reachability probe |
 | [2026-10-05-l-lifecycle.md](2026-10-05-l-lifecycle.md) | L: device lifecycle |
 | [2026-10-06-wireguard-census.md](2026-10-06-wireguard-census.md) | Coverage census of WireGuard's source against the mirror; the W rows |
@@ -102,6 +109,11 @@ Read these before the README's claims are taken at face value:
 
 ## Proofs
 
+The landing reviews of [Campaign 2](2026-10-20-review-campaign-2-landing.md)
+and [Campaign 3](2026-10-20-review-campaign-3-landing.md) explain the scoped
+claims and repairs. Campaign 2's follow-on closes the H5 pending-unit boundary
+claim; Campaign 3's T4/T5 still have unconstructed premises.
+
 The [binary landing report](2026-10-19-binary-landing-assessment.md) records
 the paired experiment's carry to the split mirror and pinned s5 image, its
 separate build/gate and runtime validation, and the open milestone-1 review
@@ -109,6 +121,10 @@ obligations. Current setup commands are in [binary/README.md](../binary/README.m
 
 | Document | Contents |
 | --- | --- |
+| [2026-10-21-proof-probes.md](2026-10-21-proof-probes.md) | Three bounded probes after Campaign 3: outcomes, evidence limits, validation and reproduction |
+| [2026-10-21-lifetime-fault-probe.md](2026-10-21-lifetime-fault-probe.md) | Open initialized fault-exclusion goal and a checked local countermodel; not an initialized counterexample or a new security guarantee |
+| [2026-10-21-observer-removal-probe.md](2026-10-21-observer-removal-probe.md) | Removing one getter event breaks its unchanged coverage equation; erasure and safety of the retained history survive |
+| [2026-10-21-independent-input-probe.md](2026-10-21-independent-input-probe.md) | Independent fixed input sample and single-CPU interference audit; initialized race reachability remains unproved |
 | [2026-10-12-charter-window-proof.md](2026-10-12-charter-window-proof.md) | The first proof charter: replay freedom of the receive counter window, Rule Zero, the layered models |
 | [2026-10-12-spike-window-review.md](2026-10-12-spike-window-review.md) | The independent review of the spike, in two parts: the original and its carry-over onto the new mirror |
 | [2026-10-13-spike-window.md](2026-10-13-spike-window.md) | The spike's own report |
@@ -123,9 +139,8 @@ obligations. Current setup commands are in [binary/README.md](../binary/README.m
 | [2026-10-19-proof-campaign-2-supplied-pending.md](2026-10-19-proof-campaign-2-supplied-pending.md) | H5 accepted supplied-record pending identity after nested requeue; exact runtime witness, refused empty-dispatch control and mirror follow-up |
 | [2026-10-20-proof-campaign-2-namespace-pin.md](2026-10-20-proof-campaign-2-namespace-pin.md) | H5 accepted namespace-pin alias leaves cleanup pending: fixture-domain review, interpreter recipe and mirror request |
 | [2026-10-18-charter-proof-campaign-3.md](2026-10-18-charter-proof-campaign-3.md) | Charter for proof campaign 3: the high-consequence group (nonce safety, transmit authorization and conservation, authenticated effects and silence, handshake replay resistance, responder key confirmation, key retirement), revised against its independent review; DoS resource bounds and the routing composition deferred with the exposure named |
-| [2026-10-18-proof-campaign-3.md](2026-10-18-proof-campaign-3.md) | Campaign 3 progress: six open outcomes; C3-F1 examines queued encryption after key invalidation and clearing against the revised retirement clause, with reproduction commands and explicit evidence limits |
-| [2026-10-18-charter-proof-campaign-3.md](2026-10-18-charter-proof-campaign-3.md) | Charter for proof campaign 3: the high-consequence group (sender nonce discipline, transmit binding and egress conservation, silence, handshake freshness, confirmation discipline), with key lifetime over the wheel, resource bounds and the routing composition deferred |
-| [2026-10-18-review-campaign-3-charter.md](2026-10-18-review-campaign-3-charter.md) | Review of campaign 3's goals: retain the five themes, correct the nonce, conservation and silence contracts, and prioritize key retirement; proof architecture stays discretionary |
+| [2026-10-18-proof-campaign-3.md](2026-10-18-proof-campaign-3.md) | Campaign 3 result reports: scoped T1/T2/T3/T6 claims, conditional T4/T5 claims, statement amendments, findings and validation |
+| [2026-10-18-review-campaign-3-charter.md](2026-10-18-review-campaign-3-charter.md) | Historical review of campaign 3's goals and proposed contract changes; read with the revised six-result charter and final result reports |
 | [2026-10-14-charter-binary-tv.md](2026-10-14-charter-binary-tv.md) | Charter for the scoping of binary-level translation validation: the mirror against the compiled oracle under Kraken's x86-64 semantics, a probe on one WireGuard function |
 | [2026-10-15-charter-binary-adequacy.md](2026-10-15-charter-binary-adequacy.md) | Charter for the binary-level adequacy grind: one theorem per anchored WireGuard function under Kraken, region lemmas between correspondence points, the trust base in one file |
 | [2026-10-15-binary-tv-scoping.md](2026-10-15-binary-tv-scoping.md) | Instruction census and executable three-way index-lookup probe under Kraken; blockers, state relation and checker estimates |
@@ -179,13 +194,29 @@ obligations. Current setup commands are in [binary/README.md](../binary/README.m
 | [2026-10-20-fresh-eyes-scope-review.md](2026-10-20-fresh-eyes-scope-review.md) | Independent directional review of the mirror and three proof campaigns against the goal of verifying real Linux: execution-domain and statement boundaries, proof maintenance, ranked recommendations and pivot criteria |
 | [2026-10-14-pre-release-review.md](2026-10-14-pre-release-review.md) | The pre-release review: 14 critiques an outside expert would make, ranked by damage and fairness, with a fix for each; the two concrete evidence defects (the foreign-function rule, the timer-input reconstruction) and the self-selected domain lead |
 
+## Binary follow-ons
+
+- [Index insertion charter](2026-10-18-charter-paired-index-insertion.md),
+  [report](2026-10-18-paired-index-insertion.md) and
+  [review](2026-10-18-review-paired-index-insertion.md): input-driven insertion
+  and retained-heap composition under explicit contracts. Their original
+  pending-gate status predates the combined s5 landing.
+- [Callback charter](2026-10-19-charter-paired-callbacks.md),
+  [report](2026-10-19-paired-callbacks.md) and
+  [review](2026-10-19-review-paired-callbacks.md): bounded image callbacks and
+  first-return permissions.
+- [Allowed-IPs scaling charter](2026-10-20-charter-binary-allowedips.md),
+  [report](2026-10-20-binary-allowedips.md) and
+  [landing review](2026-10-20-review-binary-allowedips-landing.md): closed as a
+  partial experiment with zero newly completed functions. Insertion remains
+  open; the follow-on direction is a typed heap view.
+
+See [binary/README.md](../binary/README.md) for the current build procedure,
+artifact limitations and the distinction between local and external checks.
+
 ## Retired
 
-[history/](history/README.md) holds the superseded proposals and the proof
-artefacts of the first prototype. They are not current direction and do not
-authorise recreating what they describe.
-
-- [2026-10-18-charter-paired-index-insertion.md](2026-10-18-charter-paired-index-insertion.md): insertion, recorded draws and finite retained-heap composition; [execution report](2026-10-18-paired-index-insertion.md), [fresh checkpoint review](2026-10-18-review-paired-index-insertion.md). Both review findings are repaired and local validation passes; paused with external acceptance pending.
-
-- [2026-10-19-charter-paired-callbacks.md](2026-10-19-charter-paired-callbacks.md): bounded shared callback image proofs and first-return permissions; [report](2026-10-19-paired-callbacks.md), [charter review](2026-10-19-review-paired-callback-charter.md), [closing review](2026-10-19-review-paired-callbacks.md).
-- [2026-10-20-charter-binary-allowedips.md](2026-10-20-charter-binary-allowedips.md): scaling through allocated trie mutation and component closure; [review](2026-10-20-review-binary-allowedips-charter.md), [report](2026-10-20-binary-allowedips.md). Closed early as an experimental partial result: zero newly completed functions, insertion open, tested segments retained. The sequence-counter finding is fixed without narrowing the target; follow-on work is redirected to a typed heap view.
+[history/](history/README.md) holds superseded proposals and first-prototype
+proof artifacts. The [old machine setup](history/SETUP-new-machine.md) is also
+historical. These documents are not current setup instructions or project
+direction.
