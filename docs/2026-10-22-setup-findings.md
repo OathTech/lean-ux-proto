@@ -1,6 +1,6 @@
 # Setup findings for overseer follow-up
 
-These are unresolved implementation findings discovered while reviewing the
+These setup findings were discovered while reviewing the
 front-facing documentation against main `c63423ef`. Documentation corrections
 are on `task/shop-window`; the harness and build scripts are unchanged.
 
@@ -42,9 +42,8 @@ names this outstanding failure. Remove that caveat once the repair passes.
 
 ## F2: worktree guide gives an obsolete guest-slot default
 
-**Open documentation correction; source checked.**
-[docs/worktree-practices.md](worktree-practices.md) says the default for
-`LEANUX_QEMU_SLOTS` is 8. [harness/linux.py](../harness/linux.py) sets it to
-16, consistent with `AGENTS.md`. The shop-window guides now state 16; the
-working-practices document needs the same factual correction. This calls for
-updating the documented default, not changing concurrency or a standing rule.
+**Fixed on `task/shop-window`; source checked.**
+[docs/worktree-practices.md](worktree-practices.md) now states that
+`LEANUX_QEMU_SLOTS` defaults to 16, matching
+[harness/linux.py](../harness/linux.py), `AGENTS.md` and the shop-window guides.
+The former value of 8 was a documentation error; runtime concurrency is unchanged.

@@ -77,12 +77,12 @@ historical namespace-pin input into a refusal regression. Empty pending work
 units do not imply empty packet queues or absence of scheduled NAPI.
 
 The [Campaign 2 report](2026-10-14-proof-campaign-2.md) records its combined
-C1/C2/C3 checkpoint validation, before the bounded probes: 6,680 build jobs, 2,448 terminal axiom checks and all
-15 counterexample recipes pass. This supersedes Campaign 3's earlier 14/15
-recipe result; it does not discharge T4/T5's remaining premises or enlarge
+C1/C2/C3 checkpoint validation, excluding the bounded probes: 6,680 build
+jobs, 2,448 terminal axiom checks and all 15 counterexample recipes pass.
+This supersedes Campaign 3's earlier 14/15 recipe result; it does not discharge T4/T5's remaining premises or enlarge
 T2's scope. All mirror-result rows are current at that checkpoint within their
-stated boundaries. The probes have their own validation report above; historical counts and pins
-below are not newer claims.
+stated boundaries. The probes have their own validation report above;
+historical counts and pins below are not newer claims.
 
 Use [setup](../REPRODUCING.md#5-build-and-check-the-proofs) to run the proof gate
 and the separate counterexample recipes. Standing practices are in
