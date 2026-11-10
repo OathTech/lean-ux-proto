@@ -3,6 +3,7 @@ import FiniteExecution
 import HistoryGuard
 import CanonicalLoads
 import MemoryBytes
+import C2CutAssembly
 
 /-! Work package 3 of result C2: representation, the mirror link, first exits and the
 witness (`WindowMapped` to `WitnessStart` of `C2CutInterfaces`). Brief:
@@ -1292,4 +1293,26 @@ theorem witness_start : WitnessStart := by
     second, Witness.revisit⟩
 
 #print axioms witness_start
+end Binary.C2
+
+/-! ## What the package delivers -/
+namespace Binary.C2
+open Binary TrustBase Leanux
+local instance : Labels := Binary.Image.linkedLabels
+
+/-- The ten propositions of the package that the assembly takes together; the eleventh,
+`WitnessStart`, is `witness_start`. -/
+theorem representation : Representation where
+  mapped := window_mapped
+  ofFields := window_of_fields
+  toFields := fields_of_window
+  fit := fields_fit
+  retained := fields_retained
+  fieldsMapped := fields_mapped
+  mirror := mirror_follows_spec
+  world := world_holds
+  determined := first_exit_determined
+  exists_ := first_exit_exists
+
+#print axioms representation
 end Binary.C2
