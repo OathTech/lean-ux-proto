@@ -3,7 +3,8 @@ import StatementC1CallbackImage
 
 /-! Result C1, final statement: the kernel-checked evidence against vacuity that
 the result carries, as statements (no theorem, no proof), and `Signed`. `Witness` says the
-premises can be met along an actual execution through every kind of call;
+premises can be met along an actual execution through every kind of call,
+by a service that uses its stack and writes the coverage buffer;
 the two exclusions are consequences with no mirror state in their
 conclusion, naming machine behaviours the headline rules out. -/
 namespace Binary.Statements.C1
@@ -30,25 +31,22 @@ def CallbacksFromImage (fetch : Int64 → Option Decoded) : Prop :=
   ServiceDecoderAgreement fetch ∧
   ∀ pc instruction, StatementC1CallbackImage.fetch pc = some instruction → fetch pc = some instruction
 
-/-- WITNESS. Some `fetch`, layout and allocator meet every premise, the
-callbacks being the image's own code (`CallbacksFromImage`: only the code at
-`allocEntry` and `freeEntry` may be a stub), and an actual execution runs, from a physically empty table with
-the allocator idle and five answers pending, through: an insertion into the
-empty table; an insertion that allocates twice (the intermediate node,
-while a node is handed out); an insertion whose second allocation is
-refused (the rollback and the release); and a lookup that finds a peer.
-Each call meets its caller conditions and the mirror accepts it, consuming
-exactly those records. The code at `allocEntry` uses a nonempty stack
-scratch and, with the coverage buffer in use, changes a scratch byte and a
-buffer byte during the second call's allocation. The service will be a
-stub and is to be called one. -/
-def Witness : Prop :=
-  ∃ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator)
-    (w0 w1 w2 w3 w4 : World) (d0 d3 : Device) (c1 c2 c3 c4 : Context)
+/-- EXECUTED (the end-to-end half of the witness, revision 3). With this
+`fetch`, layout and allocator an actual execution runs, from a physically
+empty table with the allocator idle and five answers pending, through: an
+insertion into the empty table; an insertion that allocates twice (the
+intermediate node, while a node is handed out) with the coverage buffer in
+use; an insertion whose second allocation is refused (the rollback and the
+release); and a lookup that finds a peer. Each call meets its caller
+conditions and the mirror accepts it, consuming exactly those records.
+Everything here is about the entry and final states of the four calls
+(`Ran` gives an actual history between them and says nothing of its
+interior), so it follows from the headline's steps at this `fetch`. -/
+def Executed (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator) : Prop :=
+  ∃ (w0 w1 w2 w3 w4 : World) (d0 d3 : Device) (c1 c2 c3 c4 : Context)
     (s1 t1 s2 t2 s3 t3 s4 t4 : MachineState) (h1 h2 h3 h4 : List MachineState)
     (k1 n1 p1 k2 n2 p2 k3 n3 p3 key pointer : Nat) (found : PeerId) (ra : UInt64)
     (stream : List HiddenRecord),
-    Premises fetch L A ∧ CallbacksFromImage fetch ∧
     w0.wg.dev = some d0 ∧ armed w0 = true ∧
     w0.ambient.hidden = some ([outcome 77 true, outcome 78 true, outcome 79 true,
       outcome 78 true, outcome 79 false] ++ stream) ∧
@@ -67,11 +65,54 @@ def Witness : Prop :=
     HeapSame L t3 s4 ∧ lookupReady L c4 s4 4 key ra = .ok () ∧ w3.wg.dev = some d3 ∧
     (Source.lookup d3.peerAllowedips.root4 32 key).run w3 = .ok (some found, w4) ∧
     Trie.address L.peers (some found) = .ok pointer ∧ Ran fetch s4 t4 ra h4 ∧
-    0 < A.depth ∧ c2.Needed ∧
-    ∃ (enter leave : MachineState) (back : UInt64), enter ∈ h2 ∧ leave ∈ h2 ∧
-      enter.pc = allocEntry ∧ Returned enter leave back ∧
-      (∃ a, Scratch enter A.depth a ∧ enter.data.dmem.get? a ≠ leave.data.dmem.get? a) ∧
-      (∃ a, c2.writes a ∧ enter.data.dmem.get? a ≠ leave.data.dmem.get? a)
+    c2.Needed
+
+/-- ACTIVE SERVICE (the service half of the witness, revision 3). The code
+at `allocEntry`, taken on its own: its stack scratch is nonempty, and from
+some entry state that the contract's `alloc` clause admits (every
+hypothesis of that clause, with the coverage buffer in use and a success
+pending) an actual execution returns having changed a byte of its scratch
+and a byte of the coverage buffer. The allocator is idle in that state, so
+`Idle` holds of an actual memory. Revision 2 asked for these two changes
+between a service entry and its return inside the second insertion's
+history; the headline's steps conclude about final states only, so that
+could not be derived from them. -/
+def ServiceActive (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator) : Prop :=
+  0 < A.depth ∧
+  ∃ (c : Context) (s t : MachineState) (ra : UInt64) (live : List Nat) (record : HiddenRecord)
+    (stream : List HiddenRecord) (history : List MachineState),
+    s.pc = allocEntry ∧ EntryFrame s ra ∧ ServiceReady L A c s ∧
+    s.data.regs.rdi.toNat = L.cache ∧ s.data.regs.get (.low .rsi .W32) = 0xdc0#32 ∧
+    (ra.toNat, record.site) ∈ allocSites ∧ A.Idle s.data.dmem live (record :: stream) ∧
+    c.Needed ∧ record.bytes.head? = some 1 ∧
+    Ran fetch s t ra history ∧
+    (∃ a, Scratch s A.depth a ∧ s.data.dmem.get? a ≠ t.data.dmem.get? a) ∧
+    (∃ a, c.writes a ∧ s.data.dmem.get? a ≠ t.data.dmem.get? a)
+
+/-- WITNESS (revision 3). One `fetch`, layout and allocator meet every
+premise, with the callbacks the image's own code (`CallbacksFromImage`: only
+the code at `allocEntry` and `freeEntry` may be a stub), run the four calls
+of `Executed`, and have the active service of `ServiceActive`. The service
+will be a stub and is to be called one.
+
+What each conjunct rules out. `Premises`: premises that nothing meets.
+`CallbacksFromImage`: a witness whose coverage and BH-enable callbacks are
+stubs. `Executed`: an allocator that is never idle (it is idle at an actual
+empty table, with five answers pending); premises met only where no call
+can start or finish (each kind of call, the two-allocation insertion and
+the rollback included, starts from the caller's conditions and returns);
+a mirror that accepts none of them; a run with the coverage buffer unused.
+`ServiceActive`: a contract that only a service with no stack and no
+record could meet (this one, at the same addresses and under the same
+contract, uses its scratch and writes the buffer).
+
+What it no longer rules out, against revision 2: that the service is
+active only at entry states no insertion reaches. Revision 2 placed the
+two changed bytes inside the second insertion; here they are shown at one
+admissible entry state, which need not be one of `Executed`'s. -/
+def Witness : Prop :=
+  ∃ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator),
+    Premises fetch L A ∧ CallbacksFromImage fetch ∧ Executed fetch L A ∧ ServiceActive fetch L A
 
 /-- The caller's conditions for a lookup of `key` in any state that agrees
 with `t` on the heap. -/

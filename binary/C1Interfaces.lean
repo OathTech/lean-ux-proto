@@ -359,15 +359,27 @@ def Cmp1FromImage : Prop :=
 /-- PACKAGE 4. `__sanitizer_cov_trace_cmp8` from the image's terms. -/
 def Cmp8FromImage : Prop :=
   ∀ fetch : Int64 → Option Decoded, CallbacksFromImage fetch → AllowedipsTraceCmp8Contract fetch
-/-- PACKAGE 4. Some `fetch`, layout and allocator meet every premise with
-the callbacks the image's and a stub, in instruction terms, at the two
-service addresses, with a nonempty scratch. -/
+/-- PACKAGE 4. Some `fetch`, layout and allocator meet every premise, with
+the callbacks the image's, a nonempty scratch, and an allocator that is idle
+in some memory with nothing handed out. (Restated with revision 3 of the
+statement: without the last conjunct an allocator whose `Idle` is `False`
+closed this, which its description did not intend. That the code at the two
+service addresses is a stub in instruction terms, and that it is active, is
+`Witness`'s `ServiceActive`, not this.) -/
 def PremisesMet : Prop :=
   ∃ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator),
-    Premises fetch L A ∧ CallbacksFromImage fetch ∧ 0 < A.depth
-/-- PACKAGE 4. The witness. It may use the headline (to run the four calls
-through `InsertStep` and `LookupStep` at its own `fetch`) or execute them
-directly, as the landed `PairInsertWitness` does. -/
+    Premises fetch L A ∧ CallbacksFromImage fetch ∧ 0 < A.depth ∧
+    ∃ (m : Mem 64) (stream : List HiddenRecord), A.Idle m [] stream
+/-- PACKAGE 4. The witness of revision 3. `Executed`: run the four calls
+through `InsertStep` and `LookupStep` of the headline at the package's own
+`fetch`; each step's `Eventually` gives `Ran` and its postcondition at the
+final state (the package's `ran_of_eventually`), `Framed` and `HeapSame`
+carry `Inv` to the next entry state, whose bytes outside the heap are the
+prover's to choose. `ServiceActive`: execute the stub's own instructions
+from one admissible entry state, as the package's `alloc_run` does; under
+the revised contract a stub may change a scratch byte and append to the
+coverage buffer, because `ServiceReady.separated` places both apart from
+the coverage metadata every admitted context reads. -/
 def WitnessHolds : Prop := HeadlineFor → Witness
 
 end Binary.Statements.C1.Proof
