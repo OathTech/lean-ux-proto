@@ -290,7 +290,14 @@ theorem fields_of_window : FieldsOfWindow := by
   rw [words j hj']
   simp [toCounter]
 
+theorem fields_fit : FieldsFit := by
+  rintro m base c ⟨counter, size, words⟩
+  refine ⟨by simpa using (load_word m _ _ counter).2, size, ?_⟩
+  intro j hj
+  simpa using (load_word m _ _ (words j hj)).2
+
 #print axioms window_mapped
 #print axioms window_of_fields
 #print axioms fields_of_window
+#print axioms fields_fit
 end Binary.C2
