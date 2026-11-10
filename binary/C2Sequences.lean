@@ -266,5 +266,22 @@ theorem window_mapped : WindowMapped := by
     exact read
   exact ⟨w, first, rest⟩
 
+theorem window_of_fields : WindowOfFields := by
+  rintro m base c ⟨counter, size, words⟩
+  refine ⟨?_, ?_⟩
+  · have fit := (load_word m _ _ counter).2
+    rw [counter]
+    simp only [ofCounter, BitVec.toNat_ofNat]
+    rw [Nat.mod_eq_of_lt (by simpa using fit)]
+  · intro j hj
+    have hj' : j < c.backtrack.size := size ▸ hj
+    have read := words j hj'
+    have fit := (load_word m _ _ read).2
+    rw [read]
+    simp only [ofCounter, BitVec.toNat_ofNat, Array.getD_eq_getD_getElem?,
+      Array.getElem?_eq_getElem hj', Option.getD_some]
+    rw [Nat.mod_eq_of_lt (by simpa using fit)]
+
 #print axioms window_mapped
+#print axioms window_of_fields
 end Binary.C2
