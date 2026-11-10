@@ -1,8 +1,9 @@
 import C2Test
 
 /-! Result C2: executed tests of the sequence statements of the final text
-(`NoCounterAcceptedTwice`, `AcceptedWithinWindow`, `ReplayWitness`, `ReplayRefused`,
-`AdvanceAccepted`), the `bts` run by Kraken's interpreter. Not proofs.
+(`NoCounterAcceptedTwice`, `ReplayWitness`, `ReplayRefused`, and the floor and
+advance behaviours that the statement file no longer states), the `bts` run by Kraken's
+interpreter. Not proofs.
 
 A list of packet counters is run through the range visit by visit. Between visits only
 the 1032 window bytes are carried over: every other byte and register is rebuilt, and
@@ -132,7 +133,7 @@ def zeroWindow : Setup := { counter := 0, nonce := 0, bitmap := .zero }
     IO.println s!"the first visit's window represents counter {c.counter} with {c.backtrack.size} words; the mirror's run on a world holding it succeeds and accepts"
   | .ok (_, (false, _)) => throw (IO.userError "the mirror refuses the witness's first visit")
   | .error e => throw (IO.userError s!"the witness's mirror run fails: {e}")
-  -- `AdvanceAccepted`, concretely: every bitmap bit set, counters in a later word.
+  -- An advancing counter is accepted, concretely: every bitmap bit set, counters in a later word.
   for (counter, nonce) in [(100, 128), (100, 64*200 + 7), (0xffffffffffffdfc0, 0xffffffffffffe03d), (0, 64)] do
     let one := (machine .real .retained { counter, nonce, bitmap := .ones } [nonce]).toOption
     unless one == some [(nonce, true)] do

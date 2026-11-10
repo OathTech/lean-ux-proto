@@ -28,7 +28,7 @@ emit assumed Binary.C2.Reading Binary.C2.RangeDecoderAgreement \
 emit claimed Binary.C2.HeadlineRefinement Binary.C2.ExitsCleanly Binary.C2.Refines \
   Binary.C2.NoCounterAcceptedTwice Binary.C2.ReplayWitness \
   Binary.C2.Kept Binary.C2.accepted Binary.C2.acceptedNonces Binary.C2.exitPC Binary.C2.windowOf
-# In the file but not in the headline: the optional floor clause and the two exclusions.
-emit other Binary.C2.AcceptedWithinWindow Binary.C2.ReplayRefused Binary.C2.AdvanceAccepted
+# In the file but not in the headline: the exclusion that follows from the transported clause.
+emit other Binary.C2.ReplayRefused
 printf 'image terms (the reading of the image, not printed by the landed gate): %d lines, 70 + 10 instructions\n' \
   "$(grep -c '' "$root/binary/C2Image.lean")"

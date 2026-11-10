@@ -149,13 +149,6 @@ def NoCounterAcceptedTwice : Prop :=
   ∀ (fetch : Int64 → Option Decoded) (kp : BitVec 64) (visits : List Visit),
     Reading fetch → Visits fetch kp visits → (acceptedNonces visits).Nodup
 
-/-- Optional third clause (the landed inclusive floor): an accepted counter is at most
-one window, 8128, behind every counter accepted before it. -/
-def AcceptedWithinWindow : Prop :=
-  ∀ (fetch : Int64 → Option Decoded) (kp : BitVec 64) (visits : List Visit),
-    Reading fetch → Visits fetch kp visits →
-    (acceptedNonces visits).Pairwise (fun earlier later => earlier.toNat ≤ later.toNat + 8128)
-
 /-! ## Part 3. The refinement: what the code computes, in the mirror's terms
 
 The adequacy half of the track's objective for this function. A clause of the
@@ -198,11 +191,11 @@ def Refines : Prop :=
         Kept layout preempt kp s e.machine)
       ⟨s, [s]⟩
 
-/-! ## Part 4. Against vacuity: a witness and two exclusions
+/-! ## Part 4. Against vacuity: a witness and one exclusion
 
-A witness that the premises can be met, and two statements naming behaviours to rule
-out or in. The two exclusions (`ReplayRefused`, `AdvanceAccepted`) are in no headline:
-the first is a corollary of `NoCounterAcceptedTwice`, the second of `Refines`. -/
+A witness that the premises can be met, and one statement naming a behaviour to rule
+out. The exclusion (`ReplayRefused`) is in no headline: it is a corollary of
+`NoCounterAcceptedTwice`. -/
 
 /-- The premises are satisfiable, by a replay: the same packet counter presented twice
 to one retained window is accepted the first time and refused the second. And the
@@ -227,18 +220,6 @@ def ReplayRefused : Prop :=
     (earlier later : Visit),
     Reading fetch → Visits fetch kp (before ++ earlier :: between ++ [later]) →
     earlier.nonce = later.nonce → accepted earlier.exit = true → accepted later.exit = false
-
-/-- Excluded: refusing everything. A packet counter below the limit whose bitmap word
-lies beyond the word of the stored counter (the quadword at `kp + 136`, itself not past
-the limit) is accepted. -/
-def AdvanceAccepted : Prop :=
-  ∀ (fetch : Int64 → Option Decoded) (layout : KcovLayout) (preempt : BitVec 32)
-    (s t : MachineState) (kp skb nonce high : BitVec 64),
-    Reading fetch → Context layout preempt s kp skb nonce → FirstExit fetch s t →
-    s.data.dmem.loadInt (kp + .ofNat 64 Layouts.keypair_receiving_counter) 8 = some (high.toNat : Int) →
-    high.toNat ≤ 0xffffffffffffe03e → nonce.toNat < 0xffffffffffffe03e →
-    high.toNat / 64 < (nonce.toNat + 1) / 64 →
-    accepted t = true
 
 /-! ## Part 5. The headline -/
 
