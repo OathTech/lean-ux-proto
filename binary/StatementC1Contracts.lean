@@ -64,16 +64,32 @@ def ServiceWrites (L : Layout) (A : Allocator) (c : CommonBitsCoverage.Context)
     (s : MachineState) (kept : List Nat) (a : BitVec 64) : Prop :=
   Scratch s A.depth a ∨ (L.Arena a ∧ ¬Kept kept a) ∨ c.writes a
 
+/-- Where the service's bytes are, relative to the coverage context it is
+called under (revision 3): its stack (the scratch and the return word), the
+arena and the bytes the coverage context reads are pairwise apart, and the
+coverage buffer is apart from the coverage metadata and the preemption
+count. An insertion's caller conditions give this at every service call
+(`frameReady`'s separations); without it a context could place its mode
+word on the allocator's own state, and no allocator that changes a word of
+the arena would meet the contract. -/
+structure Separated (L : Layout) (A : Allocator) (c : CommonBitsCoverage.Context) (s : MachineState) : Prop where
+  stackArena : ∀ a, Scratch s A.depth a ∨ InRange s.data.regs.rsp.toBitVec 8 a → ¬L.Arena a
+  stackCoverage : ∀ a, Scratch s A.depth a ∨ InRange s.data.regs.rsp.toBitVec 8 a → ¬c.bytes a
+  coverageArena : ∀ a, c.bytes a → ¬L.Arena a
+  bufferMetadata : ∀ a, c.writes a → ¬c.metadataBytes a ∧ ¬InRange preemptCountAddress 4 a
+
 /-- What a service may assume at its entry besides its arguments, in the form
 of the landed `RandomReady`: valid coverage state with room for a record
-when the buffer is in use, the direction flag clear, and `depth` mapped
-bytes of stack below the return word. Revision 2. -/
-structure ServiceReady (A : Allocator) (c : CommonBitsCoverage.Context) (s : MachineState) : Prop where
+when the buffer is in use, the direction flag clear, `depth` mapped bytes of
+stack below the return word (revision 2), and the separation of its stack,
+the arena and the coverage bytes (revision 3). -/
+structure ServiceReady (L : Layout) (A : Allocator) (c : CommonBitsCoverage.Context) (s : MachineState) : Prop where
   coverage : c.At s.data.dmem
   capacity : c.Needed → 0 < c.coverage.capacity.toNat
   forward : s.data.system.bits[10] = false
   stackMapped : ∀ i < A.depth,
     (s.data.dmem.get? (s.data.regs.rsp.toBitVec - .ofNat 64 A.depth + .ofNat 64 i)).isSome = true
+  separated : Separated L A c s
 
 /-- What one `kmem_cache_zalloc(node_cache, GFP_KERNEL)` leaves behind, by the
 recorded outcome byte: NULL and nothing handed out, or an aligned, zeroed
@@ -101,14 +117,14 @@ structure AllocatorContract (fetch : Int64 → Option Decoded) (L : Layout) (A :
   frame : ∀ m m' live stream, A.Idle m live stream →
     (∀ a, L.Arena a → ¬Kept live a → m.get? a = m'.get? a) → A.Idle m' live stream
   alloc : ∀ (c : CommonBitsCoverage.Context) (s : MachineState) (ra : UInt64) live record stream,
-    s.pc = allocEntry → EntryFrame s ra → ServiceReady A c s →
+    s.pc = allocEntry → EntryFrame s ra → ServiceReady L A c s →
     s.data.regs.rdi.toNat = L.cache → s.data.regs.get (.low .rsi .W32) = 0xdc0#32 →
     (ra.toNat, record.site) ∈ allocSites → A.Idle s.data.dmem live (record :: stream) →
     Eventually (instructionStep fetch) (fun t =>
       Returned s t ra ∧ EqualOutside (ServiceWrites L A c s live) s.data.dmem t.data.dmem ∧
       c.At t.data.dmem ∧ AllocResult L A live record stream t) s
   free : ∀ (c : CommonBitsCoverage.Context) (s : MachineState) (ra : UInt64) live stream,
-    s.pc = freeEntry → EntryFrame s ra → ServiceReady A c s → ra.toNat = freeSite →
+    s.pc = freeEntry → EntryFrame s ra → ServiceReady L A c s → ra.toNat = freeSite →
     s.data.regs.rdi.toNat = L.cache → s.data.regs.rsi.toNat ∈ live →
     A.Idle s.data.dmem live stream →
     Eventually (instructionStep fetch) (fun t =>

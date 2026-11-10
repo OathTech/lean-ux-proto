@@ -179,7 +179,10 @@ flight (stack, frame, mapping, direction flag, coverage), and every
 protected byte is unchanged. The two static hypotheses (the table and peers
 apart from the arena, the handed-out nodes inside it) are conjuncts of `Inv`
 and of `AllocResult`; a caller has them. `ServiceReady` is established here from
-`insertReady` and `InFlight`; the direction flag and the mapping across the
+`insertReady` and `InFlight`, its separation (`Separated`, revision 3 of the
+statement) included: the caller's spans, the heap and the coverage spans are
+pairwise apart by `frameReady`, and the service's stack lies in the caller's
+stack span; the direction flag and the mapping across the
 service body come from `SystemInvariant` and `MemoryInvariant`. May use
 those, `PairStackBytes`, `spansApart_sound`, and the model of the landed
 `PairInsertRandomReady` / `PairInsertRandomMemory` / `PairInsertRandomFrame`. -/
