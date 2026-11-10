@@ -281,10 +281,114 @@ theorem bts_supported : BtsSupported := by
       · intro run pf af zf sf of
         exact hn _ (run pf af zf sf of)
 
+/-- A literal code list of instructions, each of positive length and monotone in its
+continuations. -/
+inductive Supported : List (Kraken.Sized Directive) → Prop
+  | nil : Supported []
+  | cons (i : Instr) (n : Nat) (tail : List (Kraken.Sized Directive))
+      (positive : 0 < n) (mono : CpsMono i) (rest : Supported tail) :
+      Supported (⟨.instr i, n⟩ :: tail)
+
+theorem start_offset {pc : Int64} {code : List (Kraken.Sized Directive)} {target : Int64}
+    (supported : Supported code) (member : target ∈ starts pc code) :
+    ∃ k, k < (code.map (·.size)).sum ∧ target = pc + .ofNat k := by
+  induction supported generalizing pc with
+  | nil => simp [starts] at member
+  | cons i n tail positive mono rest ih =>
+    simp only [starts, List.mem_cons] at member
+    rcases member with rfl | member
+    · exact ⟨0, by simp only [List.map_cons, List.sum_cons]; omega, by simp⟩
+    · obtain ⟨k, bound, at_⟩ := ih member
+      refine ⟨n + k, by simp only [List.map_cons, List.sum_cons]; omega, ?_⟩
+      rw [at_, Int64.ofNat_add, Int64.add_assoc]
+
+theorem offset_ne (pc : Int64) (m : Nat) (positive : 0 < m) (bound : m < 2 ^ 64) :
+    pc + .ofNat m ≠ pc := by
+  intro equal
+  have bits := congrArg Int64.toBitVec equal
+  rw [Int64.toBitVec_add] at bits
+  have zero : (Int64.ofNat m).toBitVec = 0 := by
+    have := congrArg (fun x => x - pc.toBitVec) bits
+    simpa [BitVec.add_comm pc.toBitVec, BitVec.add_sub_cancel] using this
+  have nat := congrArg BitVec.toNat zero
+  simp at nat
+  omega
+
+/-- A supported code list that does not wrap the address space is laid out under its
+own literal fetch: no later instruction starts at an earlier one's address. -/
+theorem fetchIn_laid_out {code : List (Kraken.Sized Directive)} (supported : Supported code)
+    (pc : Int64) (bound : (code.map (·.size)).sum < 2 ^ 64) :
+    LaidOut (Image.fetchIn pc code) pc code := by
+  induction supported generalizing pc with
+  | nil => exact .nil _
+  | cons i n tail positive mono rest ih =>
+    simp only [List.map_cons, List.sum_cons] at bound
+    refine .cons pc i n tail positive (by simp [Image.fetchIn]) mono ?_
+    apply (ih (pc + .ofNat n) (by omega)).agreement
+    intro p instruction read
+    unfold Image.fetchIn
+    split
+    · rename_i equal
+      obtain ⟨k, small, at_⟩ := start_offset rest (fetchIn_start read)
+      rw [equal, Int64.add_assoc, ← Int64.ofNat_add] at at_
+      exact absurd at_.symm (offset_ne pc (n + k) (by omega) (by omega))
+    · exact read
+
+/-- Every instruction of the range is supported: by the landed lemma, or for the `bts`
+by `bts_supported`. -/
+theorem range_supported : Supported Range.code := by
+  repeat' first
+    | exact Supported.nil
+    | refine Supported.cons _ _ _ (by decide)
+        (by first
+          | exact regular_mono _ _ _ True.intro
+          | exact bts_supported _ _) ?_
+
+/-- The whole range is laid out at its entry under its own literal fetch. -/
+theorem range_laid_out : LaidOut Range.fetch Range.entry Range.code := by
+  apply (fetchIn_laid_out range_supported Range.entry (by decide +kernel)).agreement
+  intro p instruction read
+  simp [Range.fetch, read]
+
+theorem laidOut_take {fetch : Int64 → Option Decoded} {pc : Int64}
+    {code : List (Kraken.Sized Directive)} (layout : LaidOut fetch pc code) (n : Nat) :
+    LaidOut fetch pc (code.take n) := by
+  induction layout generalizing n with
+  | nil => simp only [List.take_nil]; exact .nil _
+  | cons pc i len tail positive here mono rest ih =>
+    cases n with
+    | zero => exact .nil _
+    | succ n => exact .cons pc i len _ positive here mono (ih n)
+
+theorem laidOut_drop {fetch : Int64 → Option Decoded} {pc : Int64}
+    {code : List (Kraken.Sized Directive)} (layout : LaidOut fetch pc code) (n : Nat) :
+    LaidOut fetch (pc + .ofNat ((code.take n).map (·.size)).sum) (code.drop n) := by
+  induction layout generalizing n with
+  | nil pc => simp only [List.drop_nil]; exact .nil _
+  | cons pc i len tail positive here mono rest ih =>
+    cases n with
+    | zero =>
+      simp only [List.take_zero, List.map_nil, List.sum_nil, List.drop_zero]
+      have same : pc + Int64.ofNat 0 = pc := by simp
+      rw [same]
+      exact .cons pc i len tail positive here mono rest
+    | succ n =>
+      simp only [List.take_succ_cons, List.map_cons, List.sum_cons, List.drop_succ_cons]
+      have moved : pc + Int64.ofNat (len + ((tail.take n).map (·.size)).sum) =
+          pc + Int64.ofNat len + Int64.ofNat ((tail.take n).map (·.size)).sum := by
+        rw [Int64.ofNat_add, Int64.add_assoc]
+      rw [moved]
+      exact ih n
+
+theorem regions_laid_out : RegionsLaidOut := by
+  intro fetch agree first count _
+  exact laidOut_take (laidOut_drop (range_laid_out.agreement agree) first) count
+
 #print axioms call_site
 #print axioms stubs_agree
 #print axioms pc_site
 #print axioms cmp8_site
 #print axioms const_cmp8_site
 #print axioms bts_supported
+#print axioms regions_laid_out
 end Binary.C2
