@@ -1,277 +1,194 @@
-# C1: the recording-armed capture and the final statement
+# C1: the final statement, revision 3
 
-2026-11-10, branch `task/binary-c1`. Phase A of the commissioned result C1
-(the compiled allowed-IPs insertion): the kernel capture that was to be run
-and looked at before any proof work, and the final text of what is signed.
-**Nothing is proved here.** The statement files contain `def … : Prop` and
-executable definitions only. What was decided is in `docs/decisions.md`
-(2026-11-10): `Signed` of revision 2 of
-[the packet](2026-11-10-statement-packet-c1-insertion.md) with finding F1 of
-[the review's follow-up](2026-11-10-review-statement-packet-c1.md) repaired.
-Every judgement below is mine [AGENT]; the two things I think the owner
-should decide are in [section 5](#5-what-the-capture-puts-to-the-owner).
+2026-11-10, branch `task/binary-c1`. The signed statement of result C1 (the
+compiled allowed-IPs insertion) revised in the five places decided in
+`docs/decisions.md` (2026-11-10, the last entry), for the independent
+reviewer and then the owner. **Nothing is proved here** about the image:
+the statement files contain `def … : Prop` and executable definitions only.
+Revision 2 of this document (the capture's result and the text then signed)
+is commit `7d39d508`; its capture section is appendix C, unchanged except
+where marked. Every judgement below is mine [AGENT]; the decision to make
+the five changes is the owner's [USER].
 
-## 1. The capture
+What I ask the reader to look at hardest: the form I gave change 2
+(`Referenced`, section 1), what the restated witness no longer shows
+(change 5), and the four things in [section 7](#7-what-i-could-not-do-as-decided-and-what-i-flag).
 
-### What was run
+## 1. The five changes
 
-Five traces, each recorded first by the differential check on the saved s5
-image with the insertion coverage profile, which arms the three allocation
-sites of `add` (`allocNode190`, `allocNode205`, `allocNode234`): the oracle's
-ordinary recording mode. All five recordings pass the check, so the mirror
-and the kernel agree on them at the level the project's gate compares. Each
-was then replayed in a guest stopped under QEMU's debugger and every call of
-`wg_allowedips_insert_v4` / `_v6` was single-stepped with interrupts and
-timers deferred.
+**Change 1: the returned object ends below 2^64.** One conjunct in
+`AllocResult`'s success clause, in the form the landed `Trie.validate` uses:
 
-| Trace | Calls | What it exercises |
-| --- | ---: | --- |
-| `c1_capture_grid` (new, `binary/Statements/C1/capture/`; two peers created by a first `wg set`, thirteen prefixes added by a second) | 13 | Empty root, both families; child attachment; exact match onto another peer, both families; covering node at the root and below a parent, both families; intermediate node (two allocations) at the root, below a parent, and for IPv6 |
-| `a2_allowedips_root_nomem` (corpus) | 1 | The allocation at `allowedips.c:190` forced to fail: `-ENOMEM` on an empty table |
-| `a2_allowedips_newnode_nomem` (corpus) | 2 | The allocation at `:205` forced to fail |
-| `a2_allowedips_split_nomem` (corpus) | 2 | The allocation at `:234` forced to fail after `:205` succeeded: the rollback and the release |
-| `b1_trie_routing` (corpus) | 8 | Five peers, each created between the insertions: what an ordinary multi-peer `wg set` does |
+```lean
+  (record.bytes.head? = some 1 →
+    a ≠ 0 ∧ a % 8 = 0 ∧ a + nodeSize < 2^64 ∧
+    (∃ span ∈ L.arena, span.1 ≤ a ∧ a+nodeSize ≤ span.1+span.2) ∧ …
+```
 
-The failures were forced with the oracle's steering schedule (a `fail`
-entry for the named site, as the three corpus traces carry it); a natural
-allocation failure was not attempted. In all: **26 wrapper calls, 30
-allocations (27 objects, 3 forced NULL) and 1 release.**
+The assembly's open hypothesis `NodeBelowTop` is now the one-line theorem
+`C1Assembly.nodeBelowTop` and is gone from `signed_of_parts`.
+`Statements/C1/proof/TopOfMemory.lean` is a regression test: it fails to
+elaborate unless the object at `2^64 - 72` is admitted by revision 2's
+clause, excluded by revision 3's, and refused by the landed check.
 
-At each wrapper entry and return, and at each call of and return from the
-two service addresses, the capture takes the registers, the memory the
-statements mention (table, peers, nodes handed out, 3 KiB of stack below the
-entry and 256 bytes above, the address bytes, the `node_cache` word, the
-per-CPU words, the task's coverage fields, the coverage buffer's used part)
-and **a dump of the whole guest RAM**. What a service wrote is therefore the
-difference of two complete memory images, not a list of places somebody
-thought to look. Inside the services every instruction address and the
-registers before it are recorded, so the instructions executed and the
-addresses their operands name are known too.
+**Change 2: the closed world admits the caller's reference on a peer.** A
+fifth clause in `Headline`, beside `Framed`:
 
-Three checkers read the captures (commands in [appendix B](#appendix-b-reproduction)):
+```lean
+def CountMoved (L : Layout) (pid : PeerId) (before after : Nat) (m m' : Mem 64) : Prop :=
+  ∃ peer, Trie.address L.peers (some pid) = .ok peer ∧
+    readNat ⟨{dmem := m},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4 = .ok before ∧
+    readNat ⟨{dmem := m'},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4 = .ok after ∧
+    ∀ a, L.Heap a → ¬InRange (.ofNat 64 (peer+Root.nodeOffsets.peerRefcount)) 4 a → m.get? a = m'.get? a
 
-- `analyse.py`: the whole-RAM differences sorted into the clauses of
-  `ServiceWrites`, the instructions and operand addresses inside the
-  services, the allocation outcomes against the recorded run's records.
-- `Check.lean`: the statements' own executable definitions (`emptyTable`,
-  `insertReady`, `lookupReady`, the literals, the windows, the layout) on
-  the captured states, the mirror's `Leanux.WG.insert` threaded from the
-  empty table, and Kraken executing the compiled wrapper, `add`,
-  `common_bits` and the coverage callbacks from the captured entry state,
-  with each captured service transition installed where the interpreter
-  reaches a service address. The clauses of `AllocatorContract` are
-  renderings, as in the packet's test, since they are propositions.
-- The arena is not given by the statements. `analyse.py` proposes the
-  smallest one that makes the write clause true of the run (the nodes' slab
-  page plus every other byte range a service changed outside its stack and
-  the buffer) and `Check.lean` evaluates the caller premises with it.
+def Referenced (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
+  ∀ (w w' : World) (m m' : Mem 64) (pid : PeerId) (count : Nat), Inv w m →
+    ((liftWG (WG.peerGet pid)).run w = .ok ((), w') ∧ CountMoved L pid count (count+1) m m') ∨
+    ((liftWG (WG.peerPut (some pid))).run w = .ok ((), w') ∧ 1 < count ∧
+      CountMoved L pid count (count-1) m m') →
+    Inv w' m'
+```
 
-### What it showed
+Exactly what may change: the four bytes of one registered peer's reference
+count, by one, with every other heap byte the same (bytes outside the heap
+are free, as in `Framed`); paired with exactly one mirror operation, an
+accepted `peerGet` on that peer for `+1`, an accepted `peerPut` for `-1`.
+A drop must start above one: dropping the last reference releases the peer
+in the mirror, which changes the peer set, and stays outside. A move of a
+reference between two peers is two steps. I chose single steps over one
+"move" clause because that is how `set_peer` does it (it drops its
+reference on one peer and later takes one on the next) and because each
+step is then one mirror operation.
 
-1. **No disagreement between the mirror and the compiled code.** In the 20
-   calls evaluated against the mirror (12 of them inside one closed world
-   from an empty table, the grid's other 8 after the change of peer of
-   point 5), under two undefined-value seeds, `eax` is the mirror's answer,
-   the sequence word advances by one, the landed relation holds after every
-   call against the mirror's world, and 33 compiled lookups run afterwards
-   on the captured heaps return the mirror's peer or NULL. Among them are
-   instances of both exclusions: after the grid's first insertion the
-   address is found; after `a2_allowedips_root_nomem`'s refused one it is
-   not.
-2. **Kraken's execution of the six functions reproduces the guest.** From
-   each captured entry state the interpreter visits exactly the instruction
-   addresses the guest did, reaches each service call in the captured state
-   (registers and every captured byte), and ends in the captured return
-   state. This was not required; it is the strongest evidence here that the
-   decoded terms and the semantics mean what the CPU did on these paths.
-3. **Every clause of the contract that can be evaluated holds of the image's
-   allocator on these runs, for a suitably drawn arena.** Entry conditions,
-   return, callee-saved registers, coverage state before and after, the
-   returned object (aligned, 72 zero bytes, in the slab page, apart from
-   every node handed out), NULL on a forced failure, and no byte of a node
-   that stays handed out, of the table, or of a peer changed by any of the 31
-   service calls anywhere in RAM.
-4. **What the allocator does outside the contract is what the review said,
-   plus the page allocator.** Outside its stack, the buffer and the slab
-   page it changed the four recording counters on every allocation, the
-   steering schedule's head on the three forced ones, the per-CPU freelist
-   and transaction words, and, on the first allocation of each boot, about
-   fifteen words of page-allocator and slab metadata. Its unwinder reads up
-   to 1,448 bytes of the callers' stack above the return word and the ORC
-   tables. Two of the instructions it executes at the service addresses are
-   not the ELF's (boot-time patching), and the `popf` the review expected on
-   every fast path is not executed on this guest CPU.
-5. **A real configuration run leaves the closed world between peers.** The
-   caller holds a reference on the peer it is configuring: between the last
-   insertion for one peer and the first for the next it lowers one peer's
-   count and raises the other's, both heap words. With peers created in the
-   same `wg set` (`b1_trie_routing`) it also creates the peer. As signed,
-   the result therefore speaks about the insertions of the first peer
-   configured after the table is empty (5 of the grid's 13 calls, 2 of
-   `b1`'s 8) and not about the rest of the same `wg set`. Nothing is wrong
-   in those later calls: the grid's 8 were checked with the mirror's counts
-   re-read from memory at the switch and every check holds. The statement
-   is silent there. This is put to the owner in section 5.
+On the capture: the grid's one change of peer is `peerPut 0: 2 -> 1`, then
+`peerGet 1: 1 -> 2`, no other heap byte changed (captured states and whole
+RAM). **The headline now covers 13 of the grid's 13 calls (5 before) and
+still 2 of `b1_trie_routing`'s 8**: in `b1` each later peer is *created*
+between the insertions (its count goes 0 to 2, and the layout's peers are
+fixed at the empty table), which this clause does not and should not admit.
 
-### Clause by clause
+**Change 3: the ten-instruction listing stays.** `CallbacksFromImage` and
+`StatementC1CallbackImage.lean` are textually unchanged; the counts in
+section 4 include the listing (75 printed lines).
 
-Counts are checks passed out of checks made. "×2" means under both
-undefined-value seeds. "Window" means the readiness definitions were
-evaluated with the coverage buffer truncated to its captured words (the
-guest's buffer is 32 MiB; `Context.At` asks that every word be readable);
-the same definitions were evaluated verbatim on the whole buffer at the
-first call of the grid.
+**Change 4: `ServiceReady` carries the separation.** In the statement file,
+field for field the service prover's `Separated`:
 
-| Clause | How it was checked | Result |
-| --- | --- | --- |
-| **(a) Wrapper entry** | | |
-| `emptyTable` (the base case of `Initial`) | The statement's definition, on the first call of each trace, against the mirror's device after peer creation and the caller's reference | 5/5 ×2. The table's sequence word is the mirror's initial 1; counts and list heads agree |
-| `insertReady` | The statement's definition, window | 20/20 ×2. Verbatim with the 32 MiB buffer loaded: 1/1 |
-| The caller conditions inside it | Same evaluation: return word, 200 + `depth` mapped bytes of stack (`depth` 736 to 968 by trace), valid coverage state, capacity, direction flag, the separations (with the drawn arena, 5 to 23 spans, in the heap) | Hold. The preemption count at entry is `0x80000000`, a value the packet's search did not include |
-| Whole 32 MiB buffer apart from heap, caller spans and metadata | `spansApart` on the full span | 20/20 ×2 |
-| **(b) Each service call** (30 allocations, 1 release; 22 and 1 of them in the 20 calls evaluated in Lean) | | |
-| Entry: service address, aligned `rsp`, `rdi` the cache, `esi = 0xdc0`; release: its one return site and `rsi` handed out | Interpreter state at the stop, which equals the captured one byte for byte | 23/23 ×2 |
-| Return site against the mirror's pending record (`(ra, record.site) ∈ allocSites`) | The mirror's record list threaded from the empty table | 22/22 ×2 |
-| `ServiceReady`: coverage, capacity, direction flag, `depth` mapped bytes | Window; `depth` the deepest the trace's services went (736 to 968) | 23/23 ×2 |
-| `Returned` | Captured return state | 23/23 ×2. The other 8 return to their site with `rsp + 8`; their callee-saved registers were not compared |
-| `EqualOutside ServiceWrites` with `Kept` | (i) Every captured byte that changed; (ii) the whole RAM | (i) 23/23 ×2. (ii) 31/31: nothing changed in a kept node, the table, a peer or above the return word. With the arena the slab page only, the clause is **false**: the list below |
-| `c.At` afterwards | Window | 23/23 ×2 |
-| `AllocResult` | By the mirror's pending record's byte: NULL, or non-NULL, 8-aligned, in the arena, apart from live nodes, 72 zero bytes | 22/22 ×2 (19 objects, 3 NULL) |
-| The outcome against the record the mirror consumes | Site and outcome of the k-th allocation in the capture against the k-th allocation record of the recorded run | 30/30 |
-| `Idle`, `frame` | Not capturable: `Idle` is abstract. What `frame` would have to be true of is in the next subsection | |
-| **(c) Wrapper return** | | |
-| `Returned` | Interpreter's final state, equal to the captured one | 20/20 ×2 |
-| `eax` is the mirror's answer | `Leanux.WG.insert` on the same arguments and records | 20/20 ×2 (17 zero, 3 `-ENOMEM`) |
-| `SeqAdvanced` | The table's sequence word before and after | 20/20 ×2 |
-| `Inv` re-established | One instance, the landed relation (`assertAt`), with names taken from the allocations | 20/20 ×2 |
-| `EqualOutside InsertWrites` | (i) Every store of the interpreter against the 200 + `depth` byte window, the buffer and the heap; (ii) whole RAM across the call | (i) 20/20 ×2; deepest store of the six functions and callbacks 200 bytes. (ii) 26/26 with the service-changed words in the arena |
-| The mirror's pending records afterwards | Equal to the records the captured services did not consume | 20/20 ×2 |
-| **(d) Lookup afterwards** | The compiled `lookup` under Kraken on the final captured heap of each trace, for every inserted address and three others; caller frame constructed inside the captured stack | `lookupReady` (window) 33/33; `Returned` 33/33; `rax` the mirror's peer 33/33 (20 a peer, 13 NULL) |
+```lean
+structure Separated (L : Layout) (A : Allocator) (c : CommonBitsCoverage.Context) (s : MachineState) : Prop where
+  stackArena : ∀ a, Scratch s A.depth a ∨ InRange s.data.regs.rsp.toBitVec 8 a → ¬L.Arena a
+  stackCoverage : ∀ a, Scratch s A.depth a ∨ InRange s.data.regs.rsp.toBitVec 8 a → ¬c.bytes a
+  coverageArena : ∀ a, c.bytes a → ¬L.Arena a
+  bufferMetadata : ∀ a, c.writes a → ¬c.metadataBytes a ∧ ¬InRange preemptCountAddress 4 a
+```
 
-**Written outside the stack scratch, the buffer and the slab page** (the
-whole-RAM differences across the 31 service calls):
+and `ServiceReady` gains the field `separated : Separated L A c s`, hence the
+layout as a parameter (`ServiceReady L A c s` in the two clauses of the
+contract). Checked three ways:
 
-| Where | Calls | What |
-| --- | ---: | --- |
-| `kcov_choice_seq`, `kcov_alloc_records`, `kcov_alloc_unwinds`, `kcov_alloc_unwind_cycles` (kernel globals) | 30 of 30 allocations each | The recording hook's counters; the last holds `rdtsc` differences |
-| The steering schedule's `head` (a heap object of the oracle's) | 3 of 3 forced failures | 0 to 1 at the steered encounter |
-| The cache's per-CPU `freelist` and `tid` words | The 27 allocations that return an object, the release | The lock-free swap, or the slow path's refill |
-| `struct slab` fields of the new page, the cache's node counters, the per-CPU page lists, `contig_page_data`, `vm_node_stat`, `vm_event_states` | 4 allocations: the first of each boot | The slow path: `___slab_alloc`, `allocate_slab`, `__alloc_pages_noprof` |
-| The free-pointer word inside the 54 other objects of the new slab page | Same 4 | Inside the slab page; none is handed out |
-| `t->kcov_leanux_dropped`, the schedule's `mismatches` | 0 | Not reached: no buffer overflow, no schedule mismatch |
+- *Derivable inside an insertion.* The prover's own theorem `separated`
+  (from `insertReady` and `InFlight`), moved in front of its `serviceReady`
+  with one field added, compiles against this text, and its `allocRule` and
+  `freeRule` are then proved unchanged (scratch copy, standard axioms).
+- *Does not exclude the image's allocator as captured.* The four conjuncts
+  hold at all 23 captured service entries evaluated in Lean, under both
+  seeds, with the arena drawn around every byte the allocator changed, its
+  stack 736 to 968 bytes deep and the whole 32 MiB buffer: stack apart from
+  arena, stack apart from the coverage bytes, coverage bytes apart from the
+  arena, buffer apart from the metadata and the preemption count.
+- *`word_kept` and `no_state_word` no longer go through.* Compiled against
+  this text (scratch copy), `word_kept` fails at exactly its step
+  `readyMoved`, which must now supply the separation for the aliased
+  context. `Statements/C1/proof/StateWord.lean` proves from the statement
+  files that it cannot when the word is the allocator's (`mode_apart`: an
+  admitted context's mode word is not in the arena or the service's stack),
+  and that a conforming service cannot touch an admitted context's metadata
+  at all (`metadata_kept`). Executably: the packet's test service advances
+  an index word at `arena+16`; at the aliased state revision 2 admits the
+  state and the service then breaks `c.At` (it did not conform), revision 3
+  refuses the state; at ordinary states it meets every clause.
 
-**Stack.** A recorded fast-path allocation uses 736 or 744 bytes below its
-entry `rsp`, a forced failure 736; through the page allocator, 968; the
-release, 64. An unrecorded allocation was not captured.
+**Change 5: the witness in two halves.**
 
-**Instructions.** A recorded fast-path allocation is about 6,400 native
-instructions, of which 96 are in `kmem_cache_alloc_noprof` and about 5,400
-in the unwinder. Per allocation: `rdtsc` twice; `pushf`/`cli`/`sti` once or
-more (the steering lookup); `prefetchw` once on the fast path. No call of
-`this_cpu_cmpxchg16b_emu` and no `popf` in any of the 31 calls: at
-`kmem_cache_alloc_noprof+0x85` and `kmem_cache_free+0xf4` the guest's text
-is `cmpxchg16b (%rsi); nop` where the ELF has the call, and at `+0x91` it
-is `prefetchw` where the ELF has `prefetcht0`. Those are the three sites
-the review named, and no other byte of the two functions differs.
+```lean
+def Witness : Prop :=
+  ∃ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator),
+    Premises fetch L A ∧ CallbacksFromImage fetch ∧ Executed fetch L A ∧ ServiceActive fetch L A
+```
 
-**Read outside the arena.** Operand addresses of the service instructions:
-the callers' stack above the return word (22 loads per allocation, up to
-1,448 bytes above the service's entry `rsp`, far beyond the wrapper's
-frame), `.orc_unwind`, `.orc_unwind_ip`, `.orc_lookup`, `.rodata`,
-`pcpu_hot`, the task's coverage fields, `gfp_allowed_mask`,
-`kcov_alloc_armed`, `init_on_alloc`, `init_on_free`, `slub_debug_enabled`,
-and for the release `phys_base` and `mem_section`.
+`Executed` is revision 2's four calls with its last clause removed: an
+actual run from a physically empty table through an insertion, a
+two-allocation insertion with the coverage buffer in use, a rollback with
+its release, and a lookup that finds a peer, stated through the entry and
+final states of the calls. `ServiceActive` is about the code at
+`allocEntry` on its own:
 
-**Between calls** (whole RAM, restricted to the heap and the arena words):
-nothing, between two insertions for the same peer (16 gaps). At each change
-of peer (5 gaps): the two reference counts; in `b1_trie_routing` also the
-new peer, `kcov_choice_seq` advanced by 2 or 3 (the records of the peer's
-creation), and at two of the four gaps slab and page-list words that other
-allocations share with the arena as drawn.
+```lean
+def ServiceActive (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator) : Prop :=
+  0 < A.depth ∧
+  ∃ (c : Context) (s t : MachineState) (ra : UInt64) (live : List Nat) (record : HiddenRecord)
+    (stream : List HiddenRecord) (history : List MachineState),
+    s.pc = allocEntry ∧ EntryFrame s ra ∧ ServiceReady L A c s ∧
+    s.data.regs.rdi.toNat = L.cache ∧ s.data.regs.get (.low .rsi .W32) = 0xdc0#32 ∧
+    (ra.toNat, record.site) ∈ allocSites ∧ A.Idle s.data.dmem live (record :: stream) ∧
+    c.Needed ∧ record.bytes.head? = some 1 ∧
+    Ran fetch s t ra history ∧
+    (∃ a, Scratch s A.depth a ∧ s.data.dmem.get? a ≠ t.data.dmem.get? a) ∧
+    (∃ a, c.writes a ∧ s.data.dmem.get? a ≠ t.data.dmem.get? a)
+```
 
-### The review's predictions
+Why this shape. Revision 2 asked for a scratch byte and a buffer byte
+changed between a service entry and its return *inside* the second
+insertion's history. The headline's steps conclude `Eventually` to a final
+state and expose nothing in between, and no fact about final states can
+show that a byte *did* change (the steps say only what did not), so the
+clause was not derivable from the headline. The service's activity is
+therefore stated where it can be established: by executing the service's
+own instructions from one entry state that the contract's `alloc` clause
+admits (all seven of its hypotheses, plus the buffer in use and a success
+pending). Both halves are about the same `fetch`, layout and allocator.
 
-| Prediction (review section 3 and M1, M2) | Capture |
+| Conjunct | Vacuous reading it rules out |
 | --- | --- |
-| Entry arguments: the cache, `0xdc0`, three return sites; the release's one | **Confirmed** |
-| Needs mapped stack, clear direction flag, capacity; `Returned` on the fast path, the forced failure, and the slow path when it returns | **Confirmed**, the slow path included |
-| Never writes a node it has handed out | **Confirmed** over the whole RAM, 31 calls |
-| Coverage state valid afterwards for capacity ≥ 1 | **Confirmed** (window) |
-| Object 8-aligned, 72 zero bytes, apart from live nodes; NULL when forced | **Confirmed** |
-| The record is written by the call and carries the outcome; consistent with the recorded run's record | **Confirmed**: 30 of 30 outcomes equal the recorded run's records; the buffer gains the record during the call |
-| Six words outside the buffer: `kcov_choice_seq`, `kcov_alloc_records`, `kcov_alloc_unwinds`, `kcov_alloc_unwind_cycles`, the schedule's `head`/`mismatches`, `kcov_leanux_dropped` | **Four confirmed on every allocation, `head` on the forced ones.** `mismatches` and `kcov_leanux_dropped` not reached |
-| The in-progress counter is restored | **Consistent**: no net change |
-| The unwinder reads the stack above the call and the ORC tables | **Confirmed**, with the extent: 1,448 bytes |
-| `rdtsc` twice per recorded allocation; `prefetcht0` | **Confirmed** (`prefetchw` after patching) |
-| Three alternatives sites; the bytes the CPU runs are not the ELF's | **Confirmed**, exactly those three |
-| `popf` in `this_cpu_cmpxchg16b_emu` on every successful fast path | **Refuted for this guest**: the emulation is never called; the patched `cmpxchg16b` runs. `cmpxchg16b` has no semantics in the pinned Kraken either, so the conclusion the review drew stands |
-| Fast-path frame about 150 bytes | Not tested (non-recording). Recording: 736 or 744 bytes |
-| `kmem_cache_free` has no hook; one store into the freed object and the per-CPU swap | **Confirmed** (one release) |
-| Every recorded choice anywhere increments `kcov_choice_seq`, so an arena containing it is changed between calls | **Confirmed** in `b1_trie_routing`; not in the grid, where nothing is recorded between calls |
-| Natural failure after a release (M2) | Not exercised |
+| `Premises fetch L A` | Premises nothing meets |
+| `CallbacksFromImage fetch` | Coverage and BH-enable callbacks that are stubs |
+| `Executed`: `emptyTable …` and `A.Idle s1.data.dmem [] (five answers ++ stream)` | A never-idle allocator; an `Initial` that never applies |
+| `Executed`: each call's `…Ready = .ok ()`, the mirror's accepted run, `Ran` | Caller conditions no state meets; a mirror that refuses; calls that cannot return, for each kind of call (first insertion, two allocations, rollback and release, lookup hit) |
+| `Executed`: `c2.Needed` | A run with the coverage buffer unused |
+| `ServiceActive`: `0 < A.depth`, the scratch byte | A contract only a service without stack could meet |
+| `ServiceActive`: `c.Needed`, the buffer byte | A contract only a service that writes no record could meet |
+| `ServiceActive`: `A.Idle s.data.dmem live (record :: stream)`, `Ran` | `Idle` false of every memory; an `alloc` clause that never applies |
 
-Nobody predicted: the first allocation of each boot goes through the page
-allocator (so "only the fast paths are candidates" leaves out the first
-insertion a kernel ever makes); the caller's reference changes heap words
-between peers (point 5); the preemption count at entry is `0x80000000`;
-the buffer is 32 MiB, so `Context.At` cannot be evaluated on a capture
-except once; and Kraken reproduces the guest's execution exactly.
+**What it no longer rules out, against revision 2: a service that is active
+only at entry states no insertion reaches.** Revision 2 placed the two
+changed bytes in the second insertion; here they are shown at one admissible
+entry state that need not be one of `Executed`'s. A stub could, in
+principle, write only when called from a state the six functions never
+produce. I could not close this within the headline's shape; the reviewer
+may see a way.
 
-### What could not be captured
+A stub in instruction terms can satisfy `ServiceActive` under the revised
+contract, where the prover's could write neither byte under revision 2:
+`metadata_kept` (above) is the reason, the test service is an executable
+instance (`ServiceActive` evaluated on it holds; on the quiet service it
+fails), and one concrete design is a stub that calls the image's own
+`__sanitizer_cov_trace_pc`, whose landed contract already gives the write
+frame and `c.At`. **That a stub does satisfy it is not proved here**; it is
+package 4's work.
 
-- `Idle` and the `frame` clause: abstract. The reads above bound what
-  `frame` would have to ignore.
-- Transient writes: a byte written and restored within one service call
-  does not show in a memory difference. The in-progress counter is one.
-- Loads of the service's string instructions beyond their first address,
-  and 24 instructions the operand reader could not decode.
-- The non-recording mode, a natural allocation failure, the slow path of
-  the release, a buffer overflow, a steering mismatch.
-- Anything concurrent: the call is single-stepped with interrupts and
-  timers deferred, as in every capture of this package.
-- The lookups are the compiled code under Kraken on captured heaps with a
-  constructed caller frame, not lookups stepped in the guest. (The
-  differential check of `b1_trie_routing` and the grid covers the guest's
-  own lookups at the level it compares.)
-- In `b1_trie_routing` the statements' definitions were evaluated on the
-  first peer's two calls only; the other six calls were checked at the
-  service level (whole-RAM classes, outcomes against records).
-- The mirror's record is compared by site and outcome, not byte for byte
-  with the words the capture run wrote into its buffer.
+The interface proposition `PremisesMet` was weaker than its description (an
+allocator with `Idle := False` closed it). It now also asks that the
+allocator be idle in some memory, and its description says only what it
+states.
 
-No harness, guest or kernel file was changed. The capture needed two things
-the existing tooling did not have, both added in the new capture script on
-top of the package's debugger client: QEMU's monitor through the debugger
-(`pmemsave`, `gva2gpa`, both read-only) and all registers in one packet.
+## 2. The signed text, in reading order
 
-### Judgement
-
-**The proof can start as signed.** The capture found no premise that fails
-at a real call, no conclusion clause the image's code violates, and no
-difference between the mirror and the binary. What it found about the
-image's allocator is inside what was accepted when `Signed` was chosen: the
-result is about any code at the two addresses that meets the contract, and
-the image's allocator is not shown to. The capture adds that on these runs
-the allocator's *behaviour* fits every evaluable clause once the arena is
-drawn around what it writes, and that the remaining distance is the list
-the review gave (instructions without semantics, the unwinder's reads, the
-counters) plus the page allocator on a first allocation.
-
-One thing should be decided before the headline's four clauses are
-assembled, though it does not hold up the work on `InsertStep`: point 5,
-in section 5.
-
-## 2. The signed text
-
-`binary/StatementC1Contracts.lean` (116 source lines),
-`binary/StatementC1Headline.lean` (252),
-`binary/StatementC1CallbackImage.lean` (21, generated) and
-`binary/StatementC1Vacuity.lean` (155), roots of the package library
-`BinaryProofs`: built by `lake -d binary build` and scanned by the binary
-gate, which passes on this branch (1,123 jobs, printed surface unchanged).
-The namespace is still `Binary.Statements.C1`. Doc comments are left out
-below; the files carry them. `HeadlineExplicit` and `Related` stay in the
-file as the alternative; `Signed` does not mention them.
+`binary/StatementC1Contracts.lean` (135 source lines, 116 before),
+`binary/StatementC1Headline.lean` (281, 252),
+`binary/StatementC1CallbackImage.lean` (21, generated, unchanged) and
+`binary/StatementC1Vacuity.lean` (198, 155). Doc comments are left out
+below; the files carry them. `InsertStep`, `LookupStep`, `Initial`, the
+caller conditions and the two exclusions are textually unchanged.
 
 **What is signed:**
 
@@ -286,7 +203,8 @@ def Signed : Prop :=
 def Headline : Prop :=
   ∀ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator), Premises fetch L A →
     ∃ Inv : World → Mem 64 → Prop,
-      Initial L A Inv ∧ Framed L Inv ∧ InsertStep fetch L A Inv ∧ LookupStep fetch L Inv
+      Initial L A Inv ∧ Framed L Inv ∧ Referenced L Inv ∧
+      InsertStep fetch L A Inv ∧ LookupStep fetch L Inv
 
 def Initial (L : Layout) (A : Allocator) (Inv : World → Mem 64 → Prop) : Prop :=
   ∀ w d m stream, w.wg.dev = some d → armed w = true → w.ambient.hidden = some stream →
@@ -295,6 +213,19 @@ def Initial (L : Layout) (A : Allocator) (Inv : World → Mem 64 → Prop) : Pro
 
 def Framed (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
   ∀ w m m', Inv w m → (∀ a, L.Heap a → m.get? a = m'.get? a) → Inv w m'
+
+def CountMoved (L : Layout) (pid : PeerId) (before after : Nat) (m m' : Mem 64) : Prop :=
+  ∃ peer, Trie.address L.peers (some pid) = .ok peer ∧
+    readNat ⟨{dmem := m},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4 = .ok before ∧
+    readNat ⟨{dmem := m'},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4 = .ok after ∧
+    ∀ a, L.Heap a → ¬InRange (.ofNat 64 (peer+Root.nodeOffsets.peerRefcount)) 4 a → m.get? a = m'.get? a
+
+def Referenced (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
+  ∀ (w w' : World) (m m' : Mem 64) (pid : PeerId) (count : Nat), Inv w m →
+    ((liftWG (WG.peerGet pid)).run w = .ok ((), w') ∧ CountMoved L pid count (count+1) m m') ∨
+    ((liftWG (WG.peerPut (some pid))).run w = .ok ((), w') ∧ 1 < count ∧
+      CountMoved L pid count (count-1) m m') →
+    Inv w' m'
 
 def InsertStep (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator)
     (Inv : World → Mem 64 → Prop) : Prop :=
@@ -324,16 +255,6 @@ def LookupStep (fetch : Int64 → Option Decoded) (L : Layout)
       t.data.regs.rax.toNat = pointer ∧
       Inv w' t.data.dmem ∧
       EqualOutside (LookupWrites L c s) s.data.dmem t.data.dmem) s
-
-def SeqAdvanced (L : Layout) (s t : MachineState) : Prop :=
-  ∃ before, readNat s (L.table+AllowedipsMutationLayout.seq) 8 = .ok before ∧
-    readNat t (L.table+AllowedipsMutationLayout.seq) 8 = .ok ((before+1) % 2^64)
-
-def InsertWrites (L : Layout) (A : Allocator) (c : Context) (s : MachineState) (a : BitVec 64) : Prop :=
-  Scratch s (insertWindow + A.depth) a ∨ c.writes a ∨ L.Heap a
-
-def LookupWrites (L : Layout) (c : Context) (s : MachineState) (a : BitVec 64) : Prop :=
-  AllowedipsEntry.TotalWrites s c.coverage c.preempt a ∨ L.Heap a
 ```
 
 **What is assumed of the code:**
@@ -368,34 +289,42 @@ def ServiceWrites (L : Layout) (A : Allocator) (c : CommonBitsCoverage.Context)
     (s : MachineState) (kept : List Nat) (a : BitVec 64) : Prop :=
   Scratch s A.depth a ∨ (L.Arena a ∧ ¬Kept kept a) ∨ c.writes a
 
-structure ServiceReady (A : Allocator) (c : CommonBitsCoverage.Context) (s : MachineState) : Prop where
+structure Separated (L : Layout) (A : Allocator) (c : CommonBitsCoverage.Context) (s : MachineState) : Prop where
+  stackArena : ∀ a, Scratch s A.depth a ∨ InRange s.data.regs.rsp.toBitVec 8 a → ¬L.Arena a
+  stackCoverage : ∀ a, Scratch s A.depth a ∨ InRange s.data.regs.rsp.toBitVec 8 a → ¬c.bytes a
+  coverageArena : ∀ a, c.bytes a → ¬L.Arena a
+  bufferMetadata : ∀ a, c.writes a → ¬c.metadataBytes a ∧ ¬InRange preemptCountAddress 4 a
+
+structure ServiceReady (L : Layout) (A : Allocator) (c : CommonBitsCoverage.Context) (s : MachineState) : Prop where
   coverage : c.At s.data.dmem
   capacity : c.Needed → 0 < c.coverage.capacity.toNat
   forward : s.data.system.bits[10] = false
   stackMapped : ∀ i < A.depth,
     (s.data.dmem.get? (s.data.regs.rsp.toBitVec - .ofNat 64 A.depth + .ofNat 64 i)).isSome = true
+  separated : Separated L A c s
 
 def AllocResult (L : Layout) (A : Allocator) (live : List Nat) (record : HiddenRecord)
     (stream : List HiddenRecord) (t : MachineState) : Prop :=
   let a := t.data.regs.rax.toNat
   (record.bytes.head? = some 0 → a = 0 ∧ A.Idle t.data.dmem live stream) ∧
   (record.bytes.head? = some 1 →
-    a ≠ 0 ∧ a % 8 = 0 ∧ (∃ span ∈ L.arena, span.1 ≤ a ∧ a+nodeSize ≤ span.1+span.2) ∧
+    a ≠ 0 ∧ a % 8 = 0 ∧ a + nodeSize < 2^64 ∧
+    (∃ span ∈ L.arena, span.1 ≤ a ∧ a+nodeSize ≤ span.1+span.2) ∧
     (∀ other ∈ live, disjointRanges a nodeSize other nodeSize = true) ∧
     readNat t a nodeSize = .ok 0 ∧ A.Idle t.data.dmem (live ++ [a]) stream)
 
 structure AllocatorContract (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator) : Prop where
-    frame : ∀ m m' live stream, A.Idle m live stream →
+  frame : ∀ m m' live stream, A.Idle m live stream →
     (∀ a, L.Arena a → ¬Kept live a → m.get? a = m'.get? a) → A.Idle m' live stream
   alloc : ∀ (c : CommonBitsCoverage.Context) (s : MachineState) (ra : UInt64) live record stream,
-    s.pc = allocEntry → EntryFrame s ra → ServiceReady A c s →
+    s.pc = allocEntry → EntryFrame s ra → ServiceReady L A c s →
     s.data.regs.rdi.toNat = L.cache → s.data.regs.get (.low .rsi .W32) = 0xdc0#32 →
     (ra.toNat, record.site) ∈ allocSites → A.Idle s.data.dmem live (record :: stream) →
     Eventually (instructionStep fetch) (fun t =>
       Returned s t ra ∧ EqualOutside (ServiceWrites L A c s live) s.data.dmem t.data.dmem ∧
       c.At t.data.dmem ∧ AllocResult L A live record stream t) s
   free : ∀ (c : CommonBitsCoverage.Context) (s : MachineState) (ra : UInt64) live stream,
-    s.pc = freeEntry → EntryFrame s ra → ServiceReady A c s → ra.toNat = freeSite →
+    s.pc = freeEntry → EntryFrame s ra → ServiceReady L A c s → ra.toNat = freeSite →
     s.data.regs.rdi.toNat = L.cache → s.data.regs.rsi.toNat ∈ live →
     A.Idle s.data.dmem live stream →
     Eventually (instructionStep fetch) (fun t =>
@@ -411,13 +340,11 @@ def CallbacksFromImage (fetch : Int64 → Option Decoded) : Prop :=
   ServiceDecoderAgreement fetch ∧
   ∀ pc instruction, StatementC1CallbackImage.fetch pc = some instruction → fetch pc = some instruction
 
-def Witness : Prop :=
-  ∃ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator)
-    (w0 w1 w2 w3 w4 : World) (d0 d3 : Device) (c1 c2 c3 c4 : Context)
+def Executed (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator) : Prop :=
+  ∃ (w0 w1 w2 w3 w4 : World) (d0 d3 : Device) (c1 c2 c3 c4 : Context)
     (s1 t1 s2 t2 s3 t3 s4 t4 : MachineState) (h1 h2 h3 h4 : List MachineState)
     (k1 n1 p1 k2 n2 p2 k3 n3 p3 key pointer : Nat) (found : PeerId) (ra : UInt64)
     (stream : List HiddenRecord),
-    Premises fetch L A ∧ CallbacksFromImage fetch ∧
     w0.wg.dev = some d0 ∧ armed w0 = true ∧
     w0.ambient.hidden = some ([outcome 77 true, outcome 78 true, outcome 79 true,
       outcome 78 true, outcome 79 false] ++ stream) ∧
@@ -436,283 +363,252 @@ def Witness : Prop :=
     HeapSame L t3 s4 ∧ lookupReady L c4 s4 4 key ra = .ok () ∧ w3.wg.dev = some d3 ∧
     (Source.lookup d3.peerAllowedips.root4 32 key).run w3 = .ok (some found, w4) ∧
     Trie.address L.peers (some found) = .ok pointer ∧ Ran fetch s4 t4 ra h4 ∧
-    0 < A.depth ∧ c2.Needed ∧
-    ∃ (enter leave : MachineState) (back : UInt64), enter ∈ h2 ∧ leave ∈ h2 ∧
-      enter.pc = allocEntry ∧ Returned enter leave back ∧
-      (∃ a, Scratch enter A.depth a ∧ enter.data.dmem.get? a ≠ leave.data.dmem.get? a) ∧
-      (∃ a, c2.writes a ∧ enter.data.dmem.get? a ≠ leave.data.dmem.get? a)
+    c2.Needed
+
+def ServiceActive (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator) : Prop :=
+  0 < A.depth ∧
+  ∃ (c : Context) (s t : MachineState) (ra : UInt64) (live : List Nat) (record : HiddenRecord)
+    (stream : List HiddenRecord) (history : List MachineState),
+    s.pc = allocEntry ∧ EntryFrame s ra ∧ ServiceReady L A c s ∧
+    s.data.regs.rdi.toNat = L.cache ∧ s.data.regs.get (.low .rsi .W32) = 0xdc0#32 ∧
+    (ra.toNat, record.site) ∈ allocSites ∧ A.Idle s.data.dmem live (record :: stream) ∧
+    c.Needed ∧ record.bytes.head? = some 1 ∧
+    Ran fetch s t ra history ∧
+    (∃ a, Scratch s A.depth a ∧ s.data.dmem.get? a ≠ t.data.dmem.get? a) ∧
+    (∃ a, c.writes a ∧ s.data.dmem.get? a ≠ t.data.dmem.get? a)
+
+def Witness : Prop :=
+  ∃ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator),
+    Premises fetch L A ∧ CallbacksFromImage fetch ∧ Executed fetch L A ∧ ServiceActive fetch L A
 ```
 
-`Ran` (an actual finite execution that returns), `HeapSame`, `outcome` (a
-record with the given site and outcome byte) and the two exclusions,
-`InsertThenLookup` and `FailedInsertInvisible`, are in appendix A with
-the layout, the literals, the executable caller conditions (`insertReady`,
-`lookupReady`, `emptyTable` and what they call) and the ten instruction
-terms `CallbacksFromImage` names
-([appendix A](#appendix-a-the-rest-of-the-signed-text)). They are part of
-what is signed.
+`SeqAdvanced`, the write sets, `Ran`, `HeapSame`, `outcome`, the two
+exclusions, the layout, the literals, the executable caller conditions and
+the ten instruction terms are in [appendix A](#appendix-a-the-rest-of-the-signed-text).
+They are part of what is signed.
 
-**Sizes**, by the project's definition of trust surface (printed lines, the
-way `binary/surface.py` prints the landed file; `measure-surface.py`):
+## 3. The difference from revision 2
 
-| | Printed lines | Against revision 2 |
-| --- | ---: | --- |
-| **Assumed**: layout, service contract, `Premises` | 230 | same |
-| **Assumed**: caller conditions and the starting point | 183 | same |
-| **Assumed**: existing package definitions the premises draw in, not in the landed file | 174 | same |
-| **Assumed, total new** | **587** | same |
-| **Claimed**: `Headline` and its clauses, `SeqAdvanced`, the write sets | 80 | same |
-| **Claimed**: existing definitions the conclusion draws in | 22 | same |
-| **Claimed**: the witness, the exclusions, `Signed` | 127 | +6 (`CallbacksFromImage`) |
-| **Claimed**: the ten instruction terms and their `fetch` | 75 | new (F1) |
-| **Claimed, total new** | **304** | +81 |
+`git diff 7d39d508 -- binary/StatementC1*.lean`: 131 lines added, 40
+removed, in ten hunks; the raw diff is [appendix D](#appendix-d-the-diff-against-revision-2).
+`StatementC1CallbackImage.lean` has no hunk.
 
-Uncounted, as in the packet: the definitional closure of `Signed` is 988
-hand-written declarations (982 in revision 2), 372 of them the mirror's,
-188 Kraken's. The packet's proposed budget for the claimed kind was 230
-printed lines; the claim proper is 229, and the listing F1 needs takes it
-to 304. That listing is a reading of the image (ten instructions, checked
-against the ELF by `binary/generate_c1_callbacks.py --check`), of the same
-kind as the landed `ServiceImage`.
+| File, hunk | What | Reason | Decision |
+| --- | --- | --- | --- |
+| Contracts `@@ -64` (1) | New `Separated`; `ServiceReady` gains the parameter `L` and the field `separated`; its comment | Without it a context could read the allocator's state as its mode word, and no allocator with ordinary state met the contract | 4 |
+| Contracts `@@ -64` (2) | `a + nodeSize < 2^64 ∧` in `AllocResult`; its comment | The landed relation demands it of every node | 1 |
+| Contracts `@@ -98` | `ServiceReady A c s` becomes `ServiceReady L A c s`, twice | Follows from the new parameter | 4 |
+| Headline `@@ -7` | File comment: the sequences covered include reference moves | Comment only | 2 |
+| Headline `@@ -158` | New `CountMoved`, `Referenced` | The clause itself | 2 |
+| Headline `@@ -215` | `Referenced L Inv` in `Headline`'s conjunction; its comment | The clause is claimed | 2 |
+| Headline `@@ -241` | The same conjunct in `HeadlineExplicit` (not signed) | Keeps "implies `Headline`" true | 2 |
+| Vacuity `@@ -3` | File comment | Comment only | 5 |
+| Vacuity `@@ -30`, `@@ -67` | `Witness` split into `Executed`, `ServiceActive` and the conjunction; the mid-history clause removed; comments | Provable from the headline's shape | 5 |
+| Vacuity `@@ -133` | The comment on `Signed` (the register wording): the witness's relation to the headline; "with the caller's references on registered peers taken and dropped between them"; "ending below 2^64" | Says what the revised result establishes. Comment only, but it is the wording the register entry will use | 1, 2, 5 |
 
-## 3. The difference from packet revision 2
+Not statement text, changed to follow: `C1Interfaces.lean`, `C1Assembly.lean`
+(section 6), `Statements/C1/Test.lean`, `run-tests.sh`,
+`capture/Check.lean`, `capture/summarise.py`, `measure-surface.py`,
+`proof/TopOfMemory.lean`, new `proof/StateWord.lean`, and a note at the top
+of `proof/PLAN.md` section 0.
 
-Against `eb67564b`, `git diff -M eb67564b -- binary/` restricted to the
-statement modules and the lake file. The headline, its clauses, the
-premises, the contract, the caller conditions and both exclusions are
-textually unchanged.
+## 4. Sizes
 
-```diff
-diff --git a/binary/Statements/C1/Contracts.lean b/binary/StatementC1Contracts.lean
-rename from binary/Statements/C1/Contracts.lean
-rename to binary/StatementC1Contracts.lean
---- a/binary/Statements/C1/Contracts.lean
-+++ b/binary/StatementC1Contracts.lean
-@@ -1,9 +1,9 @@
- import PairAllowedipsMutation
- import AllowedipsRootRecord
- 
--/-! Statement packet C1 (no theorem, no proof): the layout a reader is told
-+/-! Result C1, final statement (no theorem, no proof): the layout a reader is told
- about and the allocator/free contract. Everything here is a premise of the
--headline in `Statements.C1.Headline`: nothing in a proof polices it. -/
-+headline in `StatementC1Headline`: nothing in a proof polices it. -/
- namespace Binary.Statements.C1
- open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
- local instance : Labels := Image.linkedLabels
-diff --git a/binary/Statements/C1/Headline.lean b/binary/StatementC1Headline.lean
-rename from binary/Statements/C1/Headline.lean
-rename to binary/StatementC1Headline.lean
---- a/binary/Statements/C1/Headline.lean
-+++ b/binary/StatementC1Headline.lean
-@@ -1,7 +1,7 @@
--import Statements.C1.Contracts
-+import StatementC1Contracts
- import PairAllowedipsLookupAdequacy
- 
--/-! Statement packet C1 (no theorem, no proof): the proposed headline for the
-+/-! Result C1, final statement (no theorem, no proof): the headline for the
- compiled allowed-IPs insertion of the pinned s5 image, as `def … : Prop`.
- 
- `Headline` keeps the memory relation internal (an existentially quantified
-@@ -214,7 +214,7 @@ def LookupStep (fetch : Int64 → Option Decoded) (L : Layout)
-       Inv w' t.data.dmem ∧
-       EqualOutside (LookupWrites L c s) s.data.dmem t.data.dmem) s
- 
--/-- THE PROPOSED HEADLINE. Under the premises there is an invariant, holding
-+/-- THE HEADLINE. Under the premises there is an invariant, holding
- at every empty table, insensitive to memory outside the heap, preserved by
- every insertion and every lookup, under which each returns what the mirror
- returns. The relation between memory and the mirror is not part of the
-diff --git a/binary/Statements/C1/Vacuity.lean b/binary/StatementC1Vacuity.lean
-rename from binary/Statements/C1/Vacuity.lean
-rename to binary/StatementC1Vacuity.lean
---- a/binary/Statements/C1/Vacuity.lean
-+++ b/binary/StatementC1Vacuity.lean
-@@ -1,7 +1,8 @@
--import Statements.C1.Headline
-+import StatementC1Headline
-+import StatementC1CallbackImage
- 
--/-! Statement packet C1: the kernel-checked evidence against vacuity that the
--result carries, as statements (no theorem, no proof). `Witness` says the
-+/-! Result C1, final statement: the kernel-checked evidence against vacuity that
-+the result carries, as statements (no theorem, no proof), and `Signed`. `Witness` says the
- premises can be met along an actual execution through every kind of call;
- the two exclusions are consequences with no mirror state in their
- conclusion, naming machine behaviours the headline rules out. -/
-@@ -20,8 +21,18 @@ def HeapSame (L : Layout) (t s : MachineState) : Prop :=
- 
- def outcome (site : Nat) (ok : Bool) : HiddenRecord := ⟨site, (if ok then 1 else 0) :: List.replicate 39 0⟩
- 
--/-- WITNESS (revision 2). Some `fetch`, layout and allocator meet every
--premise, and an actual execution runs, from a physically empty table with
-+/-- The code at every coverage and BH-enable callback the premises name is
-+the image's: `fetch` returns the committed decoded terms of
-+`__sanitizer_cov_trace_pc`, `_cmp4`, `_const_cmp1`, `_const_cmp4`,
-+`write_comp_data` and `__local_bh_enable_ip` (the landed `ServiceImage`) and
-+of `__sanitizer_cov_trace_cmp1` and `_cmp8` (`StatementC1CallbackImage`). -/
-+def CallbacksFromImage (fetch : Int64 → Option Decoded) : Prop :=
-+  ServiceDecoderAgreement fetch ∧
-+  ∀ pc instruction, StatementC1CallbackImage.fetch pc = some instruction → fetch pc = some instruction
-+
-+/-- WITNESS. Some `fetch`, layout and allocator meet every premise, the
-+callbacks being the image's own code (`CallbacksFromImage`: only the code at
-+`allocEntry` and `freeEntry` may be a stub), and an actual execution runs, from a physically empty table with
- the allocator idle and five answers pending, through: an insertion into the
- empty table; an insertion that allocates twice (the intermediate node,
- while a node is handed out); an insertion whose second allocation is
-@@ -37,7 +48,7 @@ def Witness : Prop :=
-     (s1 t1 s2 t2 s3 t3 s4 t4 : MachineState) (h1 h2 h3 h4 : List MachineState)
-     (k1 n1 p1 k2 n2 p2 k3 n3 p3 key pointer : Nat) (found : PeerId) (ra : UInt64)
-     (stream : List HiddenRecord),
--    Premises fetch L A ∧
-+    Premises fetch L A ∧ CallbacksFromImage fetch ∧
-     w0.wg.dev = some d0 ∧ armed w0 = true ∧
-     w0.ambient.hidden = some ([outcome 77 true, outcome 78 true, outcome 79 true,
-       outcome 78 true, outcome 79 false] ++ stream) ∧
-@@ -120,9 +131,24 @@ def FailedInsertInvisible : Prop :=
-         Eventually (instructionStep fetch) (fun t' =>
-           Returned s' t' ra' ∧ t'.data.regs.rax.toNat = 0) s') s
- 
--/-- WHAT IS SIGNED (revision 2): the headline together with the evidence
--against vacuity it relies on. The exclusions follow from `Headline` and
--facts about the mirror; the witness is independent of it. -/
-+/-- WHAT IS SIGNED: the headline together with the evidence against vacuity
-+it relies on. The exclusions follow from `Headline` and facts about the
-+mirror; the witness is independent of it.
-+
-+What it establishes, in the words its summary and register entry use: the
-+compiled `wg_allowedips_insert_v4`, `_v6`, `add.isra.0`, `lookup`,
-+`common_bits` and `wg_peer_get_maybe_zero` of the s5 image return what the
-+mirror returns along any sequence of insertions and lookups from an empty
-+table, **given any code at the two service addresses that meets the stated
-+contract; the image's allocator is not shown to, and under this semantic
-+base cannot be**. About how the compiled code uses that service it
-+establishes that the code calls it only with the cache and the flags the
-+contract names and from states the contract covers; relies on nothing about
-+a returned object but that it is zeroed, aligned, inside the arena and apart
-+from the nodes handed out; never depends on the service's stack scratch, on
-+the caller-saved registers it returns, on free arena bytes or on the bytes
-+of a released object; and releases exactly the node it allocated, once, on
-+the one failing path. -/
- def Signed : Prop :=
-   Headline ∧ Witness ∧ InsertThenLookup ∧ FailedInsertInvisible
- 
-```
+By the project's definition of trust surface (`docs/decisions.md`,
+2026-11-10), in printed lines the way `binary/surface.py` prints the landed
+file (`measure-surface.py`):
 
-Also: `binary/StatementC1CallbackImage.lean` is new (whole text in appendix A), and in
-`binary/lakefile.toml` the `roots` of `BinaryProofs` gain `"StatementC1Contracts"`,
-`"StatementC1Headline"`, `"StatementC1CallbackImage"` and `"StatementC1Vacuity"` (one line of
-about six hundred module names; not reproduced).
+| | Revision 2 | Revision 3 | What changed |
+| --- | ---: | ---: | --- |
+| **Assumed**: layout, service contract, `Premises` | 230 | 257 | `Separated` 24; `ServiceReady`, `AllocResult` and the contract +3 |
+| **Assumed**: caller conditions and the starting point | 183 | 183 | |
+| **Assumed**: existing package definitions the premises draw in, not in the landed file | 174 | 187 | `Context.bytes` 4, `Context.metadataBytes` 9 |
+| **Assumed, total new** | **587** | **627** | **+40** |
+| **Claimed**: `Headline` and its clauses, `SeqAdvanced`, the write sets | 80 | 110 | `CountMoved` 19, `Referenced` 10, `Headline` +1 |
+| **Claimed**: existing definitions the conclusion draws in | 22 | 22 | |
+| **Claimed**: the witness, the exclusions, `Signed` | 127 | 167 | `Witness` 24 becomes `Executed` 26, `ServiceActive` 31 and `Witness` 7 |
+| **Claimed**: the ten instruction terms and their `fetch` (change 3) | 75 | 75 | |
+| **Claimed, total new** | **304** | **374** | **+70** |
 
+Uncounted in printed lines, as before: the definitional closure of `Signed`
+is 1,015 hand-written declarations (988), of which 391 are the mirror's
+(372) and 188 Kraken's. The 19 new mirror declarations are what `peerGet`
+and `peerPut` draw in, the release path of `peerPut` included, although
+`1 < count` keeps every admitted run off it. The packet's proposed budgets
+were 600 assumed and 230 claimed: **the assumed kind is now 27 lines over
+its budget**, and the claim proper (without the listing) is 299.
 
-| Hunk | Reason |
-| --- | --- |
-| The three files renamed to `binary/StatementC1*.lean`; the two `import` lines | The binary gate scans `binary/*.lean` only and the package's modules are flat. As top-level modules and roots of `BinaryProofs` the statements are built by the package build and seen by the gate's source scan, with no change to the gate |
-| File headers: "Statement packet C1" to "Result C1, final statement"; `Statements.C1.Headline` to `StatementC1Headline` | They are no longer a packet. Comment only |
-| "THE PROPOSED HEADLINE" to "THE HEADLINE" | Decided. Comment only |
-| `import StatementC1CallbackImage`; new `CallbacksFromImage`; the conjunct `CallbacksFromImage fetch` in `Witness`; the witness's comment | **F1.** The witness must have the image's own code at the coverage and BH-enable callbacks, so that only the code at the two service addresses may be a stub. `ServiceDecoderAgreement` is the landed agreement for `__sanitizer_cov_trace_pc`, `_cmp4`, `_const_cmp1`, `_const_cmp4`, `write_comp_data` and `__local_bh_enable_ip`; the package had no terms for `__sanitizer_cov_trace_cmp1` and `_cmp8`, which `Premises` also names |
-| New file `binary/StatementC1CallbackImage.lean` (generated by the new `binary/generate_c1_callbacks.py`) | The ten instructions of those two callbacks as literal terms, in the form of `ServiceImage` |
-| The comment on `Signed` | **F2.** Says what the result establishes about how the compiled code uses the service, and carries the sentence the review asked for in the form decided |
-| `binary/lakefile.toml`: four roots added to `BinaryProofs` | The wiring |
+## 5. The reruns on the revised text
 
-Not statement text, changed to follow the move: `Test.lean` and
-`Closure.lean` (the import line), `run-tests.sh` (the statements are built
-by lake now; it also refuses `lemma`), `measure-surface.py` (paths, and the
-new definitions in its lists). `binary/TrustSurface.expected.txt` and
-`binary/surface.py` are not changed: the printed surface is for landed
-headlines, and C1 is not one yet.
+**Build and gate.** `lake -d binary build`: 1,131 jobs. `scripts/binary-proof-gate`:
+PASS, printed surface unchanged. `#print axioms signed_of_parts`: `propext`,
+`Classical.choice`, `Quot.sound`.
 
-**The packet's tests on the final text** (`binary/Statements/C1/run-tests.sh`):
-`PASS`. 23 families, 900 insertions, 4,124 lookups, every family `holds`
-(110 lookups where the mirror refuses on saturating counts), deepest stack
-write 200, 23 distinct mirror decisions in each; the 5 refusals; H1 and H2
-under both contracts as in the packet. The test does not exercise `Witness`,
-so it does not exercise F1's conjunct; F1 is checked by the build and by the
-generator's comparison with the ELF.
+**The packet's tests** (`binary/Statements/C1/run-tests.sh`): `PASS`.
 
-**Register wording** (for `docs/proofs.md` when the result lands; not
-entered now, since nothing is proved): the text of the comment on `Signed`.
+- The search, with the separation of `ServiceReady` now evaluated at every
+  service entry and the bound on every returned object: 23 families, 900
+  insertions, 4,124 lookups, every family `holds`, deepest stack write 200,
+  23 distinct mirror decisions in each. The same numbers as revision 2: the
+  new premise refuses none of the families and the test service meets the
+  revised clauses in all of them. The invariant, step, walk and cut checks
+  the architect added run inside these and pass.
+- The 5 refusals, H1 under the revision 1 contract (conclusion broken) and
+  under revision 3 (excluded by the write clause), H2 under both, the frame
+  probes: as before.
+- New, change 4: the test service with its index word at `arena+16`, at a
+  plain entry state, meets every clause of revisions 2 and 3 and advances
+  the word; at the aliased state revision 2 admits the state and the
+  service fails `c.At` afterwards, revision 3 refuses the state
+  (`ready.separated.coverage-arena`); a stack scratch inside the arena is
+  refused (`ready.separated.stack-arena`).
+- New, change 5: `ServiceActive` evaluated on the test service at that
+  state holds; on the quiet service it fails.
+- New, change 2: a reference moved from one peer to another (`peerPut`
+  then `peerGet`, each with its count word) is accepted and the invariant's
+  decidable part holds after each step; refused are a count raised with no
+  mirror step, a count raised by two with one `peerGet`, a paired step with
+  a root word or an arena byte changed as well, the last reference dropped,
+  and a peer the layout does not name; the invariant's decidable part fails
+  after an unpaired change in either direction. Two more families run the
+  whole scenario with the caller's reference following the peer being
+  configured, as `set_peer` does: 36 insertions, 168 lookups and 21
+  reference steps each, `holds`.
+- The two regression files elaborate: `TopOfMemory.lean`, `StateWord.lean`
+  (two theorems, standard axioms).
 
-## 4. What the owner is accepting knowingly
+**The capture's checks** on the captured states (raw captures still in
+`.tmp/c1`; no guest was booted again, so nothing new was captured):
 
-1. **Closed-world.** The invariant is hidden, so the conclusion holds only
-   while nothing but these calls changes a heap byte or the mirror world. A
-   later result on removal or the dump replaces this one; it cannot extend
-   it. The capture makes this concrete: see section 5, item 1.
-2. **Parent pointers, the peers' node lists and the internal nodes' list
+| | Revision 2 | Revision 3 |
+| --- | --- | --- |
+| Calls evaluated in Lean, each under two seeds | 20 | 20 |
+| Every check of revision 2 (entry, 23 service calls, return, frame, the landed relation, the invariant, step and walk checks, 33 lookups) | pass | pass, same counts |
+| `ServiceReady.separated`, four conjuncts, at each captured service entry | not stated | 23/23 ×2 each |
+| `AllocResult` with the bound | 22/22 ×2 without it | 22/22 ×2 |
+| Gaps between calls read as steps of the closed world | counts re-read from memory | 2 reference steps at the grid's change of peer, each accepted; every other gap empty |
+| Calls covered from the empty table: `c1_capture_grid` | 5 of 13 | **13 of 13** |
+| Calls covered: `b1_trie_routing` | 2 of 8 | 2 of 8 |
+| Calls covered: the three failure traces | 1, 2, 2 (all) | 1, 2, 2 (all) |
+| `emptyTable` and `insertReady` verbatim on the first call with the 32 MiB buffer loaded | ok | ok (rerun) |
+
+Under revision 2 the grid's last 8 calls were checked with the mirror's
+counts overwritten from memory; under revision 3 the same calls are reached
+by two steps of the clause and nothing is overwritten. The whole-RAM
+comparison of the gaps (from the first run's dumps, which are deleted as
+they are compared) agrees: the only heap bytes the caller changed in the
+grid are the two counts.
+
+Could not be rerun: nothing. Not run at all, as before: `Idle` and `frame`
+(abstract), anything concurrent.
+
+## 6. The interfaces and the assembly
+
+`signed_of_parts` is proved for the revised `Signed` from the interface
+propositions (no `sorry`; standard axioms). It lost the hypothesis
+`NodeBelowTop` and gained `ReferencedHolds`. What changed, and what it does
+to the closed proofs on `task/binary-c1-wp1` (`73387d54`) and
+`task/binary-c1-wp4` (`93226094`); "compiled" means I compiled that branch's
+files against revision 3 in a scratch directory, without touching the
+branch:
+
+| Proposition (package) | Statement | Definitions under it | Closed proof |
+| --- | --- | --- | --- |
+| `RunIsStep` (1) | unchanged | none changed | **unchanged**: compiled |
+| `InitialHolds`, `FramedHolds`, `LookupHolds` (1) | unchanged | `Premises` (through the contract) | **unchanged**: compiled |
+| `ExclusionOne`, `ExclusionTwo` (1) | unchanged | `Premises`; `HeadlineFor` keeps its four clauses for this reason | **unchanged**: compiled |
+| `ReferencedHolds` (1) | **new** | | **real work**: a new proof. The landed `target_mapCounts` and `heap_mapCounts`, which `lookup_checked` uses for the count a lookup raises, are the likely tools |
+| `AllocRule`, `FreeRule` (4) | unchanged | `AllocResult` (one more conjunct in the conclusion, from the contract), `ServiceReady` | **mechanical**: the package's `separated` moved before `serviceReady`, one field and the layout argument added; then both compiled |
+| `Cmp1FromImage`, `Cmp8FromImage` (4) | unchanged | none changed | **unchanged**: compiled |
+| `PremisesMet` (4) | **restated**: gains `∃ m stream, A.Idle m [] stream` | `Premises` | **mechanical**: the layout argument at two places and one arithmetic conjunct in `Stub.contract`; the new conjunct from the package's `idle_initial`; then compiled |
+| `WitnessHolds` (4) | same text | `Witness` restated | **real work**, and was not closed: `Executed` through the headline (the package's `ran_of_eventually`), and a stub that uses its stack and writes the buffer, re-proved against the contract |
+| `NodeBelowTop` | unchanged | `AllocResult` | now a theorem; the path propositions that take it as a hypothesis are unchanged |
+| `Path k`, the nine path propositions, `TrunkToNode`, `TrunkHolds` (2, 3; open) | unchanged | `Premises`; `AllocRule`'s `AllocResult` | proofs in progress that take `AllocResult`'s success clause apart by position meet one more component, third |
+| `HeadlineFor`, `InsertPost`, `StepFacts`, `InFlight`, `Protected`, `NodeCut`, `Exits` | unchanged | none changed | |
+
+The service package's finding file (`C1ServiceContractFinding`) no longer
+compiles, as intended: `word_kept` and `no_state_word` are theorems about
+revision 2.
+
+## 7. What I could not do as decided, and what I flag
+
+Each change was made as decided. Four things the owner and the reviewer
+should know that the decision did not anticipate:
+
+1. **Change 4 forces a parameter.** `ServiceReady` cannot state separation
+   from the arena without the layout, so it is now `ServiceReady L A c s`.
+   This is inside the named change but it touches the two contract clauses.
+2. **Change 2 does not reach `b1_trie_routing`.** The decision's wording
+   (what a real `wg set` does between peers) is met for a `wg set` over
+   peers that exist when the table is empty. A `wg set` that creates its
+   peers as it goes is still covered for the first peer only.
+3. **The assumed kind is over the packet's budget** (627 against 600), and
+   the mirror's share of the claim grew by `peerGet` and `peerPut`.
+4. **The witness is weaker in one respect** (section 1, change 5), and its
+   satisfiability by a stub is argued and tested, not proved.
+
+Smaller: `HeadlineExplicit` (unsigned) gained the same conjunct; the comment
+on `Signed`, which is the register wording, changed in three phrases.
+
+## 8. What the owner is accepting knowingly
+
+1. **Closed-world, now one step wider.** The invariant is hidden, so the
+   conclusion holds only along sequences made of: insertions; lookups;
+   changes outside the heap (`Framed`); and, new, a registered peer's
+   reference count going up by one with the mirror's `peerGet`, or down by
+   one from above one with the mirror's `peerPut`. Exactly that wide: not
+   peer creation or removal, not the last reference dropped, not a count
+   changed by more than one at a step, not a count changed while any other
+   heap byte changes, not a reference the mirror refuses to take (a count
+   of zero, or saturation). A later result on removal or the dump replaces
+   this one; it cannot extend it. The mirror's `peerGet` and `peerPut` are
+   now inside the claim.
+2. **What the witness shows and does not.** It shows that one decoder,
+   layout and allocator meet every premise with the image's callbacks; that
+   with them an actual execution runs through each kind of call from an
+   empty table and returns; and that the service at the allocation address,
+   under the same contract, uses its stack and writes the coverage buffer
+   from an admissible entry state. It does not show that the service does
+   so during an insertion, and it says nothing of the image's allocator:
+   the service is a stub.
+3. **Parent pointers, the peers' node lists and the internal nodes' list
    heads are not claimed.** Nothing with an observable conclusion reads
-   them. (The landed relation, which does read them, held after each of
-   the 20 calls evaluated; that is a test of one invariant instance.)
-3. **The mirror's definition of an accepted run is inside the claim** and
-   is not in the printed line counts: 372 declarations of the closure.
-4. **Nothing is claimed of the kernel's allocator.** The result is about
+   them.
+4. **The mirror's definition of an accepted run is inside the claim** and
+   is not in the printed line counts: 391 declarations of the closure.
+5. **Nothing is claimed of the kernel's allocator.** The result is about
    the six functions given any code at the two service addresses that meets
-   the contract. Section 1 is how far the image's allocator was seen to be
-   from it on 31 calls, not a discharge.
-5. **Where the mirror refuses, the claim is silent**: a trie deeper than
+   the contract. Revision 3's contract is one an allocator with ordinary
+   internal state can meet, which revision 2's was not; the image's
+   allocator still cannot, under this semantic base (appendix C).
+6. **Where the mirror refuses, the claim is silent**: a trie deeper than
    its bound, a lookup that would retry on a dying peer, a peer with a
-   pending worker, a short record list, and reference-count saturation.
-   The last is reachable inside the closed world: each lookup raises a
-   count and nothing in scope lowers it (58 of 168 lookups refused in the
-   packet's family that starts near 2^31).
-6. **Decoder agreement is tested, not proved**: `fetch` returning the
-   committed terms is a premise; that the terms are the ELF's bytes is the
-   generators' `--check`, now including the ten new terms. The capture adds
-   execution agreement on 20 calls. At the two service addresses the guest
-   does not run the ELF's bytes at three sites.
-7. **Sequential model.** One CPU stepping these instructions alone: no
-   interrupt, no RCU reader during an insertion, no sleeping allocation.
-   The capture deferred interrupts and timers to match.
-8. **Instrumented image.** The saved s5 oracle build with KCOV callbacks,
-   not a production kernel.
+   pending worker, a short record list, and reference-count saturation,
+   which is reachable inside the closed world.
+7. **Decoder agreement is tested, not proved**; at the two service
+   addresses the guest does not run the ELF's bytes at three sites.
+8. **Sequential model**, and **an instrumented image**: one CPU stepping
+   these instructions alone, on the saved s5 oracle build with KCOV
+   callbacks.
 
-Unchanged from the packet and still to be accepted: the caller's conditions
-are not shown to hold at any real call by proof (the capture shows them at
-20); the over-long-prefix exit is not reachable from the real caller; the
-NULL-peer exit is outside.
-
-## 5. What the capture puts to the owner
-
-Neither is changed in the statements.
-
-1. **Whether the closed world should admit the caller's reference on a
-   peer.** Evidence: section 1, point 5 and "Between calls". As signed, a
-   run of a real `wg set` over two existing peers is inside the claim for
-   the first peer's insertions and outside it from the second peer on,
-   because `set_peer` moves a reference between the two peers' counts, and
-   those words are in `Layout.fixed`. Options: (a) leave it, and say in the
-   summary that the sequences covered are those between two changes of a
-   reference count; (b) add a clause to `Headline`'s conjunction, beside
-   `Framed`: the invariant survives a change of one peer's count in memory
-   together with the mirror's `peerGet` or `peerPut` on that peer. That
-   would bring every insertion of a `wg set` over existing peers inside
-   (not peer creation, which changes the peer set). The landed relation
-   compares counts, so (b) costs the proof little; it adds perhaps ten
-   printed lines to the claim and a second kind of step a reader must
-   understand. It can be decided while `InsertStep` is being proved, since
-   that clause does not change; it must be decided before `Headline` is
-   closed, because the result is replaced, not extended, afterwards. My
-   recommendation is (b).
-2. **Whether F1's listing is the right way to pin the two callbacks.** The
-   repair needed terms for `__sanitizer_cov_trace_cmp1` and `_cmp8`; I added
-   them as a new generated module rather than extending the landed
-   `ServiceImage`, which five proved contracts depend on. The cost is 75
-   printed lines of claimed surface beyond the packet's budget. The
-   alternative is to pin only the six functions `ServiceImage` already has
-   and say in the summary that the witness's `cmp1` and `cmp8` may be
-   stubs: a partial repair.
-
-For information, no decision needed: a service that records as the image's
-does needs `depth` of at least 968 bytes and an arena containing the four
-counters; with `kcov_choice_seq` in the arena, any other recorded choice
-between calls is a change to the arena (seen in `b1_trie_routing`). The
-witness's stub is not bound by either.
+Unchanged and still to be accepted: the caller's conditions are not shown
+to hold at any real call by proof (the capture shows them at 20); the
+over-long-prefix exit is not reachable from the real caller; the NULL-peer
+exit is outside.
 
 ## Appendix A: the rest of the signed text
 
 ```lean
+def SeqAdvanced (L : Layout) (s t : MachineState) : Prop :=
+  ∃ before, readNat s (L.table+AllowedipsMutationLayout.seq) 8 = .ok before ∧
+    readNat t (L.table+AllowedipsMutationLayout.seq) 8 = .ok ((before+1) % 2^64)
+
+def InsertWrites (L : Layout) (A : Allocator) (c : Context) (s : MachineState) (a : BitVec 64) : Prop :=
+  Scratch s (insertWindow + A.depth) a ∨ c.writes a ∨ L.Heap a
+
+def LookupWrites (L : Layout) (c : Context) (s : MachineState) (a : BitVec 64) : Prop :=
+  AllowedipsEntry.TotalWrites s c.coverage c.preempt a ∨ L.Heap a
+
 structure Layout where
   table : Nat
   peers : List (PeerId × Nat)
@@ -876,7 +772,7 @@ def FailedInsertInvisible : Prop :=
           Returned s' t' ra' ∧ t'.data.regs.rax.toNat = 0) s') s
 ```
 
-`binary/StatementC1CallbackImage.lean`, whole:
+`binary/StatementC1CallbackImage.lean`, whole (unchanged):
 
 ```lean
 import LiteralDecode
@@ -910,14 +806,18 @@ Python with pyelftools, and the package bootstrapped (`binary/README.md`):
 
 ```sh
 cap() { if command -v capped >/dev/null 2>&1; then capped -- "$@"; else "$@"; fi; }
-cap scripts/in-bundle lake -d binary build                                   # 1,123 jobs
+cap scripts/in-bundle lake -d binary build                                   # 1,131 jobs
 cap scripts/in-bundle /usr/bin/python3 scripts/binary-proof-gate             # PASS
 cap scripts/in-bundle /usr/bin/python3 -B binary/generate_c1_callbacks.py --check
 cap scripts/in-bundle /usr/bin/python3 -B binary/allowedips_mutation.py      # writes the tests' input
-binary/Statements/C1/run-tests.sh                                            # about 18 minutes; PASS
+binary/Statements/C1/run-tests.sh                                            # about 20 minutes; PASS
 binary/Statements/C1/capture/run-capture.sh                                  # about 10 minutes
 cap scripts/in-bundle /usr/bin/python3 -B binary/Statements/C1/measure-surface.py
 ```
+
+`run-tests.sh` first elaborates the two regression files, then runs
+`Test.lean`; `lean --run Statements/C1/Test.lean INPUT.json probes` runs
+everything but the search over the 23 families (about two minutes).
 
 `run-capture.sh` records each trace (`evaluator.check --binary-coverage
 --binary-profile allowedips-insert`), captures it
@@ -928,11 +828,253 @@ whole buffer loaded (about three minutes, 5.4 GiB), and prints the counts
 recording and removed again; it is not a corpus trace. Outputs are under
 `.artifacts/check/c1-*` and `.tmp/c1/capture-*`, ignored and not committed:
 up to about 90 MiB per trace, the RAM dumps deleted as they are compared.
+For revision 3 the captures of the first run were kept and only
+`Check.lean` and `summarise.py` were run again on them.
 
-The run reported here: s5 image `06513d05…e88e`, Kraken `43df9468`, QEMU's
-`qemu64` CPU under TCG, 256 MiB, one CPU, `nokaslr`.
+The capture reported here: s5 image `06513d05…e88e`, Kraken `43df9468`,
+QEMU's `qemu64` CPU under TCG, 256 MiB, one CPU, `nokaslr`.
 
-## Appendix C: the calls
+## Appendix C: the capture
+
+This is section 1 of revision 2 of this document: the recording-armed
+capture of real insertions, run against revision 2's text. Its counts are
+revision 2's; the rerun of its checks on revision 3 is in section 5. Its
+closing judgement, that the proof could start as signed, was overtaken by
+the three findings behind this revision and is not repeated.
+
+### What was run
+
+Five traces, each recorded first by the differential check on the saved s5
+image with the insertion coverage profile, which arms the three allocation
+sites of `add` (`allocNode190`, `allocNode205`, `allocNode234`): the oracle's
+ordinary recording mode. All five recordings pass the check, so the mirror
+and the kernel agree on them at the level the project's gate compares. Each
+was then replayed in a guest stopped under QEMU's debugger and every call of
+`wg_allowedips_insert_v4` / `_v6` was single-stepped with interrupts and
+timers deferred.
+
+| Trace | Calls | What it exercises |
+| --- | ---: | --- |
+| `c1_capture_grid` (new, `binary/Statements/C1/capture/`; two peers created by a first `wg set`, thirteen prefixes added by a second) | 13 | Empty root, both families; child attachment; exact match onto another peer, both families; covering node at the root and below a parent, both families; intermediate node (two allocations) at the root, below a parent, and for IPv6 |
+| `a2_allowedips_root_nomem` (corpus) | 1 | The allocation at `allowedips.c:190` forced to fail: `-ENOMEM` on an empty table |
+| `a2_allowedips_newnode_nomem` (corpus) | 2 | The allocation at `:205` forced to fail |
+| `a2_allowedips_split_nomem` (corpus) | 2 | The allocation at `:234` forced to fail after `:205` succeeded: the rollback and the release |
+| `b1_trie_routing` (corpus) | 8 | Five peers, each created between the insertions: what an ordinary multi-peer `wg set` does |
+
+The failures were forced with the oracle's steering schedule (a `fail`
+entry for the named site, as the three corpus traces carry it); a natural
+allocation failure was not attempted. In all: **26 wrapper calls, 30
+allocations (27 objects, 3 forced NULL) and 1 release.**
+
+At each wrapper entry and return, and at each call of and return from the
+two service addresses, the capture takes the registers, the memory the
+statements mention (table, peers, nodes handed out, 3 KiB of stack below the
+entry and 256 bytes above, the address bytes, the `node_cache` word, the
+per-CPU words, the task's coverage fields, the coverage buffer's used part)
+and **a dump of the whole guest RAM**. What a service wrote is therefore the
+difference of two complete memory images, not a list of places somebody
+thought to look. Inside the services every instruction address and the
+registers before it are recorded, so the instructions executed and the
+addresses their operands name are known too.
+
+Three checkers read the captures (commands in [appendix B](#appendix-b-reproduction)):
+
+- `analyse.py`: the whole-RAM differences sorted into the clauses of
+  `ServiceWrites`, the instructions and operand addresses inside the
+  services, the allocation outcomes against the recorded run's records.
+- `Check.lean`: the statements' own executable definitions (`emptyTable`,
+  `insertReady`, `lookupReady`, the literals, the windows, the layout) on
+  the captured states, the mirror's `Leanux.WG.insert` threaded from the
+  empty table, and Kraken executing the compiled wrapper, `add`,
+  `common_bits` and the coverage callbacks from the captured entry state,
+  with each captured service transition installed where the interpreter
+  reaches a service address. The clauses of `AllocatorContract` are
+  renderings, as in the packet's test, since they are propositions.
+- The arena is not given by the statements. `analyse.py` proposes the
+  smallest one that makes the write clause true of the run (the nodes' slab
+  page plus every other byte range a service changed outside its stack and
+  the buffer) and `Check.lean` evaluates the caller premises with it.
+
+### What it showed
+
+1. **No disagreement between the mirror and the compiled code.** In the 20
+   calls evaluated against the mirror (12 of them inside one closed world
+   from an empty table, the grid's other 8 after the change of peer of
+   point 5), under two undefined-value seeds, `eax` is the mirror's answer,
+   the sequence word advances by one, the landed relation holds after every
+   call against the mirror's world, and 33 compiled lookups run afterwards
+   on the captured heaps return the mirror's peer or NULL. Among them are
+   instances of both exclusions: after the grid's first insertion the
+   address is found; after `a2_allowedips_root_nomem`'s refused one it is
+   not.
+2. **Kraken's execution of the six functions reproduces the guest.** From
+   each captured entry state the interpreter visits exactly the instruction
+   addresses the guest did, reaches each service call in the captured state
+   (registers and every captured byte), and ends in the captured return
+   state. This was not required; it is the strongest evidence here that the
+   decoded terms and the semantics mean what the CPU did on these paths.
+3. **Every clause of the contract that can be evaluated holds of the image's
+   allocator on these runs, for a suitably drawn arena.** Entry conditions,
+   return, callee-saved registers, coverage state before and after, the
+   returned object (aligned, 72 zero bytes, in the slab page, apart from
+   every node handed out), NULL on a forced failure, and no byte of a node
+   that stays handed out, of the table, or of a peer changed by any of the 31
+   service calls anywhere in RAM.
+4. **What the allocator does outside the contract is what the review said,
+   plus the page allocator.** Outside its stack, the buffer and the slab
+   page it changed the four recording counters on every allocation, the
+   steering schedule's head on the three forced ones, the per-CPU freelist
+   and transaction words, and, on the first allocation of each boot, about
+   fifteen words of page-allocator and slab metadata. Its unwinder reads up
+   to 1,448 bytes of the callers' stack above the return word and the ORC
+   tables. Two of the instructions it executes at the service addresses are
+   not the ELF's (boot-time patching), and the `popf` the review expected on
+   every fast path is not executed on this guest CPU.
+5. **A real configuration run leaves the closed world between peers.** The
+   caller holds a reference on the peer it is configuring: between the last
+   insertion for one peer and the first for the next it lowers one peer's
+   count and raises the other's, both heap words. With peers created in the
+   same `wg set` (`b1_trie_routing`) it also creates the peer. As signed,
+   the result therefore speaks about the insertions of the first peer
+   configured after the table is empty (5 of the grid's 13 calls, 2 of
+   `b1`'s 8) and not about the rest of the same `wg set`. Nothing is wrong
+   in those later calls: the grid's 8 were checked with the mirror's counts
+   re-read from memory at the switch and every check holds. The statement
+   is silent there. (Revision 3 changes this for the grid: change 2 in
+   section 1.)
+
+### Clause by clause
+
+Counts are checks passed out of checks made. "×2" means under both
+undefined-value seeds. "Window" means the readiness definitions were
+evaluated with the coverage buffer truncated to its captured words (the
+guest's buffer is 32 MiB; `Context.At` asks that every word be readable);
+the same definitions were evaluated verbatim on the whole buffer at the
+first call of the grid.
+
+| Clause | How it was checked | Result |
+| --- | --- | --- |
+| **(a) Wrapper entry** | | |
+| `emptyTable` (the base case of `Initial`) | The statement's definition, on the first call of each trace, against the mirror's device after peer creation and the caller's reference | 5/5 ×2. The table's sequence word is the mirror's initial 1; counts and list heads agree |
+| `insertReady` | The statement's definition, window | 20/20 ×2. Verbatim with the 32 MiB buffer loaded: 1/1 |
+| The caller conditions inside it | Same evaluation: return word, 200 + `depth` mapped bytes of stack (`depth` 736 to 968 by trace), valid coverage state, capacity, direction flag, the separations (with the drawn arena, 5 to 23 spans, in the heap) | Hold. The preemption count at entry is `0x80000000`, a value the packet's search did not include |
+| Whole 32 MiB buffer apart from heap, caller spans and metadata | `spansApart` on the full span | 20/20 ×2 |
+| **(b) Each service call** (30 allocations, 1 release; 22 and 1 of them in the 20 calls evaluated in Lean) | | |
+| Entry: service address, aligned `rsp`, `rdi` the cache, `esi = 0xdc0`; release: its one return site and `rsi` handed out | Interpreter state at the stop, which equals the captured one byte for byte | 23/23 ×2 |
+| Return site against the mirror's pending record (`(ra, record.site) ∈ allocSites`) | The mirror's record list threaded from the empty table | 22/22 ×2 |
+| `ServiceReady`: coverage, capacity, direction flag, `depth` mapped bytes | Window; `depth` the deepest the trace's services went (736 to 968) | 23/23 ×2 |
+| `Returned` | Captured return state | 23/23 ×2. The other 8 return to their site with `rsp + 8`; their callee-saved registers were not compared |
+| `EqualOutside ServiceWrites` with `Kept` | (i) Every captured byte that changed; (ii) the whole RAM | (i) 23/23 ×2. (ii) 31/31: nothing changed in a kept node, the table, a peer or above the return word. With the arena the slab page only, the clause is **false**: the list below |
+| `c.At` afterwards | Window | 23/23 ×2 |
+| `AllocResult` | By the mirror's pending record's byte: NULL, or non-NULL, 8-aligned, in the arena, apart from live nodes, 72 zero bytes | 22/22 ×2 (19 objects, 3 NULL) |
+| The outcome against the record the mirror consumes | Site and outcome of the k-th allocation in the capture against the k-th allocation record of the recorded run | 30/30 |
+| `Idle`, `frame` | Not capturable: `Idle` is abstract. What `frame` would have to be true of is in the next subsection | |
+| **(c) Wrapper return** | | |
+| `Returned` | Interpreter's final state, equal to the captured one | 20/20 ×2 |
+| `eax` is the mirror's answer | `Leanux.WG.insert` on the same arguments and records | 20/20 ×2 (17 zero, 3 `-ENOMEM`) |
+| `SeqAdvanced` | The table's sequence word before and after | 20/20 ×2 |
+| `Inv` re-established | One instance, the landed relation (`assertAt`), with names taken from the allocations | 20/20 ×2 |
+| `EqualOutside InsertWrites` | (i) Every store of the interpreter against the 200 + `depth` byte window, the buffer and the heap; (ii) whole RAM across the call | (i) 20/20 ×2; deepest store of the six functions and callbacks 200 bytes. (ii) 26/26 with the service-changed words in the arena |
+| The mirror's pending records afterwards | Equal to the records the captured services did not consume | 20/20 ×2 |
+| **(d) Lookup afterwards** | The compiled `lookup` under Kraken on the final captured heap of each trace, for every inserted address and three others; caller frame constructed inside the captured stack | `lookupReady` (window) 33/33; `Returned` 33/33; `rax` the mirror's peer 33/33 (20 a peer, 13 NULL) |
+
+**Written outside the stack scratch, the buffer and the slab page** (the
+whole-RAM differences across the 31 service calls):
+
+| Where | Calls | What |
+| --- | ---: | --- |
+| `kcov_choice_seq`, `kcov_alloc_records`, `kcov_alloc_unwinds`, `kcov_alloc_unwind_cycles` (kernel globals) | 30 of 30 allocations each | The recording hook's counters; the last holds `rdtsc` differences |
+| The steering schedule's `head` (a heap object of the oracle's) | 3 of 3 forced failures | 0 to 1 at the steered encounter |
+| The cache's per-CPU `freelist` and `tid` words | The 27 allocations that return an object, the release | The lock-free swap, or the slow path's refill |
+| `struct slab` fields of the new page, the cache's node counters, the per-CPU page lists, `contig_page_data`, `vm_node_stat`, `vm_event_states` | 4 allocations: the first of each boot | The slow path: `___slab_alloc`, `allocate_slab`, `__alloc_pages_noprof` |
+| The free-pointer word inside the 54 other objects of the new slab page | Same 4 | Inside the slab page; none is handed out |
+| `t->kcov_leanux_dropped`, the schedule's `mismatches` | 0 | Not reached: no buffer overflow, no schedule mismatch |
+
+**Stack.** A recorded fast-path allocation uses 736 or 744 bytes below its
+entry `rsp`, a forced failure 736; through the page allocator, 968; the
+release, 64. An unrecorded allocation was not captured.
+
+**Instructions.** A recorded fast-path allocation is about 6,400 native
+instructions, of which 96 are in `kmem_cache_alloc_noprof` and about 5,400
+in the unwinder. Per allocation: `rdtsc` twice; `pushf`/`cli`/`sti` once or
+more (the steering lookup); `prefetchw` once on the fast path. No call of
+`this_cpu_cmpxchg16b_emu` and no `popf` in any of the 31 calls: at
+`kmem_cache_alloc_noprof+0x85` and `kmem_cache_free+0xf4` the guest's text
+is `cmpxchg16b (%rsi); nop` where the ELF has the call, and at `+0x91` it
+is `prefetchw` where the ELF has `prefetcht0`. Those are the three sites
+the review named, and no other byte of the two functions differs.
+
+**Read outside the arena.** Operand addresses of the service instructions:
+the callers' stack above the return word (22 loads per allocation, up to
+1,448 bytes above the service's entry `rsp`, far beyond the wrapper's
+frame), `.orc_unwind`, `.orc_unwind_ip`, `.orc_lookup`, `.rodata`,
+`pcpu_hot`, the task's coverage fields, `gfp_allowed_mask`,
+`kcov_alloc_armed`, `init_on_alloc`, `init_on_free`, `slub_debug_enabled`,
+and for the release `phys_base` and `mem_section`.
+
+**Between calls** (whole RAM, restricted to the heap and the arena words):
+nothing, between two insertions for the same peer (16 gaps). At each change
+of peer (5 gaps): the two reference counts; in `b1_trie_routing` also the
+new peer, `kcov_choice_seq` advanced by 2 or 3 (the records of the peer's
+creation), and at two of the four gaps slab and page-list words that other
+allocations share with the arena as drawn.
+
+### The review's predictions
+
+| Prediction (review section 3 and M1, M2) | Capture |
+| --- | --- |
+| Entry arguments: the cache, `0xdc0`, three return sites; the release's one | **Confirmed** |
+| Needs mapped stack, clear direction flag, capacity; `Returned` on the fast path, the forced failure, and the slow path when it returns | **Confirmed**, the slow path included |
+| Never writes a node it has handed out | **Confirmed** over the whole RAM, 31 calls |
+| Coverage state valid afterwards for capacity ≥ 1 | **Confirmed** (window) |
+| Object 8-aligned, 72 zero bytes, apart from live nodes; NULL when forced | **Confirmed** |
+| The record is written by the call and carries the outcome; consistent with the recorded run's record | **Confirmed**: 30 of 30 outcomes equal the recorded run's records; the buffer gains the record during the call |
+| Six words outside the buffer: `kcov_choice_seq`, `kcov_alloc_records`, `kcov_alloc_unwinds`, `kcov_alloc_unwind_cycles`, the schedule's `head`/`mismatches`, `kcov_leanux_dropped` | **Four confirmed on every allocation, `head` on the forced ones.** `mismatches` and `kcov_leanux_dropped` not reached |
+| The in-progress counter is restored | **Consistent**: no net change |
+| The unwinder reads the stack above the call and the ORC tables | **Confirmed**, with the extent: 1,448 bytes |
+| `rdtsc` twice per recorded allocation; `prefetcht0` | **Confirmed** (`prefetchw` after patching) |
+| Three alternatives sites; the bytes the CPU runs are not the ELF's | **Confirmed**, exactly those three |
+| `popf` in `this_cpu_cmpxchg16b_emu` on every successful fast path | **Refuted for this guest**: the emulation is never called; the patched `cmpxchg16b` runs. `cmpxchg16b` has no semantics in the pinned Kraken either, so the conclusion the review drew stands |
+| Fast-path frame about 150 bytes | Not tested (non-recording). Recording: 736 or 744 bytes |
+| `kmem_cache_free` has no hook; one store into the freed object and the per-CPU swap | **Confirmed** (one release) |
+| Every recorded choice anywhere increments `kcov_choice_seq`, so an arena containing it is changed between calls | **Confirmed** in `b1_trie_routing`; not in the grid, where nothing is recorded between calls |
+| Natural failure after a release (M2) | Not exercised |
+
+Nobody predicted: the first allocation of each boot goes through the page
+allocator (so "only the fast paths are candidates" leaves out the first
+insertion a kernel ever makes); the caller's reference changes heap words
+between peers (point 5); the preemption count at entry is `0x80000000`;
+the buffer is 32 MiB, so `Context.At` cannot be evaluated on a capture
+except once; and Kraken reproduces the guest's execution exactly.
+
+### What could not be captured
+
+- `Idle` and the `frame` clause: abstract. The reads above bound what
+  `frame` would have to ignore.
+- Transient writes: a byte written and restored within one service call
+  does not show in a memory difference. The in-progress counter is one.
+- Loads of the service's string instructions beyond their first address,
+  and 24 instructions the operand reader could not decode.
+- The non-recording mode, a natural allocation failure, the slow path of
+  the release, a buffer overflow, a steering mismatch.
+- Anything concurrent: the call is single-stepped with interrupts and
+  timers deferred, as in every capture of this package.
+- The lookups are the compiled code under Kraken on captured heaps with a
+  constructed caller frame, not lookups stepped in the guest. (The
+  differential check of `b1_trie_routing` and the grid covers the guest's
+  own lookups at the level it compares.)
+- In `b1_trie_routing` the statements' definitions were evaluated on the
+  first peer's two calls only; the other six calls were checked at the
+  service level (whole-RAM classes, outcomes against records).
+- The mirror's record is compared by site and outcome, not byte for byte
+  with the words the capture run wrote into its buffer.
+
+No harness, guest or kernel file was changed. The capture needed two things
+the existing tooling did not have, both added in the new capture script on
+top of the package's debugger client: QEMU's monitor through the debugger
+(`pmemsave`, `gva2gpa`, both read-only) and all registers in one packet.
+
+### The calls
 
 `service@site:result`; sites 77, 78, 79 are the mirror's record sites for
 `allowedips.c:190`, `:205`, `:234`. Steps are native instructions between
@@ -974,3 +1116,301 @@ The arena drawn for the grid (23 spans; 5, 21, 22 and 22 for the other traces): 
 the cache's per-CPU structure, its node structure, the per-CPU page lists
 and the new page's `struct slab`. It is the set of bytes that changed, not
 the objects: a proof-grade layout would name whole objects.
+
+## Appendix D: the diff against revision 2
+
+`git diff 7d39d508 -- binary/StatementC1Contracts.lean binary/StatementC1Headline.lean binary/StatementC1CallbackImage.lean binary/StatementC1Vacuity.lean`:
+
+```diff
+diff --git a/binary/StatementC1Contracts.lean b/binary/StatementC1Contracts.lean
+--- a/binary/StatementC1Contracts.lean
++++ b/binary/StatementC1Contracts.lean
+@@ -64,26 +64,45 @@ def ServiceWrites (L : Layout) (A : Allocator) (c : CommonBitsCoverage.Context)
+     (s : MachineState) (kept : List Nat) (a : BitVec 64) : Prop :=
+   Scratch s A.depth a ∨ (L.Arena a ∧ ¬Kept kept a) ∨ c.writes a
+ 
++/-- Where the service's bytes are, relative to the coverage context it is
++called under (revision 3): its stack (the scratch and the return word), the
++arena and the bytes the coverage context reads are pairwise apart, and the
++coverage buffer is apart from the coverage metadata and the preemption
++count. An insertion's caller conditions give this at every service call
++(`frameReady`'s separations); without it a context could place its mode
++word on the allocator's own state, and no allocator that changes a word of
++the arena would meet the contract. -/
++structure Separated (L : Layout) (A : Allocator) (c : CommonBitsCoverage.Context) (s : MachineState) : Prop where
++  stackArena : ∀ a, Scratch s A.depth a ∨ InRange s.data.regs.rsp.toBitVec 8 a → ¬L.Arena a
++  stackCoverage : ∀ a, Scratch s A.depth a ∨ InRange s.data.regs.rsp.toBitVec 8 a → ¬c.bytes a
++  coverageArena : ∀ a, c.bytes a → ¬L.Arena a
++  bufferMetadata : ∀ a, c.writes a → ¬c.metadataBytes a ∧ ¬InRange preemptCountAddress 4 a
++
+ /-- What a service may assume at its entry besides its arguments, in the form
+ of the landed `RandomReady`: valid coverage state with room for a record
+-when the buffer is in use, the direction flag clear, and `depth` mapped
+-bytes of stack below the return word. Revision 2. -/
+-structure ServiceReady (A : Allocator) (c : CommonBitsCoverage.Context) (s : MachineState) : Prop where
++when the buffer is in use, the direction flag clear, `depth` mapped bytes of
++stack below the return word (revision 2), and the separation of its stack,
++the arena and the coverage bytes (revision 3). -/
++structure ServiceReady (L : Layout) (A : Allocator) (c : CommonBitsCoverage.Context) (s : MachineState) : Prop where
+   coverage : c.At s.data.dmem
+   capacity : c.Needed → 0 < c.coverage.capacity.toNat
+   forward : s.data.system.bits[10] = false
+   stackMapped : ∀ i < A.depth,
+     (s.data.dmem.get? (s.data.regs.rsp.toBitVec - .ofNat 64 A.depth + .ofNat 64 i)).isSome = true
++  separated : Separated L A c s
+ 
+ /-- What one `kmem_cache_zalloc(node_cache, GFP_KERNEL)` leaves behind, by the
+ recorded outcome byte: NULL and nothing handed out, or an aligned, zeroed
+-72-byte object inside the arena that overlaps no object already handed out. -/
++72-byte object inside the arena that overlaps no object already handed out
++and ends strictly below 2^64 (revision 3: the bound the landed
++interpretation check `Trie.validate` demands of every node). -/
+ def AllocResult (L : Layout) (A : Allocator) (live : List Nat) (record : HiddenRecord)
+     (stream : List HiddenRecord) (t : MachineState) : Prop :=
+   let a := t.data.regs.rax.toNat
+   (record.bytes.head? = some 0 → a = 0 ∧ A.Idle t.data.dmem live stream) ∧
+   (record.bytes.head? = some 1 →
+-    a ≠ 0 ∧ a % 8 = 0 ∧ (∃ span ∈ L.arena, span.1 ≤ a ∧ a+nodeSize ≤ span.1+span.2) ∧
++    a ≠ 0 ∧ a % 8 = 0 ∧ a + nodeSize < 2^64 ∧
++    (∃ span ∈ L.arena, span.1 ≤ a ∧ a+nodeSize ≤ span.1+span.2) ∧
+     (∀ other ∈ live, disjointRanges a nodeSize other nodeSize = true) ∧
+     readNat t a nodeSize = .ok 0 ∧ A.Idle t.data.dmem (live ++ [a]) stream)
+ 
+@@ -98,14 +117,14 @@ structure AllocatorContract (fetch : Int64 → Option Decoded) (L : Layout) (A :
+   frame : ∀ m m' live stream, A.Idle m live stream →
+     (∀ a, L.Arena a → ¬Kept live a → m.get? a = m'.get? a) → A.Idle m' live stream
+   alloc : ∀ (c : CommonBitsCoverage.Context) (s : MachineState) (ra : UInt64) live record stream,
+-    s.pc = allocEntry → EntryFrame s ra → ServiceReady A c s →
++    s.pc = allocEntry → EntryFrame s ra → ServiceReady L A c s →
+     s.data.regs.rdi.toNat = L.cache → s.data.regs.get (.low .rsi .W32) = 0xdc0#32 →
+     (ra.toNat, record.site) ∈ allocSites → A.Idle s.data.dmem live (record :: stream) →
+     Eventually (instructionStep fetch) (fun t =>
+       Returned s t ra ∧ EqualOutside (ServiceWrites L A c s live) s.data.dmem t.data.dmem ∧
+       c.At t.data.dmem ∧ AllocResult L A live record stream t) s
+   free : ∀ (c : CommonBitsCoverage.Context) (s : MachineState) (ra : UInt64) live stream,
+-    s.pc = freeEntry → EntryFrame s ra → ServiceReady A c s → ra.toNat = freeSite →
++    s.pc = freeEntry → EntryFrame s ra → ServiceReady L A c s → ra.toNat = freeSite →
+     s.data.regs.rdi.toNat = L.cache → s.data.regs.rsi.toNat ∈ live →
+     A.Idle s.data.dmem live stream →
+     Eventually (instructionStep fetch) (fun t =>
+diff --git a/binary/StatementC1Headline.lean b/binary/StatementC1Headline.lean
+--- a/binary/StatementC1Headline.lean
++++ b/binary/StatementC1Headline.lean
+@@ -7,7 +7,9 @@ compiled allowed-IPs insertion of the pinned s5 image, as `def … : Prop`.
+ `Headline` keeps the memory relation internal (an existentially quantified
+ invariant): what a reader takes away is machine-observable, the 32-bit
+ result of every insertion and the peer pointer returned by every later
+-lookup, along any call sequence that starts at a physically empty table.
++lookup, along any call sequence that starts at a physically empty table,
++with the caller's references on registered peers taken and dropped between
++the calls (revision 3).
+ `HeadlineExplicit` is the alternative with the landed relation in its
+ conclusion; it implies `Headline`, and it is what a proof would exhibit. -/
+ namespace Binary.Statements.C1
+@@ -158,6 +160,31 @@ between calls. -/
+ def Framed (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
+   ∀ w m m', Inv w m → (∀ a, L.Heap a → m.get? a = m'.get? a) → Inv w m'
+ 
++/-- Memory `m'` is memory `m` with peer `pid`'s four-byte reference count
++changed from `before` to `after`: both are readable, and every other heap
++byte is the same. Bytes outside the heap are unconstrained, as in `Framed`. -/
++def CountMoved (L : Layout) (pid : PeerId) (before after : Nat) (m m' : Mem 64) : Prop :=
++  ∃ peer, Trie.address L.peers (some pid) = .ok peer ∧
++    readNat ⟨{dmem := m},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4 = .ok before ∧
++    readNat ⟨{dmem := m'},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4 = .ok after ∧
++    ∀ a, L.Heap a → ¬InRange (.ofNat 64 (peer+Root.nodeOffsets.peerRefcount)) 4 a → m.get? a = m'.get? a
++
++/-- Revision 3. The invariant survives the caller taking or dropping one
++reference on a registered peer between calls: the peer's count word goes up
++by one together with the mirror's `peerGet` on that peer, or down by one,
++from a count above one, together with the mirror's `peerPut` on it (the
++last reference is not dropped here: that is the peer's removal). No other
++heap byte changes and no other mirror operation runs. This is what a
++`wg set` over existing peers does between the insertions for one peer and
++those for the next: `set_peer` drops its reference on the first and takes
++one on the second. -/
++def Referenced (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
++  ∀ (w w' : World) (m m' : Mem 64) (pid : PeerId) (count : Nat), Inv w m →
++    ((liftWG (WG.peerGet pid)).run w = .ok ((), w') ∧ CountMoved L pid count (count+1) m m') ∨
++    ((liftWG (WG.peerPut (some pid))).run w = .ok ((), w') ∧ 1 < count ∧
++      CountMoved L pid count (count-1) m m') →
++    Inv w' m'
++
+ /-- The table's sequence word after the call is the word before plus one,
+ modulo 2^64: what a wrapper does besides calling `add`. -/
+ def SeqAdvanced (L : Layout) (s t : MachineState) : Prop :=
+@@ -215,14 +242,16 @@ def LookupStep (fetch : Int64 → Option Decoded) (L : Layout)
+       EqualOutside (LookupWrites L c s) s.data.dmem t.data.dmem) s
+ 
+ /-- THE HEADLINE. Under the premises there is an invariant, holding
+-at every empty table, insensitive to memory outside the heap, preserved by
+-every insertion and every lookup, under which each returns what the mirror
+-returns. The relation between memory and the mirror is not part of the
++at every empty table, insensitive to memory outside the heap, surviving the
++caller's reference on a peer being taken or dropped between calls
++(revision 3), preserved by every insertion and every lookup, under which
++each returns what the mirror returns. The relation between memory and the mirror is not part of the
+ claim; a proof must exhibit one. -/
+ def Headline : Prop :=
+   ∀ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator), Premises fetch L A →
+     ∃ Inv : World → Mem 64 → Prop,
+-      Initial L A Inv ∧ Framed L Inv ∧ InsertStep fetch L A Inv ∧ LookupStep fetch L Inv
++      Initial L A Inv ∧ Framed L Inv ∧ Referenced L Inv ∧
++      InsertStep fetch L A Inv ∧ LookupStep fetch L Inv
+ 
+ /-! ## The alternative: the landed relation in the conclusion -/
+ 
+@@ -241,12 +270,12 @@ def Related (L : Layout) (A : Allocator) (w : World) (m : Mem 64) : Prop :=
+     (∀ node ∈ names.trie.nodes, ∃ span ∈ L.arena, span.1 ≤ node.2 ∧ node.2+nodeSize ≤ span.1+span.2) ∧
+     A.Idle m (names.trie.nodes.map (·.2)) stream
+ 
+-/-- The same four clauses with the invariant fixed to `Related`. It implies
++/-- The same five clauses with the invariant fixed to `Related`. It implies
+ `Headline`; it additionally tells a reader what memory looks like after
+ each call, in terms nothing but tests and reading pin down. -/
+ def HeadlineExplicit : Prop :=
+   ∀ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator), Premises fetch L A →
+-    Initial L A (Related L A) ∧ Framed L (Related L A) ∧
++    Initial L A (Related L A) ∧ Framed L (Related L A) ∧ Referenced L (Related L A) ∧
+     InsertStep fetch L A (Related L A) ∧ LookupStep fetch L (Related L A)
+ 
+ end Binary.Statements.C1
+diff --git a/binary/StatementC1Vacuity.lean b/binary/StatementC1Vacuity.lean
+--- a/binary/StatementC1Vacuity.lean
++++ b/binary/StatementC1Vacuity.lean
+@@ -3,7 +3,8 @@ import StatementC1CallbackImage
+ 
+ /-! Result C1, final statement: the kernel-checked evidence against vacuity that
+ the result carries, as statements (no theorem, no proof), and `Signed`. `Witness` says the
+-premises can be met along an actual execution through every kind of call;
++premises can be met along an actual execution through every kind of call,
++by a service that uses its stack and writes the coverage buffer;
+ the two exclusions are consequences with no mirror state in their
+ conclusion, naming machine behaviours the headline rules out. -/
+ namespace Binary.Statements.C1
+@@ -30,25 +31,22 @@ def CallbacksFromImage (fetch : Int64 → Option Decoded) : Prop :=
+   ServiceDecoderAgreement fetch ∧
+   ∀ pc instruction, StatementC1CallbackImage.fetch pc = some instruction → fetch pc = some instruction
+ 
+-/-- WITNESS. Some `fetch`, layout and allocator meet every premise, the
+-callbacks being the image's own code (`CallbacksFromImage`: only the code at
+-`allocEntry` and `freeEntry` may be a stub), and an actual execution runs, from a physically empty table with
+-the allocator idle and five answers pending, through: an insertion into the
+-empty table; an insertion that allocates twice (the intermediate node,
+-while a node is handed out); an insertion whose second allocation is
+-refused (the rollback and the release); and a lookup that finds a peer.
+-Each call meets its caller conditions and the mirror accepts it, consuming
+-exactly those records. The code at `allocEntry` uses a nonempty stack
+-scratch and, with the coverage buffer in use, changes a scratch byte and a
+-buffer byte during the second call's allocation. The service will be a
+-stub and is to be called one. -/
+-def Witness : Prop :=
+-  ∃ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator)
+-    (w0 w1 w2 w3 w4 : World) (d0 d3 : Device) (c1 c2 c3 c4 : Context)
++/-- EXECUTED (the end-to-end half of the witness, revision 3). With this
++`fetch`, layout and allocator an actual execution runs, from a physically
++empty table with the allocator idle and five answers pending, through: an
++insertion into the empty table; an insertion that allocates twice (the
++intermediate node, while a node is handed out) with the coverage buffer in
++use; an insertion whose second allocation is refused (the rollback and the
++release); and a lookup that finds a peer. Each call meets its caller
++conditions and the mirror accepts it, consuming exactly those records.
++Everything here is about the entry and final states of the four calls
++(`Ran` gives an actual history between them and says nothing of its
++interior), so it follows from the headline's steps at this `fetch`. -/
++def Executed (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator) : Prop :=
++  ∃ (w0 w1 w2 w3 w4 : World) (d0 d3 : Device) (c1 c2 c3 c4 : Context)
+     (s1 t1 s2 t2 s3 t3 s4 t4 : MachineState) (h1 h2 h3 h4 : List MachineState)
+     (k1 n1 p1 k2 n2 p2 k3 n3 p3 key pointer : Nat) (found : PeerId) (ra : UInt64)
+     (stream : List HiddenRecord),
+-    Premises fetch L A ∧ CallbacksFromImage fetch ∧
+     w0.wg.dev = some d0 ∧ armed w0 = true ∧
+     w0.ambient.hidden = some ([outcome 77 true, outcome 78 true, outcome 79 true,
+       outcome 78 true, outcome 79 false] ++ stream) ∧
+@@ -67,11 +65,54 @@ def Witness : Prop :=
+     HeapSame L t3 s4 ∧ lookupReady L c4 s4 4 key ra = .ok () ∧ w3.wg.dev = some d3 ∧
+     (Source.lookup d3.peerAllowedips.root4 32 key).run w3 = .ok (some found, w4) ∧
+     Trie.address L.peers (some found) = .ok pointer ∧ Ran fetch s4 t4 ra h4 ∧
+-    0 < A.depth ∧ c2.Needed ∧
+-    ∃ (enter leave : MachineState) (back : UInt64), enter ∈ h2 ∧ leave ∈ h2 ∧
+-      enter.pc = allocEntry ∧ Returned enter leave back ∧
+-      (∃ a, Scratch enter A.depth a ∧ enter.data.dmem.get? a ≠ leave.data.dmem.get? a) ∧
+-      (∃ a, c2.writes a ∧ enter.data.dmem.get? a ≠ leave.data.dmem.get? a)
++    c2.Needed
++
++/-- ACTIVE SERVICE (the service half of the witness, revision 3). The code
++at `allocEntry`, taken on its own: its stack scratch is nonempty, and from
++some entry state that the contract's `alloc` clause admits (every
++hypothesis of that clause, with the coverage buffer in use and a success
++pending) an actual execution returns having changed a byte of its scratch
++and a byte of the coverage buffer. The allocator is idle in that state, so
++`Idle` holds of an actual memory. Revision 2 asked for these two changes
++between a service entry and its return inside the second insertion's
++history; the headline's steps conclude about final states only, so that
++could not be derived from them. -/
++def ServiceActive (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator) : Prop :=
++  0 < A.depth ∧
++  ∃ (c : Context) (s t : MachineState) (ra : UInt64) (live : List Nat) (record : HiddenRecord)
++    (stream : List HiddenRecord) (history : List MachineState),
++    s.pc = allocEntry ∧ EntryFrame s ra ∧ ServiceReady L A c s ∧
++    s.data.regs.rdi.toNat = L.cache ∧ s.data.regs.get (.low .rsi .W32) = 0xdc0#32 ∧
++    (ra.toNat, record.site) ∈ allocSites ∧ A.Idle s.data.dmem live (record :: stream) ∧
++    c.Needed ∧ record.bytes.head? = some 1 ∧
++    Ran fetch s t ra history ∧
++    (∃ a, Scratch s A.depth a ∧ s.data.dmem.get? a ≠ t.data.dmem.get? a) ∧
++    (∃ a, c.writes a ∧ s.data.dmem.get? a ≠ t.data.dmem.get? a)
++
++/-- WITNESS (revision 3). One `fetch`, layout and allocator meet every
++premise, with the callbacks the image's own code (`CallbacksFromImage`: only
++the code at `allocEntry` and `freeEntry` may be a stub), run the four calls
++of `Executed`, and have the active service of `ServiceActive`. The service
++will be a stub and is to be called one.
++
++What each conjunct rules out. `Premises`: premises that nothing meets.
++`CallbacksFromImage`: a witness whose coverage and BH-enable callbacks are
++stubs. `Executed`: an allocator that is never idle (it is idle at an actual
++empty table, with five answers pending); premises met only where no call
++can start or finish (each kind of call, the two-allocation insertion and
++the rollback included, starts from the caller's conditions and returns);
++a mirror that accepts none of them; a run with the coverage buffer unused.
++`ServiceActive`: a contract that only a service with no stack and no
++record could meet (this one, at the same addresses and under the same
++contract, uses its scratch and writes the buffer).
++
++What it no longer rules out, against revision 2: that the service is
++active only at entry states no insertion reaches. Revision 2 placed the
++two changed bytes inside the second insertion; here they are shown at one
++admissible entry state, which need not be one of `Executed`'s. -/
++def Witness : Prop :=
++  ∃ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator),
++    Premises fetch L A ∧ CallbacksFromImage fetch ∧ Executed fetch L A ∧ ServiceActive fetch L A
+ 
+ /-- The caller's conditions for a lookup of `key` in any state that agrees
+ with `t` on the heap. -/
+@@ -133,19 +174,21 @@ def FailedInsertInvisible : Prop :=
+ 
+ /-- WHAT IS SIGNED: the headline together with the evidence against vacuity
+ it relies on. The exclusions follow from `Headline` and facts about the
+-mirror; the witness is independent of it.
++mirror; of the witness, `Executed` follows from the headline's steps at one
++`fetch` that meets the premises, and `ServiceActive` is independent of it.
+ 
+ What it establishes, in the words its summary and register entry use: the
+ compiled `wg_allowedips_insert_v4`, `_v6`, `add.isra.0`, `lookup`,
+ `common_bits` and `wg_peer_get_maybe_zero` of the s5 image return what the
+ mirror returns along any sequence of insertions and lookups from an empty
+-table, **given any code at the two service addresses that meets the stated
++table, with the caller's references on registered peers taken and dropped
++between them, **given any code at the two service addresses that meets the stated
+ contract; the image's allocator is not shown to, and under this semantic
+ base cannot be**. About how the compiled code uses that service it
+ establishes that the code calls it only with the cache and the flags the
+ contract names and from states the contract covers; relies on nothing about
+-a returned object but that it is zeroed, aligned, inside the arena and apart
+-from the nodes handed out; never depends on the service's stack scratch, on
++a returned object but that it is zeroed, aligned, inside the arena, ending
++below 2^64 and apart from the nodes handed out; never depends on the service's stack scratch, on
+ the caller-saved registers it returns, on free arena bytes or on the bytes
+ of a released object; and releases exactly the node it allocated, once, on
+ the one failing path. -/
+```
