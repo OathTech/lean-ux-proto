@@ -7,8 +7,11 @@ rule (section 6), and the kernel replay run outside the sandbox (section 5).
 
 ## 1. What is proved
 
-The signed statement is `binary/C2Statement.lean`
-([final statement](2026-11-10-c2-final-statement.md)). Its headline, verbatim:
+The statement is `binary/C2Statement.lean`, as put to the owner in the
+[final statement](2026-11-10-c2-final-statement.md). The owner has not yet
+signed it: he left the choices to the coordinator's recommendation and is to
+see the final text before any proof is accepted; his signature is given at
+the landing. Its headline, verbatim:
 
 ```lean
 def HeadlineRefinement : Prop :=
@@ -228,11 +231,12 @@ in the package).
 1. The independent landing review of the whole.
 2. The owner's signoff on section 6, and on the merge.
 3. The kernel replay outside the sandbox (section 5).
-4. Two unsigned statements were removed from `C2Statement.lean`
-   (`AcceptedWithinWindow`, `AdvanceAccepted`): in no headline, in no
-   package, and not a few lines from what exists. The file otherwise equals
-   the signed text. The docstring of `HeadlineRefinement` still names
-   `AdvanceAccepted` as the rejected alternative; it was left as signed.
+4. Two statements outside the text put for signature were removed from
+   `C2Statement.lean` (`AcceptedWithinWindow`, `AdvanceAccepted`): in no
+   headline, in no package, and not a few lines from what exists. The file
+   otherwise equals the text put to the owner. The docstring of
+   `HeadlineRefinement` still names `AdvanceAccepted` as the rejected
+   alternative; it was left as put to the owner (section 9, item D1).
 5. The packages could not be imported together as delivered: packages 1 and
    2 each declared `Binary.C2.WindowAt.frame`, with different statements.
    Package 1's was renamed (`WindowAt.ofEqualOutside`), statement and proof

@@ -23,13 +23,13 @@ mentions), knowing section 5. Three things to weigh first:
    than a rebuild. Appendix A4.
 3. Every rerun number equals the placeholder runs'. Section 4.
 
-## 1. The signed text
+## 1. The text put to the owner for signature
 
 Verbatim from `binary/C2Statement.lean` at `8200bf7e`, namespace
 `Binary.C2`, in reading order: the headline, then what it assumes, then
 what it claims. The file holds three more declarations that the headline
 does not mention (`AcceptedWithinWindow`, `ReplayRefused`,
-`AdvanceAccepted`); they are not signed.
+`AdvanceAccepted`); they are not part of what is put for signature.
 
 ```lean
 /-- THE HEADLINE. What the code computes (`Refines`), that it exits cleanly, the

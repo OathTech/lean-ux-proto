@@ -1354,7 +1354,7 @@ realism and physical frame premises.
 | Allowed-IPs `lookup` and `common_bits`, both families | In progress; no function theorem claimed | 56 (35 lookup, 21 common_bits), plus existing peer-get | Under construction; additional variable cmp1/cmp8 callbacks reached | `cb2348e` | Paused for replanning (2026-10-16). Both-family Pre witnesses execute to RET; complete entry/common_bits/peer-get/return-tail components checked with union cut frames. Bounded loop and function correspondence/transport remain open; recovery record is in the single adequacy report. M2 review will recheck M1 fixes. |
 
 Result C2 of the binary track, the receive replay window
-([closing report](2026-11-10-c2-replay-window.md), [signed statement](2026-11-10-c2-final-statement.md)),
+([closing report](2026-11-10-c2-replay-window.md), [final statement as put to the owner](2026-11-10-c2-final-statement.md), whose signature is given at the landing),
 is in two parts: three clauses closed in the binary package, which does not
 import the proof tree, and the transported clause and the headline in the
 bridge library, the one file outside `Leanux/Proofs/` that imports it.
