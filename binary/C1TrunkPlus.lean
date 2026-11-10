@@ -3,9 +3,8 @@ import C1TrunkCut
 reaches `add`'s entry with `Trunk` for an arbitrary continuation (the first
 half of `through_core`, copied); `trunk_to_cut` joins the walk, the
 allocation and the cut; `trunkToNodePlus` is the trunk package 3 uses
-(`TrunkToNodePlus`, copied from `task/binary-c1-wp3` at 3738c868,
-`binary/C1BelowTrunk.lean`, because importing that module would bring
-package 3's proofs with it), under `StackOffPeers` (see `C1TrunkCut`). -/
+(`TrunkToNodePlus`, in `C1Cut` since the integration), under
+`StackOffPeers` (see `C1TrunkCut`). -/
 namespace C1Trunk
 open Binary Binary.Pair Binary.Pair.Allowedips Binary.AllowedipsMutationImage
 open Binary.TrustBase Binary.CommonBitsCoverage Binary.Instrumentation
@@ -69,29 +68,6 @@ theorem to_trunk (fetch : Int64 → Option Decoded) (L : Statements.C1.Layout) (
     relatedA, shapeA }
   rw [Placement.at_pc a _ pcA]
   exact body names stream d seq a.data trunk
-
-/-- Copied verbatim from package 3 (see the module comment), with this
-package's copy of `CutExtra`. -/
-def TrunkToNodePlus : Prop :=
-  ∀ (fetch : Int64 → Option Decoded) (L : Statements.C1.Layout) (A : Allocator), Premises fetch L A →
-  ∀ (c : Context) (s : MachineState) (w w' : World) (family key cidr pid : Nat) (ra : UInt64)
-    (answer : Int) (d : Device) (stream : List HiddenRecord) (placed : Option NodeId) (exact : Bool)
-    (st : Proof.Step),
-    Inv L A w s.data.dmem →
-    insertReady L A c s family key cidr pid ra = .ok () →
-    StepFacts w family key cidr pid answer w' d stream placed exact st →
-    st.case = .cover ∨ st.case = .split ∨ st.case = .splitNoMem →
-    Eventually (instructionStep fetch) (fun e => ∃ names base,
-      NodeCut fetch L A c s ra w d key cidr pid stream placed names base e ∧
-      CutExtra L s e family) s
-
-/-- The strengthened trunk gives the interface's trunk (after package 3's `trunk_of_plus`). -/
-theorem trunk_of_plus (trunk : TrunkToNodePlus) : TrunkToNode := by
-  intro fetch L A premises c s w w' family key cidr pid ra answer d stream placed exact st inv ready facts case
-  apply eventually_weaken (instructionStep fetch) _ _ _ _
-    (trunk fetch L A premises c s w w' family key cidr pid ra answer d stream placed exact st inv ready facts case)
-  rintro e ⟨names,base,cut,_⟩
-  exact ⟨names,base,cut⟩
 
 /-- The first pending record of a case that allocates at :205. -/
 theorem first_site {stream : List HiddenRecord} {n : Nat} {tail : List Nat}

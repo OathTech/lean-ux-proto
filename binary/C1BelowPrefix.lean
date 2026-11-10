@@ -6,7 +6,7 @@ import C1BelowReady
 /-! Result C1, work package 3: the prefix shared by the three paths below the
 placement, from the cut `add+0x156` to the comparison after `common_bits`
 at `add+0x267`, from `NodeCut`, the caller's conditions, the step facts and
-`CutExtra` (what `NodeCut` does not give; see `C1BelowPrefixCut`). -/
+`CutExtra` (what `NodeCut` does not give; see `C1Cut`). -/
 namespace Binary.Statements.C1.Proof
 open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.CommonBitsCoverage Binary.Statements.C1 Binary.AllowedipsMutationImage

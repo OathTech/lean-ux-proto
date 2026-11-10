@@ -264,16 +264,16 @@ theorem pathChild_of_stackOffPeers : C1Trunk.StackOffPeers → PathChild := by
             record rest rfl recordSite ok after recordsAfter' facts.armedAfter)
 
 /-- PACKAGE 2, for package 3: the trunk in the strengthened form package 3's
-paths take (`C1Trunk.TrunkToNodePlus`, a copy of package 3's proposition).
+paths take (`TrunkToNodePlus`, in `C1Cut`).
 NOT the interface's `TrunkHolds`: `C1Trunk.StackOffPeers` is an extra
 hypothesis, not derivable from the signed text (see `C1TrunkCut`). -/
 theorem trunkToNodePlus_of_stackOffPeers :
-    C1Trunk.StackOffPeers → NodeBelowTop → FramedHolds → AllocRule → C1Trunk.TrunkToNodePlus :=
+    C1Trunk.StackOffPeers → NodeBelowTop → FramedHolds → AllocRule → TrunkToNodePlus :=
   C1Trunk.trunkToNodePlus
 
 /-- PACKAGE 2, for package 3: `TrunkHolds` from `C1Trunk.StackOffPeers`. -/
 theorem trunkHolds_of_stackOffPeers : C1Trunk.StackOffPeers → TrunkHolds :=
-  fun off below framed alloc => C1Trunk.trunk_of_plus (C1Trunk.trunkToNodePlus off below framed alloc)
+  fun off below framed alloc => trunk_of_plus (C1Trunk.trunkToNodePlus off below framed alloc)
 
 #print axioms pathTooLong
 #print axioms pathRootNoMem

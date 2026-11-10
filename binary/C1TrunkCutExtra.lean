@@ -1,10 +1,9 @@
 import C1TrunkRoot
+import C1Cut
 /-! Result C1, package 2: the six facts package 3 needs of the cut state
 beside `NodeCut` (coordinator's decision of 2026-11-10 on the internal
-interface). `CutExtra` is copied verbatim from package 3
-(`task/binary-c1-wp3` at 3738c868, `binary/C1BelowPrefixCut.lean`), because
-importing that module would bring package 3's proofs with it; the
-coordinator moves the definition into the interface file at integration.
+interface). `CutExtra` is in `C1Cut` since the integration (the package
+carried a verbatim copy of package 3's definition on its branch).
 
 `cutExtra_of_frame` proves all six for any state of `add`'s frame at which
 `r13` and `rbp` are what the prologue left and the stack word at `rsp+8` is
@@ -17,16 +16,6 @@ open Binary Binary.Pair Binary.Pair.Allowedips Binary.AllowedipsMutationImage
 open Binary.TrustBase Binary.CommonBitsCoverage Binary.Instrumentation
 open Binary.Statements.C1 Binary.Statements.C1.Proof Leanux Leanux.WG
 local instance : Labels := Image.linkedLabels
-
-/-- Copied verbatim from package 3 (see the module comment). -/
-structure CutExtra (L : Statements.C1.Layout) (s e : MachineState) (family : Nat) : Prop where
-  frameHigh : e.data.regs.rsp.toNat+48≤s.data.regs.rsp.toNat
-  frameLow : s.data.regs.rsp.toNat+48≤e.data.regs.rsp.toNat+insertWindow
-  width : e.data.regs.rbp.toNat=widthOf family
-  keyLow : e.data.regs.rsp.toNat+48≤e.data.regs.r13.toNat
-  keyHigh : e.data.regs.r13.toNat+e.data.regs.rbp.toNat/8≤s.data.regs.rsp.toNat
-  slot : e.data.dmem.loadInt (e.data.regs.rsp.toBitVec+8) 8=
-    some ((L.table+(if family = 4 then AllowedipsMutationLayout.root4 else AllowedipsMutationLayout.root6) : Nat) : Int)
 
 section
 variable {L : Statements.C1.Layout} {A : Allocator} {c : Context}
