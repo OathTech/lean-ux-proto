@@ -205,5 +205,49 @@ theorem call_site {callee : Int64} {plan : MachineState → Option (List WordWri
       · rw [List.mem_singleton.mp final, atPc]
         exact notExit
 
+/-! ## The adapter -/
+
+/-- The addresses at which a literal code list has an instruction. -/
+def starts (pc : Int64) : List (Kraken.Sized Directive) → List Int64
+  | [] => []
+  | ⟨_, n⟩ :: rest => pc :: starts (pc + .ofNat n) rest
+
+theorem fetchIn_start {pc : Int64} {code : List (Kraken.Sized Directive)} {target : Int64}
+    {instruction : Decoded} (read : Image.fetchIn pc code target = some instruction) :
+    target ∈ starts pc code := by
+  induction code generalizing pc with
+  | nil => simp [Image.fetchIn] at read
+  | cons head rest ih =>
+    obtain ⟨d, n⟩ := head
+    unfold Image.fetchIn at read
+    split at read
+    · rename_i equal
+      rw [equal]
+      exact List.mem_cons_self
+    · exact List.mem_cons_of_mem _ (ih read)
+
+theorem stubs_agree : StubsAgree := by
+  intro fetch agree
+  constructor
+  · intro pc instruction read
+    apply agree
+    have member := fetchIn_start read
+    have list : starts Callback.Cmp8.cmp8Entry Callback.Cmp8.cmp8Stub =
+        (Callback.Cmp8.addresses.take 5) := by rfl
+    rw [list] at member
+    simp only [Callback.Cmp8.addresses, List.take_succ_cons, List.take_zero, List.mem_cons,
+      List.not_mem_nil, or_false] at member
+    rcases member with rfl | rfl | rfl | rfl | rfl <;> exact (by rfl : Range.fetch _ = _).trans read
+  · intro pc instruction read
+    apply agree
+    have member := fetchIn_start read
+    have list : starts Callback.Cmp8.constCmp8Entry Callback.Cmp8.constCmp8Stub =
+        (Callback.Cmp8.addresses.drop 5) := by rfl
+    rw [list] at member
+    simp only [Callback.Cmp8.addresses, List.drop_succ_cons, List.drop_zero, List.mem_cons,
+      List.not_mem_nil, or_false] at member
+    rcases member with rfl | rfl | rfl | rfl | rfl <;> exact (by rfl : Range.fetch _ = _).trans read
+
 #print axioms call_site
+#print axioms stubs_agree
 end Binary.C2
