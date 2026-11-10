@@ -6,6 +6,8 @@ import PairCountUpdate
 import PairLocalsProof
 import AllowedipsValidateConstruct
 import PairRequire
+import AllowedipsSourceRun
+import Init.Internal.Order.While
 
 /-! Result C1, work package 1: the source side and the invariant's algebra. This module is the package's root in
 `binary/lakefile.toml`. The brief is `binary/Statements/C1/proof/WP1.md`.
@@ -372,4 +374,229 @@ theorem initialHolds : InitialHolds := by
     cases member
 
 #print axioms initialHolds
+
+/-! ## The mirror's allocation records and primitives, for `RunIsStep` -/
+
+/-- Copy of the mirror's private `AmbientM.allocRecord` (Leanux/Kernel/Defs.lean), text unchanged. -/
+def allocRecordCopy (s : AllocSite) : AmbientM Bool := do
+  let bs ← AmbientM.hidden (.alloc s)
+  match bs.headD 2 with
+  | 1 => return true
+  | 0 => return false
+  | b => throw (.hidden s!"{s.info.label}: outcome byte {b}, expected 0 or 1")
+
+/-- Copy of the mirror's `AmbientM.hiddenAlloc`, text unchanged, with the placeholder encounter a parameter. -/
+def hiddenAllocCopy (allocPlaceholder : AllocSite → AmbientM Bool) (s : AllocSite) : AmbientM Bool := do
+  let i := s.info
+  match i.count with
+  | .laxZero => return true
+  | .unrecorded => return true
+  | .cut => AmbientM.invariant s!"{i.label} is a below-cut consumer, consumed only at a cut point"
+  | .exact n =>
+    let w ← get
+    let placeholders := w.hidden.isNone && w.hiddenPlaceholders
+    if !placeholders && !w.allocArmed.contains i.label then return true
+    let encounter : AmbientM Bool := if placeholders then allocPlaceholder s else allocRecordCopy s
+    let mut k := 0
+    while k < n do
+      if !(← encounter) then return false
+      k := k + 1
+    return true
+
+theorem hiddenAlloc_copy : ∃ P, ∀ s, AmbientM.hiddenAlloc s = hiddenAllocCopy P s := ⟨_,fun _ => rfl⟩
+
+theorem passive_sites : HiddenSite.passive 77 = false ∧ HiddenSite.passive 78 = false ∧ HiddenSite.passive 79 = false := by
+  decide
+
+
+theorem loop_unfold {β : Type} (st : β) (f : Unit → β → AmbientM (ForInStep β)) :
+    forIn Lean.Loop.mk st f = (do
+      match ← f () st with
+      | .done v => pure v
+      | .yield v => forIn Lean.Loop.mk v f) :=
+  Lean.Loop.forIn_eq_of_monadTail
+
+theorem loop_once (encounter : AmbientM Bool) :
+    (do
+      let mut k := 0
+      while k < 1 do
+        if !(← encounter) then return false
+        k := k + 1
+      return true : AmbientM Bool) = encounter := by
+  dsimp only
+  rw [loop_unfold]
+  simp only [Nat.zero_lt_one, ↓reduceIte, bind_assoc]
+  conv => rhs; rw [← bind_pure encounter]
+  apply bind_congr
+  intro b
+  cases b
+  · simp
+  · simp only [Bool.not_true, Bool.false_eq_true, ↓reduceIte, pure_bind]
+    rw [loop_unfold]
+    simp
+
+
+theorem hiddenAllocCopy_once (P : AllocSite → AmbientM Bool) (s : AllocSite)
+    (count : s.info.count = .exact 1) :
+    hiddenAllocCopy P s = (do
+      let w ← get
+      let placeholders := w.hidden.isNone && w.hiddenPlaceholders
+      if !placeholders && !w.allocArmed.contains s.info.label then return true
+      (if placeholders then P s else allocRecordCopy s)) := by
+  unfold hiddenAllocCopy
+  simp only [count]
+  apply bind_congr
+  intro w
+  split
+  · rfl
+  · exact loop_once _
+
+
+theorem alloc_site_facts {s : AllocSite} (site : s = .allocNode190 ∨ s = .allocNode205 ∨ s = .allocNode234) :
+    s.info.count = .exact 1 ∧ (HiddenSite.alloc s).info.len = 40 ∧ (HiddenSite.alloc s).info.id = s.hiddenId ∧
+    (s.hiddenId == (HiddenSite.sectionStart .netRx).info.id) = false := by
+  rcases site with rfl | rfl | rfl <;> exact ⟨rfl,rfl,rfl,by decide⟩
+
+theorem hidden_alloc_accepted {s : AllocSite} {a a' : Ambient} {bs : List UInt8} {r : HiddenRecord} {rest : List HiddenRecord}
+    (site : s = .allocNode190 ∨ s = .allocNode205 ∨ s = .allocNode234)
+    (hid : a.hidden = some (r :: rest)) (clean : HiddenSite.passive r.site = false)
+    (run : (AmbientM.hidden (.alloc s)).run a = .ok (bs,a')) :
+    r.site = s.hiddenId ∧ r.bytes.length = 40 ∧ bs = r.bytes.take 40 ∧ a' = {a with hidden := some rest} := by
+  obtain ⟨count,len,ident,notRx⟩ := alloc_site_facts site
+  simp only [AmbientM.hidden,AmbientM.skipAmbient,AmbientM.noteNetRxStart,StateT.run_bind,StateT.run_get,
+    StateT.run_set,hid,len,ident,notRx,clean,List.dropWhile,
+    Source.except_ok_bind,Source.except_pure,pure_bind,Bool.false_eq_true,↓reduceIte] at run
+  split at run
+  · cases run
+  · rename_i sameSite
+    split at run
+    · cases run
+    · rename_i wellFormed
+      cases run
+      refine ⟨by simpa using sameSite,?_,rfl,rfl⟩
+      simp only [Bool.or_eq_true,bne_iff_ne,ne_eq,not_or,Decidable.not_not] at wellFormed
+      omega
+
+theorem hiddenAlloc_accepted {s : AllocSite} {a a' : Ambient} {b : Bool} {r : HiddenRecord} {rest : List HiddenRecord}
+    (site : s = .allocNode190 ∨ s = .allocNode205 ∨ s = .allocNode234)
+    (hid : a.hidden = some (r :: rest)) (arm : a.allocArmed.contains s.info.label = true)
+    (clean : HiddenSite.passive r.site = false)
+    (run : (AmbientM.hiddenAlloc s).run a = .ok (b,a')) :
+    r.site = s.hiddenId ∧ (r.bytes.head? = some 0 ∨ r.bytes.head? = some 1) ∧
+      b = (r.bytes.head? == some 1) ∧ a' = {a with hidden := some rest} := by
+  obtain ⟨P,copy⟩ := hiddenAlloc_copy
+  obtain ⟨count,len,ident,notRx⟩ := alloc_site_facts site
+  rw [copy,hiddenAllocCopy_once P s count] at run
+  simp only [StateT.run_bind,StateT.run_get,hid,arm,Option.isNone_some,Bool.false_and,Bool.not_false,
+    Bool.not_true,Bool.and_false,Bool.false_eq_true,↓reduceIte,Source.except_ok_bind,Source.except_pure,
+    allocRecordCopy] at run
+  cases consumed : (AmbientM.hidden (.alloc s)).run a with
+  | error e => rw [consumed] at run; cases run
+  | ok out =>
+    obtain ⟨bs,a1⟩ := out
+    obtain ⟨sameSite,length,rfl,rfl⟩ := hidden_alloc_accepted site hid clean consumed
+    rw [consumed] at run
+    cases bytes : r.bytes with
+    | nil => rw [bytes] at length; cases length
+    | cons x xs =>
+      simp only [Source.except_ok_bind,bytes,List.take_succ_cons,List.headD_cons] at run
+      split at run
+      · cases run
+        exact ⟨sameSite,.inr rfl,rfl,rfl⟩
+      · cases run
+        exact ⟨sameSite,.inl rfl,rfl,rfl⟩
+      · cases run
+
+
+/-! ## Accepted runs of the mirror's primitives, as the pure functions of `C1Step` -/
+
+/-- Adapted from the T4 trial (`T4Source.bind_ok_run`). -/
+theorem bind_ok_run {σ α β : Type} {x : StateT σ AmbientM α} {f : α → StateT σ AmbientM β}
+    {g : σ} {a : Ambient} {r : (β × σ) × Ambient} (h : ((x >>= f).run g).run a = .ok r) :
+    ∃ v g' a', (x.run g).run a = .ok ((v,g'),a') ∧ ((f v).run g').run a' = .ok r := by
+  have unfolded : ((x >>= f).run g).run a =
+      ((x.run g).run a >>= fun p => ((f p.1.1).run p.1.2).run p.2) := rfl
+  rw [unfolded] at h
+  cases hx : (x.run g).run a with
+  | error e => rw [hx] at h; cases h
+  | ok p => rw [hx] at h; exact ⟨p.1.1,p.1.2,p.2,rfl,h⟩
+
+theorem ok_inj {σ α : Type} {x : Except Stop ((α × σ) × Ambient)} {v : α} {s : σ} {a : Ambient}
+    (h : x = .ok ((v,s),a)) (v0 : α) (s0 : σ) (a0 : Ambient) (e : x = .ok ((v0,s0),a0)) :
+    v0 = v ∧ s0 = s ∧ a0 = a := by
+  cases e.symm.trans h
+  exact ⟨rfl,rfl,rfl⟩
+
+/-- The device with a component store written back, as `liftAip` does. -/
+def asDev (d : Device) (s : AipStore) : Device :=
+  {d with nodes := s.nodes, nextNode := s.nextNode, peerAllowedips := s.trie}
+
+theorem liftAip_acc {α : Type} {x : AipM α} {g g' : WGWorld} {a a' : Ambient} {d : Device} {v : α}
+    (device : g.dev = some d) (run : ((WG.liftAip x).run g).run a = .ok ((v,g'),a')) :
+    ∃ s', (x.run (Source.Aip.store d)).run a = .ok ((v,s'),a') ∧ g' = {g with dev := some (asDev d s')} := by
+  rw [Model.liftAip_run,device] at run
+  cases inner : (x.run {nodes := d.nodes, nextNode := d.nextNode, trie := d.peerAllowedips}).run a with
+  | error e => simp only [inner] at run; cases run
+  | ok p =>
+    obtain ⟨⟨v',s'⟩,a''⟩ := p
+    simp only [inner] at run
+    cases run
+    exact ⟨s',inner,rfl⟩
+
+theorem world_same {g : WGWorld} {d : Device} (device : g.dev = some d) : ({g with dev := some d} : WGWorld) = g := by
+  rw [← device]
+
+theorem getNode_acc {id : NodeId} {s s' : AipStore} {a a' : Ambient} {n : AipNode}
+    (run : ((getNode id).run s).run a = .ok ((n,s'),a')) : s.nodes.get? id = some n ∧ s' = s ∧ a' = a := by
+  cases present : s.nodes[id]? with
+  | none => simp [getNode,present,invariant,AmbientM.invariant] at run; cases run
+  | some node =>
+    simp [getNode,present] at run
+    obtain ⟨⟨rfl,rfl⟩,rfl⟩ := run
+    exact ⟨present,rfl,rfl⟩
+
+
+theorem connectNode_acc {slot : Slot} {id : NodeId} {d : Device} {s' : AipStore} {a a' : Ambient}
+    (run : ((connectNode slot id).run (Source.Aip.store d)).run a = .ok (((),s'),a')) :
+    asDev d s' = connect d slot id ∧ a' = a := by
+  unfold connectNode at run
+  obtain ⟨n,s1,a1,read,r1⟩ := bind_ok_run run
+  clear run
+  obtain ⟨present,rfl,rfl⟩ := getNode_acc read
+  clear read
+  obtain ⟨u,s2,a2,write,r2⟩ := bind_ok_run r1
+  clear r1
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj write () _ _ rfl
+  clear write
+  have present' : d.nodes.get? id = some n := present
+  cases slot with
+  | root4 =>
+    obtain ⟨_,rfl,rfl⟩ := ok_inj r2 () _ _ rfl
+    refine ⟨?_,rfl⟩
+    simp only [connect,present',setSlot]
+    rfl
+  | root6 =>
+    obtain ⟨_,rfl,rfl⟩ := ok_inj r2 () _ _ rfl
+    refine ⟨?_,rfl⟩
+    simp only [connect,present',setSlot]
+    rfl
+  | child parent bit =>
+    unfold slotSet at r2
+    obtain ⟨p,s3,a3,readParent,r3⟩ := bind_ok_run r2
+    clear r2
+    obtain ⟨parentPresent,rfl,rfl⟩ := getNode_acc readParent
+    clear readParent
+    dsimp only at r3
+    by_cases large : bit > 1
+    · simp only [large,↓reduceIte] at r3
+      obtain ⟨_,_,_,thrown,_⟩ := bind_ok_run r3
+      cases thrown
+    · simp only [large,↓reduceIte] at r3
+      obtain ⟨_,rfl,rfl⟩ := ok_inj r3 () _ _ rfl
+      refine ⟨?_,rfl⟩
+      have parentPresent' : (d.nodes.insert id {n with parent := Slot.child parent bit}).get? parent = some p :=
+        parentPresent
+      simp only [connect,present',setSlot,parentPresent']
+      rfl
+
 end Binary.Statements.C1.Proof
