@@ -131,5 +131,13 @@ theorem first_exit_determined : FirstExitDetermined := by
       exact ⟨rest ++ [next], by rw [equal]; simp⟩
   exact starts actual
 
+theorem first_exit_exists : FirstExitExists := by
+  intro fetch s P run
+  have traced := eventually_actual fetch s _ ⟨s, [s]⟩ run .start rfl
+  have ended := history_last fetch _ ⟨s, [s]⟩ rfl traced
+  obtain ⟨leaf, ⟨⟨⟨exit, first, holds⟩, actual⟩, last⟩, _⟩ := Callback.history_witness ended
+  exact ⟨leaf.machine, ⟨leaf.history, actual, last, exit, first⟩, holds⟩
+
 #print axioms first_exit_determined
+#print axioms first_exit_exists
 end Binary.C2
