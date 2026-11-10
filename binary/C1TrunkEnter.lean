@@ -17,6 +17,8 @@ structure AtAdd (c : Context) (s : MachineData) (seq : BitVec 64) (v4 : Bool) (k
   query : a.regs.rdx = s.regs.rsp - (if v4 then 36 else 48)
   cidr : (a.regs.get (.low .rcx .W32)).toNat = s.regs.rdx.toNat % 256
   peer : a.regs.r8 = s.regs.rcx
+  r14 : a.regs.r14 = s.regs.r14
+  r15 : a.regs.r15 = s.regs.r15
   returnWord : a.dmem.loadInt a.regs.rsp.toBitVec 8 =
     some ((if v4 then Insert4.entry+.ofNat 0x42 else Insert6.entry+.ofNat 0x4f).toBitVec.toNat : Int)
   r13 : a.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 8) 8 = some (s.regs.r13.toNat : Int)
@@ -82,7 +84,7 @@ theorem enter4 (fetch : Int64 → Option Decoded)
   apply eventually_trans (instructionStep fetch) _ _ _
     (Services.call fetch (Insert4.entry+0x15) "L_ffffffff810f31f0" .pc tracePc
       (decoder.insert4 _ _ (by rfl)) c t1.data ready1)
-  rintro t2 ⟨pc2,sp2,bx2,bp2,r12_2,r13_2,_,_,ready2,frame2⟩
+  rintro t2 ⟨pc2,sp2,bx2,bp2,r12_2,r13_2,r14_2,r15_2,ready2,frame2⟩
   rw [word1, mem1] at frame2
   have pre : Frames c s seq 48 t2.data.dmem
       (t2.data.dmem.storeInt (s.regs.rdi.toBitVec+16) 8 (1+seq).toInt) :=
@@ -152,7 +154,7 @@ theorem enter4 (fetch : Int64 → Option Decoded)
     apply UInt64.toBitVec_inj.mp
     show s.regs.rsp.toBitVec - 40#64 - 8#64 = s.regs.rsp.toBitVec - 48#64
     bv_omega
-  refine ⟨pc4,stack,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨pc4,stack,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · rw [regs4, regs3]; exact rbx2
   · rw [regs4]; rfl
   · rw [regs4, regs3]
@@ -163,6 +165,8 @@ theorem enter4 (fetch : Int64 → Option Decoded)
     bv_omega
   · exact cidr_reg s.regs t3.data.regs a.data.regs (by rw [regs3]; exact rbp2) (by rw [regs4])
   · rw [regs4, regs3]; exact r12two
+  · rw [regs4, regs3]; exact r14_2.trans (by rw [regs1])
+  · rw [regs4, regs3]; exact r15_2.trans (by rw [regs1])
   · rw [stack, mem4]
     exact load64_store _ _ _
   · exact (frames.saved caller (by omega) (by omega) 8 (by omega) (by omega)).trans (pushed_r13 s)
@@ -222,7 +226,7 @@ theorem enter6 (fetch : Int64 → Option Decoded)
   apply eventually_trans (instructionStep fetch) _ _ _
     (Services.call fetch (Insert6.entry+0x15) "L_ffffffff810f31f0" .pc tracePc
       (decoder.insert6 _ _ (by rfl)) c t1.data ready1)
-  rintro t2 ⟨pc2,sp2,bx2,bp2,r12_2,r13_2,_,_,ready2,frame2⟩
+  rintro t2 ⟨pc2,sp2,bx2,bp2,r12_2,r13_2,r14_2,r15_2,ready2,frame2⟩
   rw [word1, mem1] at frame2
   have pre : Frames c s seq 56 t2.data.dmem
       (t2.data.dmem.storeInt (s.regs.rdi.toBitVec+16) 8 (1+seq).toInt) :=
@@ -327,7 +331,7 @@ theorem enter6 (fetch : Int64 → Option Decoded)
     bv_omega
   have highBound := (Allowedips.swap64 high).isLt
   have lowBound := (Allowedips.swap64 low).isLt
-  refine ⟨pc4,stack,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨pc4,stack,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · rw [regs4, regs3, regsP]
     show t2.data.regs.rbx + 8 = s.regs.rdi + 8
     rw [rbx2]
@@ -335,6 +339,8 @@ theorem enter6 (fetch : Int64 → Option Decoded)
   · rw [regs4, regs3]; exact rspP
   · exact cidr_reg s.regs t2.data.regs a.data.regs rbp2 (by rw [regs4, regs3, regsP])
   · rw [regs4, regs3, regsP]; exact r13two
+  · rw [regs4, regs3, regsP]; exact r14_2.trans (by rw [regs1])
+  · rw [regs4, regs3, regsP]; exact r15_2.trans (by rw [regs1])
   · rw [stack, mem4]
     exact load64_store _ _ _
   · exact (frames.saved caller (by omega) (by omega) 8 (by omega) (by omega)).trans (pushed_r13 s)

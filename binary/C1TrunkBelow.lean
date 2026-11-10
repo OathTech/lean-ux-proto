@@ -59,6 +59,17 @@ theorem below_disjoint (sp : BitVec 64) (c1 n1 c2 n2 : Nat)
   rw [e2]
   exact InRange.offset_disjoint _ c2 n1 c1 n2 (by omega) (by omega) (by omega) a inside
 
+/-- A range below `sp` lies above a lower range that ends before it. -/
+theorem below_under (sp : BitVec 64) (c1 n1 c2 n2 : Nat) (h : c1 ≤ c2)
+    (bound : c2 - c1 + n1 ≤ 2^64) (apart : n2 ≤ c2 - c1) (a : BitVec 64)
+    (inside : InRange (sp - .ofNat 64 c1) n1 a) : ¬InRange (sp - .ofNat 64 c2) n2 a := by
+  have e1 : sp - .ofNat 64 c1 = sp - .ofNat 64 c2 + .ofNat 64 (c2-c1) := by
+    rw [sub_add_ofNat sp c2 (c2-c1) (by omega)]; congr 2; omega
+  have e2 : sp - .ofNat 64 c2 = sp - .ofNat 64 c2 + .ofNat 64 0 := by simp
+  rw [e1] at inside
+  rw [e2]
+  exact InRange.offset_disjoint _ (c2-c1) n1 0 n2 bound (by omega) (by omega) a inside
+
 theorem below_load_store (m : Mem 64) (sp : BitVec 64) (c1 n1 c2 n2 : Nat) (v : Int)
     (b1 : c1 + n1 < 2^63) (b2 : c2 + n2 < 2^63) (apart : c2 + n1 ≤ c1 ∨ c1 + n2 ≤ c2) :
     (m.storeInt (sp - .ofNat 64 c2) n2 v).loadInt (sp - .ofNat 64 c1) n1 =
