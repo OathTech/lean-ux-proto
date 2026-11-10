@@ -972,3 +972,29 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   does not describe the C. No initialized T1 limit counterexample was claimed.
   The counterexamples remain, and the mirror is unchanged. See the campaign-3
   report for the per-result claims and limitations.
+
+- **2026-11-09 [USER]** The binary track runs one bounded experiment on the
+  external Ascent refinement tooling and the Kraken fork's
+  weakest-precondition layer, following the coordinator's assessment of
+  both; the coordinator orchestrates worker agents, and building that
+  external code is approved for the purpose. The client, stages, budgets,
+  stop conditions and layout are the coordinator's [AGENT]. Charter:
+  docs/2026-11-09-charter-ascent-probe.md. The experiment's Kraken pin (the
+  fork plus our rebased patches) and nightly toolchain are confined to
+  `task/ascent-probe`.
+- **2026-11-10 [USER]** The Ascent probe gains a third stage after stage 2
+  reports: one unproved, heap-mutating segment of the allowed-IPs insertion
+  path, attempted by the direct method and through the WP layer by separate
+  fresh workers under equal budgets, to measure authoring cost; slower
+  checking is acceptable if authoring is cheaper. The segment's selection,
+  the frozen statement, the budgets and the arm rules are the coordinator's
+  [AGENT]; they are in the charter's stage 3 section.
+- **2026-11-10 [USER]** The Ascent probe closes. Its documentation lands
+  (charter, bridge design, independent review, closing report with
+  replication instructions); none of its code does: `binary-ascent/` stays
+  on the local branch `task/ascent-probe`, unmerged and unpushed, in case
+  the direction is revisited. The binary track does not migrate to the
+  external weakest-precondition layer or to the lifting tactic on this
+  evidence [AGENT, coordinator: the recommendation in the closing report,
+  docs/2026-11-10-ascent-probe.md]. A fresh assessment of the binary track
+  with the current agents is commissioned separately.
