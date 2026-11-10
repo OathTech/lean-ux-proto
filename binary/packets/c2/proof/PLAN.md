@@ -97,7 +97,8 @@ planned 25 to 30. Briefs: `WP1.md`, `WP2.md`, `WP3.md`.
 1. WP1's neutral half lands first on this branch (`CallbackCmp8*`), because C1 needs
    it: the C1 branch takes `CallbackCmp8Image.lean`, `CallbackCmp8Rule.lean` and
    `CallbackCmp8*.lean` unchanged, and proves on its side that its own image terms
-   (`StatementC1CallbackImage.fetch`) give `Callback.Cmp8.Agreement`. This branch
+   (`StatementC1CallbackImage.fetch`) give `Callback.Cmp8.Cmp8Agreement` (its image has the
+   variable form only, so each 8-byte rule asks for its own entry alone). This branch
    owns those modules; C1 does not edit them.
 2. WP1's C2 half, WP2, WP3, in any order: they touch disjoint files.
 3. The integration pass.
