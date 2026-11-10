@@ -59,8 +59,6 @@ local macro "stub_prefix" agree:ident cache:ident stateRead:ident tableRead:iden
    stub_instr $agree
    simp))
 
-set_option maxRecDepth 4096 in -- the interpreter's terms, as in the landed callback proofs
-set_option maxHeartbeats 4000000 in -- sixteen concrete executions of the twelve instructions
 /-- The allocation stub, executed: with `count` answers given and the pending
 outcome byte `code`, it stores `count+1` in the state byte and returns object
 `count` (outcome 1) or NULL (outcome 0), changing nothing else in memory. -/

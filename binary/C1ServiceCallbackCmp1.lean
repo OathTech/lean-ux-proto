@@ -57,8 +57,6 @@ theorem body (fetch : Int64 → Option Decoded) (services : ServiceDecoderAgreem
   exact guarded_agreement services
     (change_guard (fun q inside => ⟨inside.1,Text.service_apart inside.2⟩) (Text.in_service run))
 
-set_option maxRecDepth 4096 in -- the interpreter's terms for five instructions, as in the landed `cmp4_run`
-set_option maxHeartbeats 2000000 in -- as above
 theorem cmp1_run (fetch : Int64 → Option Decoded) (services : ServiceDecoderAgreement fetch)
     (stub : ∀ pc instruction, StatementC1CallbackImage.fetch pc = some instruction →
       fetch pc = some instruction)
