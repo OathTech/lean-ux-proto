@@ -1,5 +1,8 @@
 import CallbackCmp8Rule
 import KcovInvariant
+import CallbackWrappers
+import CallbackPc
+import CallbackLeafHistory
 
 /-! Proofs of the callback rules of `CallbackCmp8Rule` (`PcRule`, `Cmp8Rule`,
 `ConstCmp8Rule`) from the image. Work package 1 of result C2 owns this file and every
@@ -261,4 +264,58 @@ theorem Leaf.callback {fetch : Int64 → Option Decoded} {address : Int64}
 #print axioms ready_of_covered
 #print axioms preserved_of_covered
 #print axioms Leaf.callback
+
+/-! ## The interior -/
+
+/-- Every guarded step fetched its instruction, so its program counter is in the
+domain of the fetch it ran under. -/
+theorem guarded_fetched {fetch : Int64 → Option Decoded} {guard P : MachineState → Prop}
+    {s : MachineState} (run : Eventually (guardedStep fetch guard) P s) :
+    Eventually (guardedStep fetch (fun q => guard q ∧ (fetch q.pc).isSome = true)) P s := by
+  induction run with
+  | done s hp => exact .done s hp
+  | step s mid step _ ih =>
+    apply step_cps
+    refine ⟨⟨step.1, ?_⟩, instruction_mono fetch s _ _ ih step.2⟩
+    have fetched := step.2
+    unfold instructionStep at fetched
+    cases read : fetch s.pc with
+    | none => simp [read] at fetched
+    | some _ => rfl
+
+/-- A run of the shared service bodies, under the ambient decoder, with its interior
+in the callbacks' text. -/
+theorem service_interior {fetch : Int64 → Option Decoded} (services : ServiceDecoderAgreement fetch)
+    {rsp : UInt64} {P : MachineState → Prop} {s : MachineState}
+    (run : Eventually (guardedStep ServiceImage.fetch (leafGuard rsp)) P s) :
+    Eventually (guardedStep fetch (Interior rsp)) P s := by
+  apply guarded_agreement services
+  apply change_guard _ (guarded_fetched run)
+  intro t guarded
+  exact ⟨guarded.1, .inl guarded.2⟩
+
+/-- A guarded run recorded as a history gives the rule's conclusion. -/
+theorem leaf_of_run {fetch : Int64 → Option Decoded} {address : Int64}
+    {plan : MachineState → Option (List WordWrite)}
+    (run : ∀ s ra, s.pc = address → Ready plan s → EntryFrame s ra →
+      Eventually (guardedStep fetch (Interior s.data.regs.rsp))
+        (fun t => Returned s t ra ∧ EqualOutside (Writes plan s) s.data.dmem t.data.dmem ∧
+          Effect plan s t) s) :
+    Leaf fetch address plan := by
+  intro s ra pc ready frame
+  have history := guarded_history fetch _ _ s (run s ra pc ready frame) [] (by simp)
+  apply eventually_weaken (historyStep fetch) _ _ _ _ history
+  rintro t ⟨⟨returned, framed, effect⟩, interior⟩
+  exact ⟨returned, framed, effect, interior⟩
+
+/-- `PcRule`: the landed `pc_run`, its interior confined to the callbacks' text. -/
+theorem pc_rule : PcRule := by
+  intro fetch services
+  apply leaf_of_run
+  rintro ⟨s, p⟩ ra pc ready frame
+  change p = _ at pc
+  subst p
+  exact service_interior services (pc_run s ra ready frame)
+
+#print axioms pc_rule
 end Binary.Callback.Cmp8
