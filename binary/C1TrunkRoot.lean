@@ -330,7 +330,7 @@ theorem root_boundary (trunk : Trunk L A c s w v4 key cidr pid ra names stream d
       · exact ⟨by show v.data.regs.rsp.toNat + 16 + 4 ≤ 2^64; rw [vspNat]; omega,Nat.zero_lt_succ _⟩
     · exact fun span member => (at'.object.writeSpans trunk v.data at'.rbx span member).1
     · intro stackSpan member heapSpan written x inside covered
-      have inHeap := (at'.object.writeSpans trunk v.data at'.rbx heapSpan written).2 x covered
+      have inHeap := (at'.object.writeSpans trunk v.data at'.rbx heapSpan written).2.1 x covered
       apply trunk.sep.heapStack x inHeap
       simp only [List.mem_cons, List.not_mem_nil, or_false] at member
       rcases member with rfl | rfl | rfl

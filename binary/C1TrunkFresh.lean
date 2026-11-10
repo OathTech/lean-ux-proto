@@ -94,12 +94,29 @@ theorem Object.inArena (trunk : Trunk L A c s w v4 key cidr pid ra names stream 
   · rw [List.mem_singleton.mp new]
     exact object.arena
 
-/-- The root initialization's write spans: in the heap, nonempty, not wrapping. -/
+/-- The arena is apart from the table and from every peer object. -/
+theorem arena_not_object {L : Statements.C1.Layout}
+    (objectsApart : spansApart ([(L.table,AllowedipsMutationLayout.tableSize)] ++
+      L.peers.map fun (_,a) => (a,Layouts.peerSize)) L.arena = true)
+    (object : Pair.Span)
+    (member : object ∈ [(L.table,AllowedipsMutationLayout.tableSize)] ++
+      L.peers.map fun (_,a) => (a,Layouts.peerSize))
+    (x : BitVec 64) (inside : object.contains x) : ¬L.Arena x := by
+  rintro ⟨span,isArena,inArena⟩
+  exact spansApart_sound objectsApart member isArena inside inArena
+
+/-- The root initialization's write spans: nonempty and not wrapping, in the
+heap, apart from the sequence word, and inside the arena only within a node
+that stays handed out. -/
 theorem Object.writeSpans (trunk : Trunk L A c s w v4 key cidr pid ra names stream d seq a)
     {n : Nat} (object : Object L names n) (v : MachineData) (rbx : v.regs.rbx.toNat = n) :
     ∀ span ∈ Root.writeSpans (names.allocated n) v,
-      (span.1 + span.2 ≤ 2^64 ∧ 0 < span.2) ∧ ∀ x, span.contains x → L.Heap x := by
-  have tableTop := (Root.table_valid_geometry object.valid).1
+      (span.1 + span.2 ≤ 2^64 ∧ 0 < span.2) ∧ (∀ x, span.contains x → L.Heap x) ∧
+      (∀ x, span.contains x → ¬InRange (.ofNat 64 (L.table+AllowedipsMutationLayout.seq)) 8 x) ∧
+      (∀ x, span.contains x → L.Arena x → Kept (names.trie.nodes.map (·.2) ++ [n]) x) := by
+  obtain ⟨tableTop,tableApart⟩ := Root.table_valid_geometry object.valid
+  have tableEq : (names.allocated n).table = L.table := trunk.table
+  rw [tableEq] at tableTop tableApart
   have trieValid : Trie.validate (names.allocated n).trie Root.nodeOffsets = .ok () := by
     have valid := object.valid
     unfold validate at valid
@@ -107,48 +124,95 @@ theorem Object.writeSpans (trunk : Trunk L A c s w v4 key cidr pid ra names stre
     exact trieValid
   have ranges := trie_validate_ranges trieValid
   have inArena := object.inArena trunk
+  have seqValue : AllowedipsMutationLayout.seq = 16 := rfl
+  have seqSpan (x : BitVec 64) (h : InRange (.ofNat 64 (L.table+AllowedipsMutationLayout.seq)) 8 x) :
+      Pair.Span.contains (L.table+AllowedipsMutationLayout.seq,8) x := h
+  have nodeCase (base : Nat) (named : ∃ node ∈ (names.allocated n).trie.nodes, node.2 = base)
+      (off size : Nat) (fits : off + size ≤ 72) (positive : 0 < size) :
+      (base + off + size ≤ 2^64 ∧ 0 < size) ∧
+      (∀ x, Pair.Span.contains (base+off,size) x → L.Heap x) ∧
+      (∀ x, Pair.Span.contains (base+off,size) x →
+        ¬InRange (.ofNat 64 (L.table+AllowedipsMutationLayout.seq)) 8 x) ∧
+      (∀ x, Pair.Span.contains (base+off,size) x → L.Arena x →
+        Kept (names.trie.nodes.map (·.2) ++ [n]) x) := by
+    obtain ⟨node,isNode,rfl⟩ := named
+    have allocation : (node.2,Root.nodeOffsets.nodeSize) ∈ allocations (names.allocated n) Root.nodeOffsets :=
+      List.mem_append_left _ (List.mem_map.mpr ⟨node,isNode,rfl⟩)
+    have bound := (ranges _ allocation).2
+    have apart := tableApart _ allocation
+    have size72 : Root.nodeOffsets.nodeSize = 72 := rfl
+    simp only [disjointRanges, Bool.or_eq_true, decide_eq_true_eq, size72] at apart bound
+    obtain ⟨home,isArena,low,high⟩ := inArena node isNode
+    unfold nodeSize at high
+    refine ⟨⟨by omega,positive⟩,fun x inside => ?_,fun x inside h => ?_,fun x inside _ => ?_⟩
+    · exact arena_heap x ⟨home,isArena,span_within _ _ _ _ (by omega) (by omega) x inside⟩
+    · exact nat_apart (node.2+off,size) (L.table+AllowedipsMutationLayout.seq,8)
+        (by show node.2+off+size ≤ 2^64; omega) (by simp only [seqValue]; omega)
+        (by show node.2+off+size ≤ L.table+AllowedipsMutationLayout.seq ∨
+              L.table+AllowedipsMutationLayout.seq+8 ≤ node.2+off
+            simp only [seqValue]; omega) x inside (seqSpan x h)
+    · refine ⟨node.2,?_,span_within _ _ _ _ (by omega) (by unfold nodeSize; omega) x inside⟩
+      have member : node.2 ∈ (names.allocated n).trie.nodes.map (·.2) := List.mem_map.mpr ⟨node,isNode,rfl⟩
+      simpa [Names.allocated] using member
   intro span member
   simp only [Root.writeSpans, List.mem_append, List.mem_cons, List.not_mem_nil, or_false] at member
   rcases member with ((rfl | rfl) | node) | peer
   · rw [rbx]
-    refine ⟨⟨by show n + 72 ≤ 2^64; have := object.top; omega,Nat.zero_lt_succ _⟩,fun x inside => ?_⟩
-    obtain ⟨home,isArena,low,high⟩ := object.arena
-    exact arena_heap x ⟨home,isArena,span_within _ _ _ _ low (by unfold nodeSize at high; omega) x inside⟩
-  · have tableEq : (names.allocated n).table = L.table := trunk.table
-    refine ⟨⟨?_,Nat.zero_lt_succ _⟩,fun x inside => ?_⟩
+    have h := nodeCase n ⟨(names.nextNode,n),List.mem_append_right _ (List.mem_singleton.mpr rfl),rfl⟩
+      0 72 (by omega) (by omega)
+    exact h
+  · have inTable (x : BitVec 64) (inside : Pair.Span.contains
+        ((names.allocated n).table+(if (v.regs.rbp.toNat == 32) = true then 0 else 8),8) x) :
+        Pair.Span.contains (L.table,AllowedipsMutationLayout.tableSize) x := by
+      rw [tableEq] at inside
+      exact span_within _ _ _ _ (by omega) (by show _ ≤ L.table + 24; split <;> omega) x inside
+    refine ⟨⟨?_,Nat.zero_lt_succ _⟩,fun x inside => ?_,fun x inside h => ?_,fun x inside arena => ?_⟩
     · show (names.allocated n).table + _ + 8 ≤ 2^64
+      rw [tableEq]
       split <;> omega
     · rw [tableEq] at inside
       refine ⟨_,?_,inside⟩
       by_cases four : (v.regs.rbp.toNat == 32) = true <;>
         simp [four, Layout.heap, Layout.fixed, tableFields, AllowedipsMutationLayout.root4,
           AllowedipsMutationLayout.root6]
+    · rw [tableEq] at inside
+      exact nat_apart _ (L.table+AllowedipsMutationLayout.seq,8)
+        (by show L.table + _ + 8 ≤ 2^64; split <;> omega) (by simp only [seqValue]; omega)
+        (by show L.table + _ + 8 ≤ L.table+AllowedipsMutationLayout.seq ∨ _
+            simp only [seqValue]; split <;> omega) x inside (seqSpan x h)
+    · exact absurd arena (arena_not_object trunk.objectsApart _
+        (List.mem_append_left _ (List.mem_singleton.mpr rfl)) x (inTable x inside))
   · obtain ⟨named,isNode,rfl⟩ := List.mem_map.mp node
-    have bound := (ranges (named.2,Root.nodeOffsets.nodeSize)
-      (List.mem_append_left _ (List.mem_map.mpr ⟨named,isNode,rfl⟩))).2
-    have size : Root.nodeOffsets.nodeSize = 72 := rfl
-    rw [size] at bound
-    refine ⟨⟨by show named.2 + 56 + 16 ≤ 2^64; omega,Nat.zero_lt_succ _⟩,fun x inside => ?_⟩
-    obtain ⟨home,isArena,low,high⟩ := inArena named isNode
-    exact arena_heap x ⟨home,isArena,span_within _ _ _ _ (by omega) (by unfold nodeSize at high; omega) x inside⟩
+    exact nodeCase named.2 ⟨named,isNode,rfl⟩ 56 16 (by omega) (by omega)
   · obtain ⟨named,isPeer,rfl⟩ := List.mem_map.mp peer
-    have bound := (ranges (named.2,Layouts.peerSize)
-      (List.mem_append_right _ (List.mem_map.mpr ⟨named,isPeer,rfl⟩))).2
+    have allocation : (named.2,Layouts.peerSize) ∈ allocations (names.allocated n) Root.nodeOffsets :=
+      List.mem_append_right _ (List.mem_map.mpr ⟨named,isPeer,rfl⟩)
+    have bound := (ranges _ allocation).2
+    have apart := tableApart _ allocation
     have size : Layouts.peerSize = 1520 := rfl
-    rw [size] at bound
+    simp only [disjointRanges, Bool.or_eq_true, decide_eq_true_eq, size] at apart bound
     have isPeer' : named ∈ L.peers := trunk.peers ▸ isPeer
-    refine ⟨⟨by show named.2 + 1096 + 16 ≤ 2^64; omega,Nat.zero_lt_succ _⟩,fun x inside => ?_⟩
-    obtain ⟨i,hi,eq⟩ := inside
-    by_cases first : i < 8
-    · refine ⟨(named.2+1096,8),List.mem_append_left _ (List.mem_append_right _
-        (List.mem_flatMap.mpr ⟨named,isPeer',List.mem_map.mpr ⟨(1096,8),by decide,rfl⟩⟩)),⟨i,first,eq⟩⟩
-    · refine ⟨(named.2+1104,8),List.mem_append_left _ (List.mem_append_right _
-        (List.mem_flatMap.mpr ⟨named,isPeer',List.mem_map.mpr ⟨(1104,8),by decide,rfl⟩⟩)),
-        ⟨i-8,by omega,?_⟩⟩
-      rw [eq, ← BitVec.ofNat_add, ← BitVec.ofNat_add]
-      congr 1
-      show named.2 + 1096 + i = named.2 + 1104 + (i - 8)
-      omega
+    refine ⟨⟨by show named.2 + 1096 + 16 ≤ 2^64; omega,Nat.zero_lt_succ _⟩,fun x inside => ?_,
+      fun x inside h => ?_,fun x inside arena => ?_⟩
+    · obtain ⟨i,hi,eq⟩ := inside
+      by_cases first : i < 8
+      · exact ⟨(named.2+1096,8),List.mem_append_left _ (List.mem_append_right _
+          (List.mem_flatMap.mpr ⟨named,isPeer',List.mem_map.mpr ⟨(1096,8),by decide,rfl⟩⟩)),⟨i,first,eq⟩⟩
+      · refine ⟨(named.2+1104,8),List.mem_append_left _ (List.mem_append_right _
+          (List.mem_flatMap.mpr ⟨named,isPeer',List.mem_map.mpr ⟨(1104,8),by decide,rfl⟩⟩)),
+          ⟨i-8,by omega,?_⟩⟩
+        rw [eq, ← BitVec.ofNat_add, ← BitVec.ofNat_add]
+        congr 1
+        show named.2 + 1096 + i = named.2 + 1104 + (i - 8)
+        omega
+    · exact nat_apart (named.2+1096,16) (L.table+AllowedipsMutationLayout.seq,8)
+        (by show named.2+1096+16 ≤ 2^64; omega) (by simp only [seqValue]; omega)
+        (by show named.2+1096+16 ≤ L.table+AllowedipsMutationLayout.seq ∨
+              L.table+AllowedipsMutationLayout.seq+8 ≤ named.2+1096
+            simp only [seqValue]; omega) x inside (seqSpan x h)
+    · exact absurd arena (arena_not_object trunk.objectsApart (named.2,Layouts.peerSize)
+        (List.mem_append_right _ (List.mem_map.mpr ⟨named,isPeer',rfl⟩)) x
+        (span_within _ _ _ _ (by omega) (by show named.2+1096+16 ≤ named.2+1520; omega) x inside))
 end
 
 #print axioms apart_of_bytes
