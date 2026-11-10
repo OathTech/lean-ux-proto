@@ -134,8 +134,10 @@ cap ../scripts/in-bundle lake env leanexport LookupSnapshotTransport LookupWitne
 ```
 
 Result C2's closure, the bridge and its four proof-tree modules included, is
-exported on its own after the bridge is built (`cap scripts/in-bundle lake -d
-binary build C2Bridge`, from the worktree root); then, in `binary/`:
+exported on its own. Build the bridge from the source being checked
+immediately before the export (`cap scripts/in-bundle lake -d binary build
+C2Bridge`, from the worktree root): the export reads whatever was last built,
+and the replay accepts a stale output without complaint. Then, in `binary/`:
 
 ```sh
 cap ../scripts/in-bundle lake env leanexport C2Headline C2Bridge > ../.tmp/c2-check.ndjson

@@ -1,9 +1,13 @@
 # C2, the receive replay window: closing report
 
 Branch `task/binary-c2`. Status: the headline is closed on the branch; it is
-not on `main`. Three things stand between it and a landed result: the
-independent landing review, the owner's signoff on a change to a standing
-rule (section 6), and the kernel replay run outside the sandbox (section 5).
+not on `main`. The independent landing review
+(`docs/2026-11-10-review-c2-landing.md`, `bf36a236` on
+`task/review-c2-landing`) says land with named changes; section 9 disposes
+of each finding. What stands between the branch and a landed result is the
+owner's: his signature on the final statement, his signoff on a change to a
+standing rule (section 6), and the kernel replay run outside the sandbox
+(section 5).
 
 ## 1. What is proved
 
@@ -52,8 +56,12 @@ of the pinned s5 image (`counter_validate` as inlined in
   address between which the window bytes are unchanged, no packet counter is
   accepted twice. This is the landed `CounterWindow.accepted_nodup` carried to
   the machine code through `Refines` and `CounterWindow.mirror_step`.
-- `ReplayWitness`: the premises are met by a concrete state on which one
-  counter is accepted and then refused.
+- `ReplayWitness`: the premises are met. The entry state is concrete
+  (coverage in PC-recording mode, a zero window, packet counter 5); the
+  second visit enters at the first visit's exit state with the program
+  counter put back at the entry. That second entry is not a state the kernel
+  is ever in: the witness shows that `Visits` is satisfiable and that
+  accept-then-refuse happens, and no more.
 
 Also proved, in no headline: `Binary.C2.Bridge.replay_refused : ReplayRefused`.
 
@@ -79,7 +87,15 @@ The printed surface (`binary/TrustSurface.expected.txt`) gained 234 lines:
 | `Visits`, `WindowRetained`, `FirstExit` | `C2Statement` | For the third clause only: each visit starts in a `Context` and ends at its first exit, and the window bytes are the same from one visit's exit to the next visit's entry |
 | Kraken's x86-64 semantics at `96d48487`, ten patches | `binary/kraken-patches`, `TrustBase.lean` | Patch ten gives `bts` with a 64-bit register offset on a memory quadword, unlocked: defined when the offset is below 64 and the quadword mapped; CF takes the old bit, the bit is set, the five other status flags are undefined. Tested against one processor, not proved faithful |
 | The mirror's `counterValidate` (`Leanux.WG.RxData`), by path | the mirror at `218d3ffd` | `Refines` says no more than the mirror says |
-| The four `CounterWindow` modules of the proof tree | the bridge | `mirror_step` and `accepted_nodup` as validated by the proof gate over mirror `218d3ffd` |
+
+The four `CounterWindow` modules of the proof tree are not assumed: the
+bridge build compiles them from source, and the headline's axioms and the
+replay export cover them. The pure window model is proof, not surface.
+
+The image terms (`binary/C2Image.lean`) are the reading of the image. They
+are compared with the saved ELF by `binary/generate_c2.py --check`, a
+by-hand check beside the landed generators' in `binary/README.md`; the gate
+prints no image terms, for this result as for the landed ones.
 
 ## 3. What is not claimed
 
@@ -112,51 +128,76 @@ computes it, the representation lemmas, the first-exit facts and the
 witness. `C2CutAssembly` joins them; `C2Headline` and the bridge apply the
 joins.
 
+The invariant carried from +14 on, across each of the thirteen calls and at
+the head of each loop iteration (`Carried`): coverage readiness at the
+raised preempt count, the window bytes holding the window in progress, the
+three stack slots mapped, memory equal to the entry's outside the footprint
+and the coverage buffer, and `%rsp`, `%rbx`, `%r12`, `%r13` the entry's. The
+cut predicates and the pivot are also executed (`binary/packets/c2/proof/check`):
+evidence that they hold on those runs, beside the proof.
+
+The 8-byte comparison callback is stated once, in `CallbackCmp8Image` and
+`CallbackCmp8Rule`, and proved in `CallbackCmp8`, none of which imports a C2
+module. The C1 branch takes those files unchanged and proves on its side
+that its own image terms give `Cmp8.Cmp8Agreement`; the note written for it
+is in history at `c4b66700:binary/packets/c2/proof/C1-ADAPTER.md`.
+
 | Part | Files | Lines | Elapsed agent time |
 | --- | --- | ---: | ---: |
 | Statement and image terms | `C2Statement`, `C2Image` | 336 | (earlier phases) |
 | Cut: pivot, interfaces, assembly, shared callback statement | `C2Cut`, `C2CutInterfaces`, `C2CutAssembly`, `CallbackCmp8Image`, `CallbackCmp8Rule` | 983 | (earlier phase) |
-| Package 1: callback rules, layout, `bts` support, call sites | `CallbackCmp8`, `C2Callbacks` | 871 | about 15 minutes |
-| Package 2: the five segments | `C2Range` and six `C2Range*` modules | 1,408 | about 21 minutes |
-| Package 3: representation, mirror link, sequences, witness | `C2Sequences` | 1,318 | about 42 minutes |
-| Integration: closed theorems, bridge, gate | `C2Headline`, `bridge/C2Bridge.lean`, `scripts/c2-bridge-gate` | 80, 141, 204 | about 50 minutes |
+| Package 1: callback rules, layout, `bts` support, call sites | `CallbackCmp8`, `C2Callbacks` | 869 | about 15 minutes |
+| Package 2: the five segments | `C2Range` and six `C2Range*` modules | 1,407 | about 21 minutes |
+| Package 3: representation, mirror link, sequences, witness | `C2Sequences` | 1,317 | about 42 minutes |
+| Integration: closed theorems, bridge, gate | `C2Headline`, `bridge/C2Bridge.lean`, `scripts/c2-bridge-gate` | 80, 141, 202 | about 50 minutes, and about 90 on the review's findings |
 
 No file carries a resource raise. Each package module compiles in one to
 three seconds. The plan estimated 20 to 33 worker-hours for the three
-packages; they took about 78 agent-minutes. That gap is reported here as a
-fact for the landing review, not explained: the integration pass checked
-types, axioms and builds, and did not re-derive the mathematics.
+packages; they took about 78 agent-minutes. The integration pass checked
+types, axioms and builds, and did not re-derive the mathematics. The
+landing review's answer: the closed theorems take no hypothesis, so every
+intermediate device is inside a kernel-checked term, and what can be wrong
+while everything checks is only the statement, the reading of the image and
+the semantic base, which it read.
 
 ## 5. Validation
 
-On the integrated code (the commit before this report; the report and its
-index row are the only later changes).
+`scripts/in-bundle` resets `PATH`, so the two binary gates cannot find
+`capped` themselves: they are capped only when the whole command is wrapped,
+as written here. The first three rows and step 4 were rerun, wrapped, after
+the changes of section 9; the other rows are from the integration pass, and
+no file they read has changed since except header comments in four package
+modules (which the build of the first row recompiled).
 
 | Check | Command | Result |
 | --- | --- | --- |
-| Binary package build | `capped -m 24G -- scripts/in-bundle lake -d binary build` | 1137 jobs, no warning in the C2 files |
-| Binary gate | `scripts/in-bundle "$(command -v python3)" scripts/binary-proof-gate` | PASS: pin `96d48487`, 74 terminal statements on the standard axioms (71 before, 3 new), surface diff PASS, no forbidden token |
-| Bridge gate | `scripts/in-bundle python3 scripts/c2-bridge-gate` | PASS: 130 jobs, 5 theorems on the standard three axioms, lag report: four modules at `b32bb164`, mirror at `1b7a3b70`, register names `218d3ffd`, no mirror file differs |
-| Bridge gate, one-off mutants (run once, deleted) | a fifth proof-tree import; a second Lean file in `binary/bridge/`; `sorry` in `headline`; a register row saying Current over a commit the mirror differs from | 4 of 4 rejected |
+| Binary package build | `capped -m 24G -- scripts/in-bundle lake -d binary build` | 1137 jobs, no warning |
+| Binary gate | `capped -m 24G -- scripts/in-bundle "$(command -v python3)" scripts/binary-proof-gate` | PASS: pin `96d48487`, 74 terminal statements on the standard axioms (71 before, 3 new), surface diff PASS, no forbidden token |
+| Bridge gate | `capped -m 24G -- scripts/in-bundle "$(command -v python3)" scripts/c2-bridge-gate` | PASS: 130 jobs, 5 theorems on the standard three axioms, the statements of `headline` and `no_counter_accepted_twice` equal to the expected text; printed lag report: four modules at `b32bb164`, mirror at `1b7a3b70`, register names `218d3ffd` |
+| Bridge gate, the reviewer's two restatements as one-off mutants (run once, reverted) | `no_counter_accepted_twice : True`; `headline : ExitsCleanly` | both rejected on the statement diff |
+| Proof gate, step 4 alone | `check_imports` of `scripts/proof-gate` | main's gate on this tree: 4 findings (the bridge's four imports). This branch's gate on this tree: 0. This branch's gate on main's tree: 0. A fifth proof-tree import in the bridge: 1. The same four imports in another file: 4 |
+| Whole proof gate, with the changed rule | `capped -m 24G -- scripts/in-bundle scripts/proof-gate` | PASS: 6681 jobs, 2455 terminal statements over 20 root modules on the standard three axioms; about 30 minutes. Not rerun: `scripts/proof-gate` is as it was for that run |
 | Types of the packages' theorems | a scratch file comparing each constant's type with its proposition, syntactically | 25 closed and 5 conditional theorems have exactly the stated types |
-| Proof gate, step 4 alone | `check_imports` of `scripts/proof-gate` | 0 findings before the bridge; 4 with the bridge and the old rule; 0 with the changed rule; 1 with a fifth proof-tree import in the bridge; 4 with the same four imports in another file |
-| Whole proof gate, with the changed rule | `capped -m 24G -- scripts/in-bundle scripts/proof-gate` | PASS: 6681 jobs, 2455 terminal statements over 20 root modules on the standard three axioms; about 30 minutes |
 | Statement tests | `binary/packets/c2/check` | exit 0, about 24 minutes. Every count equals the final statement's table (its section 4): 972 runs, 564 accepted, 0 failures; the eleven wrong variants fail 16, 8, 56, 160, 216, 112, 112, 108, 108, 112, 108 of 216 runs; six sequences, 465 visits, 2, 8, 145, 143, 113, 3 accepted; search 775 and 921 layouts, broken on 0 under the revised `Context`; capacity loop 28,568 states, 9,442 meeting the revised `Context`, broken on 0, replay accepted on 0 |
 | Cut tests | `binary/packets/c2/proof/check` | exit 0, about 4 minutes: the pivot agrees with the mirror on 2,925 cases; 512 runs, 41,760 calls, 18,544 loop iterations, every cut predicate held |
+| Image terms against the ELF, by hand | `scripts/in-bundle "$(command -v python3)" -B binary/generate_c2.py --check` | "C2Image.lean matches the pinned ELF": 70 instructions, 324 bytes, 13 call sites |
+| The Kraken patches' own tests, by hand | the command in `binary/README.md` (eleven test modules) | 24 jobs, every `#guard` holds |
 | Kraken bootstrap from nothing | `binary/test_bootstrap.py` (a scratch root with no checkout) | 10 patches applied, identity equals the lock (`96d48487`), 1 test OK |
 | Mirror build | `capped -m 24G -- scripts/in-bundle lake build` | 66 jobs, completed |
 | Unit tier | the `unittest` line of AGENTS.md | 149 tests, OK (1 skipped) |
 | Kernel replay export | `lake env leanexport C2Headline C2Bridge` | exit 0; 17,824,663 lines, 1,095,410,711 bytes |
 | Kernel replay, diagnostic inside the sandbox | `lake check --from-export=… --inadvisably-no-sandbox` | exit 0 in about 3 minutes: "Lean default kernel accepts the solution", axioms `propext`, `Quot.sound`, `Classical.choice`. Not trustworthy by its own banner (sandbox disabled); it needed `/usr/bin` appended to `PATH` for `git` |
 
-`binary/bridge/check` no longer exists: it compiled the staged copy of the
-bridge and is replaced by the named gate.
-
 The gate proper is the same replay run by the owner outside the sandbox.
-From the worktree root, after `capped -- scripts/in-bundle lake -d binary
-build C2Bridge`:
+Two cautions from the landing review. The export reads whatever was last
+built, and the replay accepted a stale output in the reviewer's first try:
+build `C2Bridge` from the merged source immediately before exporting. And
+"the kernel accepts the solution" says nothing about what the headline
+states: the bridge gate's statement comparison is what checks that. From the
+worktree root:
 
 ```sh
+capped -- scripts/in-bundle lake -d binary build C2Bridge      # from the merged source, immediately before the export
 cd binary
 capped -- ../scripts/in-bundle lake env leanexport C2Headline C2Bridge > ../.tmp/c2-check.ndjson   # exit 0 required
 capped -- ../scripts/in-bundle lake check --from-export ../.tmp/c2-check.ndjson
@@ -166,8 +207,8 @@ capped -- ../scripts/in-bundle lake check --from-export ../.tmp/c2-check.ndjson
 
 The bridge is the one file outside `Leanux/Proofs/` that imports the proof
 tree. That needs a change to a standing rule, decided in principle on
-2026-11-10 on four conditions and put to the owner here as two diffs, each
-its own commit on the branch. Neither is in force until signed.
+2026-11-10 on four conditions and put to the owner here as two diffs against
+`main`. Neither is in force until the owner signs off.
 
 `AGENTS.md`:
 
@@ -187,18 +228,18 @@ its own commit on the branch. Neither is in force until signed.
  
 +The exempt file is the binary track's bridge: it joins the replay-window
 +refinement proved in the binary package with the landed `CounterWindow`
-+theorems. It has its own gate, run at the binary track's claim points:
-+`capped -- scripts/in-bundle scripts/c2-bridge-gate`, which builds the lake
-+target `C2Bridge` of `binary/lakefile.toml`, prints the axioms of its
-+theorems and fails on any beyond the standard three, applies the proof
-+tree's forbidden-token scan to `binary/bridge/`, and fails if the bridge
-+imports the proof tree beyond the four modules, if `binary/bridge/` holds
-+another Lean file, or if `C2Bridge` is a default target. The register
-+(`docs/proofs.md`) names the mirror commit the four modules hold over; the
-+bridge's result lags when they lag.
++theorems. Its gate, run at the binary track's claim points and after a
++change to any of the four modules (the proof gate does not build the bridge):
++`capped -- scripts/in-bundle scripts/c2-bridge-gate` builds the lake target
++`C2Bridge` of `binary/lakefile.toml`, fails on an axiom of its theorems
++beyond the standard three or on a forbidden token in `binary/bridge/`, and
++compares what `headline` and `no_counter_accepted_twice` state with
++`binary/bridge/C2Bridge.expected.txt`. It prints the commits for the lag
++report; the register (`docs/proofs.md`) says when the bridge's result lags.
 ```
 
-`scripts/proof-gate` (the docstring's item 4 says the same):
+`scripts/proof-gate`, the whole of its change (the docstring's item 4 says
+the same):
 
 ```diff
  TARGET = 'LeanuxProofs'
@@ -214,44 +255,39 @@ its own commit on the branch. Neither is in force until signed.
                  fail(f'{rel}:{number} imports the proof tree')
 ```
 
-Two departures from the text proposed in `binary/packets/c2/proof/BRIDGE.md`.
-The pattern there ended in `\s*$`, which would have stopped matching an
-import followed by a comment in every file; the one applied matches exactly
-the lines the old pattern matched. And `AGENTS.md` says "its theorems" where
-the proposal said "its three theorems": there are five.
+The pattern matches exactly the lines main's pattern matches; the only
+change is the exemption.
 
-If the owner declines, the commits of the bridge, the gate change, the
-`AGENTS.md` change and the bridge gate are dropped; `exits_cleanly`,
-`refines` and `replay_witness` stand without them, and the third clause
-falls back to the statement packet's alternative (a copy of the window model
-in the package).
+What the gates are for. The import check is a speedbump against an honest
+stray import in the ordinary spelling, which it catches. It is not built to
+resist unusual spellings of an import, and the bridge gate does not check
+the bridge's imports at all: step 4 does. At this head the bridge's
+transitive imports from the proof tree are exactly the four (2500 modules;
+found by the reviewer and again here with a scratch `#eval`).
+
+A change in the proof tree can break the bridge while the proof gate is
+green: the proof gate does not build `C2Bridge`, so a renamed lemma or a
+changed hypothesis in one of the four modules passes it. The bridge gate,
+run at the binary track's claim points and after a change to any of the four
+modules, is what catches that; it rebuilds the four modules from source, so
+a pass means the result holds over the tree as it stands.
+
+If the owner declines the rule change, the commits of the bridge, the gate
+change, the `AGENTS.md` change and the bridge gate are dropped;
+`exits_cleanly`, `refines` and `replay_witness` stand without them, and the
+third clause falls back to the statement packet's alternative (a copy of the
+window model in the package).
 
 ## 7. Open items
 
-1. The independent landing review of the whole.
+1. The owner's signature on the final statement, with the one-word docstring
+   correction of section 9 (D1) if he takes it.
 2. The owner's signoff on section 6, and on the merge.
 3. The kernel replay outside the sandbox (section 5).
-4. Two statements outside the text put for signature were removed from
-   `C2Statement.lean` (`AcceptedWithinWindow`, `AdvanceAccepted`): in no
-   headline, in no package, and not a few lines from what exists. The file
-   otherwise equals the text put to the owner. The docstring of
-   `HeadlineRefinement` still names `AdvanceAccepted` as the rejected
-   alternative; it was left as put to the owner (section 9, item D1).
-5. The packages could not be imported together as delivered: packages 1 and
-   2 each declared `Binary.C2.WindowAt.frame`, with different statements.
-   Package 1's was renamed (`WindowAt.ofEqualOutside`), statement and proof
-   unchanged, in its own commit.
-6. An existing weakness of step 4 of `scripts/proof-gate`, not changed: the
-   pattern anchors `import` at the start of the line, so `public import
-   Leanux.Proofs…` in a file that uses the module system passes it. A
-   one-line fix, for the owner:
-
-   ```diff
-   -            m = re.match(r'^import\s+(Leanux\.Proofs(?:\.\S*)?)(?:\s|$)', line)
-   +            m = re.match(r'^\s*(?:(?:public|private|meta)\s+)*import\s+(?:all\s+)?(Leanux\.Proofs(?:\.\S*)?)(?:\s|$)', line)
-   ```
-7. The bridge's row in the register lags when `ReplayWindow` S2 lags; the
+4. The bridge's row in the register lags when `ReplayWindow` S2 lags; the
    bridge gate prints the commits at every claim point.
+5. The tests that the ten Kraken patches carry are compiled by no gate; they
+   are a by-hand check (section 9, S5).
 
 ## 8. How to reproduce
 
@@ -264,6 +300,7 @@ cap scripts/in-bundle "$py" -B binary/run.py --bootstrap-only   # upstream + ten
 cap scripts/in-bundle lake -d binary build
 cap scripts/in-bundle "$py" scripts/binary-proof-gate
 cap scripts/in-bundle "$py" scripts/c2-bridge-gate              # builds C2Bridge
+cap scripts/in-bundle "$py" -B binary/generate_c2.py --check    # needs the saved ELF and pyelftools
 binary/packets/c2/check                                         # the statement's tests, about 30 minutes
 binary/packets/c2/proof/check                                   # the cut's tests, about 4 minutes
 ```
@@ -272,3 +309,39 @@ and the replay of section 5. The whole proof gate (`capped -- scripts/in-bundle
 scripts/proof-gate`, about 30 minutes from an unbuilt proof tree) is not needed
 for the binary track's claim; it was run once here to show that it passes with
 the changed rule.
+
+## 9. Dispositions of the landing review's findings
+
+Each finding of `docs/2026-11-10-review-c2-landing.md` (`bf36a236`), one
+commit each on this branch where something changed. "Not done" is a
+decision, taken on the coordinator's correction: the gates here catch honest
+mistakes and are not built to resist someone defeating them, and over-strong
+gating is a defect (AGENTS.md, "Gates and speedbumps").
+
+| Finding | Disposition | Where, and the reason |
+| --- | --- | --- |
+| S1: the bridge gate checks axioms and names, never a type | Fixed, in the smallest form | `scripts/c2-bridge-gate` prints `headline` and `no_counter_accepted_twice` with their types and compares them with `binary/bridge/C2Bridge.expected.txt` (two lines). Honest drift of what the headline states is a real class of mistake and the check is one `lean` run. The reviewer's two restatements, run once as mutants, both fail. Commits `1e0126da`, `7a245ff0` |
+| S2: the four-module limit is enforced on the spelling of one line, and the bridge gate accepts any package module | Not done: adversarial hardening, gate cruft | The import check is a speedbump against an honest stray import in the ordinary spelling, which it catches; evading it by an unusual spelling is not a class of honest mistake. The condition holds at the head: the bridge's transitive proof-tree imports are exactly the four (the reviewer's check, repeated here). A transitive-import check in the bridge gate and an every-spelling match in step 4 were written, then reverted (`27f76fe3`, `0e9ffea9`; reverts `b39cdb3e`, `aecaa2d6`). The `public import` pattern change drafted in the first version of this report is withdrawn for the same reason. The only change to `scripts/proof-gate` is the exemption |
+| S3: the branch calls the statement signed and holds no record of a signature | Fixed | The owner has not yet signed the final statement: he left the choices to the coordinator's recommendation and is to see the final text before any proof is accepted. The closing report, the register and the final-statement document now say the final statement as put to the owner, whose signature is given at the landing. Not changed: commit messages (`c499a310` says "the signed C2 statement"; history is not rewritten) and the coordinator's entry in `docs/decisions.md` on main ("C2 is signed in the refinement form"), which is the coordinator's to word. No [USER] entry is added here. Commit `0edab70b` |
+| S4: the register rows leave the limits out | Fixed | Both rows of `docs/proofs.md` name the single-CPU instrumented build with no lock and the gap to "a replayed packet is dropped"; the bridge's row states the window-unchanged-between-visits premise in the result; the review cell links the review. Commit `67d69a01` |
+| S5: patch ten's tests are run by nothing | Answered; documented, no gate step | The landed practice, as found: no build and no gate compiles the in-patch tests of any of the ten patches; they were run when each patch was made. Patch ten is treated identically. `binary/README.md` now gives the by-hand command for the eleven test modules; run once here, 24 jobs, every guard holds. A gate step was written and discarded uncommitted. Commit `71ddba49` |
+| S6: the image terms are pinned by the generator only | Answered; no change needed | `generate_c2.py --check` is already where the landed generators' checks are: the by-hand block of `binary/README.md`, which needs the saved ELF and pyelftools and is not a gate. Run once here: matches the pinned ELF. The landed gate prints no image terms for any result, so `C2Image` is not added to the printed surface |
+| S7: a proof-tree change can break the bridge with the proof gate green; the README's check block stops at the binary gate | Fixed, documentation only | The check block of `binary/README.md` carries the bridge gate; the `AGENTS.md` paragraph names a change to any of the four modules as a claim point for it; section 6 above says what catches the break. No gate is wired into another. Commit `e426d95d` |
+| S8: working papers would land under `binary/packets/c2/proof/` | Fixed | `PLAN.md`, `WP1.md` to `WP3.md`, `BRIDGE.md`, `C1-ADAPTER.md` removed; what was still a fact about the result is in sections 4 and 6; the executed tests stay. Commit `c4ecd599` |
+| N2: the replay accepts whatever was built | Fixed | The owner's command block builds `C2Bridge` immediately before the export and says why (section 5) |
+| N3: the report listed the four `CounterWindow` modules as assumed | Fixed | Section 2 says they are compiled from source and covered by the axioms and the export |
+| N4: the validation table gave the gate commands unwrapped | Fixed | Section 5 gives the wrapped form; both gates were rerun wrapped; `binary/README.md` says why |
+| The witness is described more shortly than the fact | Fixed | Section 1 says the second visit's entry is not a state the kernel is ever in |
+| D1 (N5): the docstring of `HeadlineRefinement` names the removed `AdvanceAccepted` | Left for the owner, with his signature | The statement's text is not changed here. Proposed diff below |
+| The bridge gate as a whole | Trimmed | It builds the bridge, prints axioms, compares the two statements, scans for forbidden tokens, and prints the lag commits without failing on them. Removed: the reading of the bridge's import lines, the other-Lean-file check, the default-target check, the failure on a build warning, and the register-row parsing with a content diff. Kept beside the axioms, three lines: the bridge's theorem names against the gate's list, so that a theorem added to the bridge has its axioms printed. Commit `7a245ff0` |
+
+D1, the proposed diff to `binary/C2Statement.lean`, for the owner:
+
+```diff
+ /-- THE HEADLINE. What the code computes (`Refines`), that it exits cleanly, the
+ transported property, and a witness that all of it is inhabited. (Rejected alternative:
+-a machine-states-only conjunction with `AdvanceAccepted` in place of `Refines`, which
+-holds of code that permutes the bits of a bitmap word.) -/
++a machine-states-only conjunction with an advance-is-accepted clause in place of `Refines`,
++which holds of code that permutes the bits of a bitmap word.) -/
+```
