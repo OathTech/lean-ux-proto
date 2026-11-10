@@ -9,9 +9,9 @@ import C2CutAssembly
 witness (`WindowMapped` to `WitnessStart` of `C2CutInterfaces`). Brief:
 packets/c2/proof/WP3.md.
 
-One file: the lakefile lists every module of the package as a root and is not edited by
-a work package, so a module imported from this root that is not itself a root cannot be
-built; the sections below would otherwise be files of their own. -/
+One file: a module imported from this root is built only if it is itself a root in the
+lakefile, and the package keeps to its one registered root; the sections below would
+otherwise be files of their own. -/
 
 /-! Work package 3 of result C2, first exits: an `Eventually` proof that every execution
 from `s` reaches an exit first with `P` against an actual first exit
