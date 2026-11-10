@@ -1,6 +1,7 @@
 import C2CutInterfaces
 import FiniteExecution
 import HistoryGuard
+import CanonicalLoads
 
 /-! Work package 3 of result C2: representation, the mirror link, first exits and the
 witness (`WindowMapped` to `WitnessStart` of `C2CutInterfaces`). Brief:
@@ -140,4 +141,130 @@ theorem first_exit_exists : FirstExitExists := by
 
 #print axioms first_exit_determined
 #print axioms first_exit_exists
+end Binary.C2
+
+/-! ## Representation
+
+`Layouts.ReplayFields` against `WindowAt`, and both against the 1032 window bytes. -/
+namespace Binary.C2
+open Binary TrustBase Leanux
+local instance : Labels := Binary.Image.linkedLabels
+
+theorem allSome_of_mapped : ∀ (xs : List (Option UInt8)),
+    (∀ x ∈ xs, x.isSome = true) → ∃ ys, xs.allSome = some ys
+  | [], _ => ⟨[], rfl⟩
+  | none :: _, mapped => by simpa using mapped none (by simp)
+  | some x :: xs, mapped => by
+    obtain ⟨ys, rest⟩ := allSome_of_mapped xs (fun y hy => mapped y (by simp [hy]))
+    have rest' : List.mapM id xs = some ys := rest
+    exact ⟨x :: ys, by simp [List.allSome, List.mapM_cons, rest']⟩
+
+theorem mapped_of_allSome : ∀ (xs : List (Option UInt8)) (ys : List UInt8),
+    xs.allSome = some ys → ∀ x ∈ xs, x.isSome = true
+  | [], _, _ => by simp
+  | none :: _, ys, read => by simp [List.allSome, List.mapM_cons] at read
+  | some x :: xs, ys, read => by
+    cases tail : xs.allSome with
+    | none =>
+      have tail' : List.mapM id xs = none := tail
+      simp [List.allSome, List.mapM_cons, tail'] at read
+    | some rest =>
+      intro y hy
+      rcases List.mem_cons.mp hy with rfl | inside
+      · rfl
+      · exact mapped_of_allSome xs rest tail y inside
+
+/-- A load reads exactly its bytes: mapped bytes give a value. -/
+theorem loadInt_of_mapped (m : Mem 64) (a : BitVec 64) (n : Nat)
+    (mapped : ∀ i < n, (m.get? (a + .ofNat 64 i)).isSome = true) :
+    ∃ v, m.loadInt a n = some v := by
+  obtain ⟨ys, read⟩ := allSome_of_mapped ((List.range n).map fun i => m.get? (a + .ofNat 64 i))
+    (by
+      intro x hx
+      obtain ⟨i, hi, rfl⟩ := List.mem_map.mp hx
+      exact mapped i (List.mem_range.mp hi))
+  refine ⟨Int.ofBytes ys, ?_⟩
+  unfold Mem.loadInt Mem.loadBytes
+  rw [read]
+  rfl
+
+/-- A load that gives a value read mapped bytes. -/
+theorem mapped_of_loadInt (m : Mem 64) (a : BitVec 64) (n : Nat) (v : Int)
+    (read : m.loadInt a n = some v) :
+    ∀ i < n, (m.get? (a + .ofNat 64 i)).isSome = true := by
+  intro i hi
+  cases bytes : m.loadBytes a n with
+  | none => simp [Mem.loadInt, bytes] at read
+  | some ys =>
+    exact mapped_of_allSome _ ys bytes _
+      (List.mem_map.mpr ⟨i, List.mem_range.mpr hi, rfl⟩)
+
+/-- A load depends only on its bytes. -/
+theorem loadInt_congr (m m' : Mem 64) (a : BitVec 64) (n : Nat)
+    (same : ∀ i < n, m.get? (a + .ofNat 64 i) = m'.get? (a + .ofNat 64 i)) :
+    m.loadInt a n = m'.loadInt a n := by
+  unfold Mem.loadInt Mem.loadBytes
+  congr 2
+  exact List.map_congr_left fun i hi => same i (List.mem_range.mp hi)
+
+/-- A loaded quadword is its own 64-bit value. -/
+theorem load_word (m : Mem 64) (a : BitVec 64) (v : Int) (read : m.loadInt a 8 = some v) :
+    v = ((BitVec.ofNat 64 v.toNat).toNat : Int) ∧ v.toNat < 2 ^ 64 := by
+  obtain ⟨low, high⟩ := loadInt_range m a 8 v read
+  have high' : v < 2 ^ 64 := by simpa using high
+  refine ⟨?_, by omega⟩
+  rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt (by omega)]
+  omega
+
+/-- Byte `i` of the counter field is byte `i` of the window. -/
+theorem counter_byte (base : BitVec 64) (i : Nat) :
+    base + .ofNat 64 Layouts.replay_counter + .ofNat 64 i = base + .ofNat 64 i := by
+  simp [Layouts.replay_counter]
+
+/-- Byte `i` of bitmap word `j` is byte `8 + 8 j + i` of the window. -/
+theorem word_byte (base : BitVec 64) (j i : Nat) :
+    base + .ofNat 64 (Layouts.replay_backtrack + j * Layouts.replayWordBytes) + .ofNat 64 i =
+      base + .ofNat 64 (8 + j * 8 + i) := by
+  rw [BitVec.add_assoc, ← BitVec.ofNat_add]
+  rfl
+
+theorem counter_inside (kp : BitVec 64) (i : Nat) (hi : i < 8) :
+    windowBytes kp (windowBase kp + .ofNat 64 Layouts.replay_counter + .ofNat 64 i) :=
+  ⟨i, by simp only [Layouts.replaySize]; omega, counter_byte _ i⟩
+
+theorem word_inside (kp : BitVec 64) (j i : Nat) (hj : j < Layouts.replayWords) (hi : i < 8) :
+    windowBytes kp (windowBase kp +
+      .ofNat 64 (Layouts.replay_backtrack + j * Layouts.replayWordBytes) + .ofNat 64 i) :=
+  ⟨8 + j * 8 + i, by simp only [Layouts.replaySize, Layouts.replayWords] at hj ⊢; omega,
+    word_byte _ j i⟩
+
+theorem window_mapped : WindowMapped := by
+  intro m kp mapped
+  have counter : ∃ v, m.loadInt (windowBase kp + .ofNat 64 Layouts.replay_counter) 8 = some v :=
+    loadInt_of_mapped m _ 8 (fun i hi => mapped _ (counter_inside kp i hi))
+  have words : ∀ j, j < Layouts.replayWords → ∃ v, m.loadInt (windowBase kp +
+      .ofNat 64 (Layouts.replay_backtrack + j * Layouts.replayWordBytes)) 8 = some v :=
+    fun j hj => loadInt_of_mapped m _ 8 (fun i hi => mapped _ (word_inside kp j i hj hi))
+  let w : Window :=
+    { counter := .ofNat 64
+        ((m.loadInt (windowBase kp + .ofNat 64 Layouts.replay_counter) 8).getD 0).toNat
+      words := fun j => .ofNat 64 ((m.loadInt (windowBase kp +
+        .ofNat 64 (Layouts.replay_backtrack + j * Layouts.replayWordBytes)) 8).getD 0).toNat }
+  have first : m.loadInt (windowBase kp + .ofNat 64 Layouts.replay_counter) 8 =
+      some (w.counter.toNat : Int) := by
+    obtain ⟨v, read⟩ := counter
+    have value : w.counter = .ofNat 64 v.toNat := by simp only [w, read, Option.getD_some]
+    rw [value, ← (load_word m _ v read).1]
+    exact read
+  have rest : ∀ j, j < Layouts.replayWords → m.loadInt (windowBase kp +
+      .ofNat 64 (Layouts.replay_backtrack + j * Layouts.replayWordBytes)) 8 =
+        some ((w.words j).toNat : Int) := by
+    intro j hj
+    obtain ⟨v, read⟩ := words j hj
+    have value : w.words j = .ofNat 64 v.toNat := by simp only [w, read, Option.getD_some]
+    rw [value, ← (load_word m _ v read).1]
+    exact read
+  exact ⟨w, first, rest⟩
+
+#print axioms window_mapped
 end Binary.C2
