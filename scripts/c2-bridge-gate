@@ -18,9 +18,12 @@ In order:
    a specification: `--write-expected` replaces it, and its diff is reviewed.
 4. The proof tree's forbidden-token scan over `binary/bridge/*.lean`,
    comments and strings stripped.
-5. The bridge's imports: of the proof tree exactly the four modules, and
-   beyond them only modules of the binary package; no other Lean file in
-   `binary/bridge/`; `C2Bridge` not a default target.
+5. The bridge's imports. Asked of Lean, on the built module: the modules of
+   the proof tree among everything the bridge imports, directly or through
+   any other module, must be exactly the four. And read from the source: its
+   own import lines name the four and otherwise only modules of the binary
+   package; no other Lean file in `binary/bridge/`; `C2Bridge` not a default
+   target.
 6. The lag report: the last commit of the four modules and of the mirror,
    beside the mirror commit the register row (`docs/proofs.md`) names. The
    row may say "Current" only if no mirror file differs from that commit.
@@ -137,6 +140,35 @@ def check_statements():
              f'{EXPECTED.relative_to(ROOT)}')
 
 
+def check_closure():
+    """The fact and not a spelling: what Lean itself imported to build the bridge."""
+    print('      the proof-tree modules among everything the bridge imports, asked of Lean', flush=True)
+    artifacts = ROOT / '.tmp' / 'c2-bridge-gate'
+    artifacts.mkdir(parents=True, exist_ok=True)
+    scratch = artifacts / 'imports.lean'
+    scratch.write_text(f'import Lean\nimport {TARGET}\nopen Lean in\n#eval show CoreM Unit from do\n'
+                       '  let names := (← getEnv).allImportedModuleNames\n'
+                       '  IO.println s!"modules: {names.size}"\n'
+                       '  for name in names do\n'
+                       '    if (`Leanux.Proofs).isPrefixOf name then IO.println s!"proof tree: {name}"\n')
+    result = subprocess.run(binary_gate.capped(['lake', 'env', 'lean', str(scratch)]), cwd=ROOT / 'binary',
+                            capture_output=True, text=True)
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    if result.returncode or result.stderr or not lines or not re.fullmatch(r'modules: [1-9]\d*', lines[0]) \
+            or any(not line.startswith('proof tree: ') for line in lines[1:]):
+        fail(f'listing the bridge\'s imports failed:\n{result.stdout}{result.stderr}')
+        return
+    reached = {line.removeprefix('proof tree: ') for line in lines[1:]}
+    print(f'  {lines[0].removeprefix("modules: ")} modules imported; of the proof tree, {len(reached)}: '
+          f'{", ".join(sorted(reached)[:8]) or "none"}{", ..." if len(reached) > 8 else ""}', flush=True)
+    beyond = sorted(reached - BRIDGE_IMPORTS)
+    if beyond:
+        fail(f'the bridge reaches {len(beyond)} module(s) of the proof tree beyond the four: '
+             + ', '.join(beyond[:5]) + (', ...' if len(beyond) > 5 else ''))
+    for name in sorted(BRIDGE_IMPORTS - reached):
+        fail(f'the bridge does not reach {name}: the claim would no longer rest on the landed theorems')
+
+
 def check_source():
     print('[4/6] forbidden tokens in binary/bridge/', flush=True)
     files = sorted(BRIDGE_DIR.rglob('*.lean'))
@@ -225,6 +257,7 @@ def main():
         print(f'  {verify_pin(ROOT)}', flush=True)
     except (ValueError, OSError, subprocess.CalledProcessError) as exc:
         fail(str(exc))
+    built = False
     if not failures:
         print(f'[2/6] lake -d binary build {TARGET}', flush=True)
         result = subprocess.run(binary_gate.capped(['lake', '-d', 'binary', 'build', TARGET]), cwd=ROOT,
@@ -234,13 +267,17 @@ def main():
         if result.returncode:
             print(result.stdout + result.stderr, file=sys.stderr, flush=True)
             fail(f'the bridge build exited {result.returncode}')
+        else:
+            built = True
         for line in tail:
             if line.startswith('warning:') and 'bridge/' in line:
                 fail(f'the bridge build warns: {line}')
-    if not failures:
+    if built:
         check_axioms()
         check_statements()
     check_source()
+    if built:
+        check_closure()
     check_lag()
     print('c2 bridge gate: ' + ('FAILED' if failures else 'PASS'), flush=True)
     return 1 if failures else 0
