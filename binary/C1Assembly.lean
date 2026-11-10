@@ -54,19 +54,24 @@ theorem headlineFor_of_parts (initial : InitialHolds) (framed : FramedHolds) (ru
   fun fetch L A premises => ⟨initial fetch L A premises, framed fetch L A premises,
     insertStep_of_paths run paths fetch L A premises, lookup fetch L A premises⟩
 
-/-- `Headline` is `HeadlineFor` with the invariant forgotten. -/
-theorem headline_of_for (h : HeadlineFor) : Headline :=
-  fun fetch L A premises => ⟨Inv L A, h fetch L A premises⟩
+/-- `Headline` is `HeadlineFor` and `ReferencedHolds` with the invariant forgotten. -/
+theorem headline_of_for (h : HeadlineFor) (referenced : ReferencedHolds) : Headline :=
+  fun fetch L A premises =>
+    have ⟨initial,framed,inserts,lookups⟩ := h fetch L A premises
+    ⟨Inv L A,initial,framed,referenced fetch L A premises,inserts,lookups⟩
 
-/-- `HeadlineFor` is `HeadlineExplicit`: `Inv` is `Related`. -/
-theorem explicit_of_for (h : HeadlineFor) : HeadlineExplicit := h
+/-- `HeadlineFor` with `ReferencedHolds` is `HeadlineExplicit`: `Inv` is `Related`. -/
+theorem explicit_of_for (h : HeadlineFor) (referenced : ReferencedHolds) : HeadlineExplicit :=
+  fun fetch L A premises =>
+    have ⟨initial,framed,inserts,lookups⟩ := h fetch L A premises
+    ⟨initial,framed,referenced fetch L A premises,inserts,lookups⟩
 
 /-- WHAT THE FOUR PACKAGES ADD UP TO. Every hypothesis is one package's
 acceptance theorem. -/
 theorem signed_of_parts
     -- package 1: the source side and the invariant's algebra
-    (run : RunIsStep) (initial : InitialHolds) (framed : FramedHolds) (lookup : LookupHolds)
-    (exclusion1 : ExclusionOne) (exclusion2 : ExclusionTwo)
+    (run : RunIsStep) (initial : InitialHolds) (framed : FramedHolds) (referenced : ReferencedHolds)
+    (lookup : LookupHolds) (exclusion1 : ExclusionOne) (exclusion2 : ExclusionTwo)
     -- package 2: the trunk and the paths that end above the placement
     (tooLong : PathTooLong) (rootNoMem : PathRootNoMem) (root : PathRoot) (exact : PathExact)
     (nodeNoMem : PathNodeNoMem) (child : PathChild) (trunk : TrunkHolds)
@@ -77,7 +82,7 @@ theorem signed_of_parts
   have h : HeadlineFor := headlineFor_of_parts initial framed run
     (paths_of_parts nodeBelowTop framed alloc free trunk tooLong rootNoMem root exact nodeNoMem child cover splitNoMem split)
     lookup
-  exact ⟨headline_of_for h, witness h, exclusion1 h, exclusion2 h⟩
+  exact ⟨headline_of_for h referenced, witness h, exclusion1 h, exclusion2 h⟩
 
 #print axioms signed_of_parts
 end Binary.Statements.C1.Proof

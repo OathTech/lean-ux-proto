@@ -114,6 +114,22 @@ def FramedHolds : Prop :=
   ∀ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator), Premises fetch L A →
     Framed L (Inv L A)
 
+/-- PACKAGE 1 (new with revision 3 of the statement). `Referenced` for
+`Inv`: a peer's count word moved by one together with the mirror's `peerGet`
+or a non-releasing `peerPut`. `Inv` gives the count in memory equal to the
+mirror's (`assertAt`'s reconstruction reads it), so the mirror's run changes
+exactly that peer's `refcount` by one and nothing `Related` reads besides
+(the pending records and the armed sites are untouched); the landed
+`target_mapCounts`, `heap_mapCounts` (`PairAllowedipsCount`,
+`PairAllowedipsHeapFrame`), which `lookup_checked` uses for the count
+`wg_peer_get_maybe_zero` raises, carry the relation; the rest of the heap is
+unchanged, so the reconstruction's other reads agree as in `FramedHolds`;
+the count word is in a peer, apart from the arena (a conjunct of `Inv`), so
+`Idle` survives by the contract's `frame` clause. -/
+def ReferencedHolds : Prop :=
+  ∀ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator), Premises fetch L A →
+    Referenced L (Inv L A)
+
 /-- PACKAGE 1. `LookupStep` for `Inv`, from the landed `lookup_checked`
 (`PairAllowedipsLookupAdequacy`): `lookupReady` and `Inv` give its
 `lookupBoundary`; its post gives `Returned` and `rax`; `Trie.CountBytes` is
@@ -314,7 +330,9 @@ def PathSplitNoMem : Prop := AllocRule → FreeRule → TrunkToNode → Path .sp
 
 /-! ## The headline with the invariant fixed, and what follows from it -/
 
-/-- The four clauses of `Headline` for `Inv`. -/
+/-- The four clauses of `Headline` for `Inv` that revision 2 had; the fifth,
+`Referenced`, is `ReferencedHolds`, kept apart so that the exclusions, which
+do not need it, keep their statements. -/
 def HeadlineFor : Prop :=
   ∀ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator), Premises fetch L A →
     Initial L A (Inv L A) ∧ Framed L (Inv L A) ∧

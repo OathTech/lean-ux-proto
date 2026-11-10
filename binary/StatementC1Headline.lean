@@ -7,7 +7,9 @@ compiled allowed-IPs insertion of the pinned s5 image, as `def … : Prop`.
 `Headline` keeps the memory relation internal (an existentially quantified
 invariant): what a reader takes away is machine-observable, the 32-bit
 result of every insertion and the peer pointer returned by every later
-lookup, along any call sequence that starts at a physically empty table.
+lookup, along any call sequence that starts at a physically empty table,
+with the caller's references on registered peers taken and dropped between
+the calls (revision 3).
 `HeadlineExplicit` is the alternative with the landed relation in its
 conclusion; it implies `Headline`, and it is what a proof would exhibit. -/
 namespace Binary.Statements.C1
@@ -158,6 +160,31 @@ between calls. -/
 def Framed (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
   ∀ w m m', Inv w m → (∀ a, L.Heap a → m.get? a = m'.get? a) → Inv w m'
 
+/-- Memory `m'` is memory `m` with peer `pid`'s four-byte reference count
+changed from `before` to `after`: both are readable, and every other heap
+byte is the same. Bytes outside the heap are unconstrained, as in `Framed`. -/
+def CountMoved (L : Layout) (pid : PeerId) (before after : Nat) (m m' : Mem 64) : Prop :=
+  ∃ peer, Trie.address L.peers (some pid) = .ok peer ∧
+    readNat ⟨{dmem := m},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4 = .ok before ∧
+    readNat ⟨{dmem := m'},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4 = .ok after ∧
+    ∀ a, L.Heap a → ¬InRange (.ofNat 64 (peer+Root.nodeOffsets.peerRefcount)) 4 a → m.get? a = m'.get? a
+
+/-- Revision 3. The invariant survives the caller taking or dropping one
+reference on a registered peer between calls: the peer's count word goes up
+by one together with the mirror's `peerGet` on that peer, or down by one,
+from a count above one, together with the mirror's `peerPut` on it (the
+last reference is not dropped here: that is the peer's removal). No other
+heap byte changes and no other mirror operation runs. This is what a
+`wg set` over existing peers does between the insertions for one peer and
+those for the next: `set_peer` drops its reference on the first and takes
+one on the second. -/
+def Referenced (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
+  ∀ (w w' : World) (m m' : Mem 64) (pid : PeerId) (count : Nat), Inv w m →
+    ((liftWG (WG.peerGet pid)).run w = .ok ((), w') ∧ CountMoved L pid count (count+1) m m') ∨
+    ((liftWG (WG.peerPut (some pid))).run w = .ok ((), w') ∧ 1 < count ∧
+      CountMoved L pid count (count-1) m m') →
+    Inv w' m'
+
 /-- The table's sequence word after the call is the word before plus one,
 modulo 2^64: what a wrapper does besides calling `add`. -/
 def SeqAdvanced (L : Layout) (s t : MachineState) : Prop :=
@@ -215,14 +242,16 @@ def LookupStep (fetch : Int64 → Option Decoded) (L : Layout)
       EqualOutside (LookupWrites L c s) s.data.dmem t.data.dmem) s
 
 /-- THE HEADLINE. Under the premises there is an invariant, holding
-at every empty table, insensitive to memory outside the heap, preserved by
-every insertion and every lookup, under which each returns what the mirror
-returns. The relation between memory and the mirror is not part of the
+at every empty table, insensitive to memory outside the heap, surviving the
+caller's reference on a peer being taken or dropped between calls
+(revision 3), preserved by every insertion and every lookup, under which
+each returns what the mirror returns. The relation between memory and the mirror is not part of the
 claim; a proof must exhibit one. -/
 def Headline : Prop :=
   ∀ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator), Premises fetch L A →
     ∃ Inv : World → Mem 64 → Prop,
-      Initial L A Inv ∧ Framed L Inv ∧ InsertStep fetch L A Inv ∧ LookupStep fetch L Inv
+      Initial L A Inv ∧ Framed L Inv ∧ Referenced L Inv ∧
+      InsertStep fetch L A Inv ∧ LookupStep fetch L Inv
 
 /-! ## The alternative: the landed relation in the conclusion -/
 
@@ -241,12 +270,12 @@ def Related (L : Layout) (A : Allocator) (w : World) (m : Mem 64) : Prop :=
     (∀ node ∈ names.trie.nodes, ∃ span ∈ L.arena, span.1 ≤ node.2 ∧ node.2+nodeSize ≤ span.1+span.2) ∧
     A.Idle m (names.trie.nodes.map (·.2)) stream
 
-/-- The same four clauses with the invariant fixed to `Related`. It implies
+/-- The same five clauses with the invariant fixed to `Related`. It implies
 `Headline`; it additionally tells a reader what memory looks like after
 each call, in terms nothing but tests and reading pin down. -/
 def HeadlineExplicit : Prop :=
   ∀ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator), Premises fetch L A →
-    Initial L A (Related L A) ∧ Framed L (Related L A) ∧
+    Initial L A (Related L A) ∧ Framed L (Related L A) ∧ Referenced L (Related L A) ∧
     InsertStep fetch L A (Related L A) ∧ LookupStep fetch L (Related L A)
 
 end Binary.Statements.C1
