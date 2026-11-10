@@ -1,7 +1,2 @@
-Binary.C2.Bridge.accepts_as_pure_window : Binary.C2.Refines →
-  Binary.C2.Representation → Binary.C2.Bridge.AcceptsAsPureWindow
-Binary.C2.Bridge.no_counter_accepted_twice_of_parts : Binary.C2.Refines →
-  Binary.C2.Representation → Binary.C2.NoCounterAcceptedTwice
-Binary.C2.Bridge.no_counter_accepted_twice : Binary.C2.NoCounterAcceptedTwice
 Binary.C2.Bridge.headline : Binary.C2.HeadlineRefinement
-Binary.C2.Bridge.replay_refused : Binary.C2.ReplayRefused
+Binary.C2.Bridge.no_counter_accepted_twice : Binary.C2.NoCounterAcceptedTwice
