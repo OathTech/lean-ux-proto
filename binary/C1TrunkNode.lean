@@ -205,6 +205,35 @@ theorem node_reach (premises : Premises fetch L A)
   exact ⟨u,⟨held,regs,mem,pc,fun x n h => mapped x n (walked.mapped x n h),forward.trans walked.forward⟩,
     bx,bp,r14,r15⟩
 
+/-- The bytes of `add`'s frame that stay the prologue's on every path up to
+the cut: the slot and cidr locals, four bytes at `0x20(%rsp)`, and the saved
+registers with the return word. -/
+def Keep (a : MachineData) (y : BitVec 64) : Prop :=
+  InRange (a.regs.rsp.toBitVec-104+.ofNat 64 16) 16 y ∨
+  InRange (a.regs.rsp.toBitVec-104+.ofNat 64 40) 4 y ∨
+  InRange (a.regs.rsp.toBitVec-104+.ofNat 64 56) 56 y
+
+theorem keep_cases (a : MachineData) (y : BitVec 64) (h : Keep a y) (P : Prop)
+    (k : ∀ off n : Nat, 16 ≤ off → off+n ≤ 112 → (off+n ≤ 32 ∨ (40 ≤ off ∧ off+n ≤ 44) ∨ 48 ≤ off) →
+      InRange (a.regs.rsp.toBitVec-104+.ofNat 64 off) n y → P) : P := by
+  rcases h with h | h | h
+  · exact k 16 16 (by omega) (by omega) (by omega) h
+  · exact k 40 4 (by omega) (by omega) (by omega) h
+  · exact k 56 56 (by omega) (by omega) (by omega) h
+
+theorem keep_of (a : MachineData) (off n : Nat) (lo : 16 ≤ off)
+    (clear : off+n ≤ 32 ∨ (40 ≤ off ∧ off+n ≤ 44) ∨ (56 ≤ off ∧ off+n ≤ 112)) (i : Nat) (hi : i < n) :
+    Keep a (a.regs.rsp.toBitVec-104+.ofNat 64 off+.ofNat 64 i) := by
+  have shift (b : Nat) (hb : b ≤ off) : a.regs.rsp.toBitVec-104+.ofNat 64 off+.ofNat 64 i =
+      a.regs.rsp.toBitVec-104+.ofNat 64 b+.ofNat 64 (off-b+i) := by
+    rw [BitVec.add_assoc, BitVec.add_assoc, ← BitVec.ofNat_add, ← BitVec.ofNat_add]
+    congr 2
+    omega
+  rcases clear with c | c | c
+  · exact .inl ⟨off-16+i,by omega,shift 16 lo⟩
+  · exact .inr (.inl ⟨off-40+i,by omega,shift 40 c.1⟩)
+  · exact .inr (.inr ⟨off-56+i,by omega,shift 56 c.1⟩)
+
 /-- A state of `add`'s frame after the service at :205 returned, with the
 word `word` in `(%rsp)`. -/
 structure Mid (L : Statements.C1.Layout) (A : Allocator) (c : Context) (s : MachineState) (v4 : Bool)
@@ -219,9 +248,7 @@ structure Mid (L : Statements.C1.Layout) (A : Allocator) (c : Context) (s : Mach
   r14 : m.regs.r14 = a.regs.r8
   r15 : m.regs.r15.toNat = bits
   base : m.dmem.loadInt m.regs.rsp.toBitVec 8 = some (word.toNat : Int)
-  loads : ∀ off n : Nat, 16 ≤ off → off+n ≤ 112 → (off+n ≤ 32 ∨ (40 ≤ off ∧ off+n ≤ 44) ∨ 48 ≤ off) →
-    m.dmem.loadInt (a.regs.rsp.toBitVec-104+.ofNat 64 off) n =
-      (memory a 8).loadInt (a.regs.rsp.toBitVec-104+.ofNat 64 off) n
+  kept : ∀ y, Keep a y → m.dmem.get? y = (memory a 8).get? y
   frame : EqualOutside (fun x =>
     InRange (s.data.regs.rsp.toBitVec - .ofNat 64 (insertWindow + A.depth))
       (insertWindow + A.depth - frameSize v4 + 8) x ∨ c.writes x ∨ L.Heap x) a.dmem m.dmem
@@ -237,6 +264,14 @@ theorem seq_in_heap (L : Statements.C1.Layout) (i : Nat) (hi : i < 8) :
   ⟨(L.table+AllowedipsMutationLayout.seq,8),by simp [Layout.heap, Layout.fixed, tableFields],⟨i,hi,rfl⟩⟩
 
 variable {bits : Nat} {placed : Option NodeId} {word : UInt64} {m : MachineData}
+
+theorem Mid.loads (mid : Mid L A c s v4 names d seq a bits placed word m) (off n : Nat) (lo : 16 ≤ off)
+    (clear : off+n ≤ 32 ∨ (40 ≤ off ∧ off+n ≤ 44) ∨ (56 ≤ off ∧ off+n ≤ 112)) :
+    m.dmem.loadInt (a.regs.rsp.toBitVec-104+.ofNat 64 off) n =
+      (memory a 8).loadInt (a.regs.rsp.toBitVec-104+.ofNat 64 off) n := by
+  have same : EqualOutside (fun y => ¬Keep a y) (memory a 8) m.dmem :=
+    fun y hy => (mid.kept y (Classical.not_not.mp hy)).symm
+  exact (same.loadInt _ n (fun i hi h => h (keep_of a off n lo clear i hi))).symm
 
 theorem Mid.stackAt (trunk : Trunk L A c s w v4 key cidr pid ra names stream d seq a)
     (mid : Mid L A c s v4 names d seq a bits placed word m) :
@@ -313,9 +348,13 @@ theorem Mid.call (premises : Premises fetch L A)
     fun y hy => (frame y (notCall y hy)).symm⟩
   · rw [sp, spZero, windowLoad 8 8 (by decide) (by decide), ← spZero]
     exact mid.base
-  · intro off n lo hi clear
-    rw [windowLoad off n (by omega) hi]
-    exact mid.loads off n lo hi clear
+  · intro y hy
+    refine keep_cases a y hy _ (fun off n lo hi clear inside => ?_)
+    refine (frame y (fun h => ?_)).symm.trans (mid.kept y hy)
+    rcases h with p | cw
+    · exact InRange.offset_disjoint (a.regs.rsp.toBitVec-104) off n 0 8 (by omega) (by omega)
+        (.inr (by omega)) y inside (by simpa using p)
+    · exact r.coverageApart y (writes_bytes cw) (window_sub a off n hi y inside)
   · intro y hy
     refine (mid.frame y hy).trans (frame y (fun h => hy ?_))
     rcases h with h | h
@@ -416,18 +455,22 @@ theorem node_called (alloc : AllocRule) (premises : Premises fetch L A)
       exact trunk.caller.below.load _ 8 (by omega) (by omega)
   · rw [memB, regsB]
     exact load64_store _ _ _
-  · intro off n lo hi clear
-    rw [memB, load_store_apart _ _ _ _ _ _ (fun y hy hs => not_locals a off n lo hi clear y hy (inParent y hs)),
-      ← keptFrame.loadInt _ n (fun i hi' h => h (.inl (by
-        rw [wordE, valueE]
-        exact ⟨off+i,by omega,by rw [BitVec.add_assoc, ← BitVec.ofNat_add]⟩))), at'.mem]
-    have skip := (storeInt_frame u.dmem (u.regs.rsp.toBitVec-8) 8
-      (Add.entry+.ofNat 0x144).toBitVec.toInt).loadInt (a.regs.rsp.toBitVec-104+.ofNat 64 off) n
-      (fun i hi' h => by
-        rw [word] at h
+  · intro y hy
+    refine keep_cases a y hy _ (fun off n lo hi clear inside => ?_)
+    rw [memB]
+    refine (stored y (fun hs => not_locals a off n lo hi clear y inside (inParent y hs))).symm.trans ?_
+    refine (kept y (.inl ?_)).trans ?_
+    · rw [wordE, valueE]
+      obtain ⟨i,hi',eq⟩ := inside
+      exact ⟨off+i,by omega,by rw [eq, BitVec.add_assoc, ← BitVec.ofNat_add]⟩
+    · rw [at'.mem]
+      refine (storeInt_frame u.dmem (u.regs.rsp.toBitVec-8) 8 _ y (fun h => ?_)).symm.trans
+        (at'.held.frame y (fun h => ?_)).symm
+      · rw [word] at h
         exact InRange.offset_disjoint (a.regs.rsp.toBitVec-104) off n 0 8 (by omega) (by omega)
-          (.inr (by omega)) _ ⟨i,hi',rfl⟩ (by simpa using h))
-    exact skip.symm.trans (at'.held.window_load r off n lo hi clear)
+          (.inr (by omega)) y inside (by simpa using h)
+      · exact h.elim (not_locals a off n lo hi clear y inside)
+          (fun cw => r.coverageApart y (writes_bytes cw) (window_sub a off n hi y inside))
   · intro y hy
     have service := alloc_frame trunk (frameSize v4 + 104) (by omega) stackE flightE flightT kept
     refine (at'.fromAdd y (fun h => hy ?_)).trans ((service y (fun h => hy ?_)).trans ?_)
@@ -455,9 +498,78 @@ theorem node_called (alloc : AllocRule) (premises : Premises fetch L A)
   · intro x n h
     rw [memB]
     exact storeInt_defined _ _ _ _ _ _ (flightT.mapped x n h)
+
+/-- The cut's `Exits` clause for a state of `add`'s frame whose saved words
+are the prologue's and which differs from `add`'s entry only below `add`'s
+return word, in the coverage buffer and in the heap. -/
+theorem exits_of_kept (framed : FramedHolds) (premises : Premises fetch L A)
+    (trunk : Trunk L A c s w v4 key cidr pid ra names stream d seq a) (x : MachineState)
+    (stackX : x.data.regs.rsp = a.regs.rsp - 96)
+    (kept : ∀ y, InRange (a.regs.rsp.toBitVec-104+.ofNat 64 56) 56 y →
+      x.data.dmem.get? y = (memory a 8).get? y)
+    (frame : EqualOutside (fun y =>
+      InRange (s.data.regs.rsp.toBitVec - .ofNat 64 (insertWindow + A.depth))
+        (insertWindow + A.depth - frameSize v4 + 8) y ∨ c.writes y ∨ L.Heap y) a.dmem x.data.dmem) :
+    Exits fetch L A c s ra x := by
+  have fs := frameSize_range v4
+  have wide := window_wide A
+  have room' : insertWindow + A.depth ≤ s.data.regs.rsp.toBitVec.toNat := trunk.sep.room
+  have top' : s.data.regs.rsp.toBitVec.toNat + 8 ≤ 2^64 := trunk.sep.top
+  have stackAt := trunk.atAdd.stackAt
+  apply exits_of_trunk framed premises trunk x stackX
+  rintro y ⟨i,hi,eq⟩
+  by_cases low : i < 56
+  · apply kept
+    refine ⟨i,low,?_⟩
+    rw [eq]
+    congr 1
+    show _ = a.regs.rsp.toBitVec - BitVec.ofNat 64 104 + _
+    rw [stackAt, sub_sub_ofNat, sub_add_ofNat _ _ 56 (by omega)]
+    congr 2
+  · have split : BitVec.ofNat 64 i = BitVec.ofNat 64 56 + BitVec.ofNat 64 (i-56) := by
+      rw [← BitVec.ofNat_add]
+      congr 1
+      omega
+    have above : InRange (s.data.regs.rsp.toBitVec - .ofNat 64 (frameSize v4 - 8)) (frameSize v4) y := by
+      refine ⟨i-56,by omega,?_⟩
+      rw [eq, split, ← BitVec.add_assoc, sub_add_ofNat _ _ 56 (by omega)]
+      congr 3
+    have frameBase : a.regs.rsp.toBitVec - 96 =
+        s.data.regs.rsp.toBitVec - .ofNat 64 (frameSize v4 + 96) := by
+      show a.regs.rsp.toBitVec - BitVec.ofNat 64 96 = _
+      rw [stackAt, sub_sub_ofNat]
+    refine (frame y (fun h => ?_)).symm.trans (memory_frame a 8 (by decide) y (fun h => ?_))
+    · rcases h with h | h | h
+      · exact below_under _ (frameSize v4 - 8) (frameSize v4) (insertWindow + A.depth) _ (by omega)
+          (by omega) (by omega) y above h
+      · exact trunk.sep.bytesStack y (writes_bytes h) (below_sub _ (frameSize v4 - 8) (frameSize v4)
+          (insertWindow + A.depth) (insertWindow + A.depth + 8) (by omega) (by omega) y above)
+      · exact trunk.sep.heapStack y h (below_sub _ (frameSize v4 - 8) (frameSize v4)
+          (insertWindow + A.depth) (insertWindow + A.depth + 8) (by omega) (by omega) y above)
+    · rw [frameBase] at h
+      exact below_under _ (frameSize v4 - 8) (frameSize v4) (frameSize v4 + 96) 96 (by omega)
+        (by omega) (by omega) y above h
+
+theorem Mid.exits (framed : FramedHolds) (premises : Premises fetch L A)
+    (trunk : Trunk L A c s w v4 key cidr pid ra names stream d seq a)
+    (mid : Mid L A c s v4 names d seq a bits placed word m) (pc : Int64) :
+    Exits fetch L A c s ra ⟨m,pc⟩ :=
+  exits_of_kept framed premises trunk ⟨m,pc⟩ mid.stack (fun y hy => mid.kept y (.inr (.inr hy))) mid.frame
+
+theorem Held.exits (framed : FramedHolds) (premises : Premises fetch L A)
+    (trunk : Trunk L A c s w v4 key cidr pid ra names stream d seq a)
+    (held : Held c a u) (pc : Int64) : Exits fetch L A c s ra ⟨u,pc⟩ := by
+  have fs := frameSize_range v4
+  have r := trunk.resources
+  refine exits_of_kept framed premises trunk ⟨u,pc⟩ held.stack (fun y hy => ?_) (fun y hy => ?_)
+  · exact (held.frame y (fun h => h.elim (not_locals a 56 56 (by omega) (by omega) (by omega) y hy)
+      (fun cw => r.coverageApart y (writes_bytes cw) (window_sub a 56 56 (by decide) y hy)))).symm
+  · exact held.fromEntry y (fun h => hy (h.elim
+      (fun hw => .inl (wide_tight trunk.atAdd _ (window_wide A) y hw)) (fun cw => .inr (.inl cw))))
 end
 
 #print axioms node_reach
 #print axioms Mid.call
 #print axioms node_called
+#print axioms exits_of_kept
 end C1Trunk
