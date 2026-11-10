@@ -225,8 +225,8 @@ def ReplayRefused : Prop :=
 
 /-- THE HEADLINE. What the code computes (`Refines`), that it exits cleanly, the
 transported property, and a witness that all of it is inhabited. (Rejected alternative:
-a machine-states-only conjunction with `AdvanceAccepted` in place of `Refines`, which
-holds of code that permutes the bits of a bitmap word.) -/
+a machine-states-only conjunction with an advance-is-accepted clause in place of `Refines`,
+which holds of code that permutes the bits of a bitmap word.) -/
 def HeadlineRefinement : Prop :=
   ExitsCleanly ∧ Refines ∧ NoCounterAcceptedTwice ∧ ReplayWitness
 

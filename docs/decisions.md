@@ -1036,7 +1036,7 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   documents of the same date): both results are commissioned, C1 and C2.
   The user left the remaining choices to the coordinator's recommendation,
   so they are [AGENT, coordinator] and stand until the user changes them:
-  - C2 is signed in the refinement form (`HeadlineRefinement`: clean exit,
+  - C2 is to be signed in the refinement form (`HeadlineRefinement`: clean exit,
     refinement of the mirror's `counterValidate`, no counter accepted
     twice, the replay witness, extended as the reviewer's finding F1 asks),
     in the reviewer's order: the tenth Kraken patch first, the statement
@@ -1072,4 +1072,19 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   - The packets' Lean statement files are not landed with the documents;
     they stay on the working branches until the final statements are put
     to the user.
+- **2026-11-10 [USER]** C2 lands. The user read the final statement
+  (docs/2026-11-10-c2-final-statement.md) and signed it, with the
+  correction of one docstring that named a removed definition; accepted
+  the rule change it needs (the exemption in AGENTS.md and
+  `scripts/proof-gate` letting `binary/bridge/C2Bridge.lean` import the
+  four `CounterWindow` modules, and the bridge's own gate
+  `scripts/c2-bridge-gate`); and approved the merge to `main`, with the
+  external kernel replay outside the sandbox recorded as pending. The
+  entry above this group that called C2 signed at the time of
+  commissioning was the coordinator's wording and was premature; it now
+  says "to be signed". On gates, the user's steer the same day: checks
+  here catch honest mistakes and are not hardened against deliberate
+  evasion; the landing review's hardening proposals for the import check
+  were not taken for that reason [AGENT, coordinator: which proposals,
+  listed in docs/2026-11-10-c2-replay-window.md, section 9].
 
