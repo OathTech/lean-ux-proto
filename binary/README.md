@@ -76,6 +76,17 @@ five status flags are undefined. These semantics are part of the trust
 boundary; their tests are not a proof of ISA fidelity. Unsupported forms fail
 explicitly.
 
+The patches carry their own tests (`#guard` in `Kraken/X64/*Tests.lean`).
+The package imports no test module, so no build and no gate compiles them;
+they are run by hand when a patch is made or changed, from the worktree root:
+
+```sh
+(cd .deps/kraken && cap ../../scripts/in-bundle lake -d ../../binary build \
+  +Kraken.X64.LookupTests +Kraken.X64.ParserTests +Kraken.X64.BsrTests +Kraken.X64.PrintATTTests \
+  +Kraken.X64.SystemFlagsTests +Kraken.X64.GreaterTests +Kraken.X64.StosTests +Kraken.X64.MovsTests \
+  +Kraken.X64.XaddTests +Kraken.X64.BtTests +Kraken.X64.BtsTests)
+```
+
 The package imports the operational mirror by path and does not import
 `Leanux.Proofs`. One file outside the package's default library does:
 [`bridge/C2Bridge.lean`](bridge/C2Bridge.lean), the non-default lake library
