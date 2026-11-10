@@ -206,4 +206,7 @@ the bridge gate rerun.
 | --- | --- |
 | `binary/bridge/check` (staged compile, axioms, tokens, imports) | passes; three statements on the standard axioms |
 | `lake -d binary build C2Bridge` with diff 3 applied in a trial, then reverted | built, 118 jobs |
-| `scripts/proof-gate` with the file under its real name | not run; by reading `check_imports` it fails at step 4, which is why the file is not committed under that name |
+| Step 4 of `scripts/proof-gate` (`check_imports`, run alone) with the file under its real name, in a trial that was reverted | fails with four findings, one per import: this is why the file is not committed under that name |
+| The same step from a scratch copy of the gate with diff 2 applied | no finding with the four imports; one finding when a fifth proof-tree import is added to the bridge |
+| The same step on the branch as committed (current gate) | no finding |
+| The whole of `scripts/proof-gate` | not run (the proof tree is untouched by this branch) |

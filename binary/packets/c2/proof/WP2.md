@@ -28,6 +28,11 @@ included) into the range against the pivot.
 
 ## Where to start
 
+- `binary/packets/c2/proof/C2CutTrace.lean` executes the range under Kraken and checks
+  the content of every cut predicate and of `CallSite`'s conclusion at the addresses
+  named here (run `binary/packets/c2/proof/check`). Read it for what holds where; it is
+  a test, not a lemma source.
+
 - Regions and straight-line execution: `region_eventually` with a layout from
   `RegionsLaidOut` (through `Reading.range`). It gives `instructionStep` executions
   with no history; the cut predicates need `Quiet` (no state so far at an exit), so

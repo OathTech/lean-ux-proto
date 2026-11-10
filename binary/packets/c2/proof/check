@@ -1,11 +1,24 @@
 #!/bin/sh
-# Run the executed test of the cut's pivot against the mirror (C2CutTest.lean), against
-# a built binary package. In no lake target. usage (from the worktree root):
-#   binary/packets/c2/proof/check
+# Run the executed tests of the cut (binary/C2Cut.lean) against a built binary package:
+#   C2CutTest   the pivot against the mirror's counterValidate
+#   C2CutTrace  the cut predicates and the call-site conclusion against Kraken
+# In no lake target. C2CutTrace uses the executor of the statement's tests, so
+# ../C2Test.lean is compiled first if its output is not there (about two minutes).
+# usage (from the worktree root): binary/packets/c2/proof/check
+# Outputs go to .tmp/c2-packet/build and may be deleted afterwards.
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../../.." && pwd)
+out="$root/.tmp/c2-packet/build"
+mkdir -p "$out"
 cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
 LP=$(cd "$root/binary" && ../scripts/in-bundle lake env printenv LEAN_PATH)
 cd "$here"
+echo '== C2CutTest'
 cap "$root/scripts/in-bundle" env LEAN_PATH="$LP" lean C2CutTest.lean
+if [ ! -f "$out/C2Test.olean" ] || [ ../C2Test.lean -nt "$out/C2Test.olean" ]; then
+  echo '== C2Test (the executor)'
+  (cd .. && cap "$root/scripts/in-bundle" env LEAN_PATH="$LP:$out" lean -o "$out/C2Test.olean" C2Test.lean)
+fi
+echo '== C2CutTrace'
+cap "$root/scripts/in-bundle" env LEAN_PATH="$LP:$out" lean C2CutTrace.lean

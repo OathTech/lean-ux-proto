@@ -28,7 +28,18 @@ The packages meet at one function, `validate : Window → BitVec 64 → Outcome`
 range at machine width (unsigned comparisons and wrapping sums on the values the
 instructions use). WP2 proves the machine computes it; WP3 proves the mirror's
 `counterValidate` computes it. It is executed against the mirror on 2,925 boundary
-cases by `binary/packets/c2/proof/check`.
+cases by `binary/packets/c2/proof/check` (`C2CutTest`).
+
+The cut predicates are executed too (`C2CutTrace`, same script): the range and the
+callbacks' image code are run under Kraken from the constructed entry states of the
+statement's tests, with coverage off, in PC mode and in comparison mode, and at every
+arrival at a cut address the decidable content of its predicate is compared with the
+machine state; across every call the content of `CallSite`'s conclusion is compared.
+512 runs, 41,760 calls and 18,544 loop iterations held. Three one-off mutants of the
+test (a wrong `%rbp` in the loop invariant, a wrong value for a spill slot, a
+caller-saved register claimed kept across a call) each failed it; they were run once
+and deleted. This is evidence that the propositions are true on those runs, not a
+proof, and it does not exercise the frame, the coverage state or `Quiet`.
 
 `Carried layout preempt kp s0 w d` holds at every point from +14 on, across each of
 the thirteen calls and at the head of each loop iteration:
@@ -118,11 +129,13 @@ planned 25 to 30. Briefs: `WP1.md`, `WP2.md`, `WP3.md`.
    tag-indexed plan (`recordPlan`); re-establishing `KcovState` after its stores needs
    tag-7 counterparts of about five landed lemmas. This is the statement packet's
    named main uncertainty, now confined to one package.
-2. **The call-site rule and the cut predicates are unexercised.** The assembly proves
-   they suffice for the headline; nothing yet proves they hold or that WP2 can use
-   `CallSite` as stated. T3 used a rule of the same shape with an abstract invariant.
-   A package that finds one false or too weak reports it; the fix is to the cut, by
-   the coordinator, and the assembly is rechecked.
+2. **The call-site rule and the cut predicates are unproved.** The assembly proves
+   they suffice for the headline, and the executed trace above found their register,
+   slot and window content true on 512 runs. Nothing yet proves them, and nothing
+   tests whether WP2 can continue from `CallSite` and the cut predicates as stated
+   (a fact needed across a cut may be missing). T3 used a rule of the same shape with
+   an abstract invariant. A package that finds one false or too weak reports it; the
+   fix is to the cut, by the coordinator, and the assembly is rechecked.
 3. **`Context`'s separations hold only in a recording mode.** The landed
    `Kcov.callback` wants them unconditionally. A case split on the mode with
    `Kcov.inactive_plan` should do; it was not tried.
@@ -146,6 +159,6 @@ cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
 cap scripts/in-bundle lake -d binary build
 scripts/in-bundle "$(command -v python3)" scripts/binary-proof-gate
 binary/packets/c2/check            # the statement's executed tests
-binary/packets/c2/proof/check      # the pivot against the mirror
+binary/packets/c2/proof/check      # the pivot against the mirror; the cut predicates against Kraken (4 minutes)
 binary/bridge/check                # the staged bridge: compile, axioms, tokens, imports
 ```
