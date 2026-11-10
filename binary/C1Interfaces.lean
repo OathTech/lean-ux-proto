@@ -22,20 +22,17 @@ open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.CommonBitsCoverage Binary.Statements.C1
 local instance : Labels := Image.linkedLabels
 
-/-! ## The open hypothesis (a statement finding, owned by no package) -/
+/-! ## The node bound (derived from the signed text since revision 3) -/
 
-/-- NOT DERIVABLE FROM THE SIGNED TEXT. The landed interpretation check
-(`Trie.validate`, inside `assertAt`, hence inside `Inv`) demands
-`a + 72 < 2^64` of every node; `AllocResult` promises
-`a + 72 ≤ span.1 + span.2`, and the caller's conditions bound an arena span
-by `≤ 2^64` (`spansApart`). A conforming service may therefore hand out the
-72 bytes that end at the top of the address space, after which `Inv` cannot
-hold. Every path that keeps an allocated node takes this as a hypothesis and
-`signed_of_parts` takes it explicitly. It is discharged in one line if the
-owner adds the bound to `AllocResult` (or makes `emptyTable` bound the arena
-strictly), and disappears if `Trie.validate` is relaxed to `≤` and the landed
-proofs are repaired. Until one of those, `Headline` is not provable with the
-landed relation. -/
+/-- A node the service hands out ends strictly below 2^64. The landed
+interpretation check (`Trie.validate`, inside `assertAt`, hence inside `Inv`)
+demands `a + 72 < 2^64` of every node. Revision 2's `AllocResult` promised
+only `a + 72 ≤ span.1 + span.2` with spans bounded by `≤ 2^64`, so this was a
+hypothesis no package owned; revision 3 puts the bound into `AllocResult`'s
+success clause and it is now `C1Assembly.nodeBelowTop`, one projection. The
+paths that keep an allocated node still take it as a hypothesis, so their
+statements are unchanged. `Statements/C1/proof/TopOfMemory.lean` keeps the
+finding as a regression test. -/
 def NodeBelowTop : Prop :=
   ∀ (fetch : Int64 → Option Decoded) (L : Layout) (A : Allocator), Premises fetch L A →
   ∀ (live : List Nat) (record : HiddenRecord) (stream : List HiddenRecord) (t : MachineState),

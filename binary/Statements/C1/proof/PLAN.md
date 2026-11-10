@@ -7,7 +7,13 @@ and the assembly, proved (`binary/C1Assembly.lean`: `signed_of_parts`). The
 statement files are untouched. Every judgement here is the architect's
 [AGENT 2026-11-10].
 
-## 0. Read this first: one hypothesis nobody owns
+## 0. Read this first: one hypothesis nobody owned (settled in revision 3)
+
+**Settled.** The owner chose the first way out below: revision 3 of the
+statement adds `a + nodeSize < 2^64` to `AllocResult`'s success clause, and
+`NodeBelowTop` is now the theorem `C1Assembly.nodeBelowTop`, no longer a
+hypothesis of `signed_of_parts`. The path propositions still take it as a
+hypothesis, unchanged. The finding, as it stood under revision 2:
 
 `signed_of_parts` has one hypothesis that is **not derivable from the signed
 text**: `NodeBelowTop` (a node the service hands out ends strictly below

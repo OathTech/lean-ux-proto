@@ -2,8 +2,9 @@ import C1Interfaces
 
 /-! Result C1, proof plan: `Signed` assembled from the interface propositions
 of `C1Interfaces`. These theorems are proved now, so the top-level cut is
-checked: when the four packages have proved their propositions and the open
-hypothesis `NodeBelowTop` is settled, `signed_of_parts` is the result.
+checked: when the four packages have proved their propositions,
+`signed_of_parts` is the result. `NodeBelowTop`, an open hypothesis under
+revision 2 of the statement, is derived here from revision 3's `AllocResult`.
 
 What this file does not check: that `TrunkToNode` (the machine cut handed
 from package 2 to package 3) and the two service rules give the path
@@ -13,6 +14,10 @@ namespace Binary.Statements.C1.Proof
 open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.CommonBitsCoverage Binary.Statements.C1
 local instance : Labels := Image.linkedLabels
+
+/-- The node bound, from `AllocResult`'s success clause (revision 3). -/
+theorem nodeBelowTop : NodeBelowTop :=
+  fun _ _ _ _ _ _ _ _ result success => (result.2 success).2.2.1
 
 /-- `InsertStep` from the source-side classification and one path per case. -/
 theorem insertStep_of_paths (run : RunIsStep) (paths : ∀ k, Path k)
@@ -25,7 +30,7 @@ theorem insertStep_of_paths (run : RunIsStep) (paths : ∀ k, Path k)
     inv ready accepted facts rfl
 
 /-- Every case has its path, from the nine path propositions, the trunk, the
-two service rules, `Framed` for `Inv` and the open hypothesis. -/
+two service rules, `Framed` for `Inv` and the node bound. -/
 theorem paths_of_parts (below : NodeBelowTop) (framed : FramedHolds) (alloc : AllocRule) (free : FreeRule)
     (trunk : TrunkHolds) (tooLong : PathTooLong) (rootNoMem : PathRootNoMem) (root : PathRoot)
     (exact : PathExact) (nodeNoMem : PathNodeNoMem) (child : PathChild) (cover : PathCover)
@@ -56,9 +61,9 @@ theorem headline_of_for (h : HeadlineFor) : Headline :=
 /-- `HeadlineFor` is `HeadlineExplicit`: `Inv` is `Related`. -/
 theorem explicit_of_for (h : HeadlineFor) : HeadlineExplicit := h
 
-/-- WHAT THE FOUR PACKAGES ADD UP TO. `below` is the open hypothesis, owned
-by no package; every other hypothesis is one package's acceptance theorem. -/
-theorem signed_of_parts (below : NodeBelowTop)
+/-- WHAT THE FOUR PACKAGES ADD UP TO. Every hypothesis is one package's
+acceptance theorem. -/
+theorem signed_of_parts
     -- package 1: the source side and the invariant's algebra
     (run : RunIsStep) (initial : InitialHolds) (framed : FramedHolds) (lookup : LookupHolds)
     (exclusion1 : ExclusionOne) (exclusion2 : ExclusionTwo)
@@ -70,7 +75,7 @@ theorem signed_of_parts (below : NodeBelowTop)
     -- package 4: the services and the witness
     (alloc : AllocRule) (free : FreeRule) (witness : WitnessHolds) : Signed := by
   have h : HeadlineFor := headlineFor_of_parts initial framed run
-    (paths_of_parts below framed alloc free trunk tooLong rootNoMem root exact nodeNoMem child cover splitNoMem split)
+    (paths_of_parts nodeBelowTop framed alloc free trunk tooLong rootNoMem root exact nodeNoMem child cover splitNoMem split)
     lookup
   exact ⟨headline_of_for h, witness h, exclusion1 h, exclusion2 h⟩
 

@@ -77,13 +77,16 @@ structure ServiceReady (A : Allocator) (c : CommonBitsCoverage.Context) (s : Mac
 
 /-- What one `kmem_cache_zalloc(node_cache, GFP_KERNEL)` leaves behind, by the
 recorded outcome byte: NULL and nothing handed out, or an aligned, zeroed
-72-byte object inside the arena that overlaps no object already handed out. -/
+72-byte object inside the arena that overlaps no object already handed out
+and ends strictly below 2^64 (revision 3: the bound the landed
+interpretation check `Trie.validate` demands of every node). -/
 def AllocResult (L : Layout) (A : Allocator) (live : List Nat) (record : HiddenRecord)
     (stream : List HiddenRecord) (t : MachineState) : Prop :=
   let a := t.data.regs.rax.toNat
   (record.bytes.head? = some 0 → a = 0 ∧ A.Idle t.data.dmem live stream) ∧
   (record.bytes.head? = some 1 →
-    a ≠ 0 ∧ a % 8 = 0 ∧ (∃ span ∈ L.arena, span.1 ≤ a ∧ a+nodeSize ≤ span.1+span.2) ∧
+    a ≠ 0 ∧ a % 8 = 0 ∧ a + nodeSize < 2^64 ∧
+    (∃ span ∈ L.arena, span.1 ≤ a ∧ a+nodeSize ≤ span.1+span.2) ∧
     (∀ other ∈ live, disjointRanges a nodeSize other nodeSize = true) ∧
     readNat t a nodeSize = .ok 0 ∧ A.Idle t.data.dmem (live ++ [a]) stream)
 
