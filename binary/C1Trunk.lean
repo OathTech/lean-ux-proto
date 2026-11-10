@@ -1,5 +1,6 @@
 import C1Interfaces
 import C1TrunkRootBody
+import C1TrunkNodeNoMem
 
 /-! Result C1, work package 2: the trunk of the compiled insertion and the paths that end above the placement. This module is the package's root in
 `binary/lakefile.toml`: add modules named `C1Trunk*.lean` and import them here.
@@ -143,7 +144,75 @@ theorem pathRoot : PathRoot := by
             (congrArg Allowedips.target (C1Trunk.root_device (bump d0) false key cidr pid owner hasPeer))⟩
           recordsAfter' facts.armedAfter)
 
+/-- PACKAGE 2. Nonempty root, no exact match, the allocation at :205 refused. -/
+theorem pathNodeNoMem : PathNodeNoMem := by
+  intro framed alloc fetch L A premises c s w w' family key cidr pid ra answer d stream placed exact st
+    inv ready _ facts hcase
+  have rf := C1Trunk.insertReady_facts ready
+  have hcase' : (step d family key cidr pid placed exact
+      (stream.map fun r => r.bytes.head? == some 1)).case = .nodeNoMem := by
+    rw [← facts.model]; exact hcase
+  obtain ⟨notExact,failedHead,stEq⟩ := C1Trunk.step_nodeNoMem hcase'
+  obtain ⟨bound,rootId,rootAt⟩ := C1Trunk.step_walked_of (.inr (.inl hcase'))
+  subst notExact
+  have answerEq : answer = -ENOMEM := by rw [facts.result, facts.model, stEq]
+  have after : ∃ d', w'.wg.dev = some d' ∧ Allowedips.target d' = Allowedips.target (bump d) := by
+    have h := facts.after
+    rw [facts.model, stEq] at h
+    exact h
+  have sites := facts.sites
+  have outcomes := facts.outcomes
+  have recordsAfter := facts.recordsAfter
+  rw [facts.model, stEq] at sites outcomes recordsAfter
+  obtain ⟨record,rest,pending,recordSite⟩ := C1Trunk.first_site sites
+  subst pending
+  have failed : record.bytes.head? = some 0 := by
+    rcases outcomes record (by simp) with h | h
+    · exact h
+    · exact absurd (by simp [h]) failedHead
+  have recordsAfter' : w'.ambient.hidden = some rest := by simpa using recordsAfter
+  obtain ⟨⟨ambient,finalAmbient,finalStore,accepted⟩,_⟩ := facts.walked
+    (by rw [hcase]; decide) (by rw [hcase]; decide) (by rw [hcase]; decide)
+  have rootNode := C1Trunk.ordered_root facts.trie rootAt
+  rw [answerEq]
+  rcases rf.families with rfl | rfl
+  · exact C1Trunk.to_trunk fetch L A premises c s w true key cidr pid ra inv
+      rf.pc rf.table rf.peer rf.peerNonNull rf.cidr rf.key rf.cache rf.frame _
+      (fun names stream0 d0 seq a trunk => by
+        have hd : d0 = d := Option.some.inj (trunk.device.symm.trans facts.device)
+        have hs : stream0 = record :: rest := Option.some.inj (trunk.hidden.symm.trans facts.records)
+        subst hd hs
+        exact C1Trunk.nodeNoMem_body framed alloc premises ready trunk bound facts.keyBound rootId rootAt
+          rootNode placed ambient finalAmbient finalStore
+          (by rw [show rootOf d0 4 = some rootId from rootAt] at accepted; exact accepted)
+          record rest rfl recordSite failed after recordsAfter' facts.armedAfter)
+  · exact C1Trunk.to_trunk fetch L A premises c s w false key cidr pid ra inv
+      rf.pc rf.table rf.peer rf.peerNonNull rf.cidr rf.key rf.cache rf.frame _
+      (fun names stream0 d0 seq a trunk => by
+        have hd : d0 = d := Option.some.inj (trunk.device.symm.trans facts.device)
+        have hs : stream0 = record :: rest := Option.some.inj (trunk.hidden.symm.trans facts.records)
+        subst hd hs
+        exact C1Trunk.nodeNoMem_body framed alloc premises ready trunk bound facts.keyBound rootId rootAt
+          rootNode placed ambient finalAmbient finalStore
+          (by rw [show rootOf d0 6 = some rootId from rootAt] at accepted; exact accepted)
+          record rest rfl recordSite failed after recordsAfter' facts.armedAfter)
+
+/-- PACKAGE 2, for package 3: the trunk in the strengthened form package 3's
+paths take (`C1Trunk.TrunkToNodePlus`, a copy of package 3's proposition).
+NOT the interface's `TrunkHolds`: `C1Trunk.StackOffPeers` is an extra
+hypothesis, not derivable from the signed text (see `C1TrunkCut`). -/
+theorem trunkToNodePlus_of_stackOffPeers :
+    C1Trunk.StackOffPeers → NodeBelowTop → FramedHolds → AllocRule → C1Trunk.TrunkToNodePlus :=
+  C1Trunk.trunkToNodePlus
+
+/-- PACKAGE 2, for package 3: `TrunkHolds` from `C1Trunk.StackOffPeers`. -/
+theorem trunkHolds_of_stackOffPeers : C1Trunk.StackOffPeers → TrunkHolds :=
+  fun off below framed alloc => C1Trunk.trunk_of_plus (C1Trunk.trunkToNodePlus off below framed alloc)
+
 #print axioms pathTooLong
 #print axioms pathRootNoMem
 #print axioms pathRoot
+#print axioms pathNodeNoMem
+#print axioms trunkToNodePlus_of_stackOffPeers
+#print axioms trunkHolds_of_stackOffPeers
 end Binary.Statements.C1.Proof
