@@ -2469,4 +2469,1076 @@ theorem walk_of_run {d : Device} {family key cidr : Nat} {placed : Option NodeId
       exact ⟨facts, rfl, hidden, armed⟩
 
 #print axioms walk_of_run
+
+/-! ## An accepted run of the mirror's insertion as `C1Step.step` -/
+
+/-! ## An accepted `WG.insert` is `C1Step.step` -/
+
+structure add_Ready (a : Ambient) (stream : List HiddenRecord) : Prop where
+  hidden : a.hidden = some stream
+  clean : ∀ r ∈ stream, HiddenSite.passive r.site = false
+  armed190 : a.allocArmed.contains "allocNode190" = true
+  armed205 : a.allocArmed.contains "allocNode205" = true
+  armed234 : a.allocArmed.contains "allocNode234" = true
+
+theorem add_Ready.keep {a a' : Ambient} {stream : List HiddenRecord} (ready : add_Ready a stream)
+    (hidden : a'.hidden = a.hidden) (armed : a'.allocArmed = a.allocArmed) : add_Ready a' stream :=
+  ⟨hidden.trans ready.hidden,ready.clean,armed ▸ ready.armed190,armed ▸ ready.armed205,armed ▸ ready.armed234⟩
+
+theorem add_Ready.next {a : Ambient} {r : HiddenRecord} {rest : List HiddenRecord}
+    (ready : add_Ready a (r :: rest)) : add_Ready {a with hidden := some rest} rest :=
+  ⟨rfl,fun x member => ready.clean x (List.mem_cons_of_mem _ member),ready.armed190,ready.armed205,ready.armed234⟩
+
+@[simp] theorem add_record_hidden (a : Ambient) (dcn : Decision) (b : Bool) :
+    (Model.record a dcn b).hidden = a.hidden := rfl
+@[simp] theorem add_record_armed (a : Ambient) (dcn : Decision) (b : Bool) :
+    (Model.record a dcn b).allocArmed = a.allocArmed := rfl
+@[simp] theorem add_recordCmp_hidden (a : Ambient) (dcn : Decision) (b : Bool) (x y : Int) :
+    (Placement.recordCmp a dcn b x y).hidden = a.hidden := rfl
+@[simp] theorem add_recordCmp_armed (a : Ambient) (dcn : Decision) (b : Bool) (x y : Int) :
+    (Placement.recordCmp a dcn b x y).allocArmed = a.allocArmed := rfl
+@[simp] theorem add_commonRecords_hidden (a : Ambient) (width x : Nat) :
+    (Model.commonRecords a width x).hidden = a.hidden := by
+  unfold Model.commonRecords
+  dsimp only
+  split
+  · rfl
+  · split <;> rfl
+@[simp] theorem add_commonRecords_armed (a : Ambient) (width x : Nat) :
+    (Model.commonRecords a width x).allocArmed = a.allocArmed := by
+  unfold Model.commonRecords
+  dsimp only
+  split
+  · rfl
+  · split <;> rfl
+
+/-- An ambient primitive lifted into a state layer (after the T4 trial's `lift_state`). -/
+theorem add_lift_amb {σ α : Type} {x : AmbientM α} {s s1 : σ} {a a1 : Ambient} {v : α}
+    (h : ((monadLift x : StateT σ AmbientM α).run s).run a = .ok ((v,s1),a1)) :
+    s1 = s ∧ x.run a = .ok (v,a1) := by
+  have unfolded : ((monadLift x : StateT σ AmbientM α).run s).run a =
+      (x.run a >>= fun p => pure ((p.1,s),p.2)) := rfl
+  rw [unfolded] at h
+  cases hx : x.run a with
+  | error e => rw [hx] at h; cases h
+  | ok p => rw [hx] at h; cases h; exact ⟨rfl,rfl⟩
+
+theorem add_iteration_kept (key cidr bits : Nat) (acc : Placement.Acc) (store : AipStore) (a : Ambient) :
+    match ((Placement.iteration key cidr bits acc).run store).run a with
+    | .ok r => r.2.hidden = a.hidden ∧ r.2.allocArmed = a.allocArmed
+    | .error _ => True := by
+  rcases acc with ⟨answer,current,parent⟩
+  cases current with
+  | none => exact ⟨rfl,rfl⟩
+  | some id =>
+    cases present : store.nodes[id]? with
+    | none =>
+      simp [Placement.iteration,getNode,StateT.run_bind,Placement.branch_run,
+        Source.except_ok_bind,present,invariant]
+      exact True.intro
+    | some node =>
+      by_cases long : cidr<node.cidr <;>
+        by_cases matching : AllowedipsRelation.common bits node.bits key<node.cidr <;>
+        by_cases exactLength : node.cidr=cidr <;>
+        by_cases invalid : node.cidr≥node.bitlen <;>
+        cases child : node.bit[key/2^(node.bitlen-1-node.cidr)%2]?
+      all_goals try simp only [exactLength] at long matching invalid child
+      all_goals simp [Placement.iteration,getNode,StateT.run_bind,StateT.run_pure,Placement.branch_run,
+        Placement.branchCmp_run,Source.except_ok_bind,Source.except_pure,Placement.prefix_run,present,choose,
+        AipNode.bitAt,invariant,long,matching,exactLength,invalid,child]
+      all_goals first | exact True.intro | exact ⟨rfl,rfl⟩
+
+
+/-- The walk's cursor is the node below its remembered parent. -/
+def add_Link (d : Device) (root : Option NodeId) (key : Nat) (current parent : Option NodeId) : Prop :=
+  match parent with
+  | none => current = root
+  | some p => ∃ pn, d.nodes.get? p = some pn ∧ current = (pn.bit[key / 2^(pn.bitlen-1-pn.cidr) % 2]?).join
+
+/-- What the rest of `add` needs of a returned placement: the placed node is stored and, when the
+walk was not exact, so is the node below it (the walk read it). -/
+def add_Good (d : Device) (root : Option NodeId) (key : Nat) (placed : Option NodeId) (exact : Bool) : Prop :=
+  (∀ p, placed = some p → ∃ pn, d.nodes.get? p = some pn) ∧
+  (exact = false → ∀ id, below d root key placed = some id → ∃ n, d.nodes.get? id = some n)
+
+theorem add_Link.below {d : Device} {root : Option NodeId} {key : Nat} {current parent : Option NodeId}
+    (link : add_Link d root key current parent) : below d root key parent = current := by
+  cases parent with
+  | none => exact link.symm
+  | some p =>
+    obtain ⟨pn,present,rfl⟩ := link
+    simp only [Proof.below,present]
+
+theorem add_Link.placed {d : Device} {root : Option NodeId} {key : Nat} {current parent : Option NodeId}
+    (link : add_Link d root key current parent) : ∀ p, parent = some p → ∃ pn, d.nodes.get? p = some pn := by
+  rintro p rfl
+  obtain ⟨pn,present,_⟩ := link
+  exact ⟨pn,present⟩
+
+theorem add_good_stop {d : Device} {root : Option NodeId} {key : Nat} {current parent : Option NodeId}
+    (link : add_Link d root key current parent)
+    (stored : ∀ id, current = some id → ∃ n, d.nodes.get? id = some n) :
+    ∀ res : Option NodeId × Bool, some (parent,false) = some res → add_Good d root key res.1 res.2 := by
+  intro res same
+  cases same
+  refine ⟨link.placed,fun _ id reached => ?_⟩
+  rw [link.below] at reached
+  exact stored id reached
+
+theorem add_good_exact {d : Device} {root : Option NodeId} {key : Nat} {id : NodeId} {node : AipNode}
+    (present : d.nodes.get? id = some node) :
+    ∀ res : Option NodeId × Bool, some (some id,true) = some res → add_Good d root key res.1 res.2 := by
+  intro res same
+  cases same
+  refine ⟨?_,fun wrong => by cases wrong⟩
+  rintro p ⟨rfl⟩
+  exact ⟨node,present⟩
+
+theorem add_select {d : Device} {root : Option NodeId} {key cidr bits : Nat} {acc : Placement.Acc}
+    {step : ForInStep Placement.Acc} (link : add_Link d root key acc.2.1 acc.2.2)
+    (selected : Placement.selectStep (Source.Aip.store d) key cidr bits acc = some step) :
+    match step with
+    | .done b => ∀ res, b.1 = some res → add_Good d root key res.1 res.2
+    | .yield b => b.1 = none ∧ add_Link d root key b.2.1 b.2.2 := by
+  rcases acc with ⟨answer,current,parent⟩
+  cases current with
+  | none =>
+    cases selected
+    exact add_good_stop link (fun id wrong => by cases wrong)
+  | some id =>
+    cases present : (Source.Aip.store d).nodes[id]? with
+    | none => simp [Placement.selectStep,present] at selected
+    | some node =>
+      have present' : d.nodes.get? id = some node := present
+      have stop := add_good_stop (d := d) (root := root) (key := key) link
+        (fun id' same => by cases same; exact ⟨node,present'⟩)
+      by_cases long : cidr<node.cidr <;>
+        by_cases matching : AllowedipsRelation.common bits node.bits key<node.cidr <;>
+        by_cases exactLength : node.cidr=cidr <;>
+        by_cases invalid : node.cidr≥node.bitlen <;>
+        cases child : node.bit[key/2^(node.bitlen-1-node.cidr)%2]?
+      all_goals try simp only [exactLength] at long matching invalid child
+      all_goals simp [Placement.selectStep,present,long,matching,exactLength,invalid,child] at selected
+      all_goals cases selected
+      all_goals first
+        | exact stop
+        | exact add_good_exact present'
+        | exact ⟨rfl,node,present',by rw [child]; rfl⟩
+
+
+theorem add_loop {d : Device} {root : Option NodeId} {key cidr bits : Nat} (xs : List Nat) :
+    ∀ (acc acc' : Placement.Acc) (a a' : Ambient) (s' : AipStore), acc.1 = none →
+      add_Link d root key acc.2.1 acc.2.2 →
+      ((forIn xs acc (fun _ => Placement.iteration key cidr bits)).run (Source.Aip.store d)).run a =
+        .ok ((acc',s'),a') →
+      s' = Source.Aip.store d ∧ a'.hidden = a.hidden ∧ a'.allocArmed = a.allocArmed ∧
+        ∀ res, acc'.1 = some res → add_Good d root key res.1 res.2 := by
+  induction xs with
+  | nil =>
+    intro acc acc' a a' s' opened link run
+    obtain ⟨rfl,rfl,rfl⟩ := ok_inj run _ _ _ rfl
+    exact ⟨rfl,rfl,rfl,fun res found => by rw [opened] at found; cases found⟩
+  | cons x xs ih =>
+    intro acc acc' a a' s' opened link run
+    simp only [List.forIn_cons] at run
+    obtain ⟨step,s1,a1,first,rest⟩ := bind_ok_run run
+    clear run
+    obtain ⟨selected,rfl⟩ := Placement.iteration_accepted first
+    have kept := add_iteration_kept key cidr bits acc (Source.Aip.store d) a
+    rw [first] at kept
+    have next := add_select link selected
+    cases step with
+    | done b =>
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj rest _ _ _ rfl
+      exact ⟨rfl,kept.1,kept.2,next⟩
+    | yield b =>
+      obtain ⟨same,hidden,armed,good⟩ := ih b acc' a1 a' s' next.1 next.2 rest
+      exact ⟨same,hidden.trans kept.1,armed.trans kept.2,good⟩
+
+theorem add_placement {d : Device} {root placed : Option NodeId} {key cidr bits : Nat} {exact : Bool}
+    {s' : AipStore} {a a' : Ambient}
+    (run : ((WG.nodePlacement root key cidr bits).run (Source.Aip.store d)).run a = .ok (((placed,exact),s'),a')) :
+    s' = Source.Aip.store d ∧ a'.hidden = a.hidden ∧ a'.allocArmed = a.allocArmed ∧
+      add_Good d root key placed exact := by
+  rw [← Placement.run_eq_source] at run
+  unfold Placement.run at run
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at run
+  obtain ⟨acc,s1,a1,loop,rest⟩ := bind_ok_run run
+  clear run
+  obtain ⟨rfl,hidden,armed,good⟩ := add_loop (d := d) (root := root) (key := key) _ (none,root,none) acc a a1 s1 rfl
+    (show add_Link d root key root none from rfl) loop
+  cases found : acc.1 with
+  | none => simp only [found] at rest; cases rest
+  | some res =>
+    simp only [found] at rest
+    have g := good res found
+    obtain ⟨same,rfl,rfl⟩ := ok_inj rest res _ _ rfl
+    cases same
+    exact ⟨rfl,hidden,armed,g⟩
+
+
+theorem add_hiddenAlloc_nil {s : AllocSite} {a a' : Ambient} {b : Bool}
+    (site : s = .allocNode190 ∨ s = .allocNode205 ∨ s = .allocNode234)
+    (hid : a.hidden = some []) (arm : a.allocArmed.contains s.info.label = true)
+    (run : (AmbientM.hiddenAlloc s).run a = .ok (b,a')) : False := by
+  obtain ⟨P,copy⟩ := hiddenAlloc_copy
+  obtain ⟨count,len,ident,notRx⟩ := alloc_site_facts site
+  rw [copy,hiddenAllocCopy_once P s count] at run
+  simp only [StateT.run_bind,StateT.run_get,hid,arm,Option.isNone_some,Bool.false_and,Bool.not_false,
+    Bool.not_true,Bool.and_false,Bool.false_eq_true,↓reduceIte,Source.except_ok_bind,Source.except_pure,
+    allocRecordCopy] at run
+  cases consumed : (AmbientM.hidden (.alloc s)).run a with
+  | error e => rw [consumed] at run; cases run
+  | ok out =>
+    simp only [AmbientM.hidden,AmbientM.skipAmbient,AmbientM.noteNetRxStart,StateT.run_bind,StateT.run_get,
+      StateT.run_set,hid,len,ident,notRx,List.dropWhile,Source.except_ok_bind,Source.except_pure,pure_bind,
+      Bool.false_eq_true,↓reduceIte] at consumed
+    cases consumed
+
+theorem add_allocNode_acc {site : AllocSite} {n : AipNode} {d : Device} {s' : AipStore} {a a' : Ambient}
+    {res : Option NodeId} {stream : List HiddenRecord}
+    (which : site = .allocNode190 ∨ site = .allocNode205 ∨ site = .allocNode234)
+    (hid : a.hidden = some stream) (clean : ∀ r ∈ stream, HiddenSite.passive r.site = false)
+    (arm : a.allocArmed.contains site.info.label = true)
+    (run : ((allocNode site n).run (Source.Aip.store d)).run a = .ok ((res,s'),a')) :
+    ∃ r rest, stream = r :: rest ∧ r.site = site.hiddenId ∧ a' = {a with hidden := some rest} ∧
+      ((r.bytes.head? = some 0 ∧ res = none ∧ asDev d s' = d) ∨
+       (r.bytes.head? = some 1 ∧ res = some d.nextNode ∧ asDev d s' = alloc d n)) := by
+  unfold allocNode at run
+  obtain ⟨b,s1,a1,drawn,rest⟩ := bind_ok_run run
+  clear run
+  obtain ⟨rfl,consumed⟩ := add_lift_amb drawn
+  clear drawn
+  cases stream with
+  | nil => exact (add_hiddenAlloc_nil which hid arm consumed).elim
+  | cons r tail =>
+    obtain ⟨siteEq,bytes,outcome,rfl⟩ := hiddenAlloc_accepted which hid arm (clean r (by simp)) consumed
+    cases b with
+    | false =>
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj rest none _ _ rfl
+      refine ⟨r,tail,rfl,siteEq,rfl,?_⟩
+      rcases bytes with zero | one
+      · exact .inl ⟨zero,rfl,rfl⟩
+      · rw [one] at outcome
+        exact absurd outcome (by decide)
+    | true =>
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj rest (some d.nextNode)
+        (⟨d.nodes.insert d.nextNode n,d.nextNode+1,d.peerAllowedips⟩ : AipStore) _ rfl
+      refine ⟨r,tail,rfl,siteEq,rfl,?_⟩
+      rcases bytes with zero | one
+      · rw [zero] at outcome
+        exact absurd outcome (by decide)
+      · exact .inr ⟨one,rfl,rfl⟩
+
+theorem add_choose_acc {σ : Type} {n : AipNode} {key v : Nat} {s s' : σ} {a a' : Ambient}
+    (run : ((choose n key : StateT σ AmbientM Nat).run s).run a = .ok ((v,s'),a')) :
+    v = side n key ∧ s = s' ∧ a = a' := by
+  unfold choose at run
+  by_cases full : n.cidr ≥ n.bitlen
+  · simp only [full,↓reduceIte] at run
+    obtain ⟨_,_,_,thrown,_⟩ := bind_ok_run run
+    cases thrown
+  · simp only [full,↓reduceIte] at run
+    obtain ⟨rfl,rfl,rfl⟩ := ok_inj run _ _ _ rfl
+    exact ⟨rfl,rfl,rfl⟩
+
+theorem add_bitAt_acc {σ : Type} {n : AipNode} {i : Nat} {v : Option NodeId} {s s' : σ} {a a' : Ambient}
+    (run : ((n.bitAt i : StateT σ AmbientM (Option NodeId)).run s).run a = .ok ((v,s'),a')) :
+    n.bit[i]? = some v ∧ s = s' ∧ a = a' := by
+  unfold AipNode.bitAt at run
+  cases child : n.bit[i]? with
+  | none => simp only [child] at run; cases run
+  | some c =>
+    simp only [child] at run
+    obtain ⟨rfl,rfl,rfl⟩ := ok_inj run _ _ _ rfl
+    exact ⟨rfl,rfl,rfl⟩
+
+theorem add_chooseConnect_acc {parent node : NodeId} {d : Device} {s' : AipStore} {a a' : Ambient}
+    (run : ((chooseAndConnectNode parent node).run (Source.Aip.store d)).run a = .ok (((),s'),a')) :
+    asDev d s' = chooseConnect d parent node ∧ a' = a := by
+  unfold chooseAndConnectNode at run
+  obtain ⟨p,s1,a1,readParent,r1⟩ := bind_ok_run run
+  clear run
+  obtain ⟨parentPresent,rfl,rfl⟩ := getNode_acc readParent
+  clear readParent
+  obtain ⟨n,s2,a2,readNode,r2⟩ := bind_ok_run r1
+  clear r1
+  obtain ⟨nodePresent,rfl,rfl⟩ := getNode_acc readNode
+  clear readNode
+  obtain ⟨bit,s3,a3,chosen,r3⟩ := bind_ok_run r2
+  clear r2
+  obtain ⟨rfl,rfl,rfl⟩ := add_choose_acc chosen
+  clear chosen
+  obtain ⟨connected,rfl⟩ := connectNode_acc r3
+  have parentPresent' : d.nodes.get? parent = some p := parentPresent
+  have nodePresent' : d.nodes.get? node = some n := nodePresent
+  refine ⟨?_,rfl⟩
+  rw [connected]
+  simp only [chooseConnect,parentPresent',nodePresent']
+
+theorem add_freeNode_acc {id : NodeId} {d : Device} {s' : AipStore} {a a' : Ambient}
+    (run : ((freeNode id).run (Source.Aip.store d)).run a = .ok (((),s'),a')) :
+    asDev d s' = {d with nodes := d.nodes.erase id} ∧ a' = a := by
+  unfold freeNode at run
+  obtain ⟨n,s1,a1,read,r1⟩ := bind_ok_run run
+  clear run
+  obtain ⟨_,rfl,rfl⟩ := getNode_acc read
+  obtain ⟨_,rfl,rfl⟩ := ok_inj r1 () _ _ rfl
+  exact ⟨rfl,rfl⟩
+
+
+/-! ### The same primitives in `WG.M`, at a world whose device is `d` -/
+
+theorem add_branch_run {σ : Type} (dcn : Decision) (b : Bool) (s : σ) (a : Ambient) :
+    ((branch dcn b : StateT σ AmbientM Bool).run s).run a = .ok ((b,s),Model.record a dcn b) := rfl
+
+theorem add_branchCmp_run {σ : Type} (dcn : Decision) (b : Bool) (x y : Int) (s : σ) (a : Ambient) :
+    ((branchCmp dcn b x y : StateT σ AmbientM Bool).run s).run a =
+      .ok ((b,s),Placement.recordCmp a dcn b x y) := rfl
+
+theorem add_common_run {σ : Type} (node : AipNode) (key bits : Nat) (s : σ) (a : Ambient) :
+    ((WG.commonBits node key bits : StateT σ AmbientM Nat).run s).run a =
+      .ok ((AllowedipsRelation.common bits node.bits key,s),Model.commonRecords a bits (node.bits ^^^ key)) := by
+  by_cases h32 : bits=32
+  · subst bits; rfl
+  · by_cases h128 : bits=128
+    · subst bits
+      by_cases high : (node.bits ^^^ key)/2^64=0
+      all_goals simp [WG.commonBits,StateT.run_bind,StateT.run_pure,add_branch_run,
+        Source.except_ok_bind,Source.except_pure,AllowedipsRelation.common,
+        Model.commonRecords,high] <;> rfl
+    · simp [WG.commonBits,StateT.run_bind,StateT.run_pure,add_branch_run,
+        Source.except_ok_bind,Source.except_pure,AllowedipsRelation.common,
+        Model.commonRecords,h32,h128] <;> rfl
+
+theorem add_bump_run {k : WGWorld} {d : Device} (device : k.dev = some d) (f : Device → Device) (a : Ambient) :
+    ((WG.modifyDev f).run k).run a = .ok (((),{k with dev := some (f d)}),a) := by
+  show Except.ok (((),{k with dev := k.dev.map f}),a) = _
+  rw [device]
+  rfl
+
+theorem add_getNode_wg {k k' : WGWorld} {d : Device} {a a' : Ambient} {id : NodeId} {n : AipNode}
+    (device : k.dev = some d) (run : ((WG.liftAip (getNode id)).run k).run a = .ok ((n,k'),a')) :
+    d.nodes.get? id = some n ∧ k' = {k with dev := some d} ∧ a = a' := by
+  obtain ⟨s',inner,rfl⟩ := liftAip_acc device run
+  obtain ⟨present,rfl,rfl⟩ := getNode_acc inner
+  exact ⟨present,rfl,rfl⟩
+
+theorem add_slotGet_wg {k k' : WGWorld} {d : Device} {a a' : Ambient} {root : Slot} {v : Option NodeId}
+    (device : k.dev = some d) (rootSlot : root = .root4 ∨ root = .root6)
+    (run : ((WG.liftAip (slotGet root)).run k).run a = .ok ((v,k'),a')) :
+    v = slotOf d root ∧ k' = {k with dev := some d} ∧ a = a' := by
+  obtain ⟨s',inner,rfl⟩ := liftAip_acc device run
+  rcases rootSlot with rfl | rfl
+  · obtain ⟨rfl,rfl,rfl⟩ := ok_inj inner _ _ _ rfl
+    exact ⟨rfl,rfl,rfl⟩
+  · obtain ⟨rfl,rfl,rfl⟩ := ok_inj inner _ _ _ rfl
+    exact ⟨rfl,rfl,rfl⟩
+
+theorem add_allocNode_wg {k k' : WGWorld} {d : Device} {a a' : Ambient} {site : AllocSite} {n : AipNode}
+    {res : Option NodeId} {stream : List HiddenRecord} (device : k.dev = some d)
+    (which : site = .allocNode190 ∨ site = .allocNode205 ∨ site = .allocNode234)
+    (hid : a.hidden = some stream) (clean : ∀ r ∈ stream, HiddenSite.passive r.site = false)
+    (arm : a.allocArmed.contains site.info.label = true)
+    (run : ((WG.liftAip (allocNode site n)).run k).run a = .ok ((res,k'),a')) :
+    ∃ r rest, stream = r :: rest ∧ r.site = site.hiddenId ∧ a' = {a with hidden := some rest} ∧
+      ((r.bytes.head? = some 0 ∧ res = none ∧ k' = {k with dev := some d}) ∨
+       (r.bytes.head? = some 1 ∧ res = some d.nextNode ∧ k' = {k with dev := some (alloc d n)})) := by
+  obtain ⟨s',inner,rfl⟩ := liftAip_acc device run
+  obtain ⟨r,rest,rfl,siteEq,rfl,outcome⟩ := add_allocNode_acc which hid clean arm inner
+  refine ⟨r,rest,rfl,siteEq,rfl,?_⟩
+  rcases outcome with ⟨zero,rfl,same⟩ | ⟨one,rfl,same⟩
+  · exact .inl ⟨zero,rfl,by rw [same]⟩
+  · exact .inr ⟨one,rfl,by rw [same]⟩
+
+theorem add_connect_wg {k k' : WGWorld} {d : Device} {a a' : Ambient} {slot : Slot} {id : NodeId}
+    (device : k.dev = some d) (run : ((WG.liftAip (connectNode slot id)).run k).run a = .ok (((),k'),a')) :
+    k' = {k with dev := some (connect d slot id)} ∧ a = a' := by
+  obtain ⟨s',inner,rfl⟩ := liftAip_acc device run
+  obtain ⟨same,rfl⟩ := connectNode_acc inner
+  exact ⟨by rw [same],rfl⟩
+
+theorem add_chooseConnect_wg {k k' : WGWorld} {d : Device} {a a' : Ambient} {parent node : NodeId}
+    (device : k.dev = some d)
+    (run : ((WG.liftAip (chooseAndConnectNode parent node)).run k).run a = .ok (((),k'),a')) :
+    k' = {k with dev := some (chooseConnect d parent node)} ∧ a = a' := by
+  obtain ⟨s',inner,rfl⟩ := liftAip_acc device run
+  obtain ⟨same,rfl⟩ := add_chooseConnect_acc inner
+  exact ⟨by rw [same],rfl⟩
+
+theorem add_freeNode_wg {k k' : WGWorld} {d : Device} {a a' : Ambient} {id : NodeId}
+    (device : k.dev = some d) (run : ((WG.liftAip (freeNode id)).run k).run a = .ok (((),k'),a')) :
+    k' = {k with dev := some {d with nodes := d.nodes.erase id}} ∧ a = a' := by
+  obtain ⟨s',inner,rfl⟩ := liftAip_acc device run
+  obtain ⟨same,rfl⟩ := add_freeNode_acc inner
+  exact ⟨by rw [same],rfl⟩
+
+theorem add_placement_wg {k k' : WGWorld} {d : Device} {a a' : Ambient} {root placed : Option NodeId}
+    {key cidr bits : Nat} {exact : Bool} (device : k.dev = some d)
+    (run : ((WG.liftAip (WG.nodePlacement root key cidr bits)).run k).run a = .ok (((placed,exact),k'),a')) :
+    k' = {k with dev := some d} ∧ a'.hidden = a.hidden ∧ a'.allocArmed = a.allocArmed ∧
+      add_Good d root key placed exact ∧
+      ∃ finalStore, ((WG.nodePlacement root key cidr bits).run (Source.Aip.store d)).run a =
+        .ok (((placed,exact),finalStore),a') := by
+  obtain ⟨s',inner,rfl⟩ := liftAip_acc device run
+  obtain ⟨rfl,hidden,armed,good⟩ := add_placement inner
+  exact ⟨rfl,hidden,armed,good,_,inner⟩
+
+theorem add_listAddTail_wg {k k' : WGWorld} {d : Device} {a a' : Ambient} {pid : PeerId} {id : NodeId}
+    (device : k.dev = some d) (run : ((WG.listAddTail pid id).run k).run a = .ok (((),k'),a')) :
+    k' = {k with dev := some (addTail d pid id)} ∧ a = a' := by
+  cases present : d.peers[pid]? with
+  | none =>
+    simp [WG.listAddTail,WG.getPeer,WG.getDev,invariant,AmbientM.invariant,present,device] at run
+    cases run
+  | some owner =>
+    obtain ⟨_,rfl,rfl⟩ := ok_inj run _ _ _ (Model.listAddTail_run k d a device pid id owner present)
+    have present' : d.peers.get? pid = some owner := present
+    have same : addTail d pid id =
+        {d with peers := d.peers.insert pid {owner with allowedipsList := owner.allowedipsList ++ [id]}} := by
+      simp only [addTail,present']
+    exact ⟨by rw [same],rfl⟩
+
+theorem add_delete_fold (id : NodeId) (xs : List (Nat × Peer)) (d : Device) :
+    xs.foldl (fun d (pid,p) => if p.allowedipsList.contains id then
+      {d with peers := d.peers.insert pid {p with allowedipsList := listRemove p.allowedipsList id}} else d) d =
+      {d with peers := Model.delFold id xs d.peers} := by
+  induction xs generalizing d with
+  | nil => rfl
+  | cons x xs ih =>
+    rcases x with ⟨pid,p⟩
+    simp only [List.foldl_cons,Model.delFold]
+    rw [ih]
+    by_cases member : p.allowedipsList.contains id = true
+    · simp only [member,↓reduceIte,Model.delFold,Model.delStep,Model.unlist]
+    · simp only [member,Bool.false_eq_true,↓reduceIte,Model.delFold,Model.delStep]
+
+theorem add_listDel_wg {k k' : WGWorld} {d : Device} {a a' : Ambient} {id : NodeId}
+    (device : k.dev = some d) (run : ((WG.listDel id).run k).run a = .ok (((),k'),a')) :
+    k' = {k with dev := some (delete d id)} ∧ a = a' := by
+  obtain ⟨_,rfl,rfl⟩ := ok_inj run _ _ _ (Model.listDel_run k d a device id)
+  refine ⟨?_,rfl⟩
+  rw [show delete d id = Model.unlisted d id from add_delete_fold id d.peers.toList d]
+
+
+/-! ### `add` against `step` -/
+
+/-- `C1Step.step` after the wrapper's increment, with the root slot and the width as `add` takes them. -/
+def add_stepAt (d : Device) (root : Slot) (bits key cidr pid : Nat) (placed : Option NodeId) (exact : Bool)
+    (outcomes : List Bool) : Step :=
+  if cidr > bits then ⟨.tooLong,-EINVAL,d,0⟩ else
+  match slotOf d root with
+  | none => match outcomes with
+    | true :: _ => ⟨.root,0,connect (addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode) root d.nextNode,1⟩
+    | _ => ⟨.rootNoMem,-ENOMEM,d,1⟩
+  | some rootId =>
+    if exact then
+      match placed.bind fun id => (d.nodes.get? id).map fun n => (id,n) with
+      | some (id,n) => ⟨.exact,0,addTail (delete {d with nodes := d.nodes.insert id {n with peer := some pid}} id) pid id,0⟩
+      | none => ⟨.exact,0,d,0⟩
+    else match outcomes with
+    | true :: rest =>
+      let fresh := d.nextNode
+      let d1 := addTail (alloc d (newNode key cidr bits (some pid))) pid fresh
+      match (below d (some rootId) key placed).bind fun id => (d.nodes.get? id).map fun n => (id,n) with
+      | none => match placed with
+        | some p => ⟨.child,0,chooseConnect d1 p fresh,1⟩
+        | none => ⟨.child,0,d1,1⟩
+      | some (downId,down) =>
+        let least := min cidr (AllowedipsRelation.common bits down.bits key)
+        if cidr == least then
+          let d2 := chooseConnect d1 fresh downId
+          ⟨.cover,0,match placed with | none => connect d2 root fresh | some p => chooseConnect d2 p fresh,1⟩
+        else match rest with
+        | true :: _ =>
+          let middle := d1.nextNode
+          let d2 := chooseConnect (chooseConnect (alloc d1 (newNode key least bits none)) middle downId) middle fresh
+          ⟨.split,0,match placed with | none => connect d2 root middle | some p => chooseConnect d2 p middle,2⟩
+        | _ => ⟨.splitNoMem,-ENOMEM,{delete d1 fresh with nodes := (delete d1 fresh).nodes.erase fresh},2⟩
+    | _ => ⟨.nodeNoMem,-ENOMEM,d,1⟩
+
+theorem add_step_eq (d : Device) (family key cidr pid : Nat) (placed : Option NodeId) (exact : Bool)
+    (outcomes : List Bool) :
+    step d family key cidr pid placed exact outcomes =
+      add_stepAt (bump d) (if family == 4 then .root4 else .root6) (if family == 4 then 32 else 128)
+        key cidr pid placed exact outcomes := rfl
+
+theorem add_out1 {r : HiddenRecord} (one : r.bytes.head? = some 1) : (r.bytes.head? == some 1) = true := by
+  rw [one]; rfl
+theorem add_out0 {r : HiddenRecord} (zero : r.bytes.head? = some 0) : (r.bytes.head? == some 1) = false := by
+  rw [zero]; decide
+
+/-- What one accepted `add` gives against a step. -/
+abbrev add_Post (k k' : WGWorld) (a a' : Ambient) (stream : List HiddenRecord) (answer : Int) (st : Step) : Prop :=
+  answer = st.answer ∧ k' = {k with dev := some st.device} ∧
+  a'.hidden = some (stream.drop st.consumed) ∧ a'.allocArmed = a.allocArmed ∧
+  (stream.take st.consumed).map (·.site) = st.case.sites ∧
+  (∀ r ∈ stream.take st.consumed, r.bytes.head? = some 0 ∨ r.bytes.head? = some 1)
+
+/-- The part of `add` below the node `downId` under the placement (allowedips.c:219-248), text unchanged. -/
+def add_tail (root : Slot) (bits key cidr : Nat) (placed : Option NodeId) (newnode downId : NodeId) : WG.M Int := do
+  let common ← commonBits (← getNode downId) key bits
+  let cidr := min cidr common
+  let parent := placed
+  if ← branch .addNewnodeCoversDown ((← getNode newnode).cidr == cidr) then
+    chooseAndConnectNode newnode downId
+    if ← branch .addNewnodeAtRoot parent.isNone then connectNode root newnode
+    else if let some p := parent then chooseAndConnectNode p newnode
+    return 0
+  let nodeAlloc ← allocNode .allocNode234 (newNode (← getNode newnode).bits cidr bits none)
+  if ← branch .addIntermediateNoMem nodeAlloc.isNone then
+    listDel newnode
+    freeNode newnode
+    return -ENOMEM
+  let some node := nodeAlloc | invariant "unreachable"
+  chooseAndConnectNode node downId
+  chooseAndConnectNode node newnode
+  if ← branch .addIntermediateAtRoot parent.isNone then connectNode root node
+  else if let some p := parent then chooseAndConnectNode p node
+  return 0
+
+/-- The last connection of the cover and split cases: at the root, or below the placed node. -/
+def add_attach (d : Device) (root : Slot) (placed : Option NodeId) (node : NodeId) : Device :=
+  match placed with
+  | none => connect d root node
+  | some p => chooseConnect d p node
+
+theorem add_tail_acc {k k' : WGWorld} {a a' : Ambient} {d1 : Device} {root : Slot} {bits key cidr pid : Nat}
+    {placed : Option NodeId} {newnode downId : NodeId} {down : AipNode} {answer : Int}
+    {stream : List HiddenRecord}
+    (run : ((add_tail root bits key cidr placed newnode downId).run k).run a = .ok ((answer,k'),a'))
+    (device : k.dev = some d1) (ready : add_Ready a stream)
+    (hnew : d1.nodes.get? newnode = some (newNode key cidr bits (some pid)))
+    (hdown : d1.nodes.get? downId = some down) :
+    ((cidr == min cidr (AllowedipsRelation.common bits down.bits key)) = true ∧ answer = 0 ∧
+      k' = {k with dev := some (add_attach (chooseConnect d1 newnode downId) root placed newnode)} ∧
+      a'.hidden = some stream ∧ a'.allocArmed = a.allocArmed) ∨
+    ((cidr == min cidr (AllowedipsRelation.common bits down.bits key)) = false ∧
+      ∃ r rest, stream = r :: rest ∧ r.site = 79 ∧ a'.hidden = some rest ∧ a'.allocArmed = a.allocArmed ∧
+        ((r.bytes.head? = some 0 ∧ answer = -ENOMEM ∧
+          k' = {k with dev := some {delete d1 newnode with nodes := (delete d1 newnode).nodes.erase newnode}}) ∨
+         (r.bytes.head? = some 1 ∧ answer = 0 ∧
+          k' = {k with dev := some (add_attach (chooseConnect (chooseConnect (alloc d1 (newNode key
+                (min cidr (AllowedipsRelation.common bits down.bits key)) bits none)) d1.nextNode downId)
+                d1.nextNode newnode) root placed d1.nextNode)}))) := by
+  unfold add_tail at run
+  obtain ⟨n,k1,a1,h,r1⟩ := bind_ok_run run
+  clear run
+  obtain ⟨present,rfl,rfl⟩ := add_getNode_wg device h
+  clear h
+  obtain rfl : n = down := Option.some.inj (present.symm.trans hdown)
+  obtain ⟨common,k2,a2,h,r2⟩ := bind_ok_run r1
+  clear r1
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj h _ _ _ (add_common_run n key bits _ _)
+  clear h
+  obtain ⟨nn,k3,a3,h,r3⟩ := bind_ok_run r2
+  clear r2
+  obtain ⟨presentNew,rfl,rfl⟩ := add_getNode_wg (d := d1) rfl h
+  clear h
+  obtain rfl : nn = newNode key cidr bits (some pid) := Option.some.inj (presentNew.symm.trans hnew)
+  obtain ⟨b,k4,a4,h,r4⟩ := bind_ok_run r3
+  clear r3
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj h _ _ _ (add_branch_run _ _ _ _)
+  clear h
+  have ready4 : add_Ready (Model.record (Model.commonRecords a bits (n.bits ^^^ key)) .addNewnodeCoversDown
+      ((newNode key cidr bits (some pid)).cidr == min cidr (AllowedipsRelation.common bits n.bits key))) stream :=
+    ready.keep (by simp) (by simp)
+  by_cases cover : (cidr == min cidr (AllowedipsRelation.common bits n.bits key)) = true
+  · have cover' : ((newNode key cidr bits (some pid)).cidr ==
+        min cidr (AllowedipsRelation.common bits n.bits key)) = true := cover
+    simp only [cover',↓reduceIte] at r4
+    obtain ⟨u,k5,a5,h,r5⟩ := bind_ok_run r4
+    clear r4
+    obtain ⟨rfl,rfl⟩ := add_chooseConnect_wg (d := d1) rfl h
+    clear h
+    obtain ⟨b,k6,a6,h,r6⟩ := bind_ok_run r5
+    clear r5
+    obtain ⟨rfl,rfl,rfl⟩ := ok_inj h _ _ _ (add_branch_run _ _ _ _)
+    clear h
+    dsimp only at r6
+    cases placed with
+    | none =>
+      simp only [Option.isNone_none,↓reduceIte] at r6
+      obtain ⟨u,k7,a7,h,r7⟩ := bind_ok_run r6
+      clear r6
+      obtain ⟨rfl,rfl⟩ := add_connect_wg (d := chooseConnect d1 newnode downId) rfl h
+      clear h
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj r7 0 _ _ rfl
+      exact .inl ⟨cover,rfl,rfl,ready4.hidden,by simp⟩
+    | some p =>
+      simp only [Option.isNone_some,Bool.false_eq_true,↓reduceIte] at r6
+      obtain ⟨u,k7,a7,h,r7⟩ := bind_ok_run r6
+      clear r6
+      obtain ⟨rfl,rfl⟩ := add_chooseConnect_wg (d := chooseConnect d1 newnode downId) rfl h
+      clear h
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj r7 0 _ _ rfl
+      exact .inl ⟨cover,rfl,rfl,ready4.hidden,by simp⟩
+  · have cover' : ((newNode key cidr bits (some pid)).cidr ==
+        min cidr (AllowedipsRelation.common bits n.bits key)) = false := Bool.eq_false_iff.mpr cover
+    simp only [cover',Bool.false_eq_true,↓reduceIte] at r4
+    rw [cover'] at ready4
+    obtain ⟨nn,k5,a5,h,r5⟩ := bind_ok_run r4
+    clear r4
+    obtain ⟨presentAgain,rfl,rfl⟩ := add_getNode_wg (d := d1) rfl h
+    clear h
+    obtain rfl : nn = newNode key cidr bits (some pid) := Option.some.inj (presentAgain.symm.trans hnew)
+    obtain ⟨res,k6,a6,h,r6⟩ := bind_ok_run r5
+    clear r5
+    obtain ⟨r,rest,rfl,siteEq,rfl,outcome⟩ := add_allocNode_wg (d := d1) rfl (.inr (.inr rfl))
+      ready4.hidden ready4.clean ready4.armed234 h
+    clear h
+    obtain ⟨b,k7,a7,h,r7⟩ := bind_ok_run r6
+    clear r6
+    obtain ⟨rfl,rfl,rfl⟩ := ok_inj h _ _ _ (add_branch_run _ _ _ _)
+    clear h
+    refine .inr ⟨Bool.eq_false_iff.mpr cover,r,rest,rfl,siteEq,?_⟩
+    rcases outcome with ⟨zero,rfl,rfl⟩ | ⟨one,rfl,rfl⟩
+    · simp only [Option.isNone_none,↓reduceIte] at r7
+      obtain ⟨u,k8,a8,h,r8⟩ := bind_ok_run r7
+      clear r7
+      obtain ⟨rfl,rfl⟩ := add_listDel_wg (d := d1) rfl h
+      clear h
+      obtain ⟨u,k9,a9,h,r9⟩ := bind_ok_run r8
+      clear r8
+      obtain ⟨rfl,rfl⟩ := add_freeNode_wg (d := delete d1 newnode) rfl h
+      clear h
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj r9 (-ENOMEM) _ _ rfl
+      exact ⟨rfl,by simp,.inl ⟨zero,rfl,rfl⟩⟩
+    · simp only [Option.isNone_some,Bool.false_eq_true,↓reduceIte] at r7
+      obtain ⟨u,k8,a8,h,r8⟩ := bind_ok_run r7
+      clear r7
+      obtain ⟨rfl,rfl⟩ := add_chooseConnect_wg (d := alloc d1 (newNode key
+        (min cidr (AllowedipsRelation.common bits n.bits key)) bits none)) rfl h
+      clear h
+      obtain ⟨u,k9,a9,h,r9⟩ := bind_ok_run r8
+      clear r8
+      obtain ⟨rfl,rfl⟩ := add_chooseConnect_wg (d := chooseConnect (alloc d1 (newNode key
+        (min cidr (AllowedipsRelation.common bits n.bits key)) bits none)) d1.nextNode downId) rfl h
+      clear h
+      obtain ⟨b,k10,a10,h,r10⟩ := bind_ok_run r9
+      clear r9
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj h _ _ _ (add_branch_run _ _ _ _)
+      clear h
+      dsimp only at r10
+      cases placed with
+      | none =>
+        simp only [Option.isNone_none,↓reduceIte] at r10
+        obtain ⟨u,k11,a11,h,r11⟩ := bind_ok_run r10
+        clear r10
+        obtain ⟨rfl,rfl⟩ := add_connect_wg (d := chooseConnect (chooseConnect (alloc d1 (newNode key
+          (min cidr (AllowedipsRelation.common bits n.bits key)) bits none)) d1.nextNode downId)
+          d1.nextNode newnode) rfl h
+        clear h
+        obtain ⟨rfl,rfl,rfl⟩ := ok_inj r11 0 _ _ rfl
+        exact ⟨rfl,by simp,.inr ⟨one,rfl,rfl⟩⟩
+      | some p =>
+        simp only [Option.isNone_some,Bool.false_eq_true,↓reduceIte] at r10
+        obtain ⟨u,k11,a11,h,r11⟩ := bind_ok_run r10
+        clear r10
+        obtain ⟨rfl,rfl⟩ := add_chooseConnect_wg (d := chooseConnect (chooseConnect (alloc d1 (newNode key
+          (min cidr (AllowedipsRelation.common bits n.bits key)) bits none)) d1.nextNode downId)
+          d1.nextNode newnode) rfl h
+        clear h
+        obtain ⟨rfl,rfl,rfl⟩ := ok_inj r11 0 _ _ rfl
+        exact ⟨rfl,by simp,.inr ⟨one,rfl,rfl⟩⟩
+
+theorem add_setNode_wg {k k' : WGWorld} {d : Device} {a a' : Ambient} {id : NodeId} {n : AipNode}
+    (device : k.dev = some d) (run : ((WG.liftAip (setNode id n)).run k).run a = .ok (((),k'),a')) :
+    k' = {k with dev := some {d with nodes := d.nodes.insert id n}} ∧ a = a' := by
+  obtain ⟨s',inner,rfl⟩ := liftAip_acc device run
+  obtain ⟨_,rfl,rfl⟩ := ok_inj inner () _ _ rfl
+  exact ⟨rfl,rfl⟩
+
+theorem add_addTail_nodes (d : Device) (pid : PeerId) (id : NodeId) : (addTail d pid id).nodes = d.nodes := by
+  unfold addTail
+  split <;> rfl
+
+theorem add_addTail_next (d : Device) (pid : PeerId) (id : NodeId) : (addTail d pid id).nextNode = d.nextNode := by
+  unfold addTail
+  split <;> rfl
+
+theorem add_addTail_slot (d : Device) (pid : PeerId) (id : NodeId) (n : AipNode) {root : Slot}
+    (rootSlot : root = .root4 ∨ root = .root6) : slotOf (addTail (alloc d n) pid id) root = slotOf d root := by
+  unfold addTail
+  rcases rootSlot with rfl | rfl <;> split <;> rfl
+
+theorem add_fresh_get {d : Device} {id : NodeId} {n m : AipNode} {pid : PeerId} {f : NodeId}
+    (fresh : d.nodes.get? d.nextNode = none) (present : d.nodes.get? id = some n) :
+    (addTail (alloc d m) pid f).nodes.get? id = some n := by
+  have different : ¬d.nextNode = id := by
+    rintro rfl
+    rw [fresh] at present
+    cases present
+  rw [add_addTail_nodes]
+  have stored : d.nodes[id]? = some n := present
+  show (d.nodes.insert d.nextNode m)[id]? = some n
+  simpa [Std.TreeMap.getElem?_insert,different] using stored
+
+theorem add_new_get (d : Device) (m : AipNode) (pid : PeerId) (f : NodeId) :
+    (addTail (alloc d m) pid f).nodes.get? d.nextNode = some m := by
+  rw [add_addTail_nodes]
+  show (d.nodes.insert d.nextNode m)[d.nextNode]? = some m
+  simp
+
+theorem add_one_site {r : HiddenRecord} {rest : List HiddenRecord} {n : Nat} (site : r.site = n) :
+    List.map (fun x => x.site) (List.take 1 (r :: rest)) = [n] := by
+  simp [site]
+
+theorem add_one_outcome {r : HiddenRecord} {rest : List HiddenRecord}
+    (outcome : r.bytes.head? = some 0 ∨ r.bytes.head? = some 1) :
+    ∀ x ∈ List.take 1 (r :: rest), x.bytes.head? = some 0 ∨ x.bytes.head? = some 1 := by
+  intro x member
+  simp only [List.take_succ_cons,List.take_zero,List.mem_singleton] at member
+  subst member
+  exact outcome
+
+/-- The cover and split cases against `add_stepAt`, from the tail's result. -/
+theorem add_tail_post {k k' : WGWorld} {a a6 a' : Ambient} {d : Device} {root : Slot}
+    {bits key cidr pid : Nat} {placed : Option NodeId} {rootId downId : NodeId} {down : AipNode}
+    {answer : Int} {r : HiddenRecord} {rest : List HiddenRecord}
+    (long : ¬cidr > bits) (empty : slotOf d root = some rootId)
+    (reached : ((below d (some rootId) key placed).bind fun id => (d.nodes.get? id).map fun n => (id,n)) =
+      some (downId,down))
+    (one : r.bytes.head? = some 1) (site : r.site = 78) (armed6 : a6.allocArmed = a.allocArmed)
+    (result :
+      ((cidr == min cidr (AllowedipsRelation.common bits down.bits key)) = true ∧ answer = 0 ∧
+        k' = {k with dev := some (add_attach (chooseConnect (addTail (alloc d (newNode key cidr bits (some pid)))
+          pid d.nextNode) d.nextNode downId) root placed d.nextNode)} ∧
+        a'.hidden = some rest ∧ a'.allocArmed = a6.allocArmed) ∨
+      ((cidr == min cidr (AllowedipsRelation.common bits down.bits key)) = false ∧
+        ∃ r2 rest2, rest = r2 :: rest2 ∧ r2.site = 79 ∧ a'.hidden = some rest2 ∧
+          a'.allocArmed = a6.allocArmed ∧
+          ((r2.bytes.head? = some 0 ∧ answer = -ENOMEM ∧
+            k' = {k with dev := some {delete (addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode)
+              d.nextNode with nodes := (delete (addTail (alloc d (newNode key cidr bits (some pid))) pid
+                d.nextNode) d.nextNode).nodes.erase d.nextNode}}) ∨
+           (r2.bytes.head? = some 1 ∧ answer = 0 ∧
+            k' = {k with dev := some (add_attach (chooseConnect (chooseConnect (alloc (addTail (alloc d
+              (newNode key cidr bits (some pid))) pid d.nextNode) (newNode key
+                (min cidr (AllowedipsRelation.common bits down.bits key)) bits none))
+                (addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode).nextNode downId)
+                (addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode).nextNode d.nextNode)
+                root placed (addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode).nextNode)})))) :
+    ∀ st, st = add_stepAt d root bits key cidr pid placed false
+        ((r :: rest).map fun x => x.bytes.head? == some 1) →
+      add_Post k k' a a' (r :: rest) answer st ∧ st.case ≠ .tooLong := by
+  rintro st rfl
+  rcases result with ⟨cover,rfl,rfl,hid,arm⟩ |
+    ⟨split,r2,rest2,rfl,site2,hid,arm,(⟨zero,rfl,rfl⟩ | ⟨one2,rfl,rfl⟩)⟩
+  · simp only [add_stepAt,long,↓reduceIte,empty,Bool.false_eq_true,List.map_cons,add_out1 one,reached,cover]
+    refine ⟨⟨rfl,?_,hid,arm.trans armed6,add_one_site site,add_one_outcome (.inr one)⟩,by simp⟩
+    cases placed <;> rfl
+  · simp only [add_stepAt,long,↓reduceIte,empty,Bool.false_eq_true,List.map_cons,add_out1 one,reached,split,
+      add_out0 zero]
+    refine ⟨⟨rfl,rfl,hid,arm.trans armed6,by simp [site,site2,Case.sites],?_⟩,by simp⟩
+    intro x member
+    simp only [List.take_succ_cons,List.take_zero,List.mem_cons,List.not_mem_nil,or_false] at member
+    rcases member with rfl | rfl
+    · exact .inr one
+    · exact .inl zero
+  · simp only [add_stepAt,long,↓reduceIte,empty,Bool.false_eq_true,List.map_cons,add_out1 one,reached,split,
+      add_out1 one2]
+    refine ⟨⟨rfl,?_,hid,arm.trans armed6,by simp [site,site2,Case.sites],?_⟩,by simp⟩
+    · cases placed <;> rfl
+    · intro x member
+      simp only [List.take_succ_cons,List.take_zero,List.mem_cons,List.not_mem_nil,or_false] at member
+      rcases member with rfl | rfl
+      · exact .inr one
+      · exact .inr one2
+
+theorem add_ite_run {σ α : Type} {c : Prop} [Decidable c] {A B : StateT σ AmbientM α} {s : σ} {a : Ambient}
+    {r : (α × σ) × Ambient} (h : ((if c then A else B).run s).run a = .ok r) :
+    (c ∧ (A.run s).run a = .ok r) ∨ (¬c ∧ (B.run s).run a = .ok r) := by
+  by_cases holds : c
+  · rw [show (if c then A else B) = A from by simp only [holds,↓reduceIte]] at h
+    exact .inl ⟨holds,h⟩
+  · rw [show (if c then A else B) = B from by simp only [holds,↓reduceIte]] at h
+    exact .inr ⟨holds,h⟩
+
+theorem add_core {k k' : WGWorld} {a a' : Ambient} {d : Device} {root : Slot} {bits key cidr pid : Nat}
+    {answer : Int} {stream : List HiddenRecord} (device : k.dev = some d) (ready : add_Ready a stream)
+    (rootSlot : root = .root4 ∨ root = .root6) (fresh : d.nodes.get? d.nextNode = none)
+    (run : ((WG.add root bits key cidr (some pid)).run k).run a = .ok ((answer,k'),a')) :
+    ∃ placed exact, ∀ st,
+      st = add_stepAt d root bits key cidr pid placed exact (stream.map fun r => r.bytes.head? == some 1) →
+      add_Post k k' a a' stream answer st ∧
+      (st.case ≠ .tooLong → st.case ≠ .rootNoMem → st.case ≠ .root →
+        ∃ ambient finalAmbient finalStore,
+          ((WG.nodePlacement (slotOf d root) key cidr bits).run (Source.Aip.store d)).run ambient =
+            .ok (((placed,exact),finalStore),finalAmbient)) := by
+  unfold WG.add at run
+  obtain ⟨b1,k1,a1,h1,r1⟩ := bind_ok_run run
+  clear run
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj h1 _ _ _ (add_branchCmp_run .addCidrTooLong (decide (cidr > bits)) cidr bits k a)
+  clear h1
+  by_cases long : cidr > bits
+  · simp only [long,decide_true,↓reduceIte] at r1
+    obtain ⟨rfl,rfl,rfl⟩ := ok_inj r1 (-EINVAL) _ _ rfl
+    refine ⟨none,false,?_⟩
+    rintro st rfl
+    simp only [add_stepAt,long,↓reduceIte]
+    exact ⟨⟨rfl,(world_same device).symm,ready.hidden,rfl,rfl,fun r member => by cases member⟩,
+      fun wrong => absurd rfl wrong⟩
+  simp only [long,decide_false,Bool.false_eq_true,↓reduceIte] at r1
+  obtain ⟨b2,k2,a2,h2,r2⟩ := bind_ok_run r1
+  clear r1
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj h2 _ _ _ (add_branch_run .addNoPeer (some pid).isNone k _)
+  clear h2
+  simp only [Option.isNone_some,Bool.false_eq_true,↓reduceIte] at r2
+  obtain ⟨trie,k3,a3,h3,r3⟩ := bind_ok_run r2
+  clear r2
+  obtain ⟨rfl,rfl,rfl⟩ := add_slotGet_wg device rootSlot h3
+  clear h3
+  obtain ⟨b4,k4,a4,h4,r4⟩ := bind_ok_run r3
+  clear r3
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj h4 _ _ _ (add_branch_run .addEmptyTrie (slotOf d root).isNone _ _)
+  clear h4
+  have ready4 : add_Ready (Model.record (Model.record (Placement.recordCmp a .addCidrTooLong
+      false cidr bits) .addNoPeer false) .addEmptyTrie (slotOf d root).isNone) stream :=
+    ready.keep rfl rfl
+  cases empty : slotOf d root with
+  | none =>
+    simp only [empty,Option.isNone_none,↓reduceIte] at r4 ready4
+    obtain ⟨x,k5,a5,h5,r5⟩ := bind_ok_run r4
+    clear r4
+    obtain ⟨res,k6,a6,h6,h7⟩ := bind_ok_run h5
+    clear h5
+    obtain ⟨r,rest,rfl,siteEq,rfl,outcome⟩ := add_allocNode_wg (d := d) rfl (.inl rfl)
+      ready4.hidden ready4.clean ready4.armed190 h6
+    clear h6
+    obtain ⟨b,k7,a7,h8,h9⟩ := bind_ok_run h7
+    clear h7
+    obtain ⟨rfl,rfl,rfl⟩ := ok_inj h8 _ _ _ (add_branch_run _ _ _ _)
+    clear h8
+    have site : r.site = 77 := siteEq
+    refine ⟨none,false,?_⟩
+    rintro st rfl
+    rcases outcome with ⟨zero,rfl,rfl⟩ | ⟨one,rfl,rfl⟩
+    · simp only [Option.isNone_none,↓reduceIte] at h9
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj h9 none _ _ rfl
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj r5 (-ENOMEM) _ _ rfl
+      simp only [add_stepAt,long,↓reduceIte,empty,List.map_cons,add_out0 zero]
+      exact ⟨⟨rfl,rfl,rfl,rfl,add_one_site site,add_one_outcome (.inl zero)⟩,fun _ wrong => absurd rfl wrong⟩
+    · simp only [Option.isNone_some,Bool.false_eq_true,↓reduceIte] at h9
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj h9 (some d.nextNode) _ _ rfl
+      dsimp only at r5
+      obtain ⟨u,k8,a8,h,r6⟩ := bind_ok_run r5
+      clear r5
+      obtain ⟨rfl,rfl⟩ := add_listAddTail_wg (d := alloc d (newNode key cidr bits (some pid))) rfl h
+      clear h
+      obtain ⟨u,k9,a9,h,r7⟩ := bind_ok_run r6
+      clear r6
+      obtain ⟨rfl,rfl⟩ := add_connect_wg
+        (d := addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode) rfl h
+      clear h
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj r7 0 _ _ rfl
+      simp only [add_stepAt,long,↓reduceIte,empty,List.map_cons,add_out1 one]
+      exact ⟨⟨rfl,rfl,rfl,rfl,add_one_site site,add_one_outcome (.inr one)⟩,fun _ _ wrong => absurd rfl wrong⟩
+  | some rootId =>
+    simp only [empty,Option.isNone_some,Bool.false_eq_true,↓reduceIte] at r4 ready4
+    obtain ⟨x,k5,a5,h,r5⟩ := bind_ok_run r4
+    clear r4
+    obtain ⟨placed,exact⟩ := x
+    obtain ⟨rfl,hid5,arm5,good,finalStore,inner⟩ := add_placement_wg (d := d) rfl h
+    clear h
+    have ready5 : add_Ready a5 stream := ready4.keep hid5 arm5
+    have armed5 : a5.allocArmed = a.allocArmed := arm5
+    obtain ⟨b,k6,a6,h,r6⟩ := bind_ok_run r5
+    clear r5
+    obtain ⟨rfl,rfl,rfl⟩ := ok_inj h _ _ _ (add_branch_run _ _ _ _)
+    clear h
+    refine ⟨placed,exact,?_⟩
+    rintro st rfl
+    refine ⟨?_,fun _ _ _ => ⟨_,_,_,inner⟩⟩
+    dsimp only at r6
+    cases exact with
+    | true =>
+      simp only [↓reduceIte] at r6
+      cases placed with
+      | none =>
+        obtain ⟨_,_,_,thrown,_⟩ := bind_ok_run r6
+        cases thrown
+      | some id =>
+        dsimp only at r6
+        obtain ⟨n,k7,a7,h,r7⟩ := bind_ok_run r6
+        clear r6
+        obtain ⟨present,rfl,rfl⟩ := add_getNode_wg (d := d) rfl h
+        clear h
+        obtain ⟨u,k8,a8,h,r8⟩ := bind_ok_run r7
+        clear r7
+        obtain ⟨rfl,rfl⟩ := add_setNode_wg (d := d) rfl h
+        clear h
+        obtain ⟨u,k9,a9,h,r9⟩ := bind_ok_run r8
+        clear r8
+        obtain ⟨rfl,rfl⟩ := add_listDel_wg (d := {d with nodes := d.nodes.insert id {n with peer := some pid}}) rfl h
+        clear h
+        obtain ⟨u,k10,a10,h,r10⟩ := bind_ok_run r9
+        clear r9
+        obtain ⟨rfl,rfl⟩ := add_listAddTail_wg
+          (d := delete {d with nodes := d.nodes.insert id {n with peer := some pid}} id) rfl h
+        clear h
+        obtain ⟨rfl,rfl,rfl⟩ := ok_inj r10 0 _ _ rfl
+        simp only [add_stepAt,long,↓reduceIte,empty,Option.bind_some,present,Option.map_some]
+        exact ⟨rfl,rfl,ready5.hidden,armed5,rfl,fun r member => by cases member⟩
+    | false =>
+      simp only [Bool.false_eq_true,↓reduceIte] at r6
+      obtain ⟨res,k7,a7,h,r7⟩ := bind_ok_run r6
+      clear r6
+      have ready6 : add_Ready (Model.record a5 .addExact false) stream := ready5.keep rfl rfl
+      obtain ⟨r,rest,rfl,siteEq,rfl,outcome⟩ := add_allocNode_wg (d := d) rfl (.inr (.inl rfl))
+        ready6.hidden ready6.clean ready6.armed205 h
+      clear h
+      have site : r.site = 78 := siteEq
+      obtain ⟨b,k8,a8,h,r8⟩ := bind_ok_run r7
+      clear r7
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj h _ _ _ (add_branch_run _ _ _ _)
+      clear h
+      rcases outcome with ⟨zero,rfl,rfl⟩ | ⟨one,rfl,rfl⟩
+      · simp only [Option.isNone_none,↓reduceIte] at r8
+        obtain ⟨rfl,rfl,rfl⟩ := ok_inj r8 (-ENOMEM) _ _ rfl
+        simp only [add_stepAt,long,↓reduceIte,empty,Bool.false_eq_true,List.map_cons,add_out0 zero]
+        exact ⟨rfl,rfl,rfl,armed5,add_one_site site,add_one_outcome (.inl zero)⟩
+      · simp only [Option.isNone_some,Bool.false_eq_true,↓reduceIte] at r8
+        obtain ⟨u,k9,a9,h,r9⟩ := bind_ok_run r8
+        clear r8
+        obtain ⟨rfl,rfl⟩ := add_listAddTail_wg (d := alloc d (newNode key cidr bits (some pid))) rfl h
+        clear h
+        obtain ⟨b,k10,a10,h,r10⟩ := bind_ok_run r9
+        clear r9
+        obtain ⟨rfl,rfl,rfl⟩ := ok_inj h _ _ _ (add_branch_run _ _ _ _)
+        clear h
+        have hnew := add_new_get d (newNode key cidr bits (some pid)) pid d.nextNode
+        rcases add_ite_run r10 with ⟨atRoot,r10a⟩ | ⟨belowParent,r10b⟩
+        · clear r10
+          have nothing : placed = none := by
+            cases placed with
+            | none => rfl
+            | some p => cases atRoot
+          subst nothing
+          obtain ⟨below,k11,a11,h,r11⟩ := bind_ok_run r10a
+          clear r10a
+          obtain ⟨rfl,rfl,rfl⟩ := add_slotGet_wg
+            (d := addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode) rfl rootSlot h
+          clear h
+          rw [add_addTail_slot d pid d.nextNode (newNode key cidr bits (some pid)) rootSlot,empty] at r11
+          dsimp only at r11
+          obtain ⟨down,stored⟩ := good.2 rfl rootId rfl
+          have hdown := add_fresh_get (m := newNode key cidr bits (some pid)) (pid := pid) (f := d.nextNode)
+            fresh stored
+          have result := add_tail_acc r11 rfl (ready6.next.keep rfl rfl) hnew hdown
+          have reached : ((Proof.below d (some rootId) key none).bind fun id =>
+              (d.nodes.get? id).map fun n => (id,n)) = some (rootId,down) := by
+            simp only [Proof.below,Option.bind_some,stored,Option.map_some]
+          exact (add_tail_post (k := k) long empty reached one site armed5 result _ rfl).1
+        · clear r10
+          obtain ⟨p,rfl⟩ : ∃ p, placed = some p := by
+            cases placed with
+            | none => exact absurd rfl belowParent
+            | some p => exact ⟨p,rfl⟩
+          dsimp only at r10b
+          obtain ⟨pn,k11,a11,h,r11⟩ := bind_ok_run r10b
+          clear r10b
+          obtain ⟨presentP1,rfl,rfl⟩ := add_getNode_wg
+            (d := addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode) rfl h
+          clear h
+          obtain ⟨pn0,presentP⟩ := good.1 p rfl
+          obtain rfl : pn = pn0 := Option.some.inj (presentP1.symm.trans (add_fresh_get fresh presentP))
+          obtain ⟨bit,k12,a12,h,r12⟩ := bind_ok_run r11
+          clear r11
+          obtain ⟨rfl,rfl,rfl⟩ := add_choose_acc h
+          clear h
+          obtain ⟨pn2,k13,a13,h,r13⟩ := bind_ok_run r12
+          clear r12
+          obtain ⟨presentP2,rfl,rfl⟩ := add_getNode_wg
+            (d := addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode) rfl h
+          clear h
+          obtain rfl : pn = pn2 := Option.some.inj (presentP1.symm.trans presentP2)
+          obtain ⟨downOpt,k14,a14,h,r14⟩ := bind_ok_run r13
+          clear r13
+          obtain ⟨child,rfl,rfl⟩ := add_bitAt_acc h
+          clear h
+          obtain ⟨b,k15,a15,h,r15⟩ := bind_ok_run r14
+          clear r14
+          obtain ⟨rfl,rfl,rfl⟩ := ok_inj h _ _ _ (add_branch_run _ _ _ _)
+          clear h
+          have child' : pn.bit[key / 2 ^ (pn.bitlen - 1 - pn.cidr) % 2]? = some downOpt := child
+          have reachedBelow : Proof.below d (some rootId) key (some p) = downOpt := by
+            simp only [Proof.below,presentP,child']
+            rfl
+          rcases add_ite_run r15 with ⟨noDown,r15a⟩ | ⟨someDown,r15b⟩
+          · clear r15
+            have nothing : downOpt = none := by
+              cases downOpt with
+              | none => rfl
+              | some x => cases noDown
+            subst nothing
+            obtain ⟨u,k16,a16,h,r16⟩ := bind_ok_run r15a
+            clear r15a
+            obtain ⟨rfl,rfl⟩ := add_connect_wg
+              (d := addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode) rfl h
+            clear h
+            obtain ⟨rfl,rfl,rfl⟩ := ok_inj r16 0 _ _ rfl
+            have same : chooseConnect (addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode) p
+                d.nextNode = connect (addTail (alloc d (newNode key cidr bits (some pid))) pid d.nextNode)
+                  (.child p (side pn key)) d.nextNode := by
+              simp only [chooseConnect,presentP1,hnew]
+              rfl
+            simp only [add_stepAt,long,↓reduceIte,empty,Bool.false_eq_true,List.map_cons,add_out1 one,
+              reachedBelow,Option.bind_none,same]
+            exact ⟨rfl,rfl,rfl,armed5,add_one_site site,add_one_outcome (.inr one)⟩
+          · clear r15
+            obtain ⟨downId,rfl⟩ : ∃ x, downOpt = some x := by
+              cases downOpt with
+              | none => exact absurd rfl someDown
+              | some x => exact ⟨x,rfl⟩
+            dsimp only at r15b
+            obtain ⟨down,stored⟩ := good.2 rfl downId reachedBelow
+            have hdown := add_fresh_get (m := newNode key cidr bits (some pid)) (pid := pid) (f := d.nextNode)
+              fresh stored
+            have result := add_tail_acc r15b rfl (ready6.next.keep rfl rfl) hnew hdown
+            have reached : ((Proof.below d (some rootId) key (some p)).bind fun id =>
+                (d.nodes.get? id).map fun n => (id,n)) = some (downId,down) := by
+              rw [reachedBelow]
+              simp only [Option.bind_some,stored,Option.map_some]
+            exact (add_tail_post (k := k) long empty reached one site armed5 result _ rfl).1
+
+/-- An accepted `WG.insert` is `C1Step.step`, on a device whose next node identity is unused.
+The hypothesis `fresh` is not in the statement first asked for (`add_insert_accepted`): without it the
+mirror's reads after the allocation (the placed node, the node below) can return the new node where
+`step` reads the old one. `Inv` supplies it (every stored identity is below `nextNode`). -/
+theorem add_insert_accepted_partial {g g' : WGWorld} {a a' : Ambient} {d : Device} {family key cidr pid : Nat}
+    {answer : Int} {stream : List HiddenRecord} (device : g.dev = some d) (ready : add_Ready a stream)
+    (families : family = 4 ∨ family = 6) (fresh : d.nodes.get? d.nextNode = none)
+    (run : ((WG.insert family key cidr pid).run g).run a = .ok ((answer,g'),a')) :
+    ∃ placed exact, ∀ st, st = step d family key cidr pid placed exact (stream.map fun r => r.bytes.head? == some 1) →
+      answer = st.answer ∧ g' = {g with dev := some st.device} ∧
+      a'.hidden = some (stream.drop st.consumed) ∧ a'.allocArmed = a.allocArmed ∧
+      (stream.take st.consumed).map (·.site) = st.case.sites ∧
+      (∀ r ∈ stream.take st.consumed, r.bytes.head? = some 0 ∨ r.bytes.head? = some 1) ∧
+      (st.case ≠ .tooLong → st.case ≠ .rootNoMem → st.case ≠ .root →
+        ∃ ambient finalAmbient finalStore,
+          ((WG.nodePlacement (rootOf d family) key cidr (widthOf family)).run (Source.Aip.store (bump d))).run ambient =
+            .ok (((placed,exact),finalStore),finalAmbient)) := by
+  unfold WG.insert at run
+  obtain ⟨u,k1,a1,h,r1⟩ := bind_ok_run run
+  clear run
+  obtain ⟨_,rfl,rfl⟩ := ok_inj h _ _ _ (add_bump_run device _ a)
+  clear h
+  rcases families with rfl | rfl
+  · rcases add_ite_run r1 with ⟨_,r2⟩ | ⟨wrong,_⟩
+    · obtain ⟨placed,exact,facts⟩ := add_core (d := bump d) rfl ready (.inl rfl) fresh r2
+      refine ⟨placed,exact,?_⟩
+      rintro st rfl
+      obtain ⟨post,walked⟩ := facts (step d 4 key cidr pid placed exact _) rfl
+      exact ⟨post.1,post.2.1,post.2.2.1,post.2.2.2.1,post.2.2.2.2.1,post.2.2.2.2.2,walked⟩
+    · exact absurd rfl wrong
+  · rcases add_ite_run r1 with ⟨wrong,_⟩ | ⟨_,r2⟩
+    · exact absurd wrong (by decide)
+    · obtain ⟨placed,exact,facts⟩ := add_core (d := bump d) rfl ready (.inr rfl) fresh r2
+      refine ⟨placed,exact,?_⟩
+      rintro st rfl
+      obtain ⟨post,walked⟩ := facts (step d 6 key cidr pid placed exact _) rfl
+      exact ⟨post.1,post.2.1,post.2.2.1,post.2.2.2.1,post.2.2.2.2.1,post.2.2.2.2.2,walked⟩
+
+#print axioms add_insert_accepted_partial
 end Binary.Statements.C1.Proof
