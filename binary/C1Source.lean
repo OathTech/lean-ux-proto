@@ -14,6 +14,8 @@ import AllowedipsStorage
 import AllowedipsRootIncoming
 import AllowedipsInternalFrame
 import MemoryBytes
+import PairCallSource
+import AllowedipsPlacementSourceStep
 import AllowedipsHeapChecks
 import AllowedipsTrieEdgeFacts
 import PairAllowedipsLookupFrame
@@ -1686,4 +1688,331 @@ theorem ordered_clean {L : Layout} {A : Allocator} {w : World} {m : Mem 64} (rel
 #print axioms ordered_peer_present
 #print axioms ordered_ready_facts
 #print axioms ordered_clean
+
+/-! ## The two exclusions, from the headline -/
+
+/-! ## The exclusions, from the headline with the invariant fixed -/
+
+/-- An ambient primitive lifted into a state layer leaves that state alone
+(adapted from the T4 trial's `lift_state`). -/
+theorem excl_lift_acc {σ α : Type} {x : AmbientM α} {s s1 : σ} {a a1 : Ambient} {v : α}
+    (h : ((monadLift x : StateT σ AmbientM α).run s).run a = .ok ((v,s1),a1)) :
+    s1 = s ∧ x.run a = .ok (v,a1) := by
+  have unfolded : ((monadLift x : StateT σ AmbientM α).run s).run a =
+      (x.run a >>= fun p => pure ((p.1,s),p.2)) := rfl
+  rw [unfolded] at h
+  cases hx : x.run a with
+  | error e => rw [hx] at h; cases h
+  | ok p => rw [hx] at h; cases h; exact ⟨rfl,rfl⟩
+
+theorem excl_branch_run (dcn : Decision) (b : Bool) (g : WGWorld) (a : Ambient) :
+    ((branch dcn b : WG.M Bool).run g).run a = .ok ((b,g),Model.record a dcn b) := rfl
+
+theorem excl_branchCmp_run (dcn : Decision) (b : Bool) (x y : Int) (g : WGWorld) (a : Ambient) :
+    ((branchCmp dcn b x y : WG.M Bool).run g).run a = .ok ((b,g),Placement.recordCmp a dcn b x y) := rfl
+
+theorem excl_slotGet_run (g : WGWorld) (a : Ambient) (d : Device) (device : g.dev = some d) (v4 : Bool) :
+    ((liftM (slotGet (Model.rootSlot v4)) : WG.M (Option NodeId)).run g).run a =
+      .ok ((Model.rootValue d v4,g),a) := by
+  change ((WG.liftAip (slotGet (Model.rootSlot v4))).run g).run a = _
+  rw [Model.liftAip_run, device]
+  cases v4
+  · change Except.ok ((d.peerAllowedips.root6,{g with dev := some d}),a) = _
+    rw [← device]; rfl
+  · change Except.ok ((d.peerAllowedips.root4,{g with dev := some d}),a) = _
+    rw [← device]; rfl
+
+theorem excl_connectNode_run (store : AipStore) (v4 : Bool) (id : NodeId) (n : AipNode)
+    (hn : store.nodes[id]? = some n) (a : Ambient) :
+    ((connectNode (Model.rootSlot v4) id).run store).run a =
+      .ok (((),{store with
+        nodes := store.nodes.insert id {n with parent := Model.rootSlot v4},
+        trie := if v4 then {store.trie with root4 := some id} else {store.trie with root6 := some id}}),a) := by
+  cases v4 <;> simp [connectNode,getNode,setNode,slotSet,hn,Model.rootSlot] <;> rfl
+
+theorem excl_connect_lifted (g : WGWorld) (d2 : Device) (dev : g.dev = some d2) (v4 : Bool) (id : NodeId)
+    (n : AipNode) (hn : d2.nodes[id]? = some n) (a : Ambient) :
+    ((liftM (connectNode (Model.rootSlot v4) id) : WG.M Unit).run g).run a =
+      .ok (((),{g with dev := some {d2 with
+        nodes := d2.nodes.insert id {n with parent := Model.rootSlot v4},
+        peerAllowedips := if v4 then {d2.peerAllowedips with root4 := some id}
+          else {d2.peerAllowedips with root6 := some id}}}),a) := by
+  change ((WG.liftAip (connectNode (Model.rootSlot v4) id)).run g).run a = _
+  rw [Model.liftAip_run, dev]
+  simp only [excl_connectNode_run ⟨d2.nodes,d2.nextNode,d2.peerAllowedips⟩ v4 id n hn a]
+  rfl
+
+/-- The allocation at :190 on an accepted run: the head record decides. -/
+theorem excl_allocNode_acc {n : AipNode} {store s' : AipStore} {a a' : Ambient}
+    {out : Option NodeId} {r : HiddenRecord} {rest : List HiddenRecord}
+    (hid : a.hidden = some (r :: rest)) (arm : a.allocArmed.contains "allocNode190" = true)
+    (clean : HiddenSite.passive r.site = false)
+    (h : ((allocNode .allocNode190 n).run store).run a = .ok ((out,s'),a')) :
+    (r.bytes.head? = some 0 ∧ out = none ∧ s' = store) ∨ (r.bytes.head? = some 1 ∧ out = some store.nextNode ∧
+      s' = {store with nextNode := store.nextNode+1, nodes := store.nodes.insert store.nextNode n}) := by
+  unfold allocNode at h
+  obtain ⟨b,s1,a1,hb,h2⟩ := bind_ok_run h
+  clear h
+  obtain ⟨same,consumed⟩ := excl_lift_acc hb
+  clear hb
+  subst same
+  obtain ⟨_,byte,rfl,_⟩ := hiddenAlloc_accepted (.inl rfl) hid arm clean consumed
+  rcases byte with zero | one
+  · simp only [zero] at h2
+    obtain ⟨rfl,rfl,_⟩ := ok_inj h2 none s1 a1 rfl
+    exact .inl ⟨zero,rfl,rfl⟩
+  · simp only [one] at h2
+    obtain ⟨rfl,rfl,_⟩ := ok_inj h2 (some s1.nextNode)
+      {s1 with nextNode := s1.nextNode+1, nodes := s1.nodes.insert s1.nextNode n} a1 rfl
+    exact .inr ⟨one,rfl,rfl⟩
+
+
+/-- An accepted run of the mirror's `add` at an empty root with a prefix in
+range (adapted from the T4 trial's `add_source_cases`): the head record's
+outcome byte decides between `-ENOMEM` with the world unchanged and 0 with
+the new root installed. -/
+theorem excl_add_empty (g g' : WGWorld) (a a' : Ambient) (d : Device) (device : g.dev = some d)
+    (v4 : Bool) (key cidr pid : Nat) (res : Int) (empty : Model.rootValue d v4 = none)
+    {r : HiddenRecord} {rest : List HiddenRecord}
+    (hid : a.hidden = some (r :: rest)) (arm : a.allocArmed.contains "allocNode190" = true)
+    (clean : HiddenSite.passive r.site = false) (short : cidr ≤ Model.rootWidth v4)
+    (run : ((WG.add (Model.rootSlot v4) (Model.rootWidth v4) key cidr (some pid)).run g).run a =
+      .ok ((res,g'),a')) :
+    (r.bytes.head? = some 0 ∧ res = -ENOMEM ∧ g' = g) ∨
+    (r.bytes.head? = some 1 ∧ res = 0 ∧ ∃ owner, d.peers[pid]? = some owner ∧
+      g'.dev = some (Model.emptyInstalled d v4 key cidr pid owner)) := by
+  unfold WG.add at run
+  obtain ⟨b1,g1,a1,h1,run1⟩ := bind_ok_run run
+  clear run
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj h1 _ _ _
+    (excl_branchCmp_run .addCidrTooLong (decide (cidr > Model.rootWidth v4)) cidr (Model.rootWidth v4) g a)
+  clear h1
+  have notLong : ¬cidr > Model.rootWidth v4 := by omega
+  simp only [notLong,decide_false,Bool.false_eq_true,↓reduceIte] at run1
+  obtain ⟨b2,g2,a2,h2,run2⟩ := bind_ok_run run1
+  clear run1
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj h2 _ _ _ (excl_branch_run .addNoPeer (some pid).isNone g _)
+  clear h2
+  simp only [Option.isNone_some,Bool.false_eq_true,↓reduceIte] at run2
+  obtain ⟨trie,g3,a3,h3,run3⟩ := bind_ok_run run2
+  clear run2
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj h3 _ _ _ (excl_slotGet_run g _ d device v4)
+  clear h3
+  obtain ⟨b4,g4,a4,h4,run4⟩ := bind_ok_run run3
+  clear run3
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj h4 _ _ _ (excl_branch_run .addEmptyTrie (Model.rootValue d v4).isNone g _)
+  clear h4
+  simp only [empty,Option.isNone_none,↓reduceIte] at run4
+  obtain ⟨x,g5,a5,h5,run5⟩ := bind_ok_run run4
+  clear run4
+  obtain ⟨out,g6,a6,h6,h7⟩ := bind_ok_run h5
+  clear h5
+  obtain ⟨b7,g7,a7,h8,h9⟩ := bind_ok_run h7
+  clear h7
+  obtain ⟨rfl,rfl,rfl⟩ := ok_inj h8 _ _ _ (excl_branch_run .addRootNoMem out.isNone g6 a6)
+  clear h8
+  obtain ⟨s',inner,rfl⟩ := liftAip_acc device h6
+  clear h6
+  rcases excl_allocNode_acc (by exact hid) (by exact arm) clean inner with ⟨zero,rfl,rfl⟩ | ⟨one,rfl,rfl⟩
+  · obtain ⟨rfl,rfl,rfl⟩ := ok_inj h9 none _ _ rfl
+    obtain ⟨rfl,rfl,_⟩ := ok_inj run5 (-ENOMEM) _ _ rfl
+    exact .inl ⟨zero,rfl,world_same device⟩
+  · obtain ⟨rfl,rfl,rfl⟩ := ok_inj h9 (some d.nextNode) _ _ rfl
+    clear h9 inner
+    obtain ⟨u,g8,a8,h10,run8⟩ := bind_ok_run run5
+    clear run5
+    cases hp : d.peers[pid]? with
+    | none =>
+      simp [WG.listAddTail,WG.getPeer,WG.getDev,invariant,AmbientM.invariant,hp,asDev,Source.Aip.store] at h10
+      cases h10
+    | some owner =>
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj h10 _ _ _
+        (Model.listAddTail_run _ _ _ rfl pid d.nextNode owner (by exact hp))
+      clear h10
+      obtain ⟨u2,g9,a9,h11,run9⟩ := bind_ok_run run8
+      clear run8
+      have hn : (d.nodes.insert d.nextNode (newNode key cidr (Model.rootWidth v4) (some pid)))[d.nextNode]? =
+          some (newNode key cidr (Model.rootWidth v4) (some pid)) := by simp
+      obtain ⟨rfl,rfl,rfl⟩ := ok_inj h11 _ _ _
+        (excl_connect_lifted _ _ rfl v4 d.nextNode _ (by exact hn) _)
+      clear h11
+      obtain ⟨rfl,rfl,_⟩ := ok_inj run9 0 _ _ rfl
+      refine .inr ⟨one,rfl,owner,rfl,?_⟩
+      cases v4 <;> rfl
+
+
+/-- The accepted insertion at an empty table whose next record is an
+allocation outcome: refused and both roots still empty, or 0 with the
+family's root the new node. -/
+theorem excl_insert {w w' : World} {d d' : Device} {family key cidr pid : Nat} {answer : Int}
+    {r : HiddenRecord} {rest : List HiddenRecord}
+    (device : w.wg.dev = some d) (r4 : d.peerAllowedips.root4 = none) (r6 : d.peerAllowedips.root6 = none)
+    (hid : w.ambient.hidden = some (r :: rest)) (clean : HiddenSite.passive r.site = false)
+    (armedW : armed w = true) (short : cidr ≤ Model.rootWidth (family == 4))
+    (run : (liftWG (WG.insert family key cidr pid)).run w = .ok (answer,w'))
+    (device' : w'.wg.dev = some d') :
+    (r.bytes.head? = some 0 ∧ answer = -ENOMEM ∧ Model.rootValue d' (family == 4) = none) ∨
+    (r.bytes.head? = some 1 ∧ answer = 0 ∧ Model.rootValue d' (family == 4) = some d.nextNode ∧
+      d'.nodes.get? d.nextNode = some {newNode key cidr (Model.rootWidth (family == 4)) (some pid) with
+        parent := Model.rootSlot (family == 4)}) := by
+  have arm : w.ambient.allocArmed.contains "allocNode190" = true := by
+    simp only [armed,List.all_cons,Bool.and_eq_true] at armedW
+    exact armedW.1
+  have unfolded : (liftWG (WG.insert family key cidr pid)).run w =
+      (((WG.insert family key cidr pid).run w.wg).run w.ambient >>= fun p =>
+        pure (p.1.1,{w with wg := p.1.2, ambient := p.2})) := rfl
+  rw [unfolded] at run
+  cases inner : ((WG.insert family key cidr pid).run w.wg).run w.ambient with
+  | error e => rw [inner] at run; cases run
+  | ok p =>
+    obtain ⟨⟨res,g'⟩,a'⟩ := p
+    rw [inner] at run
+    cases run
+    change g'.dev = some d' at device'
+    unfold WG.insert at inner
+    obtain ⟨u,g1,a1,h1,run1⟩ := bind_ok_run inner
+    clear inner
+    obtain ⟨_,rfl,rfl⟩ := ok_inj h1 () _ _ rfl
+    clear h1
+    have dev1 : ({w.wg with dev := w.wg.dev.map fun d =>
+        {d with peerAllowedips := {d.peerAllowedips with seq := d.peerAllowedips.seq + 1}}} : WGWorld).dev =
+        some {d with peerAllowedips := {d.peerAllowedips with seq := d.peerAllowedips.seq + 1}} := by
+      simp only [device,Option.map_some]
+    cases hf : (family == 4)
+    all_goals
+      rw [hf] at short
+      simp only [hf,Bool.false_eq_true,↓reduceIte] at run1
+      have empty : Model.rootValue {d with peerAllowedips :=
+          {d.peerAllowedips with seq := d.peerAllowedips.seq + 1}} (family == 4) = none := by
+        rw [hf]; simp [Model.rootValue,r4,r6]
+      rw [hf] at empty
+      rcases excl_add_empty _ _ _ _ _ dev1 _ key cidr pid res empty (by exact hid) (by exact arm) clean short
+        (by exact run1) with ⟨zero,rfl,rfl⟩ | ⟨one,rfl,owner,_,installed⟩
+      · have same := Option.some.inj (device'.symm.trans dev1)
+        subst same
+        exact .inl ⟨zero,rfl,empty⟩
+      · have same := Option.some.inj (device'.symm.trans installed)
+        subst same
+        refine .inr ⟨one,rfl,?_,?_⟩ <;>
+          simp [Model.emptyInstalled,Model.rootWrite,Model.rootValue,Model.rootSlot,Model.rootWidth]
+
+
+theorem excl_select_none (nodes : AllowedipsSource.NodeView) (bits key : Nat) :
+    AllowedipsSource.select nodes none bits key = some none := rfl
+
+/-- The mirror's selection on a trie whose root is the node just inserted
+for `key`: it selects that node. -/
+theorem excl_select_root (nodes : AllowedipsSource.NodeView) (id bits key cidr pid : Nat) (slot : Slot)
+    (present : nodes id = some {newNode key cidr bits (some pid) with parent := slot})
+    (family : bits = 32 ∨ bits = 128) (short : cidr ≤ bits) :
+    AllowedipsSource.select nodes (some id) bits key = some (some id) := by
+  have loop : ∀ fuel, (AllowedipsSource.selectLoop nodes bits key (fuel+2) (none,some id,none)).bind Prod.fst =
+      some (some id) := by
+    intro fuel
+    have common : ∀ n : AipNode, n.bits = key → AllowedipsSource.commonValue n key bits = bits := by
+      intro n same
+      rcases family with rfl | rfl <;> simp [AllowedipsSource.commonValue,same,fls]
+    have notLess : ¬bits < cidr := by omega
+    by_cases full : cidr = bits
+    · simp [AllowedipsSource.selectLoop,AllowedipsSource.selectStep,present,common,full,newNode]
+    · have notGe : ¬cidr ≥ bits := by omega
+      have index : key / 2^(bits-1-cidr) % 2 = 0 ∨ key / 2^(bits-1-cidr) % 2 = 1 := by omega
+      rcases index with index | index <;>
+        simp [AllowedipsSource.selectLoop,AllowedipsSource.selectStep,present,common,full,newNode,notLess,
+          notGe,index]
+  exact loop 128
+
+theorem excl_ready_peer {L : Layout} {A : Allocator} {c : Context} {s : MachineState}
+    {family key cidr pid peer : Nat} {ra : UInt64}
+    (ready : insertReady L A c s family key cidr pid ra = .ok ())
+    (address : Trie.address L.peers (some pid) = .ok peer) : peer ≠ 0 := by
+  unfold insertReady at ready
+  dsimp only at ready
+  obtain ⟨_,ready⟩ := require_bind_ok _ _ _ _ ready
+  obtain ⟨_,ready⟩ := require_bind_ok _ _ _ _ ready
+  obtain ⟨_,ready⟩ := require_bind_ok _ _ _ _ ready
+  obtain ⟨found,read,ready⟩ := bind_ok ready
+  obtain ⟨checked,_⟩ := require_bind_ok _ _ _ _ ready
+  have same : found = peer := Except.ok.inj (read.symm.trans address)
+  subst same
+  simp only [Bool.and_eq_true,bne_iff_ne,ne_eq] at checked
+  exact checked.1
+
+theorem exclusionOne : ExclusionOne := by
+  intro headline fetch L A premises w d c s family key cidr pid peer ra stream device armedW hidden sites
+    empty idle ready short address accepts
+  obtain ⟨initial,framed,insertStep,lookupStep⟩ := headline fetch L A premises
+  have facts := emptyTable_facts empty
+  have inv : Inv L A w s.data.dmem := initial w d s.data.dmem _ device armedW hidden (by
+    intro record member
+    rcases List.mem_cons.mp member with rfl | later
+    · decide
+    · exact sites record later) empty idle
+  obtain ⟨answer,w',d',found,w'',insRun,device',lookRun⟩ := accepts
+  have short' : cidr ≤ Model.rootWidth (family == 4) := by simpa [Model.rootWidth] using short
+  rcases excl_insert device facts.mirror4 facts.mirror6 hidden passive_sites.1 armedW short' insRun device' with
+    ⟨zero,_⟩ | ⟨_,rfl,root,node⟩
+  · cases zero
+  have width : Model.rootWidth (family == 4) = 32 ∨ Model.rootWidth (family == 4) = 128 := by
+    cases family == 4 <;> simp [Model.rootWidth]
+  have selected := excl_select_root (fun id => d'.nodes.get? id) d.nextNode _ key cidr pid _ node width short'
+  have foundPid : found = some pid := by
+    have lookRun' : (Source.lookup (Model.rootValue d' (family == 4)) (Model.rootWidth (family == 4)) key).run w' =
+        .ok (found,w'') := lookRun
+    rw [root] at lookRun'
+    obtain ⟨_,_,chosen,_,_,select,effect⟩ := Trie.lookup_effect device' lookRun'
+    have same : chosen = some d.nextNode := Option.some.inj (select.symm.trans selected)
+    subst same
+    obtain ⟨n,p,_,present,owner,_,answered,_⟩ := effect
+    have equal := Option.some.inj (present.symm.trans node)
+    subst equal
+    cases owner
+    exact answered
+  subst foundPid
+  refine eventually_weaken _ _ _ _ ?_ (insertStep c s w w' family key cidr pid ra 0 inv ready insRun)
+  rintro t ⟨returned,eax,_,inv',_⟩
+  refine ⟨returned,eax,?_⟩
+  rintro s' c' ra' ⟨heapSame,lookupOk⟩
+  have inv'' : Inv L A w' s'.data.dmem := framed w' t.data.dmem s'.data.dmem inv' heapSame
+  refine eventually_weaken _ _ _ _ ?_
+    (lookupStep c' s' w' w'' d' family key ra' (some pid) peer inv'' device' lookupOk lookRun address)
+  rintro t' ⟨returned',rax,_,_⟩
+  exact ⟨returned',rax,excl_ready_peer ready address⟩
+
+theorem exclusionTwo : ExclusionTwo := by
+  intro headline fetch L A premises w d c s family key cidr pid ra stream device armedW hidden sites
+    empty idle ready short accepts
+  obtain ⟨initial,framed,insertStep,lookupStep⟩ := headline fetch L A premises
+  have facts := emptyTable_facts empty
+  have inv : Inv L A w s.data.dmem := initial w d s.data.dmem _ device armedW hidden (by
+    intro record member
+    rcases List.mem_cons.mp member with rfl | later
+    · decide
+    · exact sites record later) empty idle
+  obtain ⟨answer,w',d',found,w'',insRun,device',lookRun⟩ := accepts
+  have short' : cidr ≤ Model.rootWidth (family == 4) := by simpa [Model.rootWidth] using short
+  rcases excl_insert device facts.mirror4 facts.mirror6 hidden passive_sites.1 armedW short' insRun device' with
+    ⟨_,rfl,root⟩ | ⟨one,_⟩
+  case inr => cases one
+  have foundNone : found = none := by
+    have lookRun' : (Source.lookup (Model.rootValue d' (family == 4)) (Model.rootWidth (family == 4)) key).run w' =
+        .ok (found,w'') := lookRun
+    rw [root] at lookRun'
+    obtain ⟨_,_,chosen,_,_,select,effect⟩ := Trie.lookup_effect device' lookRun'
+    have same : chosen = none := Option.some.inj (select.symm.trans (excl_select_none _ _ _))
+    subst same
+    exact effect.1
+  subst foundNone
+  refine eventually_weaken _ _ _ _ ?_ (insertStep c s w w' family key cidr pid ra (-ENOMEM) inv ready insRun)
+  rintro t ⟨returned,eax,_,inv',_⟩
+  refine ⟨returned,eax,?_⟩
+  rintro s' c' ra' ⟨heapSame,lookupOk⟩
+  have inv'' : Inv L A w' s'.data.dmem := framed w' t.data.dmem s'.data.dmem inv' heapSame
+  refine eventually_weaken _ _ _ _ ?_
+    (lookupStep c' s' w' w'' d' family key ra' none 0 inv'' device' lookupOk lookRun rfl)
+  rintro t' ⟨returned',rax,_,_⟩
+  exact ⟨returned',rax⟩
+
+#print axioms exclusionOne
+#print axioms exclusionTwo
 end Binary.Statements.C1.Proof
