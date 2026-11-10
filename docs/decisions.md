@@ -998,3 +998,78 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   evidence [AGENT, coordinator: the recommendation in the closing report,
   docs/2026-11-10-ascent-probe.md]. A fresh assessment of the binary track
   with the current agents is commissioned separately.
+- **2026-11-10 [USER]** On the binary track's reassessment
+  (docs/2026-11-10-binary-track-reassessment.md): its first step is taken.
+  The two proposed results, C1 (the allowed-IPs insertion to one reviewed
+  headline) and C2 (the replay window from machine code to the landed
+  anti-replay result), are each written as a statement packet with no
+  proofs, independently reviewed, and brought to the user before any proof
+  work; the reassessment itself is independently reviewed before its trial
+  figures are built on [AGENT, coordinator: that review, the packets' form
+  and the workers' briefs]. Adopting C1 or C2, the trust-surface budget,
+  the Kraken change C2 needs and any change to the rule that nothing
+  outside the proof tree imports it remain the user's decisions, taken on
+  the packets. The reassessment's trial proofs are kept on the local
+  branch `task/binary-trials`, unreviewed and not for `main`.
+- **2026-11-10 [USER]** What counts as trust surface on the binary track,
+  in the standard sense of formal verification: what could be wrong while
+  every proof still checks. It has two kinds. What is assumed: the semantic
+  base, the reading of the image, and a headline's premises and contracts,
+  which may be false or unsatisfiable. What is claimed: the headline
+  statement with every definition it mentions, transitively, which may be
+  weaker than it looks or vacuous. Everything the kernel checks and the
+  headline does not mention (proofs, lemmas, intermediate cut theorems,
+  relations and invariants used only inside proofs) is not trust surface
+  and is not charged to the reader. [AGENT, coordinator: how this is
+  applied] A statement packet reports the two kinds separately, each with
+  its size; keeps the claim small by stating it as a machine-level
+  observation where possible; and says what kernel-checked evidence against
+  vacuity it would carry (a witness for the premises, exclusion lemmas for
+  the conclusion). The existing printed file
+  `binary/TrustSurface.expected.txt` also prints component theorems;
+  changing what it prints or what the binary gate compares is a separate
+  proposal, not made here.
+- **2026-11-10 [USER]** After the two statement packets, their independent
+  reviews and the reviewers' follow-ups on revision 2
+  (docs/2026-11-10-statement-packet-c1-insertion.md,
+  docs/2026-11-10-statement-packet-c2-replay-window.md and the three review
+  documents of the same date): both results are commissioned, C1 and C2.
+  The user left the remaining choices to the coordinator's recommendation,
+  so they are [AGENT, coordinator] and stand until the user changes them:
+  - C2 is signed in the refinement form (`HeadlineRefinement`: clean exit,
+    refinement of the mirror's `counterValidate`, no counter accepted
+    twice, the replay witness, extended as the reviewer's finding F1 asks),
+    in the reviewer's order: the tenth Kraken patch first, the statement
+    with the `bts` placeholder discharged, and the final text with its diff
+    back to the user before any proof is accepted.
+  - The tenth Kraken patch gives `bts` with a 64-bit register offset and a
+    memory destination only, defined when the offset is below 64 and the
+    quadword is mapped and an explicit `unimplemented` otherwise; CF takes
+    the old bit, the quadword is written back with the bit set, and OF,
+    SF, ZF, AF and PF are undefined. Checked against both vendors: Intel's
+    text leaves ZF unaffected (the reviewer's reading); AMD's general-purpose
+    instruction reference (publication 24594, revision 3.37, July 2025,
+    pages 132 and 133, read by the coordinator on 2026-11-10) marks OF, SF,
+    ZF, AF and PF undefined and CF modified, and gives a register bit index
+    on a memory bit base the signed range of the operand size. Undefined ZF
+    is the sound superset; the offset restriction is sound for the one
+    instruction in the image, whose offset is masked to six bits.
+  - C2's joining proof lives in a bridge library that alone may import
+    both the binary package and the four `CounterWindow` modules of the
+    proof tree, on the reviewer's four conditions: the exemption from the
+    rule that nothing outside the proof tree imports it is one exact path;
+    the import is limited to those four modules; a named gate builds the
+    bridge and checks its axioms; the register records lag. The change to
+    AGENTS.md and to `scripts/proof-gate` is put to the user with the diff
+    at landing, as every rule change is.
+  - C1 is signed as `Signed` of revision 2 with the reviewer's finding F1
+    repaired (the witness pins the coverage callbacks to the image's code),
+    accepted knowingly as closed-world, as a claim about the six WireGuard
+    functions against any code at the two service addresses that meets the
+    contract, and as saying nothing about the kernel's allocator. A
+    recording-armed kernel capture is run and looked at before C1's proof
+    work starts.
+  - The packets' Lean statement files are not landed with the documents;
+    they stay on the working branches until the final statements are put
+    to the user.
+
