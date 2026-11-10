@@ -7,7 +7,7 @@
 # .tmp/allowedips/mutation.json; run it with the host Python, which has
 # pyelftools, as binary/README.md says:
 # `scripts/in-bundle /usr/bin/python3 -B binary/allowedips_mutation.py`).
-# The run is interpreted and takes about 18 minutes.
+# The run is interpreted and takes about 20 minutes.
 #
 #   binary/Statements/C1/run-tests.sh
 #
@@ -21,4 +21,9 @@ if grep -nE '\b(sorry|theorem|lemma|axiom|admit|native_decide)\b' StatementC1Con
 fi
 leanpath="$(../scripts/in-bundle lake env printenv LEAN_PATH)"
 input="${1:-$root/.tmp/allowedips/mutation.json}"
+# the two statement findings kept as regression tests (elaboration fails if either regresses)
+for regression in TopOfMemory StateWord; do
+  cap ../scripts/in-bundle env LEAN_PATH="$leanpath" lean "Statements/C1/proof/$regression.lean" ||
+    { echo "FAIL: Statements/C1/proof/$regression.lean" >&2; exit 1; }
+done
 cap ../scripts/in-bundle env LEAN_PATH="$leanpath" lean --run Statements/C1/Test.lean "$input"

@@ -1,7 +1,7 @@
 import StatementC1Vacuity
 import C1Interfaces
 
-/-! Executable rendering of the C1 statement packet, revision 2. Not a proof
+/-! Executable rendering of the C1 statement, revision 3. Not a proof
 and not part of the package build: run with `Statements/C1/run-tests.sh`.
 
 It executes the saved s5 instructions of the six functions with the
@@ -20,7 +20,15 @@ file's. Each call is judged in three steps, reported separately:
 The search (`configs`) varies the layout, the entry state and the service
 over families that meet the premises and looks for a broken conclusion.
 `counterexampleH1` is a service that meets every clause of the revision 1
-contract and breaks the conclusion; the revised contract refuses it. -/
+contract and breaks the conclusion; the revised contract refuses it.
+
+Revision 3 adds: the separation of `ServiceReady` at every service entry and
+the bound on the returned object (in `contractStep`); a service with a state
+word in the arena judged at a plain and at an aliased entry state by
+revisions 2 and 3 (`stateWordProbes`); the caller's reference moved between
+peers during the scenario, and count changes the closed world does not
+admit (`referenceStep`, `referenceProbes`); and `ServiceActive` evaluated on
+the test service. -/
 namespace Binary.Statements.C1.Test
 open Lean Leanux Leanux.WG Binary Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.Statements.C1
@@ -48,6 +56,7 @@ structure Config where
   depth : Nat := 64              -- the allocator's stack scratch
   -- the service
   contractV1 : Bool := false     -- judge the service by the revision 1 contract
+  contractV2 : Bool := false     -- judge it by the revision 2 contract (no separation, no bound on the object)
   clobberLive : Bool := false    -- clear the peer word of the oldest node handed out
   usesStack : Bool := true
   writesRecord : Bool := true
@@ -167,7 +176,8 @@ def service (cfg : Config) (c : CommonBitsCoverage.Context) (s : MachineState) (
 /-- One service transition judged against `AllocatorContract`: the clause's
 premises, the service, then every conjunct of the clause's conclusion.
 `contractV1` judges it by the revision 1 clauses (live objects in the write
-set, no readiness). Throws `PREMISE: …` when the service is not one the
+set, no readiness), `contractV2` by revision 2's (readiness without the
+separation, no bound on the object). Throws `PREMISE: …` when the service is not one the
 statement speaks about. -/
 def contractStep (cfg : Config) (L : Layout) (s : MachineState) (live : List Nat)
     (stream : List HiddenRecord) : Except String (MachineState × List Nat × List HiddenRecord × List Pair.Span) := do
@@ -185,6 +195,13 @@ def contractStep (cfg : Config) (L : Layout) (s : MachineState) (live : List Nat
     premise (if c.Needed then 0 < c.coverage.capacity.toNat else true) "ready.capacity"
     premise (s.data.system.bits[10] == false) "ready.direction-flag"
     premise ((List.range cfg.depth).all fun i => (s.data.dmem.get? (.ofNat 64 (rsp-cfg.depth+i))).isSome) "ready.stack-mapped"
+  unless cfg.contractV1 || cfg.contractV2 do
+    -- `ServiceReady.separated` (revision 3), on the spans that cover its byte sets
+    let stack := [(rsp-cfg.depth,cfg.depth+8)]
+    premise (spansApart stack L.arena) "ready.separated.stack-arena"
+    premise (spansApart stack (Trie.readSpans c)) "ready.separated.stack-coverage"
+    premise (spansApart (Trie.readSpans c) L.arena) "ready.separated.coverage-arena"
+    premise (spansApart (Trie.writeSpans c) (Trie.metadataSpans c ++ [(preemptCountAddress.toNat,4)])) "ready.separated.buffer-metadata"
   premise (s.data.regs.rdi.toNat == L.cache) "cache"
   (idle cfg s.data.dmem live stream).mapError (s!"PREMISE: contract.{·}")
   if isAlloc then
@@ -209,7 +226,8 @@ def contractStep (cfg : Config) (L : Layout) (s : MachineState) (live : List Nat
     let a := t.data.regs.rax.toNat
     match (stream.head?.bind (·.bytes.head?)) with
     | some 0 => premise (a == 0 && live' == live) "alloc-null"
-    | some 1 => premise (a != 0 && a % 8 == 0 && inside a nodeSize L.arena &&
+    | some 1 => premise (a != 0 && a % 8 == 0 && (cfg.contractV1 || cfg.contractV2 || a + nodeSize < 2^64) &&
+        inside a nodeSize L.arena &&
         live.all (fun other => disjointRanges a nodeSize other nodeSize) &&
         (← readNat t a nodeSize) == 0 && live' == live ++ [a]) "alloc-object"
     | _ => pure ()
@@ -406,6 +424,45 @@ def lookupCall (cfg : Config) (input : Input) (seed : UInt64) (th : Thread)
     unless inside a n frame do throw s!"CONCLUSION: a write at {a}+{n} is outside LookupWrites"
   return ({th with memory := t.data.dmem,world := w'},pointer)
 
+/-! ## The caller's reference on a peer (revision 3: `Referenced`) -/
+
+/-- `CountMoved`, executably: both counts readable with the stated values and
+every other heap byte the same. -/
+def countMoved (L : Layout) (pid before after : Nat) (m m' : DataMem) : Except String Unit := do
+  let peer ← Trie.address L.peers (some pid)
+  let word := peer+Root.nodeOffsets.peerRefcount
+  require ((← readNat ⟨{dmem := m},0⟩ word 4) == before) s!"count-before: not {before}"
+  require ((← readNat ⟨{dmem := m'},0⟩ word 4) == after) s!"count-after: not {after}"
+  for (a,n) in L.heap do
+    for i in [:n] do
+      unless word ≤ a+i && a+i < word+4 do
+        unless m.get? (.ofNat 64 (a+i)) == m'.get? (.ofNat 64 (a+i)) do
+          throw s!"heap: byte {a+i} differs"
+
+/-- One step of `Referenced`, judged like a call. PREMISE: a drop starts
+above one; the count word moves by one and no other heap byte changes
+(`after` is the memory offered, by default the count word rewritten);
+MIRROR: the mirror's `peerGet` / `peerPut` on that peer; CONCLUSION: the
+invariant's decidable part (`Proof.relatedCheck`) for the mirror's world
+after the step and the memory after it. -/
+def referenceStep (cfg : Config) (th : Thread) (pid : Nat) (drop : Bool)
+    (after : Option DataMem := none) (mirror : Bool := true) : Except String Thread := do
+  let L := cfg.layout
+  let peer ← (Trie.address L.peers (some pid)).mapError (s!"PREMISE: referenced.peer: {·}")
+  let word := peer+Root.nodeOffsets.peerRefcount
+  let count ← readNat ⟨{dmem := th.memory},0⟩ word 4
+  if drop && !(1 < count) then throw "PREMISE: referenced.last-reference"
+  let next := if drop then count-1 else count+1
+  let memory := after.getD (put th.memory word 4 next)
+  let world ← if mirror then
+      ((liftWG (if drop then WG.peerPut (some pid) else WG.peerGet pid)).run th.world).map (·.2)
+        |>.mapError (s!"MIRROR: {Stop.message ·}")
+    else pure th.world
+  unless mirror do throw "PREMISE: referenced.unpaired: no mirror step"
+  (countMoved L pid count next th.memory memory).mapError (s!"PREMISE: referenced.{·}")
+  (Proof.relatedCheck L th.names world memory).mapError (s!"CONCLUSION: Referenced: {·}")
+  return {th with memory,world}
+
 /-! ## The scenario -/
 
 def scenario (family : Nat) : List (String × Nat × Nat × Nat × List HiddenRecord) :=
@@ -437,13 +494,14 @@ structure Outcome where
   lookups : Nat := 0
   deepest : Nat := 0
   decisions : List String := []
+  moves : Nat := 0
 
 /-- From a physically empty table: every insertion of the scenario in turn,
 the mirror world and its pending records threaded from call to call as the
 statement threads them, and after each insertion lookups of that address
 and of up to four addresses inserted earlier. `families` interleaves when it holds both. -/
 def runConfig (cfg : Config) (input : Input) (seed : UInt64) (families : List Nat)
-    (related : Bool := true) : Except String Outcome := do
+    (related : Bool := true) (moves : Bool := false) : Except String Outcome := do
   let calls := (scenario 4).zip (scenario 6) |>.flatMap fun (a,b) =>
     (if families.contains 4 then [(4,a)] else []) ++ (if families.contains 6 then [(6,b)] else [])
   let stream := calls.flatMap fun (_,_,_,_,_,records) => records
@@ -457,7 +515,20 @@ def runConfig (cfg : Config) (input : Input) (seed : UInt64) (families : List Na
   let mut th : Thread := {memory := m,world := w,live := [],names := ⟨L.table,⟨[],L.peers⟩,cfg.nextNode⟩}
   let mut out : Outcome := {}
   let mut seen : List (Nat × Nat) := []
+  let mut holder : Option Nat := none
   for (family,label,address,cidr,pid,_) in calls do
+    -- as `set_peer` does over existing peers: the caller's reference follows the peer being configured
+    if moves && holder != some pid then
+      let mut next := th
+      let mut done := 0
+      let mut silent := false
+      for (peer,drop) in (holder.map (·,true)).toList ++ [(pid,false)] do
+        unless silent do
+          match referenceStep cfg next peer drop with
+          | .ok after => next := after; done := done+1
+          | .error e => if e.startsWith "MIRROR" then silent := true else throw s!"{e} [reference move before {label}/v{family}]"
+      unless silent do
+        th := next; holder := some pid; out := {out with moves := out.moves+done}
     let before := th.world.steps.size
     let (after,_) ← (insertCall cfg input seed th family address cidr pid related).mapError
       (fun e => s!"{e} [{label}/v{family}]")
@@ -474,6 +545,114 @@ def runConfig (cfg : Config) (input : Input) (seed : UInt64) (families : List Na
       | .ok (next,_) => th := next; out := {out with lookups := out.lookups+1}
       | .error e => if e.startsWith "MIRROR" then pure () else throw s!"{e} [lookup of {k}/v{f} after {label}/v{family}]"
   return {out with deepest := th.deepest}
+
+/-! ## Revision 3's probes -/
+
+/-- An entry state of the allocation service built by hand: the empty table's
+memory, a return word for site 77 at `stack`, the cache and the flags. -/
+def serviceEntry (cfg : Config) (records : List HiddenRecord) (stack : Nat) (memory : DataMem → DataMem := id) :
+    MachineState :=
+  ⟨{dmem := memory (put (emptyMemory cfg records) stack 8 0xffffffff813a0ff2),
+    regs := {rdi := .ofNat cacheValue,rsi := 0xdc0,rsp := .ofNat stack}},allocEntry⟩
+
+def changed (s t : MachineState) (spans : List Pair.Span) : Bool :=
+  spans.any fun (a,n) => (List.range n).any fun i =>
+    s.data.dmem.get? (.ofNat 64 (a+i)) != t.data.dmem.get? (.ofNat 64 (a+i))
+
+/-- Change 4. The test service keeps an index of its next answer at
+`arena+16` and advances it on every allocation: ordinary internal state.
+(1) At a plain entry state it meets every clause of revisions 2 and 3.
+(2) At the aliased state of the service package's finding (the current-task
+word moved so that the task's mode field is the index word, the preemption
+count cleared) revision 2 admits the state and the service then breaks
+`c.At`: under revision 2 this service did not meet the contract.
+Revision 3 refuses the aliased state (`ServiceReady.separated`).
+(3) A state whose stack scratch lies in the arena is refused by revision 3.
+Also `ServiceActive`'s two changed bytes, on the plain state. -/
+def stateWordProbes : Except String (List String) := do
+  let cfg : Config := {name := "state word"}
+  let records := [outcomeRecord 7 true]
+  let L := cfg.layout
+  let index (s : MachineState) := readNat s (cfg.arena+16) 8
+  let mut lines := []
+  let plain := serviceEntry cfg records cfg.stack
+  for (revision,v2) in [(2,true),(3,false)] do
+    match contractStep {cfg with contractV2 := v2} L plain [] records with
+    | .ok (t,_,_,_) =>
+      require ((← index plain) == 0 && (← index t) == 1) "state word: the index did not advance"
+      lines := lines ++ [s!"state word, revision {revision} contract, plain entry state: every clause met; the index at arena+16 went 0 -> 1"]
+      if revision == 3 then
+        let c ← Common.readContext plain.data.dmem
+        let rsp := plain.data.regs.rsp.toNat
+        require (decide c.Needed && 0 < cfg.depth && changed plain t [(rsp-cfg.depth,cfg.depth)] &&
+          changed plain t (Trie.writeSpans c)) "ServiceActive: the test service did not change a scratch byte and a buffer byte"
+        lines := lines ++ ["witness: ServiceActive holds of the test service at that state (buffer in use, a scratch byte and a buffer byte changed, returned)"]
+    | .error e => throw s!"state word: revision {revision}, plain state: {e}"
+  let quiet : Config := {cfg with usesStack := false,writesRecord := false}
+  match contractStep quiet L plain [] records with
+  | .ok (t,_,_,_) =>
+    let c ← Common.readContext plain.data.dmem
+    require (!changed plain t [(cfg.stack-cfg.depth,cfg.depth)] && !changed plain t (Trie.writeSpans c))
+      "ServiceActive: the quiet service changed a scratch or buffer byte"
+    lines := lines ++ ["witness: ServiceActive fails of the quiet service (no scratch byte, no buffer byte changed)"]
+  | .error e => throw s!"state word: the quiet service: {e}"
+  let aliased := serviceEntry cfg records cfg.stack fun m =>
+    put (put m currentTaskAddress.toNat 8 (cfg.arena+16-0x6e0)) preemptCountAddress.toNat 4 0
+  for (revision,v2,expected) in [(2,true,"PREMISE: contract.coverage-after"),(3,false,"PREMISE: contract.ready.separated.coverage-arena")] do
+    match contractStep {cfg with contractV2 := v2} L aliased [] records with
+    | .error e =>
+      require (e.startsWith expected) s!"state word: revision {revision}, aliased state: {e}"
+      lines := lines ++ [s!"state word, revision {revision} contract, aliased entry state: " ++
+        (if v2 then s!"state admitted, the service does not conform: {e}" else s!"state refused: {e}")]
+    | .ok _ => throw s!"state word: revision {revision}, aliased state: the clause holds"
+  let inArena := serviceEntry cfg records (cfg.arena+0x800)
+  match contractStep cfg L inArena [] records with
+  | .error e =>
+    require (e.startsWith "PREMISE: contract.ready.separated.stack-arena") s!"separation: stack in the arena: {e}"
+    lines := lines ++ [s!"separation, revision 3 contract, stack scratch inside the arena: state refused: {e}"]
+  | .ok _ => throw "separation: a stack inside the arena is admitted"
+  return lines
+
+/-- Change 2. From an empty table with two peers at count 2: steps the
+closed world admits, and count changes it does not. -/
+def referenceProbes : Except String (List String) := do
+  let cfg : Config := {name := "references",refcount := 2,arenaSize := 0x1000+72*40}
+  let stream := [outcomeRecord 7 true]
+  let L := cfg.layout
+  let names : Allowedips.Names := ⟨L.table,⟨[],L.peers⟩,cfg.nextNode⟩
+  let th : Thread := {memory := emptyMemory cfg stream,world := emptyWorld cfg stream,live := [],names}
+  (Proof.relatedCheck L th.names th.world th.memory).mapError (s!"references: the start: {·}")
+  let word (pid : Nat) := cfg.peerBase+pid*0x1000+Root.nodeOffsets.peerRefcount
+  let mut lines := []
+  -- admitted: a reference moved from peer 0 to peer 1
+  let moved ← referenceStep cfg (← referenceStep cfg th 0 true) 1 false
+  require ((← readNat ⟨{dmem := moved.memory},0⟩ (word 0) 4) == 1 && (← readNat ⟨{dmem := moved.memory},0⟩ (word 1) 4) == 3)
+    "references: the counts after the move"
+  lines := lines ++ ["references: peerPut 0 (2 -> 1) then peerGet 1 (2 -> 3), each paired with its count word: accepted, the invariant's decidable part holds after each"]
+  let refused (what : String) (expected : String) (result : Except String Thread) : Except String String :=
+    match result with
+    | .error e => if e.startsWith expected then pure s!"references, refused: {what}: {e}" else throw s!"references: {what}: {e}"
+    | .ok _ => throw s!"references: {what}: accepted"
+  let raised := put th.memory (word 0) 4 3
+  lines := lines ++ [← refused "a count raised in memory with no mirror step" "PREMISE: referenced.unpaired"
+    (referenceStep cfg th 0 false (mirror := false))]
+  -- and the invariant's decidable part does not survive it, nor a mirror step without the memory change
+  let (_,taken) ← ((liftWG (WG.peerGet 0)).run th.world).mapError Stop.message
+  require (!(Proof.relatedCheck L th.names th.world raised).isOk && !(Proof.relatedCheck L th.names taken th.memory).isOk)
+    "references: an unpaired change keeps the invariant's decidable part"
+  lines := lines ++ ["references: the invariant's decidable part fails after a count change without the mirror step, and after the mirror step without the count change"]
+  lines := lines ++ [← refused "a count raised by two with one peerGet" "PREMISE: referenced.count-after"
+    (referenceStep cfg th 0 false (after := some (put th.memory (word 0) 4 4)))]
+  lines := lines ++ [← refused "a paired peerGet with a root word changed as well" "PREMISE: referenced.heap"
+    (referenceStep cfg th 0 false (after := some (put raised (cfg.table+AllowedipsMutationLayout.root4) 8 0xa01000)))]
+  lines := lines ++ [← refused "a paired peerGet with an arena byte changed as well" "PREMISE: referenced.heap"
+    (referenceStep cfg th 0 false (after := some (put raised (cfg.arena+16) 1 9)))]
+  let last ← referenceStep cfg th 0 true
+  lines := lines ++ [← refused "the last reference dropped (1 -> 0)" "PREMISE: referenced.last-reference"
+    (referenceStep cfg last 0 true)]
+  lines := lines ++ [← refused "a reference on a peer the layout does not name" "PREMISE: referenced.peer"
+    (referenceStep cfg th 7 false)]
+  return lines
 
 /-! ## The search: families that meet the premises -/
 
@@ -511,7 +690,11 @@ end Binary.Statements.C1.Test
 
 open Lean Binary Binary.Pair Binary.Pair.Allowedips Binary.Statements.C1 Binary.Statements.C1.Test in
 def main (args : List String) : IO UInt32 := do
-  let [path] := args | IO.eprintln "usage: Test INPUT.json (binary/allowedips_mutation.py writes it)"; return 1
+  -- a second argument `probes` skips the search over the 23 families (section 1) and runs the rest
+  let (path,searched) ← match args with
+    | [path] => pure (path,configs)
+    | [path,"probes"] => pure (path,[])
+    | _ => IO.eprintln "usage: Test INPUT.json [probes] (binary/allowedips_mutation.py writes the input)"; return 1
   let input ← liftE (Json.parse (← IO.FS.readFile path) >>= fromJson? (α := Input))
   unless input.alloc == allocEntry.toBitVec.toNat && input.free == freeEntry.toBitVec.toNat &&
       input.cacheWord == cacheWord && input.freeReturn == freeSite &&
@@ -523,7 +706,7 @@ def main (args : List String) : IO UInt32 := do
   IO.println "addresses: statement literals equal the ELF-derived input"
   let mut failed := false
   -- 1. the statement as written, over the search's configurations
-  for cfg in configs do
+  for cfg in searched do
     let runs := if cfg.name.startsWith "baseline" then [((0 : UInt64),[4]),(0,[6]),(0,[4,6]),(0xffffffffffffffff,[4,6])]
       else [((0 : UInt64),[4,6])]
     let mut insertions := 0
@@ -562,9 +745,9 @@ def main (args : List String) : IO UInt32 := do
   | .ok _ => do failed := true; IO.println "FAIL: H1 under the revision 1 contract: conclusion holds"
   match runConfig evil input 0 [4] (related := false) with
   | .error e =>
-    if e.startsWith "PREMISE: contract.writes" then IO.println s!"counterexample H1, revision 2 contract: excluded, {e}"
-    else do failed := true; IO.println s!"FAIL: H1 under the revision 2 contract: {e}"
-  | .ok _ => do failed := true; IO.println "FAIL: H1 under the revision 2 contract: accepted"
+    if e.startsWith "PREMISE: contract.writes" then IO.println s!"counterexample H1, revision 3 contract (the clause is revision 2's): excluded, {e}"
+    else do failed := true; IO.println s!"FAIL: H1 under the revision 3 contract: {e}"
+  | .ok _ => do failed := true; IO.println "FAIL: H1 under the revision 3 contract: accepted"
   -- 4. H2: a state meeting every hypothesis of the revision 1 `alloc` clause, with nothing
   -- mapped below the return word; a service that uses its stack cannot return from it
   let lone := 0x700000
@@ -577,7 +760,7 @@ def main (args : List String) : IO UInt32 := do
     match contractStep {probe with contractV1 := v1} probe.layout entry [] records with
     | .error e =>
       if (v1 && e.startsWith "PREMISE: contract.returns") || (!v1 && e.startsWith "PREMISE: contract.ready.stack-mapped") then
-        IO.println s!"probe H2, revision {if v1 then 1 else 2} contract: {e}"
+        IO.println s!"probe H2, revision {if v1 then 1 else 3} contract (the premise is revision 2's): {e}"
       else do failed := true; IO.println s!"FAIL: H2 probe: {e}"
     | .ok _ => do failed := true; IO.println "FAIL: H2 probe: the service returned"
   -- 5. the frame law on the model, and its teeth
@@ -590,6 +773,21 @@ def main (args : List String) : IO UInt32 := do
       !(idle cfg m [] []).isOk do
     failed := true; IO.println "FAIL: the Idle model's frame probes"
   IO.println "frame: the Idle model ignores a byte outside the arena, and refuses a changed answer index and a wrong stream"
+  -- 6. revision 3, change 4: a service with a state word in the arena; the separation; ServiceActive
+  match stateWordProbes with
+  | .ok lines => for line in lines do IO.println line
+  | .error e => failed := true; IO.println s!"FAIL: {e}"
+  -- 7. revision 3, change 2: the caller's reference, admitted and not
+  match referenceProbes with
+  | .ok lines => for line in lines do IO.println line
+  | .error e => failed := true; IO.println s!"FAIL: {e}"
+  (← IO.getStdout).flush
+  for cfg in [({name := "the caller's reference follows the peer being configured",arenaSize := 0x1000+72*40,spacing := 72} : Config),
+      {high with name := "the caller's reference follows the peer, kernel-range addresses",arenaSize := 0x1000+72*40,spacing := 72}] do
+    match runConfig cfg input 0 [4,6] (moves := true) with
+    | .ok out => IO.println s!"closed world: {cfg.name}: holds ({out.insertions} insertions, {out.lookups} lookups, {out.moves} reference steps between calls)"
+    | .error e => failed := true; IO.println s!"FAIL: closed world: {cfg.name}: {e}"
+    (← IO.getStdout).flush
   if failed then IO.eprintln "FAIL"; return 1
   IO.println "PASS"
   return 0

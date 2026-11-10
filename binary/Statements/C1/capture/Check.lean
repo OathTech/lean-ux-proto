@@ -14,12 +14,14 @@ same arguments from the threaded world; then Kraken executes the compiled
 wrapper, `add`, `common_bits` and the coverage callbacks from the captured
 entry state. At each stop at a service address the interpreter's state is
 compared with the captured one, the clause's hypotheses and `ServiceReady`
-are evaluated, the captured return state is installed (the service is
+(with revision 3's separation) are evaluated, the captured return state is installed (the service is
 executed by the guest, not interpreted), and every byte of the captured
 blocks that changed is judged against `ServiceWrites` with `Kept`. At the
 end the interpreter's final state is compared with the captured return
 state, and `Returned`, `eax`, `SeqAdvanced`, the write frame and the landed
-relation are checked. Nothing is repaired: every failed check is reported
+relation are checked. Between two calls the heap bytes the caller changed
+are read as steps of the closed world (`referenceMoves`: revision 3's
+`Referenced`). Nothing is repaired: every failed check is reported
 under its name and the run continues where it can. -/
 namespace Binary.Statements.C1.CaptureCheck
 open Lean Leanux Leanux.WG Binary Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
@@ -75,25 +77,75 @@ def world (peers : Nat) : World :=
     allocArmed := ["allocNode190","allocNode205","allocNode234"]}
   {ambient,tasks := Runner.initialTasks 1024 false false false,fs := {},wg := {dev := some dev}}
 
-/-- The caller's reference on the peer it is configuring is taken and
-dropped outside the claim. Bring the mirror's counts to the machine's and
-say which changed: each is a heap word the caller wrote between calls. -/
-def syncCounts (L : Layout) (s : MachineState) (w : World) : Except String (World × List String) := do
-  let some d := w.wg.dev | throw "no device"
-  let mut d := d
-  let mut notes := []
-  for (pid,a) in L.peers do
-    let machine ← readNat s (a+Root.nodeOffsets.peerRefcount) 4
-    let some p := d.peers.get? pid | throw "no peer"
-    if p.refcount != machine then
-      notes := notes ++ [s!"peer {pid}: mirror {p.refcount} -> machine {machine}"]
-      d := {d with peers := d.peers.insert pid {p with refcount := machine}}
-  return ({w with wg := {w.wg with dev := some d}},notes)
+/-- `CountMoved` (revision 3) on captured memories: both counts readable with
+the stated values, and every other heap byte the same. A byte captured in
+neither memory compares equal; the whole-RAM comparison of the same gap is
+`analyse.py`'s (`between`). -/
+def countMoved (L : Layout) (pid before after : Nat) (m m' : DataMem) : Except String Unit := do
+  let peer ← Trie.address L.peers (some pid)
+  let word := peer+Root.nodeOffsets.peerRefcount
+  require ((← readNat ⟨{dmem := m},0⟩ word 4) == before) s!"the count before is not {before}"
+  require ((← readNat ⟨{dmem := m'},0⟩ word 4) == after) s!"the count after is not {after}"
+  for (a,n) in L.heap do
+    for i in [:n] do
+      unless word ≤ a+i && a+i < word+4 do
+        unless m.get? (.ofNat 64 (a+i)) == m'.get? (.ofNat 64 (a+i)) do
+          throw s!"heap byte {a+i} differs"
+
+/-- What the caller did to the heap since the last call, read as steps of the
+closed world. Revision 2 admits none (`Framed`: no heap byte changes).
+Revision 3 also admits `Referenced`: one peer's count word up by one with
+the mirror's `peerGet`, or down by one from above one with the mirror's
+`peerPut`. The steps are found from the two counts (drops first, as
+`set_peer` drops its reference before the next one is taken), each is run
+on the mirror and on an intermediate memory and judged by `countMoved`, and
+the memory after the last step must agree with the captured entry state on
+every heap byte. Returns the mirror's world after the steps, the steps, and
+whether the gap is inside revision 2's and revision 3's closed world. -/
+def referenceMoves (L : Layout) (previous : DataMem) (entry : MachineState) (w : World) :
+    Except String (World × List String × Bool × String) := do
+  let mut w := w
+  let mut m := previous
+  let mut notes : List String := []
+  let mut steps : List (Nat × Bool) := []
+  for drop in [true,false] do
+    for (pid,a) in L.peers do
+      let before ← readNat ⟨{dmem := previous},0⟩ (a+Root.nodeOffsets.peerRefcount) 4
+      let after ← readNat entry (a+Root.nodeOffsets.peerRefcount) 4
+      if drop && after < before then steps := steps ++ List.replicate (before-after) (pid,true)
+      if !drop && before < after then steps := steps ++ List.replicate (after-before) (pid,false)
+  for (pid,drop) in steps do
+    let peer ← Trie.address L.peers (some pid)
+    let count ← readNat ⟨{dmem := m},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4
+    let next := if drop then count-1 else count+1
+    let name := if drop then "peerPut" else "peerGet"
+    if drop && !(1 < count) then
+      return (w,notes ++ [s!"{name} {pid}: {count} -> {next} REFUSED: the last reference"],false,"FAILS: a count dropped to zero")
+    match (liftWG (if drop then WG.peerPut (some pid) else WG.peerGet pid)).run w with
+    | .error e => return (w,notes ++ [s!"{name} {pid}: MIRROR refuses: {Stop.message e}"],false,"FAILS: the mirror refuses the step")
+    | .ok (_,w') =>
+      let m' := put m (peer+Root.nodeOffsets.peerRefcount) 4 next
+      match countMoved L pid count next m m' with
+      | .error e => return (w,notes ++ [s!"{name} {pid}: {e}"],false,s!"FAILS: {e}")
+      | .ok _ => notes := notes ++ [s!"{name} {pid}: {count} -> {next} ok"]; w := w'; m := m'
+  -- what is left after the steps must be `Framed`'s: no heap byte differs
+  let mut stray : List String := []
+  for (a,n) in L.heap do
+    for i in [:n] do
+      unless m.get? (.ofNat 64 (a+i)) == entry.data.dmem.get? (.ofNat 64 (a+i)) do
+        if stray.length < 8 then stray := stray ++ [s!"{a+i}"]
+  let third := if stray.isEmpty then "ok" else s!"FAILS: heap bytes changed besides the paired counts, at {stray}"
+  return (w,notes,steps.isEmpty && stray.isEmpty,third)
 
 structure Thread where
   world : World
   names : Allowedips.Names
   live : List Nat := []
+  /-- The heap as the last call left it; none before the first call. -/
+  previous : Option DataMem := none
+  /-- Every gap so far was inside the closed world of revision 2 / revision 3. -/
+  closed2 : Bool := true
+  closed3 : Bool := true
 
 /-- The guest's coverage buffer is 32 MiB and `Context.At` asks that every
 word of it be readable. Only the words a call can reach are captured, so
@@ -129,6 +181,13 @@ def serviceStep (L : Layout) (A : Allocator) (svc : ServiceIn) (entry : MachineS
   out := note out "ServiceReady.forward" (check (entry.data.system.bits[10] == false))
   out := note out "ServiceReady.stackMapped" (check ((List.range A.depth).all fun i =>
     (entry.data.dmem.get? (.ofNat 64 (rsp-A.depth+i))).isSome))
+  -- `ServiceReady.separated` (revision 3) on the spans that cover its byte sets; the whole buffer, no window
+  let stack := [(rsp-A.depth,A.depth+8)]
+  out := note out "ServiceReady.separated: stack (scratch, return word) apart from the arena" (check (spansApart stack L.arena))
+  out := note out "ServiceReady.separated: stack apart from the coverage bytes" (check (spansApart stack (Trie.readSpans c)))
+  out := note out "ServiceReady.separated: coverage bytes apart from the arena" (check (spansApart (Trie.readSpans c) L.arena))
+  out := note out "ServiceReady.separated: buffer apart from the coverage metadata and the preemption count" (check (
+    spansApart (Trie.writeSpans c) (Trie.metadataSpans c ++ [(preemptCountAddress.toNat,4)])))
   out := note out "rdi is the cache" (check (entry.data.regs.rdi.toNat == L.cache))
   let record := pending.head?
   if isAlloc then
@@ -171,10 +230,10 @@ def serviceStep (L : Layout) (A : Allocator) (svc : ServiceIn) (entry : MachineS
       | some 0 => if a == 0 then "ok (NULL, record byte 0)" else s!"FAILS: record byte 0, rax {hex a}"
       | some 1 =>
         let zero := match readNat t a nodeSize with | .ok 0 => true | _ => false
-        if a != 0 && a % 8 == 0 && inside a nodeSize L.arena &&
+        if a != 0 && a % 8 == 0 && a + nodeSize < 2^64 && inside a nodeSize L.arena &&
             live.all (fun other => disjointRanges a nodeSize other nodeSize) && zero
           then "ok (object, record byte 1)"
-          else s!"FAILS: record byte 1, rax {hex a}, aligned {a % 8 == 0}, in arena {inside a nodeSize L.arena}, zero {zero}"
+          else s!"FAILS: record byte 1, rax {hex a}, aligned {a % 8 == 0}, below 2^64 {decide (a + nodeSize < 2^64)}, in arena {inside a nodeSize L.arena}, zero {zero}"
       | _ => s!"no usable record; rax {hex a}"
     out := note out "AllocResult against the mirror's pending record" result
     if a != 0 then live := live ++ [a]
@@ -190,8 +249,19 @@ def insertCall (L : Layout) (A : Allocator) (input : Input) (seed : UInt64) (th 
   let initial ← call.initial.registers.state memory
   let ra ← readNat initial initial.data.regs.rsp.toNat 8
   let c ← Common.readContext initial.data.dmem
-  let (w,notes) ← syncCounts L initial th.world
-  out := out ++ [("peer counts changed by the caller since the last call",toJson notes)]
+  -- the gap since the last call, as steps of the closed world
+  let (w,notes,second,third) ← match th.previous with
+    | none => pure (th.world,[],true,"ok")
+    | some previous => referenceMoves L previous initial th.world
+  let closed2 := th.closed2 && second
+  let closed3 := th.closed3 && third == "ok"
+  out := out ++ [("reference moves by the caller since the last call (Referenced)",toJson notes)]
+  out := out ++ [("gap since the last call: inside revision 2's closed world (no heap byte changed)",toJson second)]
+  out := note out "gap since the last call: inside revision 3's closed world (paired reference moves only)" third
+  out := out ++ [("covered by the headline from the empty table, revision 2",toJson closed2),
+    ("covered by the headline from the empty table, revision 3",toJson closed3)]
+  unless third == "ok" do
+    throw s!"outside the closed world of revision 3 before call {index}: {third} {notes}"
   if index == 0 then
     let some d := w.wg.dev | throw "no device"
     out := note out "emptyTable" (say (emptyTable L memory d))
@@ -254,7 +324,7 @@ def insertCall (L : Layout) (A : Allocator) (input : Input) (seed : UInt64) (th 
   out := note out "proof plan's walk facts before the call (C1Invariant.walkCheck)" (say (Proof.walkCheck w call.family call.key call.cidr))
   out := note out "proof plan's step equals the mirror's run (C1Step.stepCheck)" (match Proof.stepCheck w call.family call.key call.cidr call.pid answer w' with
     | .ok k => s!"ok ({repr k})" | .error e => e)
-  return ({world := w',names,live},t,Json.mkObj out)
+  return ({world := w',names,live,previous := some t.data.dmem,closed2,closed3},t,Json.mkObj out)
 
 /-- A compiled lookup under Kraken on the captured heap, with a caller frame
 constructed inside the captured stack block (the caller's side is not

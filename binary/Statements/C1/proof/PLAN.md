@@ -7,6 +7,16 @@ and the assembly, proved (`binary/C1Assembly.lean`: `signed_of_parts`). The
 statement files are untouched. Every judgement here is the architect's
 [AGENT 2026-11-10].
 
+**Revision 3 of the statement (2026-11-10, after this plan).** The signed
+text changed in five places (`docs/2026-11-10-c1-final-statement.md`). For
+the interfaces: `NodeBelowTop` is now a theorem (section 0); package 1 has
+one new proposition, `ReferencedHolds`; `PremisesMet` is restated and
+`Witness` (hence `WitnessHolds`) has a new shape, `Executed` and
+`ServiceActive`; `ServiceReady` takes the layout and carries the separation
+package 4 derived. Every other proposition's statement is unchanged. The
+sections and briefs below were written against revision 2 and are not
+revised beyond section 0.
+
 ## 0. Read this first: one hypothesis nobody owned (settled in revision 3)
 
 **Settled.** The owner chose the first way out below: revision 3 of the

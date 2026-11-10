@@ -18,6 +18,7 @@ def main():
     entry, service, ret, lookups, other, classes, frame = (Counter() for _ in range(7))
     depths, paths, instructions, between, cases, patched, problems = [], Counter(), Counter(), [], [], {}, []
     accessed, above = Counter(), []
+    closed, covered = [], Counter()
     for directory in map(Path, sys.argv[1:]):
         analysis = json.loads((directory / 'analysis.json').read_text())
         trace = analysis['trace']
@@ -53,9 +54,27 @@ def main():
             stray = [x for x in call['callOutsideWindowBufferHeapBeforeArena'] if x['cls'] != 'other']
             tally(frame, 'python: whole RAM across the call changed only in the stack window, the buffer, the table, '
                   'peer fields, nodes, the slab page and the words the services changed', 'ok' if not stray else f'STRAY {stray}')
+        # the closed world over the whole RAM: revision 2 admits no heap change between calls; revision 3
+        # also a registered peer's count up by one (peerGet) or down by one from above one (peerPut)
+        def paired(h):
+            if not (h['what'].startswith('peer ') and h['what'].endswith(' refcount') and h['bytes'] == 1):
+                return False
+            old, new = int(h['old'], 16), int(h['new'], 16)
+            return (new == old + 1 and old >= 1) or (new == old - 1 and old > 1)
+        first2 = first3 = len(analysis['calls'])
         for gap in analysis['between']:
             if gap['heapChanged']:
                 between.append((trace, gap['beforeCall'], [(h['what'], h['old'], h['new']) for h in gap['heapChanged']]))
+                first2 = min(first2, gap['beforeCall'])
+                if not all(paired(h) for h in gap['heapChanged']):
+                    first3 = min(first3, gap['beforeCall'])
+        closed.append((trace, len(analysis['calls']), first2, first3))
+        for line in (directory / 'lean-check.jsonl').read_text().splitlines():
+            row = json.loads(line)
+            if 'insertion' in row and row['seed'] == 0 and 'ABORTED' not in row['insertion']:
+                for revision in (2, 3):
+                    if row['insertion'].get(f'covered by the headline from the empty table, revision {revision}'):
+                        covered[(trace, revision)] += 1
         full = directory / 'lean-full-entry.jsonl'
         if full.exists():
             for line in full.read_text().splitlines():
@@ -103,6 +122,10 @@ def main():
     print('HIGHEST ACCESS ABOVE the service entry rsp (bytes): min', min(above), 'max', max(above))
     print('GUEST TEXT differing from the ELF at the service functions', patched)
     print('HEAP WORDS CHANGED BY THE CALLER between calls', between)
+    print('CLOSED WORLD: calls from the empty table inside it (whole RAM between calls; Check.lean on the captured states)')
+    for trace, calls, first2, first3 in closed:
+        print(f'   {trace}: {calls} calls; revision 2: {first2} (Lean: {covered[(trace, 2)]}); '
+              f'revision 3: {first3} (Lean: {covered[(trace, 3)]})')
     print('PROBLEMS', problems)
 
 
