@@ -94,6 +94,56 @@ theorem pathRootNoMem : PathRootNoMem := by
         exact C1Trunk.rootNoMem_body alloc premises ready trunk bound empty record rest rfl
           recordSite failed after recordsAfter' facts.armedAfter)
 
+/-- PACKAGE 2. Empty root, the node installed. `FramedHolds` is not used. -/
+theorem pathRoot : PathRoot := by
+  intro below _ alloc fetch L A premises c s w w' family key cidr pid ra answer d stream placed exact st
+    inv ready _ facts hcase
+  have rf := C1Trunk.insertReady_facts ready
+  obtain ⟨bound,empty,okHead,stEq⟩ := C1Trunk.step_root (d := d) (family := family)
+    (key := key) (cidr := cidr) (pid := pid) (placed := placed) (exact := exact)
+    (outcomes := stream.map fun r => r.bytes.head? == some 1) (by rw [← facts.model]; exact hcase)
+  have answerEq : answer = 0 := by rw [facts.result, facts.model, stEq]
+  have after := facts.after
+  have sites := facts.sites
+  have outcomes := facts.outcomes
+  have recordsAfter := facts.recordsAfter
+  rw [facts.model, stEq] at after sites outcomes recordsAfter
+  obtain ⟨record,rest,pending⟩ : ∃ record rest, stream = record :: rest := by
+    cases stream with
+    | nil => simp [Case.sites] at sites
+    | cons record rest => exact ⟨record,rest,rfl⟩
+  subst pending
+  have recordSite : record.site = 77 := by simpa [Case.sites] using sites
+  have ok : record.bytes.head? = some 1 := by
+    rcases outcomes record (by simp) with h | h
+    · simp [h] at okHead
+    · exact h
+  have recordsAfter' : w'.ambient.hidden = some rest := by simpa using recordsAfter
+  obtain ⟨d',device',same⟩ := after
+  rw [answerEq]
+  rcases rf.families with rfl | rfl
+  · exact C1Trunk.through_core fetch L A premises c s w w' true key cidr pid ra 0 inv
+      rf.pc rf.table rf.peer rf.peerNonNull rf.cidr rf.key rf.cache rf.frame
+      (fun names stream0 d0 seq a trunk => by
+        have hd : d0 = d := Option.some.inj (trunk.device.symm.trans facts.device)
+        have hs : stream0 = record :: rest := Option.some.inj (trunk.hidden.symm.trans facts.records)
+        subst hd hs
+        exact C1Trunk.root_body below alloc premises ready trunk bound empty record rest rfl
+          recordSite ok ⟨d',device',fun owner hasPeer => same.trans
+            (congrArg Allowedips.target (C1Trunk.root_device (bump d0) true key cidr pid owner hasPeer))⟩
+          recordsAfter' facts.armedAfter)
+  · exact C1Trunk.through_core fetch L A premises c s w w' false key cidr pid ra 0 inv
+      rf.pc rf.table rf.peer rf.peerNonNull rf.cidr rf.key rf.cache rf.frame
+      (fun names stream0 d0 seq a trunk => by
+        have hd : d0 = d := Option.some.inj (trunk.device.symm.trans facts.device)
+        have hs : stream0 = record :: rest := Option.some.inj (trunk.hidden.symm.trans facts.records)
+        subst hd hs
+        exact C1Trunk.root_body below alloc premises ready trunk bound empty record rest rfl
+          recordSite ok ⟨d',device',fun owner hasPeer => same.trans
+            (congrArg Allowedips.target (C1Trunk.root_device (bump d0) false key cidr pid owner hasPeer))⟩
+          recordsAfter' facts.armedAfter)
+
 #print axioms pathTooLong
 #print axioms pathRootNoMem
+#print axioms pathRoot
 end Binary.Statements.C1.Proof
