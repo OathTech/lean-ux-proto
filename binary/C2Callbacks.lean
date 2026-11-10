@@ -248,6 +248,13 @@ theorem stubs_agree : StubsAgree := by
       List.not_mem_nil, or_false] at member
     rcases member with rfl | rfl | rfl | rfl | rfl <;> exact (by rfl : Range.fetch _ = _).trans read
 
+/-! ## The call sites, closed -/
+
+theorem pc_site : PcSite :=
+  call_site (Callback.Cmp8.kcov_covered .pc)
+    (fun fetch reading => Callback.Cmp8.pc_rule fetch reading.services)
+
 #print axioms call_site
 #print axioms stubs_agree
+#print axioms pc_site
 end Binary.C2
