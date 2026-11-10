@@ -317,5 +317,109 @@ theorem pc_rule : PcRule := by
   subst p
   exact service_interior services (pc_run s ra ready frame)
 
+
+/-! ## The 8-byte entries -/
+
+/-- The register state an 8-byte entry hands to `write_comp_data`. -/
+def stubState (tag : BitVec 64) (s : MachineData) (returnPC : BitVec 64) : MachineData :=
+  {s with regs := {s.regs with
+    rcx := .ofBitVec returnPC
+    rdi := .ofBitVec tag
+    rsi := .ofBitVec (s.regs.get64 .rdi)
+    rdx := .ofBitVec (s.regs.get64 .rsi)}}
+
+theorem stub_plan (tag : BitVec 64) (s : MachineData) (pc : Int64) (returnPC : BitVec 64)
+    (read : load64 s.dmem s.regs.rsp.toBitVec = some returnPC) :
+    cmpPlan (stubState tag s returnPC) = recordPlan tag ⟨s, pc⟩ := by
+  simp [cmpPlan, stubState, cmpModePlan, cmpActivePlan, recordPlan, read,
+    BitVec.lt_def, -BitVec.toNat_add, -BitVec.toNat_mul]
+
+/-- `write_comp_data` entered from an 8-byte entry: the landed `cmp_run`. -/
+theorem stub_body {fetch : Int64 → Option Decoded} (services : ServiceDecoderAgreement fetch)
+    {rsp : UInt64} (tag : BitVec 64) (s : MachineData) (pc : Int64) (ra : UInt64)
+    (returnPC : BitVec 64) (read : load64 s.dmem s.regs.rsp.toBitVec = some returnPC)
+    (ready : Ready (recordPlan tag) ⟨s, pc⟩) (frame : EntryFrame ⟨s, pc⟩ ra)
+    (stack : s.regs.rsp = rsp) :
+    Eventually (guardedStep fetch (Interior rsp))
+      (fun t => Returned ⟨s, pc⟩ t ra ∧
+        EqualOutside (Writes (recordPlan tag) ⟨s, pc⟩) s.dmem t.data.dmem ∧
+        Effect (recordPlan tag) ⟨s, pc⟩ t)
+      ⟨stubState tag s returnPC, .ofNat 0xffffffff810f3fb0⟩ := by
+  obtain ⟨writes, plan, ready⟩ := ready
+  apply service_interior services
+  refine eventually_weaken _ _ _ _ ?_ (cmp_run _ ra writes ?_ ?_ ?_ (by exact stack))
+  · rintro t ⟨returned, after⟩
+    change t.data.dmem = Kcov.storesMemory writes s.dmem at after
+    refine ⟨by simpa [Returned, stubState] using returned, ?_, writes, plan, after⟩
+    rw [after]
+    exact Kcov.stores_frame writes s.dmem _ (by
+      intro w member a inside
+      exact ⟨writes, plan, w, member, inside⟩)
+  · rw [stub_plan tag s pc returnPC read]
+    exact plan
+  · exact frame.2
+  · exact ready
+
+theorem stub_step {fetch : Int64 → Option Decoded} {rsp : UInt64} {P : MachineState → Prop}
+    {s : MachineData} {pc : Int64} {i : Instr} {n : Nat}
+    (here : fetch pc = some ⟨i, n⟩) (positive : 0 < n)
+    (stack : s.regs.rsp = rsp) (outside : Image.fetch pc = none) (text : Text pc)
+    (run : (i.interp s ⟨pc, pc + .ofNat n⟩
+      (fun d => .done ⟨d, pc + .ofNat n⟩) (fun p d => .done ⟨d, p⟩)).All
+        (Eventually (guardedStep fetch (Interior rsp)) P)) :
+    Eventually (guardedStep fetch (Interior rsp)) P ⟨s, pc⟩ := by
+  apply step_cps
+  exact ⟨⟨⟨stack, outside⟩, text⟩,
+    by simpa only [instructionStep, here] using And.intro positive run⟩
+
+theorem jump_target (a b : Int64) : a + (b - a) = b := by
+  apply Int64.toBitVec_inj.mp
+  simp only [Int64.toBitVec_add, Int64.toBitVec_sub]
+  rw [BitVec.add_comm]
+  exact BitVec.sub_add_cancel _ _
+
+/-- One instruction of an 8-byte entry, fetched through the agreement `stub`. -/
+macro "stub_step" stub:ident : tactic => `(tactic|
+  (apply stub_step ($stub _ _ (by rfl)) (by decide) (by rfl) (by rfl) (.inr (by rfl))
+   simp only [Instr.interp, Operation.interp, RegOrMem.interp, Operand.interp,
+     MachineData.load, MachineData.store, MachineData.set, MachineData.setReg,
+     AddrExpr.interp, ConstExpr.interp, Reg64s.get, Reg64s.get64, Reg64s.set,
+     Reg64s.set64, Reg.base, Reg.offset, BitVec.drop, BitVec.take,
+     BitVec.toAddressSize, Effects.All]))
+
+theorem cmp8_run {fetch : Int64 → Option Decoded} (services : ServiceDecoderAgreement fetch)
+    (stub : Cmp8Agreement fetch) (s : MachineData) (ra : UInt64)
+    (ready : Ready (recordPlan 6) ⟨s, cmp8Entry⟩) (frame : EntryFrame ⟨s, cmp8Entry⟩ ra) :
+    Eventually (guardedStep fetch (Interior s.regs.rsp))
+      (fun t => Returned ⟨s, cmp8Entry⟩ t ra ∧
+        EqualOutside (Writes (recordPlan 6) ⟨s, cmp8Entry⟩) s.dmem t.data.dmem ∧
+        Effect (recordPlan 6) ⟨s, cmp8Entry⟩ t)
+      ⟨s, cmp8Entry⟩ := by
+  have returnRead : load64 s.dmem s.regs.rsp.toBitVec = some ra.toBitVec := by
+    simp [load64, frame.2]
+  stub_step stub
+  simp [BitVec.signed, frame.2, Effects.All]
+  stub_step stub
+  stub_step stub
+  stub_step stub
+  stub_step stub
+  simp [RelRegOrMem.interp, ConstExpr.interp, Effects.All]
+  have destination : label "L_ffffffff810f3fb0" = .ofNat 0xffffffff810f3fb0 := by decide +kernel
+  rw [destination]
+  simpa [stubState, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.drop, BitVec.take,
+    jump_target] using
+    stub_body services 6 s cmp8Entry ra ra.toBitVec returnRead ready frame rfl
+
+/-- `Cmp8Rule`: `__sanitizer_cov_trace_cmp8` from its five instructions and the landed
+proof of `write_comp_data`. -/
+theorem cmp8_rule : Cmp8Rule := by
+  intro fetch services stub
+  apply leaf_of_run
+  rintro ⟨s, p⟩ ra pc ready frame
+  change p = _ at pc
+  subst p
+  exact cmp8_run services stub s ra ready frame
+
 #print axioms pc_rule
+#print axioms cmp8_rule
 end Binary.Callback.Cmp8
