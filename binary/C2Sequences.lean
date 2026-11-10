@@ -742,3 +742,32 @@ theorem mirror_follows_spec : MirrorFollowsSpec := by
 #print axioms Binary.C2.mirror_follows_spec
 
 end Binary.C2
+
+/-! ## The world
+
+A world that holds a given replay state: a device whose keypair store has one keypair,
+number 0, with that state. -/
+namespace Binary.C2
+open Binary TrustBase Leanux
+local instance : Labels := Binary.Image.linkedLabels
+
+/-- The world with one keypair, number 0, holding `c`. -/
+def worldOf (c : WG.ReplayCounter) : WGWorld :=
+  { dev := some
+      { ifindex := 3, ifname := "wg0"
+        keypairs := (∅ : Std.TreeMap WG.KeypairId WG.Keypair).insert 0
+          { peer := none, receivingCounter := c } } }
+
+theorem windowOf_worldOf (c : WG.ReplayCounter) : windowOf (worldOf c) 0 = some c := by
+  simp [windowOf, worldOf]
+
+/-- An ambient state to run the mirror in: the environment oracle always succeeds and
+nothing has been recorded. `counterValidate` never asks the oracle. -/
+def ambientStart : Ambient :=
+  { env := fun _ _ => true, timing := { advanceWait := 0, traceBound := 0 } }
+
+theorem world_holds : WorldHolds :=
+  fun c => ⟨worldOf c, 0, ambientStart, windowOf_worldOf c⟩
+
+#print axioms world_holds
+end Binary.C2
