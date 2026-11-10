@@ -31,10 +31,17 @@ mov    %rdi,%rsi
 mov    $0x7,%edi
 jmp L_ffffffff810f3fb0")) [4, 3, 3, 5, 5]
 
+/-- The literal instructions of `__sanitizer_cov_trace_cmp8`. -/
+def cmp8Fetch (pc : Int64) : Option Binary.Decoded :=
+  Binary.Image.fetchIn cmp8Entry cmp8Stub pc
+
+/-- The literal instructions of `__sanitizer_cov_trace_const_cmp8`. -/
+def constCmp8Fetch (pc : Int64) : Option Binary.Decoded :=
+  Binary.Image.fetchIn constCmp8Entry constCmp8Stub pc
+
 /-- The literal instructions of the two entries. -/
 def fetch (pc : Int64) : Option Binary.Decoded :=
-  (Binary.Image.fetchIn cmp8Entry cmp8Stub pc).orElse fun _ =>
-    Binary.Image.fetchIn constCmp8Entry constCmp8Stub pc
+  (cmp8Fetch pc).orElse fun _ => constCmp8Fetch pc
 
 /-- The ten instruction addresses. -/
 def addresses : List Int64 :=
@@ -43,10 +50,18 @@ def addresses : List Int64 :=
    .ofNat 18446744071579844896, .ofNat 18446744071579844900, .ofNat 18446744071579844903,
    .ofNat 18446744071579844906, .ofNat 18446744071579844911]
 
-/-- The ambient decoder agrees with the literal terms of the two entries. A premise of
-the rules in `CallbackCmp8Rule`; each result derives it from its own reading of the
-image. -/
+/-- The ambient decoder agrees with the literal terms of `__sanitizer_cov_trace_cmp8`.
+The premise of `Cmp8Rule`; each result derives it from its own reading of the image. A
+result that calls only this entry (C1) needs only this premise. -/
+def Cmp8Agreement (fetch : Int64 → Option Binary.Decoded) : Prop :=
+  ∀ pc instruction, cmp8Fetch pc = some instruction → fetch pc = some instruction
+
+/-- The same for `__sanitizer_cov_trace_const_cmp8`: the premise of `ConstCmp8Rule`. -/
+def ConstCmp8Agreement (fetch : Int64 → Option Binary.Decoded) : Prop :=
+  ∀ pc instruction, constCmp8Fetch pc = some instruction → fetch pc = some instruction
+
+/-- Agreement on both entries (what C2 derives from its range's reading). -/
 def Agreement (fetch : Int64 → Option Binary.Decoded) : Prop :=
-  ∀ pc instruction, Cmp8.fetch pc = some instruction → fetch pc = some instruction
+  Cmp8Agreement fetch ∧ ConstCmp8Agreement fetch
 
 end Binary.Callback.Cmp8

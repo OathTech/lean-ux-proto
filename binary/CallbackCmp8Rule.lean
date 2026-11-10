@@ -6,7 +6,9 @@ import CallbackLeafHistory
 Interface propositions only (`def … : Prop`), and what follows from them without
 executing anything. Their proofs are work package 1 of result C2 (file prefix
 `CallbackCmp8`, root `CallbackCmp8`); the C1 branch takes this module and
-`CallbackCmp8Image` unchanged and uses `Cmp8Rule` through `cmp8_kcov` below.
+`CallbackCmp8Image` unchanged and uses `Cmp8Rule` through `cmp8_kcov` below. Each
+8-byte rule asks for agreement on its own entry only: C1's image terms hold
+`__sanitizer_cov_trace_cmp8` and not the constant form.
 
 A rule here differs from the landed `Callback.LeafService` in one respect: the interior
 of the call is confined to the callbacks' own text (`Interior`), not only kept out of
@@ -90,12 +92,12 @@ def PcRule : Prop :=
 /-- RULE, `__sanitizer_cov_trace_cmp8`, from the image: its five instructions and the
 landed proof of `write_comp_data` (`Callback.cmp_run`). -/
 def Cmp8Rule : Prop :=
-  ∀ fetch, ServiceDecoderAgreement fetch → Agreement fetch →
+  ∀ fetch, ServiceDecoderAgreement fetch → Cmp8Agreement fetch →
     Leaf fetch cmp8Entry (recordPlan 6)
 
 /-- RULE, `__sanitizer_cov_trace_const_cmp8`, from the image. -/
 def ConstCmp8Rule : Prop :=
-  ∀ fetch, ServiceDecoderAgreement fetch → Agreement fetch →
+  ∀ fetch, ServiceDecoderAgreement fetch → ConstCmp8Agreement fetch →
     Leaf fetch constCmp8Entry (recordPlan 7)
 
 /-! ## What follows without executing anything -/
@@ -115,11 +117,11 @@ theorem effect_kcov (kind : KcovKind) (s t : MachineState) :
 /-- The 8-byte comparison rule in the vocabulary of `TrustBase` (what the landed
 `Kcov` lemmas and the C1 contracts consume). -/
 theorem cmp8_kcov (rule : Cmp8Rule) (fetch : Int64 → Option Decoded)
-    (services : ServiceDecoderAgreement fetch) (stubs : Agreement fetch) :
+    (services : ServiceDecoderAgreement fetch) (stub : Cmp8Agreement fetch) :
     Leaf fetch cmp8Entry (KcovPlan .cmp8) := by
   have same : recordPlan 6 = KcovPlan .cmp8 := funext recordPlan_cmp8
   rw [← same]
-  exact rule fetch services stubs
+  exact rule fetch services stub
 
 /-- A rule gives the landed leaf-service form, forgetting the text confinement. -/
 theorem Leaf.service {fetch address} {kind : KcovKind} (leaf : Leaf fetch address (KcovPlan kind)) :
