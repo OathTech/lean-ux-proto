@@ -12,7 +12,10 @@ In order:
 2. `lake -d binary build C2Bridge`.
 3. `#print axioms` for every theorem of the bridge; any axiom beyond
    `propext`, `Classical.choice` and `Quot.sound` fails, and so does a
-   theorem in the source that is not in THEOREMS.
+   theorem in the source that is not in THEOREMS. Then the statements: the
+   type of every theorem as `#check` prints it, compared with
+   `binary/bridge/C2Bridge.expected.txt`; any difference fails. That file is
+   a specification: `--write-expected` replaces it, and its diff is reviewed.
 4. The proof tree's forbidden-token scan over `binary/bridge/*.lean`,
    comments and strings stripped.
 5. The bridge's imports: of the proof tree exactly the four modules, and
@@ -22,6 +25,7 @@ In order:
    beside the mirror commit the register row (`docs/proofs.md`) names. The
    row may say "Current" only if no mirror file differs from that commit.
 """
+import difflib
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 import re
@@ -38,6 +42,7 @@ THEOREMS = ['Binary.C2.Bridge.' + name for name in (
     'accepts_as_pure_window', 'no_counter_accepted_twice_of_parts',
     'no_counter_accepted_twice', 'headline', 'replay_refused')]
 MIRROR = ['Leanux/FS', 'Leanux/WG', 'Leanux/Net', 'Leanux/Kernel', 'Leanux/Env.lean', 'Leanux/Runner.lean']
+EXPECTED = BRIDGE_DIR / 'C2Bridge.expected.txt'
 REGISTER = ROOT / 'docs' / 'proofs.md'
 ROW = '| C2 bridge:'
 
@@ -95,6 +100,41 @@ def check_axioms():
             fail(f'unexpected statement printed: {name}')
     if result.returncode != 0:
         fail(f'lean exited {result.returncode} on the axiom scratch file')
+
+
+def render_statements():
+    """The bridge's theorems with their types, printed as the binary gate prints its surface."""
+    artifacts = ROOT / '.tmp' / 'c2-bridge-gate'
+    artifacts.mkdir(parents=True, exist_ok=True)
+    scratch = artifacts / 'statements.lean'
+    scratch.write_text(f'import {TARGET}\nset_option format.width 110\nset_option pp.universes true\n'
+                       + ''.join(f'#check @{name}\n' for name in THEOREMS))
+    result = subprocess.run(binary_gate.capped(['lake', 'env', 'lean', str(scratch)]), cwd=ROOT / 'binary',
+                            capture_output=True, text=True)
+    if result.returncode or result.stderr:
+        fail(f'printing the bridge\'s statements failed:\n{result.stdout}{result.stderr}')
+        return None
+    return result.stdout.rstrip() + '\n'
+
+
+def check_statements():
+    print(f'      the statements of the {len(THEOREMS)} theorems against {EXPECTED.relative_to(ROOT)}', flush=True)
+    actual = render_statements()
+    if actual is None:
+        return
+    for line in actual.splitlines():
+        if not line.startswith(' '):
+            print(f'  {line}'[:160], flush=True)
+    if not EXPECTED.exists():
+        fail(f'{EXPECTED.relative_to(ROOT)} is missing')
+        return
+    delta = ''.join(difflib.unified_diff(EXPECTED.read_text().splitlines(keepends=True),
+                                         actual.splitlines(keepends=True),
+                                         fromfile='expected statements', tofile='current statements'))
+    if delta:
+        print(delta, end='', flush=True)
+        fail('the statements of the bridge\'s theorems changed; inspect the diff and explicitly update '
+             f'{EXPECTED.relative_to(ROOT)}')
 
 
 def check_source():
@@ -168,8 +208,16 @@ def check_lag():
 
 
 def main():
+    if sys.argv[1:] not in ([], ['--write-expected']):
+        raise SystemExit('usage: c2-bridge-gate [--write-expected]')
     if sys.argv[1:]:
-        raise SystemExit('usage: c2-bridge-gate')
+        # Intentionally replace the reviewed statements, from the bridge as built; commit and review the diff.
+        actual = render_statements()
+        if actual is None:
+            return 1
+        EXPECTED.write_text(actual)
+        print(f'Updated {EXPECTED}; review its Git diff')
+        return 0
     sys.path.insert(0, str(ROOT / 'binary'))
     from pin import verify_pin
     print('[1/6] private Kraken pin and clean tree', flush=True)
@@ -191,6 +239,7 @@ def main():
                 fail(f'the bridge build warns: {line}')
     if not failures:
         check_axioms()
+        check_statements()
     check_source()
     check_lag()
     print('c2 bridge gate: ' + ('FAILED' if failures else 'PASS'), flush=True)

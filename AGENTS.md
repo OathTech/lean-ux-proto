@@ -145,7 +145,9 @@ refinement proved in the binary package with the landed `CounterWindow`
 theorems. It has its own gate, run at the binary track's claim points:
 `capped -- scripts/in-bundle scripts/c2-bridge-gate`, which builds the lake
 target `C2Bridge` of `binary/lakefile.toml`, prints the axioms of its
-theorems and fails on any beyond the standard three, applies the proof
+theorems and fails on any beyond the standard three, compares their
+statements with `binary/bridge/C2Bridge.expected.txt` and fails on any
+difference, applies the proof
 tree's forbidden-token scan to `binary/bridge/`, and fails if the bridge
 imports the proof tree beyond the four modules, if `binary/bridge/` holds
 another Lean file, or if `C2Bridge` is a default target. The register
