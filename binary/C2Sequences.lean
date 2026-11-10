@@ -296,8 +296,19 @@ theorem fields_fit : FieldsFit := by
   intro j hj
   simpa using (load_word m _ _ (words j hj)).2
 
+theorem fields_retained : FieldsRetained := by
+  rintro m m' kp c ⟨counter, size, words⟩ same
+  refine ⟨?_, size, ?_⟩
+  · rw [← counter]
+    exact (loadInt_congr m m' _ 8 fun i hi => same _ (counter_inside kp i hi)).symm
+  · intro j hj
+    rw [← words j hj]
+    exact (loadInt_congr m m' _ 8 fun i hi =>
+      same _ (word_inside kp j i (size ▸ hj) hi)).symm
+
 #print axioms window_mapped
 #print axioms window_of_fields
 #print axioms fields_of_window
 #print axioms fields_fit
+#print axioms fields_retained
 end Binary.C2
