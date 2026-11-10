@@ -306,9 +306,22 @@ theorem fields_retained : FieldsRetained := by
     exact (loadInt_congr m m' _ 8 fun i hi =>
       same _ (word_inside kp j i (size ▸ hj) hi)).symm
 
+theorem fields_mapped : FieldsMapped := by
+  rintro m kp c ⟨counter, size, words⟩ a ⟨i, hi, rfl⟩
+  simp only [Layouts.replaySize] at hi
+  by_cases low : i < 8
+  · have := mapped_of_loadInt m _ 8 _ counter i low
+    rwa [counter_byte] at this
+  · have hj : (i - 8) / 8 < c.backtrack.size := by
+      rw [size]; simp only [Layouts.replayWords]; omega
+    have := mapped_of_loadInt m _ 8 _ (words _ hj) ((i - 8) % 8) (Nat.mod_lt _ (by omega))
+    rw [word_byte] at this
+    rwa [show 8 + (i - 8) / 8 * 8 + (i - 8) % 8 = i by omega] at this
+
 #print axioms window_mapped
 #print axioms window_of_fields
 #print axioms fields_of_window
 #print axioms fields_fit
 #print axioms fields_retained
+#print axioms fields_mapped
 end Binary.C2
