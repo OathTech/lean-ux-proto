@@ -1,4 +1,4 @@
-import C1Trunk.Tail
+import C1TrunkTail
 /-! Result C1, package 2 (origin: trial T4, `task/binary-trials:binary-trials/t4`, copied and trimmed): the failure exits of the empty-root path on the machine side
 (-ENOMEM after a failed allocation, -EINVAL for a too-long prefix). -/
 namespace C1Trunk

@@ -1,4 +1,4 @@
-import C1Trunk.Live
+import C1TrunkLive
 /-! Result C1, package 2 (origin: trial T4, `task/binary-trials:binary-trials/t4`, copied): from `Add.entry` to the allocator's entry (the CALL at +0x42d executed). -/
 namespace C1Trunk
 open Binary Binary.Pair Binary.Pair.Allowedips Binary.AllowedipsMutationImage

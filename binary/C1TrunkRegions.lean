@@ -1,4 +1,4 @@
-import C1Trunk.Stack
+import C1TrunkStack
 /-! Result C1, package 2 (origin: trial T4, `task/binary-trials:binary-trials/t4`, copied): the straight-line regions between the prologue and the allocation boundary. -/
 namespace C1Trunk
 open Binary Binary.Pair Binary.Pair.Allowedips Binary.AllowedipsMutationImage

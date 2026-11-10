@@ -1,4 +1,4 @@
-import C1Trunk.Caller
+import C1TrunkCaller
 import AllowedipsCounterRegion
 /-! Result C1, package 2: from a wrapper's entry to `add`'s entry (prologue,
 coverage callback, sequence increment, address copy and byte swap, CALL). -/

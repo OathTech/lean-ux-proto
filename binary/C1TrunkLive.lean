@@ -1,4 +1,4 @@
-import C1Trunk.Regions
+import C1TrunkRegions
 /-! Result C1, package 2 (origin: trial T4, `task/binary-trials:binary-trials/t4`, copied): the running invariant between the prologue and the allocation call. -/
 namespace C1Trunk
 open Binary Binary.Pair Binary.Pair.Allowedips Binary.AllowedipsMutationImage

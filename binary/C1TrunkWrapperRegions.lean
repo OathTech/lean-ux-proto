@@ -1,4 +1,4 @@
-import C1Trunk.Fail
+import C1TrunkFail
 /-! Result C1, package 2: the straight-line regions of the two public wrappers
 (`wg_allowedips_insert_v4`, `_v6`) from their entries to the CALL of `add`. -/
 namespace C1Trunk

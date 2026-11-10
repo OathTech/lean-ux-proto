@@ -1,4 +1,4 @@
-import C1Trunk.Prologue
+import C1TrunkPrologue
 /-! Result C1, package 2 (origin: trial T4, `task/binary-trials:binary-trials/t4`, copied): readback and frame of the prologue's memory. -/
 namespace C1Trunk
 open Binary Binary.Pair Binary.Pair.Allowedips Binary.AllowedipsMutationImage

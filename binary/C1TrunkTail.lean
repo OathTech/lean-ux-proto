@@ -1,4 +1,4 @@
-import C1Trunk.Entry
+import C1TrunkEntry
 import PairMappedMemory
 import PairAllowedipsAssert
 /-! Result C1, package 2 (origin: trial T4, `task/binary-trials:binary-trials/t4`, copied and trimmed): the common tail from +0x549 (last coverage callback, epilogue, RET),

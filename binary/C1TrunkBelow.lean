@@ -1,4 +1,4 @@
-import C1Trunk.WrapperRegions
+import C1TrunkWrapperRegions
 /-! Result C1, package 2: addresses below a stack pointer, in the one form
 `sp - n`, with readability, inclusion and separation of such ranges. -/
 namespace C1Trunk
