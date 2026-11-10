@@ -1586,6 +1586,9 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
                 Eq.{1} (Binary.Pair.Insert.draw records) (Except.ok.{0, 0} (Prod.mk.{0, 0} value rest)) →
                   Eventually (Binary.instructionStep fetch)
                     (Binary.RandomService.Post config coverage preempt inputAt s ra value rest) s
+Binary.C2.exits_cleanly : Binary.C2.ExitsCleanly
+Binary.C2.refines : Binary.C2.Refines
+Binary.C2.replay_witness : Binary.C2.ReplayWitness
 def Binary.Pair.Allowedips.NodeInit.EntryWrites : Binary.Pair.Allowedips.Names → MachineData → Nat → BitVec 64 → Prop :=
 fun names s base a =>
   Binary.InRange (BitVec.ofNat 64 base) 72 a ∨
@@ -3954,6 +3957,237 @@ fun m task selected pointers =>
                 (HMul.hMul.{0, 0, 0} count Binary.RandomProvider.Layout.entrySize)))
             List.nil.{0})
     __do_jp steering
+structure Binary.C2.Reading (fetch : Int64 → Option.{0} Binary.Decoded) : Prop
+number of parameters: 1
+fields:
+  Binary.C2.Reading.range : Binary.C2.RangeDecoderAgreement fetch
+  Binary.C2.Reading.services : Binary.TrustBase.ServiceDecoderAgreement fetch
+constructor:
+  Binary.C2.Reading.mk {fetch : Int64 → Option.{0} Binary.Decoded} (range : Binary.C2.RangeDecoderAgreement fetch)
+    (services : Binary.TrustBase.ServiceDecoderAgreement fetch) : Binary.C2.Reading fetch
+def Binary.C2.RangeDecoderAgreement : (Int64 → Option.{0} Binary.Decoded) → Prop :=
+fun fetch =>
+  ∀ (pc : Int64) (instruction : Binary.Decoded),
+    Eq.{1} (Binary.C2.Range.fetch pc) (some.{0} instruction) → Eq.{1} (fetch pc) (some.{0} instruction)
+structure Binary.C2.Context (layout : Binary.TrustBase.KcovLayout) (preempt : BitVec 32) (s : MachineState)
+  (kp skb nonce : BitVec 64) : Prop
+number of parameters: 6
+fields:
+  Binary.C2.Context.pc : Eq.{1} s.pc Binary.C2.Range.entry
+  Binary.C2.Context.keypair : Eq.{1} s.data.regs.r13.toBitVec kp
+  Binary.C2.Context.packet : Eq.{1} s.data.regs.rbx.toBitVec skb
+  Binary.C2.Context.nonce : Eq.{1} (Mem.loadInt s.data.dmem (HAdd.hAdd.{0, 0, 0} skb 40) 8) (some.{0} ↑nonce.toNat)
+  Binary.C2.Context.window : ∀ (a : BitVec 64),
+      Binary.C2.windowBytes kp a → Eq.{1} (Option.isSome.{0} (Std.ExtHashMap.get?.{0, 0} s.data.dmem a)) true
+  Binary.C2.Context.aligned : Eq.{1} (HMod.hMod.{0, 0, 0} s.data.regs.rsp.toNat 8) 0
+  Binary.C2.Context.stack : ∀ (a : BitVec 64),
+      Binary.C2.stackBytes s.data.regs.rsp.toBitVec a →
+        Eq.{1} (Option.isSome.{0} (Std.ExtHashMap.get?.{0, 0} s.data.dmem a)) true
+  Binary.C2.Context.coverage : Binary.TrustBase.KcovState layout preempt s.data.dmem
+  Binary.C2.Context.stackWindow : ∀ (a : BitVec 64),
+      Binary.C2.stackBytes s.data.regs.rsp.toBitVec a → ¬Binary.C2.windowBytes kp a
+  Binary.C2.Context.stackPreempt : ∀ (a : BitVec 64),
+      Binary.C2.stackBytes s.data.regs.rsp.toBitVec a → ¬Binary.InRange Binary.TrustBase.preemptCountAddress 4 a
+  Binary.C2.Context.windowPreempt : ∀ (a : BitVec 64),
+      Binary.C2.windowBytes kp a → ¬Binary.InRange Binary.TrustBase.preemptCountAddress 4 a
+  Binary.C2.Context.coverageApart : ∀ (a : BitVec 64),
+      Binary.C2.coverageBytes layout a → ¬Binary.C2.Footprint s.data.regs.rsp.toBitVec kp a
+  Binary.C2.Context.coverageMetadata : ∀ (a : BitVec 64),
+      Eq.{1} layout.mode 2 ∨ Eq.{1} layout.mode 3 →
+        Binary.TrustBase.KcovStorageBytes layout a → ¬Binary.TrustBase.KcovMetadataBytes layout a
+constructor:
+  Binary.C2.Context.mk {layout : Binary.TrustBase.KcovLayout} {preempt : BitVec 32} {s : MachineState}
+    {kp skb nonce : BitVec 64} (pc : Eq.{1} s.pc Binary.C2.Range.entry) (keypair : Eq.{1} s.data.regs.r13.toBitVec kp)
+    (packet : Eq.{1} s.data.regs.rbx.toBitVec skb) :
+    Eq.{1} (Mem.loadInt s.data.dmem (HAdd.hAdd.{0, 0, 0} skb 40) 8) (some.{0} ↑nonce.toNat) →
+      ∀
+        (window :
+          ∀ (a : BitVec 64),
+            Binary.C2.windowBytes kp a → Eq.{1} (Option.isSome.{0} (Std.ExtHashMap.get?.{0, 0} s.data.dmem a)) true)
+        (aligned : Eq.{1} (HMod.hMod.{0, 0, 0} s.data.regs.rsp.toNat 8) 0)
+        (stack :
+          ∀ (a : BitVec 64),
+            Binary.C2.stackBytes s.data.regs.rsp.toBitVec a →
+              Eq.{1} (Option.isSome.{0} (Std.ExtHashMap.get?.{0, 0} s.data.dmem a)) true)
+        (coverage : Binary.TrustBase.KcovState layout preempt s.data.dmem)
+        (stackWindow : ∀ (a : BitVec 64), Binary.C2.stackBytes s.data.regs.rsp.toBitVec a → ¬Binary.C2.windowBytes kp a)
+        (stackPreempt :
+          ∀ (a : BitVec 64),
+            Binary.C2.stackBytes s.data.regs.rsp.toBitVec a → ¬Binary.InRange Binary.TrustBase.preemptCountAddress 4 a)
+        (windowPreempt :
+          ∀ (a : BitVec 64), Binary.C2.windowBytes kp a → ¬Binary.InRange Binary.TrustBase.preemptCountAddress 4 a)
+        (coverageApart :
+          ∀ (a : BitVec 64), Binary.C2.coverageBytes layout a → ¬Binary.C2.Footprint s.data.regs.rsp.toBitVec kp a)
+        (coverageMetadata :
+          ∀ (a : BitVec 64),
+            Eq.{1} layout.mode 2 ∨ Eq.{1} layout.mode 3 →
+              Binary.TrustBase.KcovStorageBytes layout a → ¬Binary.TrustBase.KcovMetadataBytes layout a),
+        Binary.C2.Context layout preempt s kp skb nonce
+def Binary.C2.windowBytes : BitVec 64 → BitVec 64 → Prop :=
+fun kp =>
+  Binary.InRange (HAdd.hAdd.{0, 0, 0} kp (BitVec.ofNat 64 Binary.Layouts.keypair_receiving_counter))
+    Binary.Layouts.replaySize
+def Binary.C2.stackBytes : BitVec 64 → BitVec 64 → Prop :=
+fun sp a => Binary.InRange (HSub.hSub.{0, 0, 0} sp 8) 8 a ∨ Binary.InRange (HAdd.hAdd.{0, 0, 0} sp 16) 16 a
+def Binary.C2.Footprint : BitVec 64 → BitVec 64 → BitVec 64 → Prop :=
+fun sp kp a =>
+  Binary.C2.stackBytes sp a ∨ Binary.C2.windowBytes kp a ∨ Binary.InRange Binary.TrustBase.preemptCountAddress 4 a
+def Binary.C2.coverageBytes : Binary.TrustBase.KcovLayout → BitVec 64 → Prop :=
+fun layout a =>
+  Binary.TrustBase.KcovMetadataBytes layout a ∨
+    (Eq.{1} layout.mode 2 ∨ Eq.{1} layout.mode 3) ∧ Binary.TrustBase.KcovStorageBytes layout a
+structure Binary.C2.Visits (fetch : Int64 → Option.{0} Binary.Decoded) (kp : BitVec 64)
+  (visits : List.{0} Binary.C2.Visit) : Prop
+number of parameters: 3
+fields:
+  Binary.C2.Visits.entries : ∀ (v : Binary.C2.Visit),
+      Membership.mem.{0, 0} visits v →
+        Exists.{1} fun layout =>
+          Exists.{1} fun preempt => Exists.{1} fun skb => Binary.C2.Context layout preempt v.entry kp skb v.nonce
+  Binary.C2.Visits.exits : ∀ (v : Binary.C2.Visit),
+      Membership.mem.{0, 0} visits v → Binary.C2.FirstExit fetch v.entry v.exit
+  Binary.C2.Visits.retained : Binary.C2.WindowRetained kp visits
+constructor:
+  Binary.C2.Visits.mk {fetch : Int64 → Option.{0} Binary.Decoded} {kp : BitVec 64} {visits : List.{0} Binary.C2.Visit}
+    (entries :
+      ∀ (v : Binary.C2.Visit),
+        Membership.mem.{0, 0} visits v →
+          Exists.{1} fun layout =>
+            Exists.{1} fun preempt => Exists.{1} fun skb => Binary.C2.Context layout preempt v.entry kp skb v.nonce)
+    (exits : ∀ (v : Binary.C2.Visit), Membership.mem.{0, 0} visits v → Binary.C2.FirstExit fetch v.entry v.exit)
+    (retained : Binary.C2.WindowRetained kp visits) : Binary.C2.Visits fetch kp visits
+structure Binary.C2.Visit : Type
+number of parameters: 0
+fields:
+  Binary.C2.Visit.entry : MachineState
+  Binary.C2.Visit.exit : MachineState
+  Binary.C2.Visit.nonce : BitVec 64
+constructor:
+  Binary.C2.Visit.mk (entry exit : MachineState) (nonce : BitVec 64) : Binary.C2.Visit
+def Binary.C2.WindowRetained : BitVec 64 → List.{0} Binary.C2.Visit → Prop :=
+fun kp x => List.brecOn.{1, 0} x (Binary.C2.WindowRetained._f kp)
+def Binary.C2.FirstExit : (Int64 → Option.{0} Binary.Decoded) → MachineState → MachineState → Prop :=
+fun fetch s t =>
+  Exists.{1} fun history =>
+    Binary.ActualHistory fetch s history ∧
+      Eq.{1} (List.getLast?.{0} history) (some.{0} t) ∧
+        Membership.mem.{0, 0} Binary.C2.exits t.pc ∧
+          ∀ (u : MachineState),
+            Membership.mem.{0, 0} (List.dropLast.{0} history) u → ¬Membership.mem.{0, 0} Binary.C2.exits u.pc
+def Binary.C2.exits : List.{0} Int64 :=
+List.cons.{0} Binary.C2.Range.donePC
+  (List.cons.{0} Binary.C2.Range.rejectWindowPC (List.cons.{0} Binary.C2.Range.rejectLimitPC List.nil.{0}))
+def Binary.C2.HeadlineRefinement : Prop :=
+Binary.C2.ExitsCleanly ∧ Binary.C2.Refines ∧ Binary.C2.NoCounterAcceptedTwice ∧ Binary.C2.ReplayWitness
+def Binary.C2.ExitsCleanly : Prop :=
+∀ (fetch : Int64 → Option.{0} Binary.Decoded) (layout : Binary.TrustBase.KcovLayout) (preempt : BitVec 32)
+  (s : MachineState) (kp skb nonce : BitVec 64),
+  Binary.C2.Reading fetch →
+    Binary.C2.Context layout preempt s kp skb nonce →
+      Eventually (Binary.historyStep fetch)
+        (fun e =>
+          Membership.mem.{0, 0} Binary.C2.exits e.machine.pc ∧
+            (∀ (u : MachineState),
+                Membership.mem.{0, 0} (List.dropLast.{0} e.history) u → ¬Membership.mem.{0, 0} Binary.C2.exits u.pc) ∧
+              Binary.C2.Kept layout preempt kp s e.machine)
+        { machine := s, history := List.cons.{0} s List.nil.{0} }
+def Binary.C2.Refines : Prop :=
+∀ (fetch : Int64 → Option.{0} Binary.Decoded) (layout : Binary.TrustBase.KcovLayout) (preempt : BitVec 32)
+  (s : MachineState) (kp skb nonce : BitVec 64) (world world' : Leanux.WGWorld) (ambient ambient' : Leanux.Ambient)
+  (id : Leanux.WG.KeypairId) (c : Leanux.WG.ReplayCounter) (result : Bool),
+  Binary.C2.Reading fetch →
+    Binary.C2.Context layout preempt s kp skb nonce →
+      Binary.Layouts.ReplayFields s.data.dmem
+          (HAdd.hAdd.{0, 0, 0} kp (BitVec.ofNat 64 Binary.Layouts.keypair_receiving_counter)) c →
+        Eq.{1} (Binary.C2.windowOf world id) (some.{0} c) →
+          Eq.{1} (StateT.run.{0, 0} (StateT.run.{0, 0} (Leanux.WG.counterValidate id nonce.toNat) world) ambient)
+              (Except.ok.{0, 0} (Prod.mk.{0, 0} (Prod.mk.{0, 0} result world') ambient')) →
+            Eventually (Binary.historyStep fetch)
+              (fun e =>
+                Eq.{1} e.machine.pc (Binary.C2.exitPC c nonce.toNat) ∧
+                  (∀ (u : MachineState),
+                      Membership.mem.{0, 0} (List.dropLast.{0} e.history) u →
+                        ¬Membership.mem.{0, 0} Binary.C2.exits u.pc) ∧
+                    Eq.{1} (Binary.C2.accepted e.machine) result ∧
+                      (Exists.{1} fun c' =>
+                          Eq.{1} (Binary.C2.windowOf world' id) (some.{0} c') ∧
+                            Binary.Layouts.ReplayFields e.machine.data.dmem
+                              (HAdd.hAdd.{0, 0, 0} kp (BitVec.ofNat 64 Binary.Layouts.keypair_receiving_counter)) c') ∧
+                        Binary.C2.Kept layout preempt kp s e.machine)
+              { machine := s, history := List.cons.{0} s List.nil.{0} }
+def Binary.C2.NoCounterAcceptedTwice : Prop :=
+∀ (fetch : Int64 → Option.{0} Binary.Decoded) (kp : BitVec 64) (visits : List.{0} Binary.C2.Visit),
+  Binary.C2.Reading fetch → Binary.C2.Visits fetch kp visits → List.Nodup.{0} (Binary.C2.acceptedNonces visits)
+def Binary.C2.ReplayWitness : Prop :=
+Exists.{1} fun fetch =>
+  Exists.{1} fun kp =>
+    Exists.{1} fun first =>
+      Exists.{1} fun second =>
+        Binary.C2.Reading fetch ∧
+          Binary.C2.Visits fetch kp (List.cons.{0} first (List.cons.{0} second List.nil.{0})) ∧
+            Eq.{1} first.nonce second.nonce ∧
+              Eq.{1} (Binary.C2.accepted first.exit) true ∧
+                Eq.{1} (Binary.C2.accepted second.exit) false ∧
+                  Exists.{1} fun world =>
+                    Exists.{1} fun world' =>
+                      Exists.{1} fun ambient =>
+                        Exists.{1} fun ambient' =>
+                          Exists.{1} fun id =>
+                            Exists.{1} fun c =>
+                              Binary.Layouts.ReplayFields first.entry.data.dmem
+                                  (HAdd.hAdd.{0, 0, 0} kp (BitVec.ofNat 64 Binary.Layouts.keypair_receiving_counter))
+                                  c ∧
+                                Eq.{1} (Binary.C2.windowOf world id) (some.{0} c) ∧
+                                  Eq.{1}
+                                    (StateT.run.{0, 0}
+                                      (StateT.run.{0, 0} (Leanux.WG.counterValidate id first.nonce.toNat) world)
+                                      ambient)
+                                    (Except.ok.{0, 0} (Prod.mk.{0, 0} (Prod.mk.{0, 0} true world') ambient'))
+structure Binary.C2.Kept (layout : Binary.TrustBase.KcovLayout) (preempt : BitVec 32) (kp : BitVec 64)
+  (s t : MachineState) : Prop
+number of parameters: 5
+fields:
+  Binary.C2.Kept.coverage : Binary.TrustBase.KcovState layout (HAdd.hAdd.{0, 0, 0} preempt 512) t.data.dmem
+  Binary.C2.Kept.rsp : Eq.{1} t.data.regs.rsp s.data.regs.rsp
+  Binary.C2.Kept.rbx : Eq.{1} t.data.regs.rbx s.data.regs.rbx
+  Binary.C2.Kept.r12 : Eq.{1} t.data.regs.r12 s.data.regs.r12
+  Binary.C2.Kept.r13 : Eq.{1} t.data.regs.r13 s.data.regs.r13
+  Binary.C2.Kept.unlockArgument : Eq.{1} t.pc Binary.C2.Range.donePC →
+      Eq.{1} (HMod.hMod.{0, 0, 0} t.data.regs.rsi.toNat (HPow.hPow.{0, 0, 0} 2 32)) 512
+  Binary.C2.Kept.frame : Binary.EqualOutside
+      (fun a =>
+        Binary.C2.Footprint s.data.regs.rsp.toBitVec kp a ∨
+          (Eq.{1} layout.mode 2 ∨ Eq.{1} layout.mode 3) ∧ Binary.TrustBase.KcovStorageBytes layout a)
+      s.data.dmem t.data.dmem
+constructor:
+  Binary.C2.Kept.mk {layout : Binary.TrustBase.KcovLayout} {preempt : BitVec 32} {kp : BitVec 64} {s t : MachineState}
+    (coverage : Binary.TrustBase.KcovState layout (HAdd.hAdd.{0, 0, 0} preempt 512) t.data.dmem)
+    (rsp : Eq.{1} t.data.regs.rsp s.data.regs.rsp) (rbx : Eq.{1} t.data.regs.rbx s.data.regs.rbx)
+    (r12 : Eq.{1} t.data.regs.r12 s.data.regs.r12) (r13 : Eq.{1} t.data.regs.r13 s.data.regs.r13)
+    (unlockArgument :
+      Eq.{1} t.pc Binary.C2.Range.donePC →
+        Eq.{1} (HMod.hMod.{0, 0, 0} t.data.regs.rsi.toNat (HPow.hPow.{0, 0, 0} 2 32)) 512)
+    (frame :
+      Binary.EqualOutside
+        (fun a =>
+          Binary.C2.Footprint s.data.regs.rsp.toBitVec kp a ∨
+            (Eq.{1} layout.mode 2 ∨ Eq.{1} layout.mode 3) ∧ Binary.TrustBase.KcovStorageBytes layout a)
+        s.data.dmem t.data.dmem) :
+    Binary.C2.Kept layout preempt kp s t
+def Binary.C2.accepted : MachineState → Bool :=
+fun t => BEq.beq.{0} t.pc Binary.C2.Range.donePC && BEq.beq.{0} (HMod.hMod.{0, 0, 0} t.data.regs.rbp.toNat 256) 0
+def Binary.C2.acceptedNonces : List.{0} Binary.C2.Visit → List.{0} (BitVec 64) :=
+fun visits => List.map.{0, 0} (fun x => x.nonce) (List.filter.{0} (fun v => Binary.C2.accepted v.exit) visits)
+def Binary.C2.exitPC : Leanux.WG.ReplayCounter → Nat → Int64 :=
+fun c nonce =>
+  ite.{1} (GE.ge.{0} c.counter (HAdd.hAdd.{0, 0, 0} Leanux.WG.REJECT_AFTER_MESSAGES 1)) Binary.C2.Range.rejectWindowPC
+    (ite.{1} (GE.ge.{0} nonce Leanux.WG.REJECT_AFTER_MESSAGES) Binary.C2.Range.rejectLimitPC
+      (ite.{1} (LT.lt.{0} (HAdd.hAdd.{0, 0, 0} Leanux.WG.COUNTER_WINDOW_SIZE (HAdd.hAdd.{0, 0, 0} nonce 1)) c.counter)
+        Binary.C2.Range.rejectWindowPC Binary.C2.Range.donePC))
+def Binary.C2.windowOf : Leanux.WGWorld → Leanux.WG.KeypairId → Option.{0} Leanux.WG.ReplayCounter :=
+fun world id =>
+  Option.map.{0, 0} (fun x => x.receivingCounter)
+    (Option.bind.{0, 0} world.dev fun d => Std.TreeMap.get?.{0, 0} d.keypairs id)
 
 TRUST DECLARATIONS: binary/TrustBase.lean (verbatim)
 import FiniteExecution
@@ -3992,7 +4226,7 @@ import PairInsertInput
 -/
 namespace Binary.TrustBase
 
-def krakenCommit : String := "43df9468febc173e6cf9363d87e8ad34e76d7434"
+def krakenCommit : String := "96d484872c2c438a4d02f47e6390507f587a095c"
 def kernelIdentity : String := "b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767"
 def elfSha256 : String := "06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"

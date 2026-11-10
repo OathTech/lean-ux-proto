@@ -80,10 +80,18 @@ HEADLINES = [
     'Binary.Pair.Insert.Witness.source_success',
     'Binary.Pair.Insert.Witness.executes',
     'Binary.RandomService.return_recorded',
+
+    # Result C2, the receive replay window: the three clauses closed in this package.
+    # The fourth clause and `HeadlineRefinement` itself are closed in the bridge library
+    # (bridge/C2Bridge.lean, gate: scripts/c2-bridge-gate), which this gate does not build.
+    'Binary.C2.exits_cleanly',
+    'Binary.C2.refines',
+    'Binary.C2.replay_witness',
 ]
 IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'AllowedipsWitnessPre',
            'PairCallbackSurface', 'PairCallWitness',
-           'PairAllowedipsLookupAdequacy', 'AllowedipsCommonChecked', 'AllowedipsInsertionSurface']
+           'PairAllowedipsLookupAdequacy', 'AllowedipsCommonChecked', 'AllowedipsInsertionSurface',
+           'C2Headline']
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
@@ -163,6 +171,19 @@ DEFINITIONS = [
     'Binary.RandomProvider.steer', 'Binary.RandomProvider.remote', 'Binary.RandomProvider.check',
     'Binary.RandomProvider.roleApart', 'Binary.RandomProvider.writesApart',
     'Binary.RandomProvider.recordingGeometry',
+
+    # Result C2. ASSUMED: the premises of the headline and every new definition they mention.
+    'Binary.C2.Reading', 'Binary.C2.RangeDecoderAgreement',
+    'Binary.C2.Context', 'Binary.C2.windowBytes', 'Binary.C2.stackBytes', 'Binary.C2.Footprint',
+    'Binary.C2.coverageBytes',
+    'Binary.C2.Visits', 'Binary.C2.Visit', 'Binary.C2.WindowRetained', 'Binary.C2.FirstExit',
+    'Binary.C2.exits',
+    # Result C2. CLAIMED: the headline and every new definition it mentions. The cut of the
+    # proof (the pivot, the carried invariant, the interface propositions) is not surface.
+    'Binary.C2.HeadlineRefinement', 'Binary.C2.ExitsCleanly', 'Binary.C2.Refines',
+    'Binary.C2.NoCounterAcceptedTwice', 'Binary.C2.ReplayWitness',
+    'Binary.C2.Kept', 'Binary.C2.accepted', 'Binary.C2.acceptedNonces', 'Binary.C2.exitPC',
+    'Binary.C2.windowOf',
 ]
 EXPECTED = ROOT / 'binary/TrustSurface.expected.txt'
 

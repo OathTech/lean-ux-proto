@@ -1,0 +1,34 @@
+#!/bin/sh
+# Print the trust surface of the C2 final statement in the form scripts/binary-proof-gate
+# prints the landed one (binary/surface.py: `#print` at width 110), in the owner's two
+# kinds, with line counts. usage (from the worktree root, after a build of the package):
+#   binary/packets/c2/surface
+# C2_BUILT_TREE names a worktree whose binary package is built (default: this one).
+# Writes .tmp/c2-packet/surface-*.txt.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$here/../../.." && pwd)
+tree=${C2_BUILT_TREE:-$root}
+out="$root/.tmp/c2-packet"
+mkdir -p "$out"
+LP=$(cd "$tree/binary" && ../scripts/in-bundle lake env printenv LEAN_PATH)
+emit() {
+  kind=$1; shift
+  { echo 'import C2Statement'; echo 'set_option format.width 110'; echo 'set_option pp.universes true'
+    for name in "$@"; do echo "#print $name"; done; } > "$out/Surface-$kind.lean"
+  "$tree/scripts/in-bundle" env LEAN_PATH="$LP" lean "$out/Surface-$kind.lean" > "$out/surface-$kind.txt"
+  printf '%-18s %4d lines printed, %d declarations\n' "$kind" "$(wc -l < "$out/surface-$kind.txt")" "$#"
+}
+# Kind 1, ASSUMED: the premises of the headline and every new definition they mention.
+emit assumed Binary.C2.Reading Binary.C2.RangeDecoderAgreement \
+  Binary.C2.Context Binary.C2.windowBytes Binary.C2.stackBytes Binary.C2.Footprint Binary.C2.coverageBytes \
+  Binary.C2.Visits Binary.C2.Visit Binary.C2.WindowRetained Binary.C2.FirstExit Binary.C2.exits
+# Kind 2, CLAIMED: the headline and every new definition it mentions. `exits` and
+# `Footprint` are printed once, under the premises.
+emit claimed Binary.C2.HeadlineRefinement Binary.C2.ExitsCleanly Binary.C2.Refines \
+  Binary.C2.NoCounterAcceptedTwice Binary.C2.ReplayWitness \
+  Binary.C2.Kept Binary.C2.accepted Binary.C2.acceptedNonces Binary.C2.exitPC Binary.C2.windowOf
+# In the file but not in the headline: the exclusion that follows from the transported clause.
+emit other Binary.C2.ReplayRefused
+printf 'image terms (the reading of the image, not printed by the landed gate): %d lines, 70 + 10 instructions\n' \
+  "$(grep -c '' "$root/binary/C2Image.lean")"

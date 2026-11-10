@@ -1,0 +1,2 @@
+Binary.C2.Bridge.headline : Binary.C2.HeadlineRefinement
+Binary.C2.Bridge.no_counter_accepted_twice : Binary.C2.NoCounterAcceptedTwice

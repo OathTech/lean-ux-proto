@@ -23,7 +23,7 @@
   {
     "name": "kraken",
     "url": "https://github.com/AeneasVerif/kraken.git",
-    "commit": "43df9468febc173e6cf9363d87e8ad34e76d7434",
+    "commit": "96d484872c2c438a4d02f47e6390507f587a095c",
     "kind": "git",
     "consumer": "binary",
     "toolchain": "leanprover/lean4:v4.35.0",
@@ -37,7 +37,8 @@
       "binary/kraken-patches/0006-stos-and-greater.patch",
       "binary/kraken-patches/0007-movs-and-xadd.patch",
       "binary/kraken-patches/0008-lean435-rewrite-name.patch",
-      "binary/kraken-patches/0009-register-bt.patch"
+      "binary/kraken-patches/0009-register-bt.patch",
+      "binary/kraken-patches/0010-memory-bts.patch"
     ]
   }
 ]

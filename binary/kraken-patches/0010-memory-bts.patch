@@ -1,0 +1,368 @@
+From 96d484872c2c438a4d02f47e6390507f587a095c Mon Sep 17 00:00:00 2001
+From: Mike Dodds <mike@oath.tech>
+Date: Tue, 10 Nov 2026 12:00:00 +0000
+Subject: [PATCH] Support unlocked BTS with a 64-bit register offset and a
+ memory destination
+
+One form only: `bts r64, m64` (REX.W 0F AB /r; `bts %r15,(%rax)` is
+4c 0f ab 38), the single BTS/BTR/BTC in the pinned WireGuard text.
+
+Semantics. Defined when the offset register is below 64 and the eight bytes
+at the effective address are mapped data memory; otherwise the step is an
+explicit `unimplemented` (never an MMIO load or store). CF receives the old
+bit. The quadword is written back with the bit set, unconditionally, as on
+hardware. OF, SF, ZF, AF and PF are undefined, by the nondeterministic
+treatment register BT already uses. One sequential step; no LOCK prefix
+exists to model.
+
+Vendor texts (recorded as read for the consumer project on 2026-11-10; the
+Intel page by its statement reviewer, the AMD pages by its coordinator):
+- Intel SDM vol. 2A, BTS: CF is the old bit; ZF is unaffected; OF, SF, AF
+  and PF are undefined.
+- AMD APM vol. 3 (publication 24594, rev. 3.37, pages 132-133), BTS: CF is
+  modified; OF, SF, ZF, AF and PF are undefined. For a memory bit base with
+  a register bit index, the index is a signed offset over the range of the
+  operand size, counted from bit 0 of the addressed byte.
+
+Why this is sound for the consumer's image. Undefined ZF contains
+"unaffected", so it is the superset of the two vendors and the right choice
+under a universally quantified claim; nothing after the instruction there
+reads a flag other than CF. The below-64 restriction declines the offsets at
+which hardware addresses another quadword (ea + 8 * (offset asr 6)); in the
+image the offset register is masked by `and $0x3f,%r15d` with only a `lea`
+between, so the declined case is never reached. A declined step is a
+failing step: it cannot make a reaching claim true, and a consumer whose
+premise is an actual history must show the step is not declined.
+
+Not accepted, failing closed: register destinations, immediate offsets, the
+16- and 32-bit forms (rejected by the parser and, if constructed directly,
+`unimplemented`), any LOCK prefix, BTR and BTC.
+
+Tests. `Kraken.X64.BtsTests`: parser acceptance and rejections, both
+printers and the AT&T round trip; CF, the written quadword, its two
+neighbours, every register and the system flags at all 64 offsets on words
+with the bit clear and set; exactly one 8-byte read and one 8-byte write,
+also when the bit was already set; each undefined flag taking both values
+from either incoming value; offsets 64 and above declined before any
+access; unmapped and partly mapped quadwords declined. `test_bts.S` is the
+native comparison of CF and the written quadword against the host CPU in
+the assembly runner; these are tests, not a proof of ISA fidelity.
+
+Co-Authored-By: Claude Fable 5.2 <noreply@anthropic.com>
+---
+ Kraken/X64/BtsTests.lean       | 148 +++++++++++++++++++++++++++++++++
+ Kraken/X64/Parser/Basic.lean   |  12 +++
+ Kraken/X64/PrintATT.lean       |   1 +
+ Kraken/X64/PrintATTTests.lean  |   1 +
+ Kraken/X64/PrintIntel.lean     |   1 +
+ Kraken/X64/Semantics.lean      |  26 ++++++
+ Kraken/X64/Syntax.lean         |   1 +
+ Kraken/X64/Test/asm/test_bts.S |  33 ++++++++
+ 8 files changed, 223 insertions(+)
+ create mode 100644 Kraken/X64/BtsTests.lean
+ create mode 100644 Kraken/X64/Test/asm/test_bts.S
+
+diff --git a/Kraken/X64/BtsTests.lean b/Kraken/X64/BtsTests.lean
+new file mode 100644
+index 0000000..525da0e
+--- /dev/null
++++ b/Kraken/X64/BtsTests.lean
+@@ -0,0 +1,148 @@
++module
++
++import Kraken.X64.OmniSemantics
++import Kraken.X64.Parser
++import Kraken.X64.PrintATT
++import Kraken.X64.PrintIntel
++meta import Kraken.X64.PrintATT
++meta import Kraken.X64.PrintIntel
++meta import Kraken.X64.Semantics
++meta import Kraken.Mem
++
++namespace Kraken.X64.BtsTests
++
++private instance : Labels := ⟨fun _ => 0⟩
++
++/-- `bts %r15,(%rax)`: the one encoding in the pinned image (4c 0f ab 38). -/
++private def instruction : Instr :=
++  .regular .W64 .W64 (.bts {base := some (.reg .rax), idx := none} (.low .r15 .W64))
++
++private def execute (i : Instr) (s : MachineData) : Effects :=
++  i.interp s ⟨0, 4⟩ (fun d => .done ⟨d, 4⟩) (fun pc d => .done ⟨d, pc⟩)
++
++/-- Three quadwords at 0x1000; the instruction addresses the middle one. -/
++private def initial (below word above offset : Nat) (flags : Bool := false) : MachineData := {
++  regs := {rax := 0x1008, r15 := .ofNat offset, rbx := 99, rcx := 7, rsp := 0x8000}
++  status := {cf := flags, pf := flags, af := flags, zf := flags, sf := flags, of := flags}
++  system := {bits := 512, cpl := 0}
++  dmem := (Int.toBytes 24 (below + word * 2^64 + above * 2^128)).At 0x1000 }
++
++/-- Walk the effect tree: exactly one 8-byte read and one 8-byte write at the
++addressed quadword, in that order, and `post` at the end. `all` selects whether
++`post` must hold for every value of the undefined flags or for some. -/
++private def walk (all : Bool) (reads writes : Nat) (post : MachineState → Bool) : Effects → Bool
++  | .done s => reads == 0 && writes == 0 && post s
++  | .require_exec_access _ next => walk all reads writes post (next ())
++  | .require_read_access a w next =>
++    a == 0x1008 && w == .W64 && reads == 1 && writes == 1 && walk all 0 writes post (next ())
++  | .require_write_access a w next =>
++    a == 0x1008 && w == .W64 && reads == 0 && writes == 1 && walk all reads 0 post (next ())
++  | @Effects.undefined _ .bool next =>
++    if all then walk all reads writes post (next false) && walk all reads writes post (next true)
++    else walk all reads writes post (next false) || walk all reads writes post (next true)
++  | _ => false
++
++private def always := walk true 1 1
++private def sometimes := walk false 1 1
++
++/-- The step is declined with an explicit `unimplemented`, after at most the
++given number of read-access requests, without any write and without an MMIO
++(`nonmem_load`/`nonmem_store`) effect. -/
++private def declined (reads : Nat) : Effects → Bool
++  | .unimplemented _ => true
++  | .require_exec_access _ next => declined reads (next ())
++  | .require_read_access _ _ next => reads > 0 && declined (reads - 1) (next ())
++  | _ => false
++
++/-- CF is the old bit, the quadword comes back with the bit set, the neighbours,
++every register and the system flags are unchanged, and the PC advances; for
++every value of the undefined flags. -/
++private def check (word offset : Nat) (flags : Bool := false) : Bool :=
++  let s := initial 0x1111111111111111 word 0x2222222222222222 offset flags
++  always (fun t => t.pc == 4 && t.data.regs == s.regs && t.data.system == s.system &&
++    t.data.status.cf == word.testBit offset &&
++    t.data.dmem.loadInt 0x1008 8 == some ((word ||| 2^offset : Nat) : Int) &&
++    t.data.dmem.loadInt 0x1000 8 == some 0x1111111111111111 &&
++    t.data.dmem.loadInt 0x1010 8 == some 0x2222222222222222) (execute instruction s)
++
++-- Bit clear: CF = 0 and the bit is set. Offsets 0, 1, 63 and all between.
++#guard (List.range 64).all fun offset => check 0 offset
++#guard (List.range 64).all fun offset => check 0x5555555555555555 offset
++#guard (List.range 64).all fun offset => check 0xdeadbeef01234567 offset true
++-- Bit set: CF = 1 and the quadword is written back unchanged.
++#guard (List.range 64).all fun offset => check 0xffffffffffffffff offset
++#guard check 0x8000000000000000 63 && check 1 0 && check 2 1
++-- The write happens even when the bit was already set (one write access).
++#guard always (fun t => t.data.status.cf && t.data.dmem.loadInt 0x1008 8 == some 1)
++  (execute instruction (initial 0 1 0 0))
++#guard !walk true 1 0 (fun _ => true) (execute instruction (initial 0 1 0 0))
++-- CF does not depend on the incoming flags.
++#guard always (fun t => !t.data.status.cf) (execute instruction (initial 0 0 0 5 true))
++#guard always (fun t => t.data.status.cf) (execute instruction (initial 0 32 0 5 false))
++
++-- Each of OF, SF, ZF, AF and PF can come out either way from either incoming value.
++#guard [false, true].all fun incoming => [false, true].all fun outcome =>
++  let effect := execute instruction (initial 0 0 0 3 incoming)
++  sometimes (fun t => t.data.status.pf == outcome) effect &&
++  sometimes (fun t => t.data.status.af == outcome) effect &&
++  sometimes (fun t => t.data.status.zf == outcome) effect &&
++  sometimes (fun t => t.data.status.sf == outcome) effect &&
++  sometimes (fun t => t.data.status.of == outcome) effect
++-- ... and jointly: all five set, all five clear.
++#guard sometimes (fun t => t.data.status.pf && t.data.status.af && t.data.status.zf && t.data.status.sf && t.data.status.of)
++  (execute instruction (initial 0 0 0 3))
++#guard sometimes (fun t => !t.data.status.pf && !t.data.status.af && !t.data.status.zf && !t.data.status.sf && !t.data.status.of)
++  (execute instruction (initial 0 0 0 3 true))
++
++-- Offsets outside the addressed quadword are declined before any access.
++#guard [64, 65, 127, 128, 2^32, 2^63, 2^64 - 64, 2^64 - 1].all fun offset =>
++  declined 0 (execute instruction (initial 0 0 0 offset))
++#guard !declined 0 (execute instruction (initial 0 0 0 63))
++-- An unmapped or partly mapped quadword is declined, not treated as MMIO.
++#guard declined 1 (execute instruction {initial 0 0 0 3 with dmem := {}})
++#guard declined 1 (execute instruction {initial 0 0 0 3 with regs := {rax := 0x1011, r15 := 3}})
++#guard declined 1 (execute instruction {initial 0 0 0 3 with regs := {rax := 0xff9, r15 := 3}})
++#guard !declined 1 (execute instruction (initial 0 0 0 3))
++-- The effective address uses the full address expression; the register is the offset.
++#guard walk true 1 1 (fun t => t.data.status.cf == false && t.data.dmem.loadInt 0x1008 8 == some 0x200 &&
++    t.data.regs.rcx == 9)
++  (execute (.regular .W64 .W64 (.bts {base := some (.reg .rbx), idx := some ⟨.rdx, .W64⟩, disp := .int64 8}
++    (.low .rcx .W64))) {initial 0 0 0 0 with regs := {rbx := 0xff0, rdx := 2, rcx := 9}})
++-- Narrower operand sizes are not modeled even if constructed directly.
++#guard [Width.W8, .W16, .W32].all fun w =>
++  declined 0 (execute (.regular .W64 w (.bts {base := some (.reg .rax), idx := none} (.low .r15 w)))
++    (initial 0 0 0 3))
++
++-- Parser: the one accepted form, with and without the suffix.
++#guard match Parser.parse "bts %r15,(%rax)" with
++  | .ok p => p == [.instr instruction]
++  | .error _ => false
++#guard match Parser.parse "btsq %r15,(%rax)" with
++  | .ok p => p == [.instr instruction]
++  | .error _ => false
++-- Everything else fails closed: register destination, immediate offset,
++-- narrower widths, the LOCK prefix, and the sibling instructions.
++#guard !(Parser.parse "bts %r15,%rax").isOk
++#guard !(Parser.parse "btsq %r15,%rax").isOk
++#guard !(Parser.parse "bts $3,(%rax)").isOk
++#guard !(Parser.parse "btsq $3,(%rax)").isOk
++#guard !(Parser.parse "bts $3,%rax").isOk
++#guard !(Parser.parse "bts %r15d,(%rax)").isOk
++#guard !(Parser.parse "btsl %r15d,(%rax)").isOk
++#guard !(Parser.parse "bts %r15w,(%rax)").isOk
++#guard !(Parser.parse "btsw %r15w,(%rax)").isOk
++#guard !(Parser.parse "btsb %r15b,(%rax)").isOk
++#guard !(Parser.parse "btsq %r15d,(%rax)").isOk
++#guard !(Parser.parse "lock bts %r15,(%rax)").isOk
++#guard !(Parser.parse "lock btsq %r15,(%rax)").isOk
++#guard !(Parser.parse "btr %r15,(%rax)").isOk
++#guard !(Parser.parse "btc %r15,(%rax)").isOk
++
++-- Printers, and the AT&T round trip.
++#guard toString instruction == "bts QWORD PTR [rax+0], r15"
++#guard toATT [.instr instruction] == "btsq %r15, (%rax)"
++#guard match Parser.parse (toATT [.instr instruction]) with
++  | .ok p => p == [.instr instruction]
++  | .error _ => false
++
++end Kraken.X64.BtsTests
+diff --git a/Kraken/X64/Parser/Basic.lean b/Kraken/X64/Parser/Basic.lean
+index 6e8dfd8..f216d8a 100644
+--- a/Kraken/X64/Parser/Basic.lean
++++ b/Kraken/X64/Parser/Basic.lean
+@@ -1067,6 +1067,18 @@ def parseInstr : Parser Instr := do
+     | .regular _ .W8 _ => fail "BT has no 8-bit form"
+     | _ => pure instruction
+ 
++  -- BTS: only `bts r64, m64` (REX.W 0F AB /r), the one form in the pinned
++  -- WireGuard text. Register destinations, immediate offsets and the 16- and
++  -- 32-bit forms are rejected here; a LOCK prefix is not a mnemonic this
++  -- parser knows, so `lock bts` is rejected as well.
++  | "bts" | "btsq" => do
++    let (_, index) ← parseAO parseRegA .W64
++    parseComma
++    let (addr_w, dst) ← parseAO parseRegOrMem .W64
++    match dst with
++    | .mem a => pure (toInstr addr_w (.bts a index))
++    | .reg _ => fail "BTS: register destination is not modeled"
++
+   -- Byte swap
+   | "bsr" | "bsrw" | "bsrl" | "bsrq" => do
+     let width ← if mn == "bsr" then pure none else some <$> instrWidth mn
+diff --git a/Kraken/X64/PrintATT.lean b/Kraken/X64/PrintATT.lean
+index 729cb76..3841a16 100644
+--- a/Kraken/X64/PrintATT.lean
++++ b/Kraken/X64/PrintATT.lean
+@@ -121,6 +121,7 @@ def operation {w} (aw : Width) (op : Operation w) : String :=
+   | .bswap d => s!"bswap {reg d}"
+   | .bsr d x => two "bsr" (rm aw x) (reg d)
+   | .bt b i => two "bt" (reg i) (reg b)
++  | .bts d i => two "bts" (reg i) (addr aw d)
+   | .jcc cc l => s!"j{cc} {l}"
+   | .jmp t => s!"jmp {target aw t}"
+   | .call t => s!"call {target aw t}"
+diff --git a/Kraken/X64/PrintATTTests.lean b/Kraken/X64/PrintATTTests.lean
+index 45341e0..143cf25 100644
+--- a/Kraken/X64/PrintATTTests.lean
++++ b/Kraken/X64/PrintATTTests.lean
+@@ -49,6 +49,7 @@ def corpus : List String := [
+   "rolq $1, %rax", "rorb %cl, %al", "rclq $1, %rax", "rcrl %cl, (%rsp)",
+   "bswap %eax", "bswapq %rax",
+   "bt %ecx, %eax", "btw %cx, %ax", "btq %rcx, %rax",
++  "bts %r15, (%rax)", "btsq %rcx, 8(%rsp,%rdx,4)",
+   "bsr %edx, %eax", "bsrw %ax, %r15w", "bsrl (%rax), %ecx", "bsrq 8(%r12), %rbx",
+   -- control flow
+   "foo:\n  jmp foo", "je foo", "jne .L1", "jb foo", "jae foo", "ja foo", "jbe foo",
+diff --git a/Kraken/X64/PrintIntel.lean b/Kraken/X64/PrintIntel.lean
+index fd8e603..94b34b8 100644
+--- a/Kraken/X64/PrintIntel.lean
++++ b/Kraken/X64/PrintIntel.lean
+@@ -177,6 +177,7 @@ def Operation.toStr {w} (op : Operation w) (addr_w : Width := .W64) : String :=
+   | .bswap dst => s!"bswap {dst}"
+   | .bsr dst src => s!"bsr {dst}, {src.toStr addr_w}"
+   | .bt base index => s!"bt {base}, {index}"
++  | .bts dst index => s!"bts {(RegOrMem.mem dst : RegOrMem w).toStr addr_w}, {index}"
+   | .jcc cc l => s!"j{cc} {l}"
+   | .jmp tgt => s!"jmp {tgt.toStr addr_w}"
+   | .call tgt => s!"call {tgt.toStr addr_w}"
+diff --git a/Kraken/X64/Semantics.lean b/Kraken/X64/Semantics.lean
+index 7145d79..a6f198a 100644
+--- a/Kraken/X64/Semantics.lean
++++ b/Kraken/X64/Semantics.lean
+@@ -832,6 +832,32 @@ set_option maxHeartbeats 1000000
+     let cf := (s.regs.get base).getLsbD ((s.regs.get index).toNat % w.bits)
+     undefined (fun pf => undefined (fun af => undefined (fun zf => undefined (fun sf => undefined (fun of =>
+       next {s with status := {cf, pf, af, zf, sf, of}})))))
++  -- BTS r64, m64 without LOCK (REX.W 0F AB /r), one sequential step.
++  -- Modeled only where the bit lies in the addressed quadword: the offset
++  -- register is below 64 and the eight bytes at the effective address are
++  -- mapped. Outside that (where hardware addresses another quadword, at
++  -- ea + 8 * (offset asr 6), or the memory is not data memory) the step is an
++  -- explicit `unimplemented`, never an MMIO access.
++  -- CF receives the old bit; the quadword is written back with the bit set
++  -- whether or not it was set already. OF, SF, AF and PF are undefined on
++  -- Intel and AMD; ZF is unaffected on Intel and undefined on AMD, taken as
++  -- undefined, which contains both.
++  | .bts dst index =>
++    if w != .W64 then unimplemented "BTS: only the 64-bit form is modeled" else
++    let addr := (dst.interp s.regs p).zeroExtend 64
++    let offset := (s.regs.get index).toNat
++    if offset ≥ 64 then unimplemented "BTS: bit offset outside the addressed quadword" else
++    require_read_access addr .W64 (fun _unit =>
++      match Mem.loadInt s.dmem addr 8 with
++      | .none => unimplemented "BTS: destination quadword is not mapped data memory"
++      | .some old =>
++        let word : BitVec 64 := .ofInt 64 old
++        let cf := word.getLsbD offset
++        undefined (fun pf => undefined (fun af => undefined (fun zf => undefined (fun sf => undefined (fun of =>
++        require_write_access addr .W64 (fun _unit =>
++          next { s with
++            dmem := Mem.storeInt s.dmem addr 8 (word ||| (1#64 <<< offset)).toInt
++            status := {cf, pf, af, zf, sf, of} })))))))
+   | .bsr dst src =>
+     if w == .W8 then unimplemented "BSR has no 8-bit form" else
+     src.interp s p (fun a s =>
+diff --git a/Kraken/X64/Syntax.lean b/Kraken/X64/Syntax.lean
+index 4fc9d7a..a744802 100644
+--- a/Kraken/X64/Syntax.lean
++++ b/Kraken/X64/Syntax.lean
+@@ -238,6 +238,7 @@ inductive Operation (w : Width)
+   | bswap  (dst : Reg w) -- (_ : w = .W32 ∨ w = .W64)
+   | bsr (dst : Reg w) (src : RegOrMem w)
+   | bt (base : Reg w) (index : Reg w)
++  | bts (dst : AddrExpr) (index : Reg w) -- memory bit base, register bit offset; 64-bit only
+   -- Control flow
+   | jcc (cc : CondCode) (target : Label)
+   | jmp (target : RelRegOrMem)
+diff --git a/Kraken/X64/Test/asm/test_bts.S b/Kraken/X64/Test/asm/test_bts.S
+new file mode 100644
+index 0000000..a62013b
+--- /dev/null
++++ b/Kraken/X64/Test/asm/test_bts.S
+@@ -0,0 +1,33 @@
++# BTS r64, m64 (unlocked) against the host: CF and the written quadword.
++# The quadword lives on Kraken's stack mapping; popping it reads it back.
++# Bit clear at offset 5: CF = 0, the bit is set.
++movq $0x0123456789abcd00, %rbx
++pushq %rbx
++movq %rsp, %rax
++movq $5, %r15
++bts %r15, (%rax)
++setc %r8b
++popq %r9
++# Bit already set at offset 63: CF = 1, the quadword is unchanged.
++movq $0x8000000000000001, %rbx
++pushq %rbx
++movq %rsp, %rax
++movq $63, %r15
++btsq %r15, (%rax)
++setc %r10b
++popq %r11
++# Offset 0 on a clear bit, with CF set on entry (by the borrow) and a neighbour above.
++movq $0x7777777777777777, %rbx
++pushq %rbx
++movq $0xfffffffffffffffe, %rbx
++pushq %rbx
++movq %rsp, %rax
++movq $0, %r15
++movq $0, %rcx
++subq $1, %rcx
++bts %r15, (%rax)
++setc %r12b
++popq %r13
++popq %r14
++# OF, SF, ZF, AF and PF are undefined after BTS: define every flag again.
++addq $0, %rbx
+-- 
+2.43.0
+

@@ -1,0 +1,202 @@
+#!/usr/bin/env python3
+"""The gate of the binary track's bridge library (AGENTS.md, "Gates and
+speedbumps"). `binary/bridge/C2Bridge.lean` is the one file outside
+`Leanux/Proofs/` that may import the proof tree, and of it only the four
+`CounterWindow` modules; step 4 of `scripts/proof-gate` checks that. Run
+from the repository root at the binary track's claim points:
+
+    capped -- scripts/in-bundle scripts/c2-bridge-gate
+
+In order:
+1. The Kraken pin and clean tree (`binary/pin.py`, as the binary gate does).
+2. `lake -d binary build C2Bridge`.
+3. `#print axioms` for every theorem of the bridge; any axiom beyond
+   `propext`, `Classical.choice` and `Quot.sound` fails, and so does a
+   theorem in the source that is not in THEOREMS.
+4. What the closed theorems state: `headline` and
+   `no_counter_accepted_twice` as `#check` prints them, compared with
+   `binary/bridge/C2Bridge.expected.txt`; any difference fails. That file is
+   a specification: `--write-expected` replaces it, and its diff is reviewed.
+5. The proof tree's forbidden-token scan over `binary/bridge/*.lean`,
+   comments and strings stripped.
+Then it prints, without failing on them, the commit at which the four
+modules last changed, the mirror's last commit, and the mirror commit the
+register row (`docs/proofs.md`) names: the lag report.
+"""
+import difflib
+from importlib.machinery import SourceFileLoader
+from pathlib import Path
+import re
+import subprocess
+import sys
+
+ROOT = Path(__file__).resolve().parents[1]
+BRIDGE_DIR = ROOT / 'binary' / 'bridge'
+BRIDGE = BRIDGE_DIR / 'C2Bridge.lean'
+TARGET = 'C2Bridge'
+THEOREMS = ['Binary.C2.Bridge.' + name for name in (
+    'accepts_as_pure_window', 'no_counter_accepted_twice_of_parts',
+    'no_counter_accepted_twice', 'headline', 'replay_refused')]
+STATEMENTS = ['Binary.C2.Bridge.headline', 'Binary.C2.Bridge.no_counter_accepted_twice']
+MODULES = ['Leanux/Proofs/WG/CounterWindow/' + name + '.lean' for name in ('Model', 'Refinement', 'MirrorCalls', 'Bounds')]
+MIRROR = ['Leanux/FS', 'Leanux/WG', 'Leanux/Net', 'Leanux/Kernel', 'Leanux/Env.lean', 'Leanux/Runner.lean']
+EXPECTED = BRIDGE_DIR / 'C2Bridge.expected.txt'
+REGISTER = ROOT / 'docs' / 'proofs.md'
+ROW = '| C2 bridge:'
+
+# One scanner and one axiom grammar for both binary gates.
+sys.dont_write_bytecode = True
+binary_gate = SourceFileLoader('binary_proof_gate', str(ROOT / 'scripts' / 'binary-proof-gate')).load_module()
+failures = []
+
+
+def fail(message):
+    failures.append(message)
+    print(f'FAIL: {message}', file=sys.stderr, flush=True)
+
+
+def git(*args):
+    return subprocess.check_output(['git', '-C', str(ROOT), *args], text=True).strip()
+
+
+def check_axioms():
+    print(f'[3/5] #print axioms for {len(THEOREMS)} theorems of the bridge', flush=True)
+    artifacts = ROOT / '.tmp' / 'c2-bridge-gate'
+    artifacts.mkdir(parents=True, exist_ok=True)
+    scratch = artifacts / 'axioms.lean'
+    scratch.write_text(f'import {TARGET}\n' + ''.join(f'#print axioms {name}\n' for name in THEOREMS))
+    result = subprocess.run(binary_gate.capped(['lake', 'env', 'lean', str(scratch)]), cwd=ROOT / 'binary',
+                            capture_output=True, text=True)
+    lines = []
+    for raw in (result.stdout + result.stderr).splitlines():
+        if raw[:1] == ' ' and lines:
+            lines[-1] += ' ' + raw.strip()
+        else:
+            lines.append(raw)
+    seen = {}
+    for line in lines:
+        if not line.strip():
+            continue
+        if (m := binary_gate.DEPENDS.match(line)):
+            axioms = {a.strip() for a in m.group(2).split(',') if a.strip()}
+        elif (m := binary_gate.NO_AXIOMS.match(line)):
+            axioms = set()
+        else:
+            fail(f'unrecognised line from lean: {line}')
+            continue
+        if m.group(1) in seen:
+            fail(f'{m.group(1)} printed twice')
+        seen[m.group(1)] = axioms
+        print(f'  {m.group(1)}: {sorted(axioms) or "no axioms"}', flush=True)
+        if axioms - binary_gate.PERMITTED:
+            fail(f'{m.group(1)} depends on {sorted(axioms - binary_gate.PERMITTED)}')
+    for name in THEOREMS:
+        if name not in seen:
+            fail(f'{name} did not print its axioms')
+    for name in seen:
+        if name not in THEOREMS:
+            fail(f'unexpected statement printed: {name}')
+    if result.returncode != 0:
+        fail(f'lean exited {result.returncode} on the axiom scratch file')
+
+
+def render_statements():
+    """The bridge's theorems with their types, printed as the binary gate prints its surface."""
+    artifacts = ROOT / '.tmp' / 'c2-bridge-gate'
+    artifacts.mkdir(parents=True, exist_ok=True)
+    scratch = artifacts / 'statements.lean'
+    scratch.write_text(f'import {TARGET}\nset_option format.width 110\nset_option pp.universes true\n'
+                       + ''.join(f'#check @{name}\n' for name in STATEMENTS))
+    result = subprocess.run(binary_gate.capped(['lake', 'env', 'lean', str(scratch)]), cwd=ROOT / 'binary',
+                            capture_output=True, text=True)
+    if result.returncode or result.stderr:
+        fail(f'printing the bridge\'s statements failed:\n{result.stdout}{result.stderr}')
+        return None
+    return result.stdout.rstrip() + '\n'
+
+
+def check_statements():
+    print(f'[4/5] the statements of {len(STATEMENTS)} theorems against {EXPECTED.relative_to(ROOT)}', flush=True)
+    actual = render_statements()
+    if actual is None:
+        return
+    for line in actual.splitlines():
+        if not line.startswith(' '):
+            print(f'  {line}'[:160], flush=True)
+    if not EXPECTED.exists():
+        fail(f'{EXPECTED.relative_to(ROOT)} is missing')
+        return
+    delta = ''.join(difflib.unified_diff(EXPECTED.read_text().splitlines(keepends=True),
+                                         actual.splitlines(keepends=True),
+                                         fromfile='expected statements', tofile='current statements'))
+    if delta:
+        print(delta, end='', flush=True)
+        fail('the statements of the bridge\'s theorems changed; inspect the diff and explicitly update '
+             f'{EXPECTED.relative_to(ROOT)}')
+
+
+def check_source():
+    print('[5/5] forbidden tokens in binary/bridge/', flush=True)
+    files = sorted(BRIDGE_DIR.glob('*.lean'))
+    if BRIDGE not in files:
+        fail(f'{BRIDGE.relative_to(ROOT)} is missing')
+        return
+    for path in files:
+        for number, line in enumerate(binary_gate.strip_comments(path.read_text()).splitlines(), 1):
+            for match in binary_gate.FORBIDDEN.finditer(line):
+                fail(f'{path.relative_to(ROOT)}:{number}: {match.group(0)}')
+    # So that a theorem added to the bridge has its axioms printed.
+    code = binary_gate.strip_comments(BRIDGE.read_text())
+    declared = {'Binary.C2.Bridge.' + name for name in re.findall(r'^\s*(?:theorem|lemma)\s+(\S+)', code, re.M)}
+    for name in sorted(declared ^ set(THEOREMS)):
+        fail(f'{name}: the theorems of the bridge and the gate\'s list differ')
+
+
+def report_lag():
+    """Printed, never a failure: the register row says how lag is reported."""
+    print('lag report:', flush=True)
+    print(f'  the four CounterWindow modules last changed at: {git("log", "-1", "--format=%h", "--", *MODULES)}')
+    print(f'  the mirror last changed at:                    {git("log", "-1", "--format=%h", "--", *MIRROR)}')
+    rows = [line for line in REGISTER.read_text().splitlines() if line.startswith(ROW)]
+    cells = [cell.strip() for cell in rows[0].strip('|').split('|')] if len(rows) == 1 else []
+    print(f'  the register row names mirror commit:          {cells[-2].strip("`") if len(cells) > 1 else "(no row found)"}')
+
+
+def main():
+    if sys.argv[1:] not in ([], ['--write-expected']):
+        raise SystemExit('usage: c2-bridge-gate [--write-expected]')
+    if sys.argv[1:]:
+        # Intentionally replace the reviewed statements, from the bridge as built; commit and review the diff.
+        actual = render_statements()
+        if actual is None:
+            return 1
+        EXPECTED.write_text(actual)
+        print(f'Updated {EXPECTED}; review its Git diff')
+        return 0
+    sys.path.insert(0, str(ROOT / 'binary'))
+    from pin import verify_pin
+    print('[1/5] private Kraken pin and clean tree', flush=True)
+    try:
+        print(f'  {verify_pin(ROOT)}', flush=True)
+    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+        fail(str(exc))
+    if not failures:
+        print(f'[2/5] lake -d binary build {TARGET}', flush=True)
+        result = subprocess.run(binary_gate.capped(['lake', '-d', 'binary', 'build', TARGET]), cwd=ROOT,
+                                capture_output=True, text=True)
+        tail = [line for line in (result.stdout + result.stderr).splitlines() if line.strip()]
+        print(f'  {tail[-1] if tail else "(no output)"}', flush=True)
+        if result.returncode:
+            print(result.stdout + result.stderr, file=sys.stderr, flush=True)
+            fail(f'the bridge build exited {result.returncode}')
+    if not failures:
+        check_axioms()
+        check_statements()
+    check_source()
+    report_lag()
+    print('c2 bridge gate: ' + ('FAILED' if failures else 'PASS'), flush=True)
+    return 1 if failures else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())
