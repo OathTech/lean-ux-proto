@@ -43,7 +43,7 @@ theorem equalOutside_weaken {p q : BitVec 64 → Prop} {a b : Mem 64}
   fun x outside => equal x (fun inside => outside (implies x inside))
 
 /-- The window is read from the window bytes only. -/
-theorem WindowAt.frame {writes : BitVec 64 → Prop} {m m' : Mem 64} {kp : BitVec 64} {w : Window}
+theorem WindowAt.ofEqualOutside {writes : BitVec 64 → Prop} {m m' : Mem 64} {kp : BitVec 64} {w : Window}
     (equal : EqualOutside writes m m')
     (apart : ∀ a, windowBytes kp a → ¬writes a)
     (window : WindowAt m (windowBase kp) w) : WindowAt m' (windowBase kp) w := by
@@ -175,7 +175,7 @@ theorem call_site {callee : Int64} {plan : MachineState → Option (List WordWri
   refine ⟨atPc, ?_, rbp, r14, r15, ?_, ?_, ?_⟩
   · exact {
       coverage := kept
-      window := WindowAt.frame whole (by
+      window := WindowAt.ofEqualOutside whole (by
         rintro a inWindow (inPush | inBuffer)
         · exact context.stackWindow a (pushIn a inPush) inWindow
         · exact context.coverageApart a (.inr ⟨inBuffer.1, .inr inBuffer.2⟩)
