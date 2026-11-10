@@ -922,7 +922,7 @@ theorem frameReady_lookup {L : Layout} {c : Context} {s : MachineState} {ra : UI
   obtain ⟨preempt,run⟩ := require_bind_ok _ _ _ _ run
   exact ⟨abi,stack,coverage,coverageBh,hardirq,pending,heap,service,buffer,preempt,require_ok run⟩
 
-structure ReadyFacts (L : Layout) (c : Context) (s : MachineState) (family key : Nat)
+structure LookupReadyFacts (L : Layout) (c : Context) (s : MachineState) (family key : Nat)
     (ra : UInt64) : Prop where
   families : family = 4 ∨ family = 6
   entry : s.pc = AllowedipsImage.Lookup.entry
@@ -933,7 +933,7 @@ structure ReadyFacts (L : Layout) (c : Context) (s : MachineState) (family key :
   frame : FrameFacts L c s ra (s.data.regs.rdx.toNat,(if family == 4 then 32 else 128)/8)
 
 theorem lookupReady_facts {L : Layout} {c : Context} {s : MachineState} {family key : Nat}
-    {ra : UInt64} (run : lookupReady L c s family key ra = .ok ()) : ReadyFacts L c s family key ra := by
+    {ra : UInt64} (run : lookupReady L c s family key ra = .ok ()) : LookupReadyFacts L c s family key ra := by
   unfold lookupReady at run
   obtain ⟨familyOk,run⟩ := require_bind_ok _ _ _ _ run
   obtain ⟨entry,run⟩ := require_bind_ok _ _ _ _ run
