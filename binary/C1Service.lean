@@ -1,6 +1,7 @@
 import C1Interfaces
 import C1ServiceRules
 import C1ServiceCallbacks
+import C1ServiceJointFetch
 
 /-! Result C1, work package 4: the service rules and the witness. This module is the package's root in
 `binary/lakefile.toml`: add modules named `C1Service*.lean` and import them here.
