@@ -131,11 +131,26 @@ modules) and fails on any beyond `propext`, `Classical.choice` and
 `Quot.sound`, fails on `sorry`, `sorryAx`, `admit`, `axiom`, `native_decide`,
 `decide +native`, `ofReduceBool`, `trustCompiler`, `skipKernelTC`, `unsafe`,
 `implemented_by` or `extern` anywhere in the tree outside comments and
-string literals, and fails if anything outside the tree imports it, if the
-root misses a result's `Statements`, or if `LeanuxProofs` is a default lake
-target. Beside it, a speedbump: `scripts/proof-counterexamples` replays the
+string literals, and fails if anything outside the tree imports it (one
+exemption: `binary/bridge/C2Bridge.lean` may import the four modules
+`Leanux.Proofs.WG.CounterWindow.Model`, `.Refinement`, `.MirrorCalls` and
+`.Bounds`, and nothing else of the tree), if the root misses a result's
+`Statements`, or if `LeanuxProofs` is a default lake target. Beside it, a
+speedbump: `scripts/proof-counterexamples` replays the
 published counterexample and witness recipes through the interpreter, which
 the gate's build does not cover.
+
+The exempt file is the binary track's bridge: it joins the replay-window
+refinement proved in the binary package with the landed `CounterWindow`
+theorems. It has its own gate, run at the binary track's claim points:
+`capped -- scripts/in-bundle scripts/c2-bridge-gate`, which builds the lake
+target `C2Bridge` of `binary/lakefile.toml`, prints the axioms of its
+theorems and fails on any beyond the standard three, applies the proof
+tree's forbidden-token scan to `binary/bridge/`, and fails if the bridge
+imports the proof tree beyond the four modules, if `binary/bridge/` holds
+another Lean file, or if `C2Bridge` is a default target. The register
+(`docs/proofs.md`) names the mirror commit the four modules hold over; the
+bridge's result lags when they lag.
 
 Lean resource limits (`maxHeartbeats`, `maxRecDepth` and similar) in the proof
 tree: the file-wide raises present when the rule arrived (439 files with
