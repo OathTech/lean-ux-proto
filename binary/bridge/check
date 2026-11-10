@@ -1,0 +1,32 @@
+#!/bin/sh
+# Compile the proposed C2 bridge and print its axioms, without applying the proposal.
+# The bridge source imports four proof-tree modules, which scripts/proof-gate refuses
+# outside Leanux/Proofs/ until the owner changes that rule (packets/c2/proof/BRIDGE.md).
+# So the source is committed as C2Bridge.lean.proposed, and this script stages it under
+# .tmp (which no gate scans) and compiles it against the built binary package and the
+# four CounterWindow modules. It fails on a compile error, on any axiom beyond the
+# standard three, and on a forbidden token in the source.
+# usage (from the worktree root, after `lake -d binary build`): binary/bridge/check
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$here/../.." && pwd)
+out="$root/.tmp/c2-bridge"
+mkdir -p "$out"
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+cd "$root"
+cap scripts/in-bundle lake build Leanux.Proofs.WG.CounterWindow.Bounds
+if grep -nE '\b(sorry|sorryAx|admit|axiom|native_decide|ofReduceBool|trustCompiler|skipKernelTC|unsafe|implemented_by|extern)\b|\+ *native\b' \
+    "$here/C2Bridge.lean.proposed" | grep -v '^[0-9]*:#print axioms'; then
+  echo 'FAIL: forbidden token in the bridge source' >&2; exit 1
+fi
+others=$(grep -E '^import +Leanux\.Proofs' "$here/C2Bridge.lean.proposed" |
+  grep -vE '^import +Leanux\.Proofs\.WG\.CounterWindow\.(Model|Refinement|MirrorCalls|Bounds)$' || true)
+if [ -n "$others" ]; then echo "FAIL: the bridge imports beyond the four modules: $others" >&2; exit 1; fi
+cp "$here/C2Bridge.lean.proposed" "$out/C2Bridge.lean"
+LP=$(cd binary && ../scripts/in-bundle lake env printenv LEAN_PATH)
+cap scripts/in-bundle env LEAN_PATH="$LP" lean "$out/C2Bridge.lean" | tee "$out/axioms.out"
+if [ "$(grep -c 'depends on axioms: \[propext, Classical.choice, Quot.sound\]$' "$out/axioms.out")" != 3 ] ||
+   [ "$(grep -c . "$out/axioms.out")" != 3 ]; then
+  echo 'FAIL: the bridge did not print exactly three statements on the standard axioms' >&2; exit 1
+fi
+echo 'C2 bridge: compiles; three statements on the standard axioms'
