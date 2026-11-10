@@ -123,6 +123,20 @@ theorem operation [Labels] [address_size : AddressSize] (stable : StoreStable F)
   case' cmpxchg dst _ => cases dst
   case' xadd dst _ => cases dst
   all_goals simp only [Operation.interp]
+  -- BTS (Kraken patch ten) reads and writes its quadword directly, declining
+  -- an unmapped one, so it does not go through `load`/`store`.
+  case bts =>
+    split
+    · exact impossible _
+    split
+    · exact impossible _
+    unfold Keeps
+    simp only [Effects.All]
+    split
+    · exact False.elim
+    · simp only [Effects.All]
+      intro h pf af zf sf of
+      exact hn _ (stable _ _ _ _ hs) (h pf af zf sf of)
   all_goals first
     | exact hn _ hs
     | exact hj _ _ hs

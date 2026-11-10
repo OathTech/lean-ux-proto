@@ -64,11 +64,16 @@ is needed, run bootstrap in an environment that permits the fetch.
 
 The semantics pin is declared in
 [`dependencies/sources.lock.json`](../dependencies/sources.lock.json) and
-[`TrustBase.lean`](TrustBase.lean), including nine committed Kraken patches.
+[`TrustBase.lean`](TrustBase.lean), including ten committed Kraken patches.
 Patch nine adds the register BT forms needed by the insertion image. Those
 forms deliberately leave the zero flag (ZF) undefined, along with BT's other
-undefined flags. These semantics are part of the trust boundary; their tests are not a proof of ISA
-fidelity. Unsupported forms fail explicitly.
+undefined flags. Patch ten adds one form of BTS, the one in the replay-window
+range: a 64-bit register bit offset on a memory quadword, unlocked. It is
+defined only when the offset is below 64 and the quadword is mapped; CF takes
+the old bit, the quadword is written back with the bit set, and the other
+five status flags are undefined. These semantics are part of the trust
+boundary; their tests are not a proof of ISA fidelity. Unsupported forms fail
+explicitly.
 
 The package imports the operational mirror by path and does not import
 `Leanux.Proofs`. Its local source-model definitions and execution equations
