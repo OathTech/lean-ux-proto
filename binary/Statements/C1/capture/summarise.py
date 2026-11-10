@@ -93,7 +93,7 @@ def main():
                 problems.append(f'{trace} call {call["call"]} seed {row["seed"]}: {call["ABORTED"]}')
                 continue
             for k, v in call.items():
-                if k in ('emptyTable', 'insertReady (captured window)',
+                if k in ('emptyTable', 'insertReady (captured window)', 'c1.stack-peers (revision 4): the stack window apart from every peer object',
                          'whole buffer apart from the heap, the caller\'s spans and the coverage metadata'):
                     tally(entry, k, v)
                 elif isinstance(v, str) and k not in ('key',):

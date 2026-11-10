@@ -87,7 +87,11 @@ def frameReady (L : Layout) (c : Context) (s : MachineState) (ra : UInt64)
 /-- A call of `wg_allowedips_insert_v4/_v6(table, ip, cidr, peer, lock)`:
 the wrapper's entry, the table, the address bytes in network order, the
 8-bit prefix length, a non-NULL registered peer, the `node_cache` word, and
-room below the stack for the allocator's scratch. -/
+room below the stack for the allocator's scratch. Revision 4: the stack
+window below the return word is apart from every peer as a whole object
+(`frameReady` keeps it apart from the heap, which holds only a peer's
+reference count and list head; the landed `NodeInit.boundary` needs `add`'s
+stack bytes apart from the whole 1520-byte object). -/
 def insertReady (L : Layout) (A : Allocator) (c : Context) (s : MachineState)
     (family key cidr pid : Nat) (ra : UInt64) : Except String Unit := do
   require (family == 4 || family == 6) "c1.family"
@@ -100,6 +104,8 @@ def insertReady (L : Layout) (A : Allocator) (c : Context) (s : MachineState)
   require (s.data.regs.rdx.toNat % 256 == cidr) "c1.insert-cidr"
   require (Trie.networkKeyCheck s.data.dmem s.data.regs.rsi.toBitVec width key) "c1.insert-address"
   require ((← readNat s cacheWord 8) == L.cache) "c1.node-cache"
+  require (spansApart [((s.data.regs.rsp.toBitVec - .ofNat 64 (insertWindow + A.depth)).toNat, insertWindow + A.depth)]
+    (L.peers.map fun (_,a) => (a,Layouts.peerSize))) "c1.stack-peers"
   frameReady L c s ra (insertWindow + A.depth) (s.data.regs.rsi.toNat, width/8) true false
 
 /-- A call of the compiled `lookup(root, bits, ip)` as its two callers make

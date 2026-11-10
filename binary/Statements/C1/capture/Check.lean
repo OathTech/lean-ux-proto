@@ -273,6 +273,9 @@ def insertCall (L : Layout) (A : Allocator) (input : Input) (seed : UInt64) (th 
   let (viewMemory,view,words) := truncated memory c
   out := note out "insertReady (captured window)" (say (insertReady L A view
     {initial with data := {initial.data with dmem := viewMemory}} call.family call.key call.cidr call.pid (.ofNat ra)))
+  out := note out "c1.stack-peers (revision 4): the stack window apart from every peer object" (check (
+    spansApart [((initial.data.regs.rsp.toBitVec - .ofNat 64 (insertWindow+A.depth)).toNat,insertWindow+A.depth)]
+      (L.peers.map fun (_,a) => (a,Layouts.peerSize))))
   let own := callerSpans initial (insertWindow+A.depth) (initial.data.regs.rsi.toNat,if call.family == 4 then 4 else 16) true
   out := note out "whole buffer apart from the heap, the caller's spans and the coverage metadata" (check (
     spansApart (Trie.callBuffers c) (L.heap ++ own ++ Trie.callMetadata c ++ [(preemptCountAddress.toNat,4)])))

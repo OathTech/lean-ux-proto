@@ -1,7 +1,7 @@
 import StatementC1Vacuity
 import C1Interfaces
 
-/-! Executable rendering of the C1 statement, revision 3. Not a proof
+/-! Executable rendering of the C1 statement, revision 4. Not a proof
 and not part of the package build: run with `Statements/C1/run-tests.sh`.
 
 It executes the saved s5 instructions of the six functions with the
@@ -615,6 +615,28 @@ def stateWordProbes : Except String (List String) := do
   | .ok _ => throw "separation: a stack inside the arena is admitted"
   return lines
 
+/-- Revision 4, change B. The trunk's finding: a stack pointer 600 bytes
+into peer 1's object, so that the insertion's window lies inside the peer
+below its reference count (offset 1056) and list head (1096). Every
+separation of `frameReady` holds of that state (the heap holds only those
+two words of a peer), and `insertReady` now refuses it at `c1.stack-peers`. -/
+def stackPeersProbe (input : Input) : Except String (List String) := do
+  let cfg : Config := {name := "stack in a peer",stack := 0x601000+600}
+  let L := cfg.layout
+  let A := cfg.allocator
+  let key := 0x0a000000
+  let memory := storeKey (put (emptyMemory cfg []) cfg.stack 8 stopAddr) cfg.keyAt 32 key
+  let s : MachineState := ⟨{dmem := memory,system := system cfg,regs := {
+    rdi := .ofNat L.table,rsi := .ofNat cfg.keyAt,rdx := 24,rcx := .ofNat cfg.peerBase,rsp := .ofNat cfg.stack}},
+    .ofNat input.insert4⟩
+  let c ← Common.readContext memory
+  (frameReady L c s (.ofNat stopAddr) (insertWindow + A.depth) (cfg.keyAt,4) true false).mapError
+    (s!"stack in a peer: frameReady refuses: {·}")
+  match insertReady L A c s 4 key 24 0 (.ofNat stopAddr) with
+  | .error "c1.stack-peers" => pure ["stack window inside a peer object, below its count and list head: frameReady (the heap separation included) holds; insertReady refuses: c1.stack-peers"]
+  | .error e => throw s!"stack in a peer: insertReady refuses with {e}"
+  | .ok _ => throw "stack in a peer: insertReady accepts"
+
 /-- Change 2. From an empty table with two peers at count 2: steps the
 closed world admits, and count changes it does not. -/
 def referenceProbes : Except String (List String) := do
@@ -777,6 +799,10 @@ def main (args : List String) : IO UInt32 := do
   IO.println "frame: the Idle model ignores a byte outside the arena, and refuses a changed answer index and a wrong stream"
   -- 6. revision 3, change 4: a service with a state word in the arena; the separation; ServiceActive
   match stateWordProbes with
+  | .ok lines => for line in lines do IO.println line
+  | .error e => failed := true; IO.println s!"FAIL: {e}"
+  -- revision 4, change B: the stack window inside a peer object
+  match stackPeersProbe input with
   | .ok lines => for line in lines do IO.println line
   | .error e => failed := true; IO.println s!"FAIL: {e}"
   -- 7. revision 3, change 2: the caller's reference, admitted and not

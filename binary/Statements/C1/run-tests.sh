@@ -21,8 +21,8 @@ if grep -nE '\b(sorry|theorem|lemma|axiom|admit|native_decide)\b' StatementC1Con
 fi
 leanpath="$(../scripts/in-bundle lake env printenv LEAN_PATH)"
 input="${1:-$root/.tmp/allowedips/mutation.json}"
-# the two statement findings kept as regression tests (elaboration fails if either regresses)
-for regression in TopOfMemory StateWord; do
+# the three statement findings kept as regression tests (elaboration fails if either regresses)
+for regression in TopOfMemory StateWord StackOffPeers; do
   cap ../scripts/in-bundle env LEAN_PATH="$leanpath" lean "Statements/C1/proof/$regression.lean" ||
     { echo "FAIL: Statements/C1/proof/$regression.lean" >&2; exit 1; }
 done

@@ -17,6 +17,14 @@ package 4 derived. Every other proposition's statement is unchanged. The
 sections and briefs below were written against revision 2 and are not
 revised beyond section 0.
 
+**Revision 4 (2026-11-10).** Two more changes: in `Referenced` a taken
+reference is paired with the mirror's `peerGetMaybeZero` returning the peer
+(`ReferencedHolds` keeps its text), and `insertReady` gains `c1.stack-peers`,
+the stack window apart from every peer object, from which the trunk's
+hypothesis `C1Trunk.StackOffPeers` follows in one step
+(`Statements/C1/proof/StackOffPeers.lean`). A proof that takes `insertReady`
+apart clause by clause meets one more clause before `frameReady`.
+
 ## 0. Read this first: one hypothesis nobody owned (settled in revision 3)
 
 **Settled.** The owner chose the first way out below: revision 3 of the
