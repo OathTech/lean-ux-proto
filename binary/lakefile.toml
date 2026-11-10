@@ -105,3 +105,11 @@ root = "PairAllowedipsMutationMain"
 [[lean_exe]]
 name = "binary-allowedips-insert-capture"
 root = "PairAllowedipsInsertCaptureMain"
+
+[[lean_lib]]
+name = "C2Bridge"
+# The one library that imports both this package and the proof tree's four
+# CounterWindow modules (AGENTS.md; gate: scripts/c2-bridge-gate). Not a default target.
+srcDir = "bridge"
+roots = ["C2Bridge"]
+allowNonModules = true

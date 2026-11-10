@@ -1,4 +1,4 @@
-import C2CutAssembly
+import C2Headline
 import Leanux.Proofs.WG.CounterWindow.Model
 import Leanux.Proofs.WG.CounterWindow.Refinement
 import Leanux.Proofs.WG.CounterWindow.MirrorCalls
@@ -16,8 +16,10 @@ proved in the binary package (`Refines`: the range computes the mirror's
 * `CounterWindow.accepted_nodup` (R1's `pure_uniqueness`): the counters `step` accepts in
   sequence are distinct.
 
-`no_counter_accepted_twice` is conditional on the binary package's propositions until
-the work packages discharge them; `headline` is then the track's headline theorem. -/
+`accepts_as_pure_window` and `no_counter_accepted_twice_of_parts` take the refinement
+and the representation as hypotheses; `no_counter_accepted_twice` and `headline` are
+closed, on the binary package's `refines`, `representation`, `exits_cleanly` and
+`replay_witness` (`C2Headline`). `headline` is the track's headline theorem. -/
 namespace Binary.C2.Bridge
 open Binary TrustBase Leanux Binary.C2
 open Leanux.Proofs.WG
@@ -87,8 +89,8 @@ theorem accepts_as_pure_window (refines : Refines) (representation : Representat
 
 /-- CLAUSE `NoCounterAcceptedTwice`: the landed uniqueness theorem, transported to the
 machine code through the refinement. -/
-theorem no_counter_accepted_twice (refines : Refines) (representation : Representation) :
-    NoCounterAcceptedTwice := by
+theorem no_counter_accepted_twice_of_parts (refines : Refines)
+    (representation : Representation) : NoCounterAcceptedTwice := by
   intro fetch kp visits reading held
   have start : ∃ c : WG.ReplayCounter, c.backtrack.size = 128 ∧
       ∀ first, visits.head? = some first →
@@ -110,12 +112,30 @@ theorem no_counter_accepted_twice (refines : Refines) (representation : Represen
   rw [← joined] at distinct
   exact List.Pairwise.of_map (·.toNat) (fun a b differ equal => differ (equal ▸ rfl)) distinct
 
-/-- THE HEADLINE of result C2 from the work packages' propositions. -/
-theorem headline (execution : Execution) (representation : Representation)
-    (start : WitnessStart) : HeadlineRefinement :=
-  headline_of_parts execution representation start no_counter_accepted_twice
+/-- CLAUSE `NoCounterAcceptedTwice`, closed. -/
+theorem no_counter_accepted_twice : NoCounterAcceptedTwice :=
+  no_counter_accepted_twice_of_parts refines representation
+
+/-- THE HEADLINE of result C2, closed. -/
+theorem headline : HeadlineRefinement :=
+  ⟨exits_cleanly, refines, no_counter_accepted_twice, replay_witness⟩
+
+/-- The exclusion `ReplayRefused`, in no headline: a corollary of the transported
+clause. A packet counter that an earlier visit accepted is refused by the range. -/
+theorem replay_refused : ReplayRefused := by
+  intro fetch kp before between earlier later reading visits same acceptedEarlier
+  have distinct := no_counter_accepted_twice fetch kp _ reading visits
+  cases acceptedLater : accepted later.exit with
+  | false => rfl
+  | true =>
+    exfalso
+    unfold acceptedNonces at distinct
+    simp [List.filter_append, acceptedEarlier, acceptedLater, same, List.nodup_append,
+      List.nodup_cons] at distinct
 
 #print axioms accepts_as_pure_window
+#print axioms no_counter_accepted_twice_of_parts
 #print axioms no_counter_accepted_twice
 #print axioms headline
+#print axioms replay_refused
 end Binary.C2.Bridge
