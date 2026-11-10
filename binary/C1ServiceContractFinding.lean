@@ -1,4 +1,5 @@
 import C1ServiceRules
+import C1ServiceHistory
 import StackFrame
 
 /-! Result C1, work package 4: a STATEMENT FINDING on `AllocatorContract`, with
@@ -45,33 +46,6 @@ namespace Binary.Statements.C1.Proof
 open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.CommonBitsCoverage Binary.Statements.C1
 local instance : Labels := Image.linkedLabels
-
-/-! ## A returning execution ends somewhere -/
-
-private theorem effects_end (effects : Effects) (post : MachineState → Prop)
-    (run : effects.All post) : ∃ t, post t := by
-  induction effects with
-  | done s => exact ⟨s,run⟩
-  | unimplemented _ => exact False.elim run
-  | gp_unaligned _ _ => exact False.elim run
-  | nonmem_load => exact False.elim run
-  | nonmem_store => exact False.elim run
-  | undefined next ih => exact ih (NondetSupportingType.from_hash 0) (run _)
-  | require_read_access _ _ next ih | require_write_access _ _ next ih | require_exec_access _ next ih =>
-    exact ih () run
-
-theorem eventually_ends {fetch : Int64 → Option Decoded} {post : MachineState → Prop}
-    {s : MachineState} (run : Eventually (instructionStep fetch) post s) : ∃ t, post t := by
-  induction run with
-  | done s hp => exact ⟨s,hp⟩
-  | step s mid step _ ih =>
-    unfold instructionStep at step
-    cases read : fetch s.pc with
-    | none => simp only [read] at step
-    | some decoded =>
-      simp only [read] at step
-      obtain ⟨next,reached⟩ := effects_end _ _ step.2
-      exact ih next reached
 
 /-! ## The aliased state -/
 
