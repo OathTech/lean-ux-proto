@@ -282,6 +282,15 @@ theorem window_of_fields : WindowOfFields := by
       Array.getElem?_eq_getElem hj', Option.getD_some]
     rw [Nat.mod_eq_of_lt (by simpa using fit)]
 
+theorem fields_of_window : FieldsOfWindow := by
+  rintro m base w ⟨counter, words⟩
+  refine ⟨counter, by simp [toCounter], ?_⟩
+  intro j hj
+  have hj' : j < Layouts.replayWords := by simpa [toCounter] using hj
+  rw [words j hj']
+  simp [toCounter]
+
 #print axioms window_mapped
 #print axioms window_of_fields
+#print axioms fields_of_window
 end Binary.C2
