@@ -14,6 +14,9 @@ import AllowedipsStorage
 import AllowedipsRootIncoming
 import AllowedipsInternalFrame
 import MemoryBytes
+import AllowedipsHeapChecks
+import AllowedipsTrieEdgeFacts
+import PairAllowedipsLookupFrame
 
 /-! Result C1, work package 1: the source side and the invariant's algebra. This module is the package's root in
 `binary/lakefile.toml`. The brief is `binary/Statements/C1/proof/WP1.md`.
@@ -1488,4 +1491,199 @@ theorem lookupHolds : LookupHolds := by
       exact outside (.inr ⟨span,List.mem_append_left _ (count_fixed peers span member),at_⟩)
 
 #print axioms lookupHolds
+
+/-! ## What `RunIsStep` takes from the invariant and the caller's conditions -/
+
+/-! ## What `RunIsStep` takes from the invariant and the caller's conditions -/
+
+/-- `heap.root-family`, read off the structural check of one node. -/
+theorem ordered_root_family {s : State} {id : NodeId} {n : AipNode}
+    (checked : structureCheck s id n = .ok ()) :
+    (s.table.root4 = some id → n.bitlen = 32) ∧ (s.table.root6 = some id → n.bitlen = 128) := by
+  rw [structureCheck_walk] at checked
+  obtain ⟨incoming,first,_⟩ := bind_ok checked
+  simp only [List.forIn_cons,List.forIn_nil,rootStep] at first
+  constructor
+  · intro root
+    by_cases family : n.bitlen = 32
+    · exact family
+    · simp [root,family] at first
+      cases first
+  · intro root
+    by_cases family : n.bitlen = 128
+    · exact family
+    · by_cases other : s.table.root4 = some id
+      · by_cases family4 : n.bitlen = 32
+        · simp [root,other,family4] at first
+          cases first
+        · simp [other,family4] at first
+          cases first
+      · simp [root,other,family] at first
+        cases first
+
+/-- A node of the mirror's store is the decoding of a named object. -/
+theorem ordered_node_fields {names : Allowedips.Names} {m : Mem 64} {d : Device} {id : NodeId} {n : AipNode}
+    (related : Allowedips.Corresponds names Root.nodeOffsets m d) (member : (id,n) ∈ d.nodes.toList) :
+    (n.bitlen = 32 ∨ n.bitlen = 128) ∧ n.cidr ≤ n.bitlen ∧ n.bits < 2^n.bitlen ∧ n.bit.size = 2 := by
+  have full := Trie.reconstruct_fields related.trie
+  have inTarget : (id,Trie.targetNode n) ∈ (Trie.target d).nodes :=
+    List.mem_map.mpr ⟨(id,n),member,rfl⟩
+  obtain ⟨⟨id',base⟩,_,_,decoded⟩ := full.nodes.right _ inTarget
+  have fields := Trie.decodeNode_fields decoded
+  obtain ⟨left,right,_,_,shape,_⟩ := fields.children
+  have family : n.bitlen = 32 ∨ n.bitlen = 128 := fields.family
+  have bounded : n.cidr ≤ n.bitlen := fields.bounded
+  have shape' : n.bit = #[left,right] := shape
+  refine ⟨family,bounded,?_,by rw [shape']; rfl⟩
+  have key := fields.key
+  change (if n.bitlen = 32 then _ else _) at key
+  by_cases width : n.bitlen = 32
+  · simp only [width,↓reduceIte] at key
+    have bound := word_bound key
+    change n.bits < 256^4 at bound
+    rw [width]
+    omega
+  · simp only [width,↓reduceIte] at key
+    obtain ⟨hi,lo,high,low,sum⟩ := key
+    have highBound := word_bound high
+    have lowBound := word_bound low
+    have sum' : n.bits = hi*2^64+lo := sum
+    have wide : n.bitlen = 128 := by omega
+    rw [wide,sum']
+    omega
+
+theorem ordered_of_related {L : Layout} {A : Allocator} {w : World} {m : Mem 64} {d : Device}
+    (related : Related L A w m) (device : w.wg.dev = some d) : ordered d = true := by
+  obtain ⟨names,stream,_,_,asserted,_⟩ := related
+  obtain ⟨d',device',corresponds,shape⟩ := assertAt_ok asserted
+  have same : d' = d := Option.some.inj (device'.symm.trans device)
+  subst d'
+  obtain ⟨tree,checks⟩ := (heap_checks names (Allowedips.target d) m).mp shape
+  have present : ∀ id (node : Trie.Node), (id,node) ∈ (Allowedips.target d).nodes.map (fun (id,n) => (id,Trie.targetNode n)) →
+      ∃ n, d.nodes.get? id = some n ∧ node = Trie.targetNode n := by
+    intro id node member
+    obtain ⟨⟨id',n⟩,inside,equal⟩ := List.mem_map.mp member
+    obtain ⟨rfl,rfl⟩ := Prod.mk.inj equal
+    exact ⟨n,Std.TreeMap.mem_toList_iff_getElem?_eq_some.mp inside,rfl⟩
+  simp only [ordered,Bool.and_eq_true,List.all_eq_true]
+  constructor
+  · rintro ⟨id,n⟩ member
+    obtain ⟨family,bounded,key,size⟩ := ordered_node_fields corresponds member
+    refine ⟨⟨⟨⟨?_,by simpa using bounded⟩,by simpa using key⟩,by simpa using size⟩,?_⟩
+    · simpa using family
+    rintro ⟨child,bit⟩ edge
+    cases child with
+    | none => rfl
+    | some next =>
+      have facts := Trie.heap_edge_facts tree id (Trie.targetNode n)
+        (List.mem_map.mpr ⟨(id,n),member,rfl⟩) (some next,bit) edge next rfl
+      obtain ⟨childNode,found,_,width,measure,prefixEq,side⟩ := facts
+      obtain ⟨c,stored,rfl⟩ := present next childNode (List.mem_of_find?_eq_some found)
+      simp only [stored,edgeOrdered,Bool.and_eq_true,beq_iff_eq,decide_eq_true_eq]
+      exact ⟨⟨⟨width,measure⟩,prefixEq⟩,side⟩
+  · have roots : ∀ id, (d.peerAllowedips.root4 = some id ∨ d.peerAllowedips.root6 = some id) →
+        ∃ n, d.nodes.get? id = some n ∧ (d.peerAllowedips.root4 = some id → n.bitlen = 32) ∧
+          (d.peerAllowedips.root6 = some id → n.bitlen = 128) := by
+      intro id which
+      have member : some id ∈ [(Allowedips.target d).table.root4,(Allowedips.target d).table.root6] := by
+        rcases which with h | h
+        · exact List.mem_cons.mpr (.inl h.symm)
+        · exact List.mem_cons_of_mem _ (List.mem_cons.mpr (.inl h.symm))
+      obtain ⟨node,inside⟩ := Trie.heap_root tree member
+      obtain ⟨n,stored,_⟩ := present id node inside
+      have listed : (id,n) ∈ (Allowedips.target d).nodes := Std.TreeMap.mem_toList_iff_getElem?_eq_some.mpr stored
+      exact ⟨n,stored,ordered_root_family (checks id n listed).1⟩
+    rintro ⟨root,width⟩ member
+    simp only [List.mem_cons,Prod.mk.injEq,List.not_mem_nil,or_false] at member
+    rcases member with ⟨rfl,rfl⟩ | ⟨rfl,rfl⟩
+    · cases slot : d.peerAllowedips.root4 with
+      | none => rfl
+      | some id =>
+        obtain ⟨n,stored,four,_⟩ := roots id (.inl slot)
+        simp only [stored,beq_iff_eq]
+        exact four slot
+    · cases slot : d.peerAllowedips.root6 with
+      | none => rfl
+      | some id =>
+        obtain ⟨n,stored,_,six⟩ := roots id (.inr slot)
+        simp only [stored,beq_iff_eq]
+        exact six slot
+
+theorem ordered_peer_present {L : Layout} {A : Allocator} {w : World} {m : Mem 64} {d : Device} {pid peer : Nat}
+    (related : Related L A w m) (device : w.wg.dev = some d)
+    (address : Trie.address L.peers (some pid) = .ok peer) : ∃ p, d.peers.get? pid = some p := by
+  obtain ⟨names,stream,_,peers,asserted,_⟩ := related
+  obtain ⟨d',device',corresponds,_⟩ := assertAt_ok asserted
+  have same : d' = d := Option.some.inj (device'.symm.trans device)
+  subst d'
+  simp only [Trie.address] at address
+  cases found : L.peers.find? (·.1 == pid) with
+  | none => simp [found] at address
+  | some pair =>
+    obtain ⟨id,a⟩ := pair
+    have identity : id = pid := by simpa using List.find?_some found
+    subst id
+    have named : (pid,a) ∈ names.trie.peers := peers ▸ List.mem_of_find?_eq_some found
+    obtain ⟨p,stored,_⟩ := named_peer_count corresponds.trie named "peer.refcount"
+    exact ⟨p,stored⟩
+
+theorem ordered_key_bound {m : Mem 64} {base : BitVec 64} {family key : Nat}
+    (checked : Trie.networkKeyCheck m base (if family == 4 then 32 else 128) key = true) :
+    key < 2^widthOf family := by
+  unfold Trie.networkKeyCheck at checked
+  unfold widthOf
+  by_cases four : (family == 4) = true
+  · simp only [four,↓reduceIte,beq_self_eq_true] at checked ⊢
+    split at checked
+    · cases checked
+    · rename_i word _
+      have equal := eq_of_beq checked
+      have bound := (Binary.Allowedips.swap32 word).isLt
+      omega
+  · simp only [four,↓reduceIte,Bool.false_eq_true] at checked ⊢
+    have wide : ((128 : Nat) == 32) = false := by decide
+    simp only [wide,Bool.false_eq_true,↓reduceIte] at checked
+    split at checked
+    · rename_i high low _ _
+      have equal := eq_of_beq checked
+      have highBound := (Binary.Allowedips.swap64 high).isLt
+      have lowBound := (Binary.Allowedips.swap64 low).isLt
+      omega
+    · cases checked
+
+theorem ordered_ready_facts {L : Layout} {A : Allocator} {c : Binary.CommonBitsCoverage.Context}
+    {s : MachineState} {family key cidr pid : Nat} {ra : UInt64}
+    (ready : insertReady L A c s family key cidr pid ra = .ok ()) :
+    (family = 4 ∨ family = 6) ∧ key < 2^widthOf family ∧
+      ∃ peer, Trie.address L.peers (some pid) = .ok peer ∧ peer ≠ 0 := by
+  unfold insertReady at ready
+  obtain ⟨families,ready⟩ := require_bind_ok _ _ _ _ ready
+  obtain ⟨_,ready⟩ := require_bind_ok _ _ _ _ ready
+  obtain ⟨_,ready⟩ := require_bind_ok _ _ _ _ ready
+  obtain ⟨peer,address,ready⟩ := bind_ok ready
+  obtain ⟨nonNull,ready⟩ := require_bind_ok _ _ _ _ ready
+  obtain ⟨_,ready⟩ := require_bind_ok _ _ _ _ ready
+  obtain ⟨keyChecked,ready⟩ := require_bind_ok _ _ _ _ ready
+  refine ⟨by simpa using families,ordered_key_bound keyChecked,peer,address,?_⟩
+  have parts : peer ≠ 0 ∧ s.data.regs.rcx.toNat = peer := by simpa using nonNull
+  exact parts.1
+
+theorem ordered_clean {L : Layout} {A : Allocator} {w : World} {m : Mem 64} (related : Related L A w m) :
+    ∃ stream, w.ambient.hidden = some stream ∧ (∀ r ∈ stream, HiddenSite.passive r.site = false) ∧
+      w.ambient.allocArmed.contains "allocNode190" = true ∧
+      w.ambient.allocArmed.contains "allocNode205" = true ∧
+      w.ambient.allocArmed.contains "allocNode234" = true := by
+  obtain ⟨names,stream,_,_,_,isArmed,hidden,sites,_⟩ := related
+  refine ⟨stream,hidden,?_,?_⟩
+  · intro r member
+    have site := sites r member
+    have cases : r.site = 78 ∨ r.site = 79 ∨ r.site = 77 := by simpa [allocSites] using site
+    obtain ⟨p77,p78,p79⟩ := passive_sites
+    rcases cases with h | h | h <;> rw [h] <;> assumption
+  · simpa [armed] using isArmed
+
+#print axioms ordered_of_related
+#print axioms ordered_peer_present
+#print axioms ordered_ready_facts
+#print axioms ordered_clean
 end Binary.Statements.C1.Proof
