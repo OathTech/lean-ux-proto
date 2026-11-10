@@ -259,8 +259,14 @@ theorem cmp8_site : Cmp8Site :=
     (fun fetch reading =>
       Callback.Cmp8.cmp8_rule fetch reading.services (stubs_agree fetch reading.range).1)
 
+theorem const_cmp8_site : ConstCmp8Site :=
+  call_site (Callback.Cmp8.record_covered 7)
+    (fun fetch reading =>
+      Callback.Cmp8.const_cmp8_rule fetch reading.services (stubs_agree fetch reading.range).2)
+
 #print axioms call_site
 #print axioms stubs_agree
 #print axioms pc_site
 #print axioms cmp8_site
+#print axioms const_cmp8_site
 end Binary.C2
