@@ -420,6 +420,39 @@ theorem cmp8_rule : Cmp8Rule := by
   subst p
   exact cmp8_run services stub s ra ready frame
 
+theorem const_cmp8_run {fetch : Int64 → Option Decoded} (services : ServiceDecoderAgreement fetch)
+    (stub : ConstCmp8Agreement fetch) (s : MachineData) (ra : UInt64)
+    (ready : Ready (recordPlan 7) ⟨s, constCmp8Entry⟩) (frame : EntryFrame ⟨s, constCmp8Entry⟩ ra) :
+    Eventually (guardedStep fetch (Interior s.regs.rsp))
+      (fun t => Returned ⟨s, constCmp8Entry⟩ t ra ∧
+        EqualOutside (Writes (recordPlan 7) ⟨s, constCmp8Entry⟩) s.dmem t.data.dmem ∧
+        Effect (recordPlan 7) ⟨s, constCmp8Entry⟩ t)
+      ⟨s, constCmp8Entry⟩ := by
+  have returnRead : load64 s.dmem s.regs.rsp.toBitVec = some ra.toBitVec := by
+    simp [load64, frame.2]
+  stub_step stub
+  simp [BitVec.signed, frame.2, Effects.All]
+  stub_step stub
+  stub_step stub
+  stub_step stub
+  stub_step stub
+  simp [RelRegOrMem.interp, ConstExpr.interp, Effects.All]
+  have destination : label "L_ffffffff810f3fb0" = .ofNat 0xffffffff810f3fb0 := by decide +kernel
+  rw [destination]
+  simpa [stubState, Reg64s.get, Reg64s.get64, Reg.base, Reg.offset, BitVec.drop, BitVec.take,
+    jump_target] using
+    stub_body services 7 s constCmp8Entry ra ra.toBitVec returnRead ready frame rfl
+
+/-- `ConstCmp8Rule`: the same for `__sanitizer_cov_trace_const_cmp8`. -/
+theorem const_cmp8_rule : ConstCmp8Rule := by
+  intro fetch services stub
+  apply leaf_of_run
+  rintro ⟨s, p⟩ ra pc ready frame
+  change p = _ at pc
+  subst p
+  exact const_cmp8_run services stub s ra ready frame
+
 #print axioms pc_rule
 #print axioms cmp8_rule
+#print axioms const_cmp8_rule
 end Binary.Callback.Cmp8
