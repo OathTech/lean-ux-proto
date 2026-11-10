@@ -1,20 +1,22 @@
-# C1: the final statement, revision 3
+# C1: the final statement, revision 4
 
 2026-11-10, branch `task/binary-c1`. The signed statement of result C1 (the
 compiled allowed-IPs insertion) revised in the five places decided in
-`docs/decisions.md` (2026-11-10, the last entry), for the independent
-reviewer and then the owner. **Nothing is proved here** about the image:
+`docs/decisions.md` (2026-11-10; revision 3) and, after the independent
+review of revision 3 and a finding of the trunk's proof, in two more
+(the last entry there; revision 4: changes A and B below), for the reviewer
+and then the owner. **Nothing is proved here** about the image:
 the statement files contain `def … : Prop` and executable definitions only.
 Revision 2 of this document (the capture's result and the text then signed)
 is commit `7d39d508`; its capture section is appendix C, unchanged except
-where marked. Every judgement below is mine [AGENT]; the decision to make
-the five changes is the owner's [USER].
+where marked. Every judgement below is mine [AGENT]; the decisions to make
+the seven changes are the owner's [USER].
 
 What I ask the reader to look at hardest: the form I gave change 2
 (`Referenced`, section 1), what the restated witness no longer shows
-(change 5), and the four things in [section 7](#7-what-i-could-not-do-as-decided-and-what-i-flag).
+(change 5), the placement of change B, and the four things in [section 7](#7-what-i-could-not-do-as-decided-and-what-i-flag).
 
-## 1. The five changes
+## 1. The changes: five in revision 3, two in revision 4
 
 **Change 1: the returned object ends below 2^64.** One conjunct in
 `AllocResult`'s success clause, in the form the landed `Trie.validate` uses:
@@ -43,16 +45,23 @@ def CountMoved (L : Layout) (pid : PeerId) (before after : Nat) (m m' : Mem 64) 
 
 def Referenced (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
   ∀ (w w' : World) (m m' : Mem 64) (pid : PeerId) (count : Nat), Inv w m →
-    ((liftWG (WG.peerGet pid)).run w = .ok ((), w') ∧ CountMoved L pid count (count+1) m m') ∨
+    ((liftWG (WG.peerGetMaybeZero (some pid))).run w = .ok (some pid, w') ∧
+      CountMoved L pid count (count+1) m m') ∨
     ((liftWG (WG.peerPut (some pid))).run w = .ok ((), w') ∧ 1 < count ∧
       CountMoved L pid count (count-1) m m') →
     Inv w' m'
 ```
 
-Exactly what may change: the four bytes of one registered peer's reference
+(The take is shown as revision 4 has it: change A below.) Exactly what may change: the four bytes of one registered peer's reference
 count, by one, with every other heap byte the same (bytes outside the heap
 are free, as in `Framed`); paired with exactly one mirror operation, an
-accepted `peerGet` on that peer for `+1`, an accepted `peerPut` for `-1`.
+accepted `peerGetMaybeZero` on that peer that returns the peer for `+1`,
+an accepted `peerPut` for `-1`. These are the operations the kernel
+performs: for a peer that already exists `set_peer` takes its reference
+through `wg_pubkey_hashtable_lookup`, which is `wg_peer_get_maybe_zero`
+(`netlink.c:386`, `peerlookup.c:68`), and drops it with `wg_peer_put`
+(`netlink.c:486`); `wg_peer_get` is called only on a peer just created
+(`netlink.c:421`), which the clause excludes.
 A drop must start above one: dropping the last reference releases the peer
 in the mirror, which changes the peer set, and stays outside. A move of a
 reference between two peers is two steps. I chose single steps over one
@@ -61,11 +70,14 @@ reference on one peer and later takes one on the next) and because each
 step is then one mirror operation.
 
 On the capture: the grid's one change of peer is `peerPut 0: 2 -> 1`, then
-`peerGet 1: 1 -> 2`, no other heap byte changed (captured states and whole
+`peerGetMaybeZero 1: 1 -> 2`, no other heap byte changed (captured states and whole
 RAM). **The headline now covers 13 of the grid's 13 calls (5 before) and
 still 2 of `b1_trie_routing`'s 8**: in `b1` each later peer is *created*
 between the insertions (its count goes 0 to 2, and the layout's peers are
 fixed at the empty table), which this clause does not and should not admit.
+So a `wg set` or `wg setconf` that creates its peers and gives them allowed
+addresses in one message, which is how an interface is usually configured,
+is covered for its first peer only.
 
 **Change 3: the ten-instruction listing stays.** `CallbacksFromImage` and
 `StatementC1CallbackImage.lean` are textually unchanged; the counts in
@@ -176,6 +188,53 @@ fails), and one concrete design is a stub that calls the image's own
 frame and `c.At`. **That a stub does satisfy it is not proved here**; it is
 package 4's work.
 
+**Change A (revision 4): the take is `peerGetMaybeZero`.** The reviewer's
+finding R1. Revision 3 paired a taken reference with the mirror's `peerGet`,
+a stand-in with the same count effect for the operation `set_peer` actually
+performs on an existing peer. The hunk:
+
+```diff
+-    ((liftWG (WG.peerGet pid)).run w = .ok ((), w') ∧ CountMoved L pid count (count+1) m m') ∨
++    ((liftWG (WG.peerGetMaybeZero (some pid))).run w = .ok (some pid, w') ∧
++      CountMoved L pid count (count+1) m m') ∨
+```
+
+On every count the clause admits the two agree: at a count of zero
+`peerGetMaybeZero` returns no peer (the step is not admitted) where
+`peerGet` is refused by the mirror; both refuse saturation. `peerGet` and
+`refcountInc` leave the claim's closure (section 4); `peerGetMaybeZero` was
+already in it, through the mirror's lookup. The drop is unchanged.
+
+**Change B (revision 4): the stack window is apart from whole peers.** The
+trunk's finding (`task/binary-c1-wp2`, `C1TrunkCut`): the landed
+`NodeInit.boundary` needs three bytes of `add`'s stack apart from every peer
+as a whole 1520-byte object, and the signed heap separation kept the window
+apart from a peer's reference count (offset 1056) and list head (1096)
+only. The hunk, in `insertReady` before its call of `frameReady`:
+
+```diff
+   require ((← readNat s cacheWord 8) == L.cache) "c1.node-cache"
++  require (spansApart [((s.data.regs.rsp.toBitVec - .ofNat 64 (insertWindow + A.depth)).toNat, insertWindow + A.depth)]
++    (L.peers.map fun (_,a) => (a,Layouts.peerSize))) "c1.stack-peers"
+   frameReady L c s ra (insertWindow + A.depth) (s.data.regs.rsi.toNat, width/8) true false
+```
+
+The window is the one the existing clauses use, `[rsp − (insertWindow +
+A.depth), rsp)`, without the return word; the peers are the layout's, each
+`Layouts.peerSize` bytes. I put it in `insertReady` and not in `frameReady`
+so that the lookup's caller conditions keep their text.
+`C1Trunk.StackOffPeers`, the trunk's hypothesis, follows in one step: take
+the clause out of `insertReady = .ok ()` and apply `spansApart_sound` to
+the window's span and the peer's span (the window's `InRange` is the span's
+`contains` after `BitVec.ofNat_toNat`).
+`Statements/C1/proof/StackOffPeers.lean` proves exactly that, with the
+trunk's statement copied verbatim, and carries the trunk's layout as two
+`#guard`s (the heap separation holds of it; the new clause refuses it).
+The clause holds at all 20 captured wrapper entries under both seeds, every
+test state of the packet still satisfies `insertReady`, and a stack window
+inside a peer object below its count and list head, of which every
+separation of `frameReady` holds, is refused at `c1.stack-peers`.
+
 The interface proposition `PremisesMet` was weaker than its description (an
 allocator with `Idle := False` closed it). It now also asks that the
 allocator be idle in some memory, and its description says only what it
@@ -183,12 +242,14 @@ states.
 
 ## 2. The signed text, in reading order
 
-`binary/StatementC1Contracts.lean` (135 source lines, 116 before),
-`binary/StatementC1Headline.lean` (281, 252),
+`binary/StatementC1Contracts.lean` (135 source lines, 116 in revision 2),
+`binary/StatementC1Headline.lean` (291, 252),
 `binary/StatementC1CallbackImage.lean` (21, generated, unchanged) and
 `binary/StatementC1Vacuity.lean` (198, 155). Doc comments are left out
-below; the files carry them. `InsertStep`, `LookupStep`, `Initial`, the
-caller conditions and the two exclusions are textually unchanged.
+below; the files carry them. `InsertStep`, `LookupStep`, `Initial`,
+`frameReady`, `lookupReady`, `emptyTable` and the two exclusions are
+textually unchanged from revision 2; `insertReady` gained one clause
+(change B, appendix A).
 
 **What is signed:**
 
@@ -222,7 +283,8 @@ def CountMoved (L : Layout) (pid : PeerId) (before after : Nat) (m m' : Mem 64) 
 
 def Referenced (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
   ∀ (w w' : World) (m m' : Mem 64) (pid : PeerId) (count : Nat), Inv w m →
-    ((liftWG (WG.peerGet pid)).run w = .ok ((), w') ∧ CountMoved L pid count (count+1) m m') ∨
+    ((liftWG (WG.peerGetMaybeZero (some pid))).run w = .ok (some pid, w') ∧
+      CountMoved L pid count (count+1) m m') ∨
     ((liftWG (WG.peerPut (some pid))).run w = .ok ((), w') ∧ 1 < count ∧
       CountMoved L pid count (count-1) m m') →
     Inv w' m'
@@ -389,8 +451,8 @@ They are part of what is signed.
 
 ## 3. The difference from revision 2
 
-`git diff 7d39d508 -- binary/StatementC1*.lean`: 131 lines added, 40
-removed, in ten hunks; the raw diff is [appendix D](#appendix-d-the-diff-against-revision-2).
+`git diff 7d39d508 -- binary/StatementC1*.lean`: 142 lines added, 41
+removed, in twelve hunks; the raw diff is [appendix D](#appendix-d-the-diff-against-revision-2).
 `StatementC1CallbackImage.lean` has no hunk.
 
 | File, hunk | What | Reason | Decision |
@@ -399,7 +461,9 @@ removed, in ten hunks; the raw diff is [appendix D](#appendix-d-the-diff-against
 | Contracts `@@ -64` (2) | `a + nodeSize < 2^64 ∧` in `AllocResult`; its comment | The landed relation demands it of every node | 1 |
 | Contracts `@@ -98` | `ServiceReady A c s` becomes `ServiceReady L A c s`, twice | Follows from the new parameter | 4 |
 | Headline `@@ -7` | File comment: the sequences covered include reference moves | Comment only | 2 |
+| Headline `@@ -85`, `@@ -98` | `insertReady`: the clause `c1.stack-peers`; its comment | The landed `NodeInit.boundary` needs `add`'s stack bytes apart from whole peer objects; without it the trunk's cut needs an extra hypothesis | B |
 | Headline `@@ -158` | New `CountMoved`, `Referenced` | The clause itself | 2 |
+| Headline `@@ -158`, within `Referenced` | The take is `peerGetMaybeZero (some pid)` returning `some pid`; the comment cites the kernel's lines | The operation `set_peer` performs on an existing peer (R1); `peerGet` leaves the claim | A |
 | Headline `@@ -215` | `Referenced L Inv` in `Headline`'s conjunction; its comment | The clause is claimed | 2 |
 | Headline `@@ -241` | The same conjunct in `HeadlineExplicit` (not signed) | Keeps "implies `Headline`" true | 2 |
 | Vacuity `@@ -3` | File comment | Comment only | 5 |
@@ -409,7 +473,8 @@ removed, in ten hunks; the raw diff is [appendix D](#appendix-d-the-diff-against
 Not statement text, changed to follow: `C1Interfaces.lean`, `C1Assembly.lean`
 (section 6), `Statements/C1/Test.lean`, `run-tests.sh`,
 `capture/Check.lean`, `capture/summarise.py`, `measure-surface.py`,
-`proof/TopOfMemory.lean`, new `proof/StateWord.lean`, and a note at the top
+`proof/TopOfMemory.lean`, new `proof/StateWord.lean` and
+`proof/StackOffPeers.lean`, and a note at the top
 of `proof/PLAN.md` section 0.
 
 ## 4. Sizes
@@ -418,27 +483,37 @@ By the project's definition of trust surface (`docs/decisions.md`,
 2026-11-10), in printed lines the way `binary/surface.py` prints the landed
 file (`measure-surface.py`):
 
-| | Revision 2 | Revision 3 | What changed |
-| --- | ---: | ---: | --- |
-| **Assumed**: layout, service contract, `Premises` | 230 | 257 | `Separated` 24; `ServiceReady`, `AllocResult` and the contract +3 |
-| **Assumed**: caller conditions and the starting point | 183 | 183 | |
-| **Assumed**: existing package definitions the premises draw in, not in the landed file | 174 | 187 | `Context.bytes` 4, `Context.metadataBytes` 9 |
-| **Assumed, total new** | **587** | **627** | **+40** |
-| **Claimed**: `Headline` and its clauses, `SeqAdvanced`, the write sets | 80 | 110 | `CountMoved` 19, `Referenced` 10, `Headline` +1 |
-| **Claimed**: existing definitions the conclusion draws in | 22 | 22 | |
-| **Claimed**: the witness, the exclusions, `Signed` | 127 | 167 | `Witness` 24 becomes `Executed` 26, `ServiceActive` 31 and `Witness` 7 |
-| **Claimed**: the ten instruction terms and their `fetch` (change 3) | 75 | 75 | |
-| **Claimed, total new** | **304** | **374** | **+70** |
+| | Revision 2 | Revision 3 | Revision 4 | What changed |
+| --- | ---: | ---: | ---: | --- |
+| **Assumed**: layout, service contract, `Premises` | 230 | 257 | 257 | Revision 3: `Separated` 24; `ServiceReady`, `AllocResult` and the contract +3 |
+| **Assumed**: caller conditions and the starting point | 183 | 183 | 197 | Revision 4: `insertReady` +14 (change B) |
+| **Assumed**: existing package definitions the premises draw in, not in the landed file | 174 | 187 | 187 | Revision 3: `Context.bytes` 4, `Context.metadataBytes` 9 |
+| **Assumed, total new** | **587** | **627** | **641** | |
+| **Claimed**: `Headline` and its clauses, `SeqAdvanced`, the write sets | 80 | 110 | 111 | Revision 3: `CountMoved` 19, `Referenced` 10, `Headline` +1. Revision 4: `Referenced` 11 (change A) |
+| **Claimed**: existing definitions the conclusion draws in | 22 | 22 | 22 | |
+| **Claimed**: the witness, the exclusions, `Signed` | 127 | 167 | 167 | Revision 3: `Witness` 24 becomes `Executed` 26, `ServiceActive` 31 and `Witness` 7 |
+| **Claimed**: the ten instruction terms and their `fetch` (change 3) | 75 | 75 | 75 | |
+| **Claimed, total new** | **304** | **374** | **375** | |
 
-Uncounted in printed lines, as before: the definitional closure of `Signed`
-is 1,015 hand-written declarations (988), of which 391 are the mirror's
-(372) and 188 Kraken's. The 19 new mirror declarations are what `peerGet`
-and `peerPut` draw in, the release path of `peerPut` included, although
+Uncounted in printed lines, as before, the definitional closure of `Signed`
+in hand-written declarations:
+
+| | Revision 2 | Revision 3 | Revision 4 |
+| --- | ---: | ---: | ---: |
+| Closure of `Signed` | 988 | 1,015 | 1,013 |
+| of which the mirror's | 372 | 391 | 389 |
+| of which Kraken's | 188 | 188 | 188 |
+
+Change A takes `peerGet` and `refcountInc` out (`Leanux.WG.Peer` 4 to 3,
+`Leanux.Kernel.Refcount` 3 to 2); change B adds none. What `Referenced` still draws in
+beyond revision 2 is `peerPut`, its release path included, although
 `1 < count` keeps every admitted run off it. The packet's proposed budgets
-were 600 assumed and 230 claimed: **the assumed kind is now 27 lines over
-its budget**, and the claim proper (without the listing) is 299.
+were 600 assumed and 230 claimed: **the assumed kind is now 41 lines over
+its budget**, and the claim proper (without the listing) is 300.
 
 ## 5. The reruns on the revised text
+
+All numbers in this section are of revision 4's text.
 
 **Build and gate.** `lake -d binary build`: 1,131 jobs. `scripts/binary-proof-gate`:
 PASS, printed surface unchanged. `#print axioms signed_of_parts`: `propext`,
@@ -450,7 +525,8 @@ PASS, printed surface unchanged. `#print axioms signed_of_parts`: `propext`,
   service entry and the bound on every returned object: 23 families, 900
   insertions, 4,124 lookups, every family `holds`, deepest stack write 200,
   23 distinct mirror decisions in each. The same numbers as revision 2: the
-  new premise refuses none of the families and the test service meets the
+  new premises (the service's separation, the stack window apart from the
+  peers) refuse none of the families and the test service meets the
   revised clauses in all of them. The invariant, step, walk and cut checks
   the architect added run inside these and pass.
 - The 5 refusals, H1 under the revision 1 contract (conclusion broken) and
@@ -464,28 +540,33 @@ PASS, printed surface unchanged. `#print axioms signed_of_parts`: `propext`,
   refused (`ready.separated.stack-arena`).
 - New, change 5: `ServiceActive` evaluated on the test service at that
   state holds; on the quiet service it fails.
-- New, change 2: a reference moved from one peer to another (`peerPut`
-  then `peerGet`, each with its count word) is accepted and the invariant's
+- New, change B: a stack window inside a peer object, below its count and
+  list head, satisfies `frameReady` whole and is refused by `insertReady`
+  at `c1.stack-peers`.
+- New, changes 2 and A: a reference moved from one peer to another (`peerPut`
+  then `peerGetMaybeZero` returning the peer, each with its count word) is accepted and the invariant's
   decidable part holds after each step; refused are a count raised with no
-  mirror step, a count raised by two with one `peerGet`, a paired step with
+  mirror step, a count raised by two with one take, a paired step with
   a root word or an arena byte changed as well, the last reference dropped,
   and a peer the layout does not name; the invariant's decidable part fails
   after an unpaired change in either direction. Two more families run the
   whole scenario with the caller's reference following the peer being
   configured, as `set_peer` does: 36 insertions, 168 lookups and 21
   reference steps each, `holds`.
-- The two regression files elaborate: `TopOfMemory.lean`, `StateWord.lean`
-  (two theorems, standard axioms).
+- The three regression files elaborate: `TopOfMemory.lean`,
+  `StateWord.lean` (two theorems) and `StackOffPeers.lean` (the trunk's
+  hypothesis as a theorem), standard axioms.
 
 **The capture's checks** on the captured states (raw captures still in
 `.tmp/c1`; no guest was booted again, so nothing new was captured):
 
-| | Revision 2 | Revision 3 |
+| | Revision 2 | Revisions 3 and 4 |
 | --- | --- | --- |
 | Calls evaluated in Lean, each under two seeds | 20 | 20 |
 | Every check of revision 2 (entry, 23 service calls, return, frame, the landed relation, the invariant, step and walk checks, 33 lookups) | pass | pass, same counts |
 | `ServiceReady.separated`, four conjuncts, at each captured service entry | not stated | 23/23 ×2 each |
 | `AllocResult` with the bound | 22/22 ×2 without it | 22/22 ×2 |
+| `insertReady` with `c1.stack-peers` (window); the clause on its own | 20/20 ×2 without it | 20/20 ×2; 20/20 ×2 |
 | Gaps between calls read as steps of the closed world | counts re-read from memory | 2 reference steps at the grid's change of peer, each accepted; every other gap empty |
 | Calls covered from the empty table: `c1_capture_grid` | 5 of 13 | **13 of 13** |
 | Calls covered: `b1_trie_routing` | 2 of 8 | 2 of 8 |
@@ -494,7 +575,8 @@ PASS, printed surface unchanged. `#print axioms signed_of_parts`: `propext`,
 
 Under revision 2 the grid's last 8 calls were checked with the mirror's
 counts overwritten from memory; under revision 3 the same calls are reached
-by two steps of the clause and nothing is overwritten. The whole-RAM
+by two steps of the clause (`peerPut`, then `peerGetMaybeZero` returning the
+peer) and nothing is overwritten. The whole-RAM
 comparison of the gaps (from the first run's dumps, which are deleted as
 they are compared) agrees: the only heap bytes the caller changed in the
 grid are the two counts.
@@ -506,24 +588,26 @@ Could not be rerun: nothing. Not run at all, as before: `Idle` and `frame`
 
 `signed_of_parts` is proved for the revised `Signed` from the interface
 propositions (no `sorry`; standard axioms). It lost the hypothesis
-`NodeBelowTop` and gained `ReferencedHolds`. What changed, and what it does
-to the closed proofs on `task/binary-c1-wp1` (`73387d54`) and
-`task/binary-c1-wp4` (`93226094`); "compiled" means I compiled that branch's
-files against revision 3 in a scratch directory, without touching the
-branch:
+`NodeBelowTop` and gained `ReferencedHolds`; revision 4 changes nothing in
+`C1Assembly.lean`. What changed, and what it does to the closed proofs on
+`task/binary-c1-wp1` (`73387d54`), `task/binary-c1-wp4` (`93226094`) and the
+trunk on `task/binary-c1-wp2` (`bccece9c`); "compiled" means I compiled that
+branch's files against revision 4 in a scratch directory, without touching
+the branch:
 
 | Proposition (package) | Statement | Definitions under it | Closed proof |
 | --- | --- | --- | --- |
 | `RunIsStep` (1) | unchanged | none changed | **unchanged**: compiled |
 | `InitialHolds`, `FramedHolds`, `LookupHolds` (1) | unchanged | `Premises` (through the contract) | **unchanged**: compiled |
 | `ExclusionOne`, `ExclusionTwo` (1) | unchanged | `Premises`; `HeadlineFor` keeps its four clauses for this reason | **unchanged**: compiled |
-| `ReferencedHolds` (1) | **new** | | **real work**: a new proof. The landed `target_mapCounts` and `heap_mapCounts`, which `lookup_checked` uses for the count a lookup raises, are the likely tools |
-| `AllocRule`, `FreeRule` (4) | unchanged | `AllocResult` (one more conjunct in the conclusion, from the contract), `ServiceReady` | **mechanical**: the package's `separated` moved before `serviceReady`, one field and the layout argument added; then both compiled |
+| `ReferencedHolds` (1) | **new** in revision 3; same text over revision 4's `Referenced` | `Referenced` (the take) | **real work**, not yet proved, so change A costs nothing. It is easier than before: the take is the operation the mirror's lookup runs, so what `lookup_checked` already proves of `peerGetMaybeZero` (`target_mapCounts`, `heap_mapCounts`) applies directly |
+| `AllocRule`, `FreeRule` (4) | unchanged | `AllocResult` (one more conjunct in the conclusion, from the contract), `ServiceReady`, `insertReady` | **mechanical**: the package's `separated` moved before `serviceReady`, one field and the layout argument added; for revision 4 one more line in `ready_of_insertReady` (the new clause is taken off before `frameReady` is unfolded); then both compiled |
 | `Cmp1FromImage`, `Cmp8FromImage` (4) | unchanged | none changed | **unchanged**: compiled |
 | `PremisesMet` (4) | **restated**: gains `∃ m stream, A.Idle m [] stream` | `Premises` | **mechanical**: the layout argument at two places and one arithmetic conjunct in `Stub.contract`; the new conjunct from the package's `idle_initial`; then compiled |
 | `WitnessHolds` (4) | same text | `Witness` restated | **real work**, and was not closed: `Executed` through the headline (the package's `ran_of_eventually`), and a stub that uses its stack and writes the buffer, re-proved against the contract |
 | `NodeBelowTop` | unchanged | `AllocResult` | now a theorem; the path propositions that take it as a hypothesis are unchanged |
-| `Path k`, the nine path propositions, `TrunkToNode`, `TrunkHolds` (2, 3; open) | unchanged | `Premises`; `AllocRule`'s `AllocResult` | proofs in progress that take `AllocResult`'s success clause apart by position meet one more component, third |
+| `Path k`, the nine path propositions, `TrunkToNode`, `TrunkHolds` (2, 3) | unchanged | `Premises`; `AllocRule`'s `AllocResult`; `insertReady` | proofs that take `AllocResult`'s success clause apart by position meet one more component, third; proofs that take `insertReady` apart clause by clause meet one more clause before `frameReady` |
+| The trunk's `trunkToNodePlus_of_stackOffPeers`, `trunkHolds_of_stackOffPeers`, `pathChild_of_stackOffPeers` (2) | not interface propositions: each is the interface's with the extra hypothesis `C1Trunk.StackOffPeers` | `insertReady` | **closed by change B**: `C1Trunk.StackOffPeers` is now a theorem (one step from the new clause: `proof/StackOffPeers.lean`), so the three become the interface's `TrunkHolds`, `PathChild` and the strengthened trunk package 3 takes. Compiled: the trunk's 42 modules at `bccece9c` against revision 4 with two one-line repairs (`insertReady_facts` takes the new clause off; `object_of_result` skips revision 3's bound), then the hypothesis derived and all three applied to it, standard axioms |
 | `HeadlineFor`, `InsertPost`, `StepFacts`, `InFlight`, `Protected`, `NodeCut`, `Exits` | unchanged | none changed | |
 
 The service package's finding file (`C1ServiceContractFinding`) no longer
@@ -535,15 +619,24 @@ revision 2.
 Each change was made as decided. Four things the owner and the reviewer
 should know that the decision did not anticipate:
 
+0. **Revision 4.** Both changes were made as decided and neither forced
+   another. Change B is in `insertReady` only; `frameReady` and the
+   lookup's conditions keep their text. The window in the new clause leaves
+   out the return word, as decided and as the trunk's hypothesis has it;
+   the return word is therefore still kept apart from a peer's count and
+   list head only, which no proof so far needs more of.
 1. **Change 4 forces a parameter.** `ServiceReady` cannot state separation
    from the arena without the layout, so it is now `ServiceReady L A c s`.
    This is inside the named change but it touches the two contract clauses.
 2. **Change 2 does not reach `b1_trie_routing`.** The decision's wording
    (what a real `wg set` does between peers) is met for a `wg set` over
-   peers that exist when the table is empty. A `wg set` that creates its
-   peers as it goes is still covered for the first peer only.
-3. **The assumed kind is over the packet's budget** (627 against 600), and
-   the mirror's share of the claim grew by `peerGet` and `peerPut`.
+   peers that exist when the table is empty. A `wg set` or `wg setconf` that
+   creates its peers and gives them allowed addresses in one message, which
+   is how an interface is usually configured, is covered for its first peer
+   only.
+3. **The assumed kind is over the packet's budget** (641 against 600), and
+   the mirror's share of the claim grew by `peerPut` (revision 3's `peerGet`
+   left with change A).
 4. **The witness is weaker in one respect** (section 1, change 5), and its
    satisfiability by a stub is argued and tested, not proved.
 
@@ -555,14 +648,21 @@ on `Signed`, which is the register wording, changed in three phrases.
 1. **Closed-world, now one step wider.** The invariant is hidden, so the
    conclusion holds only along sequences made of: insertions; lookups;
    changes outside the heap (`Framed`); and, new, a registered peer's
-   reference count going up by one with the mirror's `peerGet`, or down by
-   one from above one with the mirror's `peerPut`. Exactly that wide: not
+   reference count going up by one with the mirror's `peerGetMaybeZero`
+   returning that peer, or down by one from above one with the mirror's
+   `peerPut`. Those are the mirror's operations for what `set_peer` does to
+   an existing peer: the take through `wg_pubkey_hashtable_lookup`
+   (`wg_peer_get_maybe_zero`), the drop by `wg_peer_put`. Exactly that wide: not
    peer creation or removal, not the last reference dropped, not a count
    changed by more than one at a step, not a count changed while any other
    heap byte changes, not a reference the mirror refuses to take (a count
    of zero, or saturation). A later result on removal or the dump replaces
-   this one; it cannot extend it. The mirror's `peerGet` and `peerPut` are
-   now inside the claim.
+   this one; it cannot extend it. **A `wg set` or `wg setconf` that creates
+   its peers and gives them allowed addresses in one message, which is how
+   an interface is usually configured, is covered for its first peer only**:
+   creating a peer changes the peer set, and the layout's peers are fixed at
+   the empty table. The mirror's `peerPut` is now inside the claim
+   (`peerGetMaybeZero` already was, through the lookup).
 2. **What the witness shows and does not.** It shows that one decoder,
    layout and allocator meet every premise with the image's callbacks; that
    with them an actual execution runs through each kind of call from an
@@ -594,7 +694,9 @@ on `Signed`, which is the register wording, changed in three phrases.
 Unchanged and still to be accepted: the caller's conditions are not shown
 to hold at any real call by proof (the capture shows them at 20); the
 over-long-prefix exit is not reachable from the real caller; the NULL-peer
-exit is outside.
+exit is outside. New with revision 4 among the caller's conditions: the
+insertion's stack window does not lie in a peer object (true of the 20
+captured calls, where the stack is a kernel stack).
 
 ## Appendix A: the rest of the signed text
 
@@ -681,6 +783,8 @@ def insertReady (L : Layout) (A : Allocator) (c : Context) (s : MachineState)
   require (s.data.regs.rdx.toNat % 256 == cidr) "c1.insert-cidr"
   require (Trie.networkKeyCheck s.data.dmem s.data.regs.rsi.toBitVec width key) "c1.insert-address"
   require ((← readNat s cacheWord 8) == L.cache) "c1.node-cache"
+  require (spansApart [((s.data.regs.rsp.toBitVec - .ofNat 64 (insertWindow + A.depth)).toNat, insertWindow + A.depth)]
+    (L.peers.map fun (_,a) => (a,Layouts.peerSize))) "c1.stack-peers"
   frameReady L c s ra (insertWindow + A.depth) (s.data.regs.rsi.toNat, width/8) true false
 
 def lookupReady (L : Layout) (c : Context) (s : MachineState)
@@ -815,7 +919,7 @@ binary/Statements/C1/capture/run-capture.sh                                  # a
 cap scripts/in-bundle /usr/bin/python3 -B binary/Statements/C1/measure-surface.py
 ```
 
-`run-tests.sh` first elaborates the two regression files, then runs
+`run-tests.sh` first elaborates the three regression files, then runs
 `Test.lean`; `lean --run Statements/C1/Test.lean INPUT.json probes` runs
 everything but the search over the 23 families (about two minutes).
 
@@ -828,7 +932,7 @@ whole buffer loaded (about three minutes, 5.4 GiB), and prints the counts
 recording and removed again; it is not a corpus trace. Outputs are under
 `.artifacts/check/c1-*` and `.tmp/c1/capture-*`, ignored and not committed:
 up to about 90 MiB per trace, the RAM dumps deleted as they are compared.
-For revision 3 the captures of the first run were kept and only
+For revisions 3 and 4 the captures of the first run were kept and only
 `Check.lean` and `summarise.py` were run again on them.
 
 The capture reported here: s5 image `06513d05…e88e`, Kraken `43df9468`,
@@ -1207,7 +1311,29 @@ diff --git a/binary/StatementC1Headline.lean b/binary/StatementC1Headline.lean
  `HeadlineExplicit` is the alternative with the landed relation in its
  conclusion; it implies `Headline`, and it is what a proof would exhibit. -/
  namespace Binary.Statements.C1
-@@ -158,6 +160,31 @@ between calls. -/
+@@ -85,7 +87,11 @@ def frameReady (L : Layout) (c : Context) (s : MachineState) (ra : UInt64)
+ /-- A call of `wg_allowedips_insert_v4/_v6(table, ip, cidr, peer, lock)`:
+ the wrapper's entry, the table, the address bytes in network order, the
+ 8-bit prefix length, a non-NULL registered peer, the `node_cache` word, and
+-room below the stack for the allocator's scratch. -/
++room below the stack for the allocator's scratch. Revision 4: the stack
++window below the return word is apart from every peer as a whole object
++(`frameReady` keeps it apart from the heap, which holds only a peer's
++reference count and list head; the landed `NodeInit.boundary` needs `add`'s
++stack bytes apart from the whole 1520-byte object). -/
+ def insertReady (L : Layout) (A : Allocator) (c : Context) (s : MachineState)
+     (family key cidr pid : Nat) (ra : UInt64) : Except String Unit := do
+   require (family == 4 || family == 6) "c1.family"
+@@ -98,6 +104,8 @@ def insertReady (L : Layout) (A : Allocator) (c : Context) (s : MachineState)
+   require (s.data.regs.rdx.toNat % 256 == cidr) "c1.insert-cidr"
+   require (Trie.networkKeyCheck s.data.dmem s.data.regs.rsi.toBitVec width key) "c1.insert-address"
+   require ((← readNat s cacheWord 8) == L.cache) "c1.node-cache"
++  require (spansApart [((s.data.regs.rsp.toBitVec - .ofNat 64 (insertWindow + A.depth)).toNat, insertWindow + A.depth)]
++    (L.peers.map fun (_,a) => (a,Layouts.peerSize))) "c1.stack-peers"
+   frameReady L c s ra (insertWindow + A.depth) (s.data.regs.rsi.toNat, width/8) true false
+ 
+ /-- A call of the compiled `lookup(root, bits, ip)` as its two callers make
+@@ -158,6 +166,35 @@ between calls. -/
  def Framed (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
    ∀ w m m', Inv w m → (∀ a, L.Heap a → m.get? a = m'.get? a) → Inv w m'
  
@@ -1220,18 +1346,22 @@ diff --git a/binary/StatementC1Headline.lean b/binary/StatementC1Headline.lean
 +    readNat ⟨{dmem := m'},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4 = .ok after ∧
 +    ∀ a, L.Heap a → ¬InRange (.ofNat 64 (peer+Root.nodeOffsets.peerRefcount)) 4 a → m.get? a = m'.get? a
 +
-+/-- Revision 3. The invariant survives the caller taking or dropping one
-+reference on a registered peer between calls: the peer's count word goes up
-+by one together with the mirror's `peerGet` on that peer, or down by one,
-+from a count above one, together with the mirror's `peerPut` on it (the
-+last reference is not dropped here: that is the peer's removal). No other
-+heap byte changes and no other mirror operation runs. This is what a
-+`wg set` over existing peers does between the insertions for one peer and
-+those for the next: `set_peer` drops its reference on the first and takes
-+one on the second. -/
++/-- Revisions 3 and 4. The invariant survives the caller taking or dropping
++one reference on a registered peer between calls: the peer's count word goes
++up by one together with the mirror's `peerGetMaybeZero` on that peer
++returning the peer, or down by one, from a count above one, together with
++the mirror's `peerPut` on it (the last reference is not dropped here: that
++is the peer's removal). No other heap byte changes and no other mirror
++operation runs. This is what a `wg set` over existing peers does between
++the insertions for one peer and those for the next: `set_peer` drops its
++reference on the first (`wg_peer_put`, netlink.c:486) and takes one on the
++second through `wg_pubkey_hashtable_lookup`, that is
++`wg_peer_get_maybe_zero` (netlink.c:386, peerlookup.c:68). `wg_peer_get` is
++called only on a peer just created (netlink.c:421), which is outside. -/
 +def Referenced (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
 +  ∀ (w w' : World) (m m' : Mem 64) (pid : PeerId) (count : Nat), Inv w m →
-+    ((liftWG (WG.peerGet pid)).run w = .ok ((), w') ∧ CountMoved L pid count (count+1) m m') ∨
++    ((liftWG (WG.peerGetMaybeZero (some pid))).run w = .ok (some pid, w') ∧
++      CountMoved L pid count (count+1) m m') ∨
 +    ((liftWG (WG.peerPut (some pid))).run w = .ok ((), w') ∧ 1 < count ∧
 +      CountMoved L pid count (count-1) m m') →
 +    Inv w' m'
@@ -1239,7 +1369,7 @@ diff --git a/binary/StatementC1Headline.lean b/binary/StatementC1Headline.lean
  /-- The table's sequence word after the call is the word before plus one,
  modulo 2^64: what a wrapper does besides calling `add`. -/
  def SeqAdvanced (L : Layout) (s t : MachineState) : Prop :=
-@@ -215,14 +242,16 @@ def LookupStep (fetch : Int64 → Option Decoded) (L : Layout)
+@@ -215,14 +252,16 @@ def LookupStep (fetch : Int64 → Option Decoded) (L : Layout)
        EqualOutside (LookupWrites L c s) s.data.dmem t.data.dmem) s
  
  /-- THE HEADLINE. Under the premises there is an invariant, holding
@@ -1260,7 +1390,7 @@ diff --git a/binary/StatementC1Headline.lean b/binary/StatementC1Headline.lean
  
  /-! ## The alternative: the landed relation in the conclusion -/
  
-@@ -241,12 +270,12 @@ def Related (L : Layout) (A : Allocator) (w : World) (m : Mem 64) : Prop :=
+@@ -241,12 +280,12 @@ def Related (L : Layout) (A : Allocator) (w : World) (m : Mem 64) : Prop :=
      (∀ node ∈ names.trie.nodes, ∃ span ∈ L.arena, span.1 ≤ node.2 ∧ node.2+nodeSize ≤ span.1+span.2) ∧
      A.Idle m (names.trie.nodes.map (·.2)) stream
  
