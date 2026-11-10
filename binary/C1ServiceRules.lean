@@ -27,7 +27,7 @@ private theorem sub_bound (x : BitVec 64) (n : Nat)
   rw [BitVec.toNat_sub, BitVec.toNat_ofNat] at h
   omega
 
-private theorem inRange_iff (base : BitVec 64) (n : Nat) (h : base.toNat + n ≤ 2^64) (a : BitVec 64) :
+theorem inRange_iff (base : BitVec 64) (n : Nat) (h : base.toNat + n ≤ 2^64) (a : BitVec 64) :
     InRange base n a ↔ base.toNat ≤ a.toNat ∧ a.toNat < base.toNat + n := by
   constructor
   · rintro ⟨i,bound,rfl⟩
