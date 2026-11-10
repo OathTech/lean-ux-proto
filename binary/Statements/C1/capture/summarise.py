@@ -55,7 +55,7 @@ def main():
             tally(frame, 'python: whole RAM across the call changed only in the stack window, the buffer, the table, '
                   'peer fields, nodes, the slab page and the words the services changed', 'ok' if not stray else f'STRAY {stray}')
         # the closed world over the whole RAM: revision 2 admits no heap change between calls; revision 3
-        # also a registered peer's count up by one (peerGet) or down by one from above one (peerPut)
+        # also a registered peer's count up by one (peerGetMaybeZero returning the peer) or down by one from above one (peerPut)
         def paired(h):
             if not (h['what'].startswith('peer ') and h['what'].endswith(' refcount') and h['bytes'] == 1):
                 return False

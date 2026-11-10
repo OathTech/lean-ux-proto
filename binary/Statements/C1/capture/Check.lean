@@ -95,7 +95,7 @@ def countMoved (L : Layout) (pid before after : Nat) (m m' : DataMem) : Except S
 /-- What the caller did to the heap since the last call, read as steps of the
 closed world. Revision 2 admits none (`Framed`: no heap byte changes).
 Revision 3 also admits `Referenced`: one peer's count word up by one with
-the mirror's `peerGet`, or down by one from above one with the mirror's
+the mirror's `peerGetMaybeZero` returning the peer, or down by one from above one with the mirror's
 `peerPut`. The steps are found from the two counts (drops first, as
 `set_peer` drops its reference before the next one is taken), each is run
 on the mirror and on an intermediate memory and judged by `countMoved`, and
@@ -118,12 +118,15 @@ def referenceMoves (L : Layout) (previous : DataMem) (entry : MachineState) (w :
     let peer ← Trie.address L.peers (some pid)
     let count ← readNat ⟨{dmem := m},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4
     let next := if drop then count-1 else count+1
-    let name := if drop then "peerPut" else "peerGet"
+    let name := if drop then "peerPut" else "peerGetMaybeZero"
     if drop && !(1 < count) then
       return (w,notes ++ [s!"{name} {pid}: {count} -> {next} REFUSED: the last reference"],false,"FAILS: a count dropped to zero")
-    match (liftWG (if drop then WG.peerPut (some pid) else WG.peerGet pid)).run w with
+    let step : Except Stop (Bool × World) := if drop then ((liftWG (WG.peerPut (some pid))).run w).map fun (_,w') => (true,w')
+      else ((liftWG (WG.peerGetMaybeZero (some pid))).run w).map fun (got,w') => (got == some pid,w')
+    match step with
     | .error e => return (w,notes ++ [s!"{name} {pid}: MIRROR refuses: {Stop.message e}"],false,"FAILS: the mirror refuses the step")
-    | .ok (_,w') =>
+    | .ok (false,_) => return (w,notes ++ [s!"{name} {pid}: the mirror returns no peer"],false,"FAILS: the mirror takes no reference")
+    | .ok (true,w') =>
       let m' := put m (peer+Root.nodeOffsets.peerRefcount) 4 next
       match countMoved L pid count next m m' with
       | .error e => return (w,notes ++ [s!"{name} {pid}: {e}"],false,s!"FAILS: {e}")

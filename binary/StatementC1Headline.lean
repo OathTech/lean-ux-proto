@@ -169,18 +169,22 @@ def CountMoved (L : Layout) (pid : PeerId) (before after : Nat) (m m' : Mem 64) 
     readNat ⟨{dmem := m'},0⟩ (peer+Root.nodeOffsets.peerRefcount) 4 = .ok after ∧
     ∀ a, L.Heap a → ¬InRange (.ofNat 64 (peer+Root.nodeOffsets.peerRefcount)) 4 a → m.get? a = m'.get? a
 
-/-- Revision 3. The invariant survives the caller taking or dropping one
-reference on a registered peer between calls: the peer's count word goes up
-by one together with the mirror's `peerGet` on that peer, or down by one,
-from a count above one, together with the mirror's `peerPut` on it (the
-last reference is not dropped here: that is the peer's removal). No other
-heap byte changes and no other mirror operation runs. This is what a
-`wg set` over existing peers does between the insertions for one peer and
-those for the next: `set_peer` drops its reference on the first and takes
-one on the second. -/
+/-- Revisions 3 and 4. The invariant survives the caller taking or dropping
+one reference on a registered peer between calls: the peer's count word goes
+up by one together with the mirror's `peerGetMaybeZero` on that peer
+returning the peer, or down by one, from a count above one, together with
+the mirror's `peerPut` on it (the last reference is not dropped here: that
+is the peer's removal). No other heap byte changes and no other mirror
+operation runs. This is what a `wg set` over existing peers does between
+the insertions for one peer and those for the next: `set_peer` drops its
+reference on the first (`wg_peer_put`, netlink.c:486) and takes one on the
+second through `wg_pubkey_hashtable_lookup`, that is
+`wg_peer_get_maybe_zero` (netlink.c:386, peerlookup.c:68). `wg_peer_get` is
+called only on a peer just created (netlink.c:421), which is outside. -/
 def Referenced (L : Layout) (Inv : World → Mem 64 → Prop) : Prop :=
   ∀ (w w' : World) (m m' : Mem 64) (pid : PeerId) (count : Nat), Inv w m →
-    ((liftWG (WG.peerGet pid)).run w = .ok ((), w') ∧ CountMoved L pid count (count+1) m m') ∨
+    ((liftWG (WG.peerGetMaybeZero (some pid))).run w = .ok (some pid, w') ∧
+      CountMoved L pid count (count+1) m m') ∨
     ((liftWG (WG.peerPut (some pid))).run w = .ok ((), w') ∧ 1 < count ∧
       CountMoved L pid count (count-1) m m') →
     Inv w' m'

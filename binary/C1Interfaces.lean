@@ -115,8 +115,10 @@ def FramedHolds : Prop :=
     Framed L (Inv L A)
 
 /-- PACKAGE 1 (new with revision 3 of the statement). `Referenced` for
-`Inv`: a peer's count word moved by one together with the mirror's `peerGet`
-or a non-releasing `peerPut`. `Inv` gives the count in memory equal to the
+`Inv`: a peer's count word moved by one together with the mirror's
+`peerGetMaybeZero` returning the peer (revision 4 of the statement; the
+operation the mirror's lookup already runs, so `lookup_checked`'s treatment
+of it applies) or a non-releasing `peerPut`. `Inv` gives the count in memory equal to the
 mirror's (`assertAt`'s reconstruction reads it), so the mirror's run changes
 exactly that peer's `refcount` by one and nothing `Related` reads besides
 (the pending records and the armed sites are untouched); the landed

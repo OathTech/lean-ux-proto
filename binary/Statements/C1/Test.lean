@@ -442,7 +442,7 @@ def countMoved (L : Layout) (pid before after : Nat) (m m' : DataMem) : Except S
 /-- One step of `Referenced`, judged like a call. PREMISE: a drop starts
 above one; the count word moves by one and no other heap byte changes
 (`after` is the memory offered, by default the count word rewritten);
-MIRROR: the mirror's `peerGet` / `peerPut` on that peer; CONCLUSION: the
+MIRROR: the mirror's `peerGetMaybeZero` returning the peer / `peerPut`; CONCLUSION: the
 invariant's decidable part (`Proof.relatedCheck`) for the mirror's world
 after the step and the memory after it. -/
 def referenceStep (cfg : Config) (th : Thread) (pid : Nat) (drop : Bool)
@@ -455,8 +455,10 @@ def referenceStep (cfg : Config) (th : Thread) (pid : Nat) (drop : Bool)
   let next := if drop then count-1 else count+1
   let memory := after.getD (put th.memory word 4 next)
   let world ← if mirror then
-      ((liftWG (if drop then WG.peerPut (some pid) else WG.peerGet pid)).run th.world).map (·.2)
-        |>.mapError (s!"MIRROR: {Stop.message ·}")
+      (if drop then (((liftWG (WG.peerPut (some pid))).run th.world).map (·.2)).mapError (s!"MIRROR: {Stop.message ·}")
+        else match (liftWG (WG.peerGetMaybeZero (some pid))).run th.world with
+          | .error e => .error s!"MIRROR: {Stop.message e}"
+          | .ok (got,w') => if got == some pid then .ok w' else .error "MIRROR: peerGetMaybeZero returns no peer")
     else pure th.world
   unless mirror do throw "PREMISE: referenced.unpaired: no mirror step"
   (countMoved L pid count next th.memory memory).mapError (s!"PREMISE: referenced.{·}")
@@ -628,7 +630,7 @@ def referenceProbes : Except String (List String) := do
   let moved ← referenceStep cfg (← referenceStep cfg th 0 true) 1 false
   require ((← readNat ⟨{dmem := moved.memory},0⟩ (word 0) 4) == 1 && (← readNat ⟨{dmem := moved.memory},0⟩ (word 1) 4) == 3)
     "references: the counts after the move"
-  lines := lines ++ ["references: peerPut 0 (2 -> 1) then peerGet 1 (2 -> 3), each paired with its count word: accepted, the invariant's decidable part holds after each"]
+  lines := lines ++ ["references: peerPut 0 (2 -> 1) then peerGetMaybeZero 1 (2 -> 3), each paired with its count word: accepted, the invariant's decidable part holds after each"]
   let refused (what : String) (expected : String) (result : Except String Thread) : Except String String :=
     match result with
     | .error e => if e.startsWith expected then pure s!"references, refused: {what}: {e}" else throw s!"references: {what}: {e}"
@@ -637,15 +639,15 @@ def referenceProbes : Except String (List String) := do
   lines := lines ++ [← refused "a count raised in memory with no mirror step" "PREMISE: referenced.unpaired"
     (referenceStep cfg th 0 false (mirror := false))]
   -- and the invariant's decidable part does not survive it, nor a mirror step without the memory change
-  let (_,taken) ← ((liftWG (WG.peerGet 0)).run th.world).mapError Stop.message
+  let (_,taken) ← ((liftWG (WG.peerGetMaybeZero (some 0))).run th.world).mapError Stop.message
   require (!(Proof.relatedCheck L th.names th.world raised).isOk && !(Proof.relatedCheck L th.names taken th.memory).isOk)
     "references: an unpaired change keeps the invariant's decidable part"
   lines := lines ++ ["references: the invariant's decidable part fails after a count change without the mirror step, and after the mirror step without the count change"]
-  lines := lines ++ [← refused "a count raised by two with one peerGet" "PREMISE: referenced.count-after"
+  lines := lines ++ [← refused "a count raised by two with one peerGetMaybeZero" "PREMISE: referenced.count-after"
     (referenceStep cfg th 0 false (after := some (put th.memory (word 0) 4 4)))]
-  lines := lines ++ [← refused "a paired peerGet with a root word changed as well" "PREMISE: referenced.heap"
+  lines := lines ++ [← refused "a paired peerGetMaybeZero with a root word changed as well" "PREMISE: referenced.heap"
     (referenceStep cfg th 0 false (after := some (put raised (cfg.table+AllowedipsMutationLayout.root4) 8 0xa01000)))]
-  lines := lines ++ [← refused "a paired peerGet with an arena byte changed as well" "PREMISE: referenced.heap"
+  lines := lines ++ [← refused "a paired peerGetMaybeZero with an arena byte changed as well" "PREMISE: referenced.heap"
     (referenceStep cfg th 0 false (after := some (put raised (cfg.arena+16) 1 9)))]
   let last ← referenceStep cfg th 0 true
   lines := lines ++ [← refused "the last reference dropped (1 -> 0)" "PREMISE: referenced.last-reference"
