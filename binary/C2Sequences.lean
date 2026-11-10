@@ -2,6 +2,7 @@ import C2CutInterfaces
 import FiniteExecution
 import HistoryGuard
 import CanonicalLoads
+import MemoryBytes
 
 /-! Work package 3 of result C2: representation, the mirror link, first exits and the
 witness (`WindowMapped` to `WitnessStart` of `C2CutInterfaces`). Brief:
@@ -770,4 +771,525 @@ theorem world_holds : WorldHolds :=
   fun c => ⟨worldOf c, 0, ambientStart, windowOf_worldOf c⟩
 
 #print axioms world_holds
+end Binary.C2
+
+/-! ## The witness: tools
+
+A memory built from a list of byte regions, read back by one lemma; address ranges as
+lists of numbers, with disjointness decided. -/
+namespace Binary.C2.Witness
+open Binary TrustBase Leanux Binary.C2 Binary.MemoryBytes
+local instance : Labels := Binary.Image.linkedLabels
+
+/-- The memory holding each region's bytes at its base address. -/
+def build : List (Nat × List UInt8) → Mem 64
+  | [] => ∅
+  | (base, bytes) :: rest => (build rest).storeBytes (.ofNat 64 base) bytes
+
+/-- Every region ends within the address space and no two regions overlap. -/
+def wellPlaced : List (Nat × List UInt8) → Bool
+  | [] => true
+  | r :: rest =>
+    decide (r.1 + r.2.length ≤ 18446744073709551616) &&
+    rest.all (fun q => decide (r.1 + r.2.length ≤ q.1 ∨ q.1 + q.2.length ≤ r.1)) &&
+    wellPlaced rest
+
+theorem wellPlaced_bound : ∀ (regions : List (Nat × List UInt8)), wellPlaced regions = true →
+    ∀ q ∈ regions, q.1 + q.2.length ≤ 18446744073709551616
+  | [], _, q, inside => by cases inside
+  | r :: rest, placed, q, inside => by
+    simp only [wellPlaced, Bool.and_eq_true, decide_eq_true_eq] at placed
+    rcases List.mem_cons.mp inside with rfl | later
+    · exact placed.1.1
+    · exact wellPlaced_bound rest placed.2 q later
+
+/-- A byte of a region is read back. -/
+theorem build_get : ∀ (regions : List (Nat × List UInt8)), wellPlaced regions = true →
+    ∀ (base : Nat) (bytes : List UInt8), (base, bytes) ∈ regions →
+    ∀ (offset : Nat) (bound : offset < bytes.length),
+      (build regions).get? (.ofNat 64 (base + offset)) = some bytes[offset]
+  | [], _, _, _, inside, _, _ => by cases inside
+  | (first, content) :: rest, placed, base, bytes, inside, offset, bound => by
+    have bounds := wellPlaced_bound _ placed
+    simp only [wellPlaced, Bool.and_eq_true, decide_eq_true_eq, List.all_eq_true] at placed
+    rcases List.mem_cons.mp inside with same | later
+    · cases same
+      rw [BitVec.ofNat_add]
+      exact get_storeBytes _ _ _ (by have := placed.1.1; omega) offset bound
+    · have earlier := build_get rest placed.2 base bytes later offset bound
+      have apart := placed.1.2 (base, bytes) later
+      have fits := bounds (base, bytes) (List.mem_cons_of_mem _ later)
+      have ends := placed.1.1
+      rw [← earlier]
+      have absent : BitVec.ofNat 64 (base + offset) ∉ content.At (BitVec.ofNat 64 first) := by
+        intro present
+        rw [mem_At_iff] at present
+        obtain ⟨i, hi, equal⟩ := present
+        have numbers := congrArg BitVec.toNat equal
+        simp only [BitVec.toNat_add, BitVec.toNat_ofNat] at numbers
+        dsimp only at apart fits
+        omega
+      have missing := Std.ExtHashMap.getElem?_eq_none absent
+      simp only [build, Mem.storeBytes, Std.ExtHashMap.get?_eq_getElem?,
+        Std.ExtHashMap.union_eq, Std.ExtHashMap.getElem?_union, missing, Option.none_or]
+
+/-- A load inside a region gives the region's bytes. -/
+theorem build_load (regions : List (Nat × List UInt8)) (placed : wellPlaced regions = true)
+    (base : Nat) (bytes : List UInt8) (inside : (base, bytes) ∈ regions)
+    (offset width : Nat) (bound : offset + width ≤ bytes.length) :
+    (build regions).loadInt (.ofNat 64 (base + offset)) width =
+      some (Int.ofBytes ((bytes.drop offset).take width)) := by
+  have read : (build regions).loadBytes (.ofNat 64 (base + offset)) width =
+      some ((bytes.drop offset).take width) := by
+    rw [loadBytes_iff]
+    refine ⟨by simp only [List.length_take, List.length_drop]; omega, ?_⟩
+    intro i hi
+    have hi' : i < width ∧ offset + i < bytes.length := by
+      simp only [List.length_take, List.length_drop] at hi; omega
+    rw [← BitVec.ofNat_add, Nat.add_assoc,
+      build_get regions placed base bytes inside (offset + i) hi'.2]
+    simp
+  simp only [Mem.loadInt, read, Option.map_some]
+
+theorem ofBytes_zeros : ∀ n : Nat, Int.ofBytes (List.replicate n 0) = 0
+  | 0 => rfl
+  | n + 1 => by rw [List.replicate_succ, Int.ofBytes_cons, ofBytes_zeros n]; rfl
+
+/-- A load inside a region of zero bytes gives zero. -/
+theorem build_load_zero (regions : List (Nat × List UInt8)) (placed : wellPlaced regions = true)
+    (base size : Nat) (inside : (base, List.replicate size 0) ∈ regions)
+    (offset width : Nat) (bound : offset + width ≤ size) :
+    (build regions).loadInt (.ofNat 64 (base + offset)) width = some 0 := by
+  rw [build_load regions placed base _ inside offset width (by simpa using bound),
+    List.drop_replicate, List.take_replicate, ofBytes_zeros]
+
+/-- A byte inside a region is mapped. -/
+theorem build_mapped (regions : List (Nat × List UInt8)) (placed : wellPlaced regions = true)
+    (base : Nat) (bytes : List UInt8) (inside : (base, bytes) ∈ regions)
+    (offset : Nat) (bound : offset < bytes.length) :
+    ((build regions).get? (.ofNat 64 (base + offset))).isSome = true := by
+  rw [build_get regions placed base bytes inside offset bound]; rfl
+
+/-- `a` lies in one of the ranges, each given as its base and length. -/
+def Covers (ranges : List (Nat × Nat)) (a : BitVec 64) : Prop :=
+  ∃ r ∈ ranges, InRange (.ofNat 64 r.1) r.2 a
+
+/-- No range of the first list meets a range of the second. -/
+def apart (xs ys : List (Nat × Nat)) : Bool :=
+  xs.all fun x => ys.all fun y =>
+    decide (x.1 + x.2 ≤ 18446744073709551616 ∧ y.1 + y.2 ≤ 18446744073709551616 ∧
+      (x.1 + x.2 ≤ y.1 ∨ y.1 + y.2 ≤ x.1))
+
+theorem covers_apart (xs ys : List (Nat × Nat)) (separate : apart xs ys = true) (a : BitVec 64) :
+    Covers xs a → ¬Covers ys a := by
+  rintro ⟨x, hx, i, hi, rfl⟩ ⟨y, hy, j, hj, equal⟩
+  have fact := List.all_eq_true.mp (List.all_eq_true.mp separate x hx) y hy
+  simp only [decide_eq_true_eq] at fact
+  have numbers := congrArg BitVec.toNat equal
+  simp only [BitVec.toNat_add, BitVec.toNat_ofNat] at numbers
+  omega
+
+theorem Covers.left {xs : List (Nat × Nat)} (ys : List (Nat × Nat)) {a : BitVec 64} :
+    Covers xs a → Covers (xs ++ ys) a :=
+  fun ⟨r, inside, holds⟩ => ⟨r, List.mem_append_left _ inside, holds⟩
+
+theorem Covers.right (xs : List (Nat × Nat)) {ys : List (Nat × Nat)} {a : BitVec 64} :
+    Covers ys a → Covers (xs ++ ys) a :=
+  fun ⟨r, inside, holds⟩ => ⟨r, List.mem_append_right _ inside, holds⟩
+
+end Binary.C2.Witness
+
+/-! ## The witness: the decoder -/
+namespace Binary.C2.Witness
+open Binary TrustBase Leanux Binary.C2 Binary.MemoryBytes
+local instance : Labels := Binary.Image.linkedLabels
+
+/-- The decoder: the range's literal terms (the two 8-byte callback entries among them),
+or else the landed service image. -/
+def fetch (pc : Int64) : Option Decoded :=
+  (Range.fetch pc).orElse fun _ => ServiceImage.fetch pc
+
+/-- The addresses of a run of sized directives. -/
+def starts : Int64 → List (Kraken.Sized Directive) → List Int64
+  | _, [] => []
+  | pc, ⟨_, n⟩ :: rest => pc :: starts (pc + .ofNat n) rest
+
+theorem fetchIn_starts : ∀ (code : List (Kraken.Sized Directive)) (pc target : Int64)
+    (i : Decoded), Image.fetchIn pc code target = some i → target ∈ starts pc code
+  | [], _, _, _, fetched => by simp [Image.fetchIn] at fetched
+  | ⟨d, n⟩ :: rest, pc, target, i, fetched => by
+    unfold Image.fetchIn at fetched
+    split at fetched
+    · next here => exact here ▸ List.mem_cons_self
+    · exact List.mem_cons_of_mem _ (fetchIn_starts rest _ target i fetched)
+
+/-- Every address the range's terms decode. -/
+def rangeStarts : List Int64 :=
+  starts Range.entry Range.code ++ (starts Range.cmp8Entry Range.cmp8Stub ++
+    starts Range.constCmp8Entry Range.constCmp8Stub)
+
+theorem range_starts (pc : Int64) (i : Decoded) (fetched : Range.fetch pc = some i) :
+    pc ∈ rangeStarts := by
+  unfold Range.fetch at fetched
+  unfold rangeStarts
+  cases first : Image.fetchIn Range.entry Range.code pc with
+  | some j => exact List.mem_append_left _ (fetchIn_starts _ _ _ j first)
+  | none =>
+    rw [first] at fetched
+    apply List.mem_append_right
+    cases second : Image.fetchIn Range.cmp8Entry Range.cmp8Stub pc with
+    | some j => exact List.mem_append_left _ (fetchIn_starts _ _ _ j second)
+    | none =>
+      rw [second] at fetched
+      exact List.mem_append_right _ (fetchIn_starts _ _ _ i fetched)
+
+theorem service_row (pc : Int64) (i : Decoded) (fetched : ServiceImage.fetch pc = some i) :
+    ∃ row ∈ ServiceImage.decoded, (row.1 == pc.toUInt64.toNat) = true := by
+  unfold ServiceImage.fetch at fetched
+  cases found : ServiceImage.decoded.find? (fun row => row.1 == pc.toUInt64.toNat) with
+  | none => rw [found] at fetched; cases fetched
+  | some row => exact ⟨row, List.mem_of_find?_eq_some found, by simpa using List.find?_some found⟩
+
+/-- The range's terms and the service image decode disjoint sets of addresses. -/
+theorem images_apart : ∀ t ∈ rangeStarts, ∀ row ∈ ServiceImage.decoded,
+    (row.1 == t.toUInt64.toNat) = false := by
+  decide +kernel
+
+theorem reading : Reading fetch := by
+  refine ⟨?_, ?_⟩
+  · intro pc i fetched
+    simp only [fetch, fetched, Option.orElse_some]
+  · intro pc i fetched
+    cases ranged : Range.fetch pc with
+    | none => simp only [fetch, ranged, Option.orElse_none, fetched]
+    | some j =>
+      obtain ⟨row, inside, same⟩ := service_row pc i fetched
+      rw [images_apart pc (range_starts pc j ranged) row inside] at same
+      cases same
+
+#print axioms reading
+end Binary.C2.Witness
+
+/-! ## The witness: the entry state
+
+Coverage is in PC mode (`kcov_mode` 2) with an empty 64-word buffer, in softirq context
+(preempt count 0x100) with softirq coverage enabled: the state in which the callbacks
+record. The replay state is the fresh one: counter 0, bitmap clear. The packet counter
+is 5. Addresses are those of the statement's executed tests. -/
+namespace Binary.C2.Witness
+open Binary TrustBase Leanux Binary.C2 Binary.MemoryBytes
+local instance : Labels := Binary.Image.linkedLabels
+
+/-- The mapped regions: the stack slots (`sp - 8` to `sp + 0x20`), the packet counter at
+`skb + 0x28`, the 1032 window bytes at `kp + 136`, the current-task pointer, the preempt
+count, the four coverage fields of the task, the coverage buffer. -/
+def regions : List (Nat × List UInt8) :=
+  [(0x4007f8, List.replicate 40 0),
+   (0x600028, [5, 0, 0, 0, 0, 0, 0, 0]),
+   (0x700088, List.replicate 1032 0),
+   (0xffffffff81cc85c0, [0, 0, 0x50, 0, 0, 0, 0, 0]),
+   (0xffffffff81cc85c8, [0, 1, 0, 0]),
+   (0x5006e0, [2, 0, 0, 0]),
+   (0x5006e4, [64, 0, 0, 0]),
+   (0x5006e8, [0, 0, 0x80, 0, 0, 0, 0, 0]),
+   (0x500704, [1, 0, 0, 0]),
+   (0x800000, List.replicate 512 0)]
+
+theorem in_stack : (((0x4007f8, List.replicate 40 0) : Nat × List UInt8)) ∈ regions :=
+  List.mem_of_getElem? (i := 0) rfl
+theorem in_packet : (((0x600028, [5, 0, 0, 0, 0, 0, 0, 0]) : Nat × List UInt8)) ∈ regions :=
+  List.mem_of_getElem? (i := 1) rfl
+theorem in_window : (((0x700088, List.replicate 1032 0) : Nat × List UInt8)) ∈ regions :=
+  List.mem_of_getElem? (i := 2) rfl
+theorem in_task : (((0xffffffff81cc85c0, [0, 0, 0x50, 0, 0, 0, 0, 0]) : Nat × List UInt8)) ∈ regions :=
+  List.mem_of_getElem? (i := 3) rfl
+theorem in_count : (((0xffffffff81cc85c8, [0, 1, 0, 0]) : Nat × List UInt8)) ∈ regions :=
+  List.mem_of_getElem? (i := 4) rfl
+theorem in_mode : (((0x5006e0, [2, 0, 0, 0]) : Nat × List UInt8)) ∈ regions :=
+  List.mem_of_getElem? (i := 5) rfl
+theorem in_capacity : (((0x5006e4, [64, 0, 0, 0]) : Nat × List UInt8)) ∈ regions :=
+  List.mem_of_getElem? (i := 6) rfl
+theorem in_area : (((0x5006e8, [0, 0, 0x80, 0, 0, 0, 0, 0]) : Nat × List UInt8)) ∈ regions :=
+  List.mem_of_getElem? (i := 7) rfl
+theorem in_softirq : (((0x500704, [1, 0, 0, 0]) : Nat × List UInt8)) ∈ regions :=
+  List.mem_of_getElem? (i := 8) rfl
+theorem in_buffer : (((0x800000, List.replicate 512 0) : Nat × List UInt8)) ∈ regions :=
+  List.mem_of_getElem? (i := 9) rfl
+
+theorem placed : wellPlaced regions = true := by decide +kernel
+
+def memory : Mem 64 := build regions
+
+def state : MachineState :=
+  ⟨{ regs := { rsp := 0x400800, r13 := 0x700000, rbx := 0x600000 }, dmem := memory }, Range.entry⟩
+
+def layout : KcovLayout :=
+  { task := 0x500000#64, area := 0x800000#64, capacity := 64#32, mode := 2#32,
+    softirqEnabled := 1#32 }
+
+def preempt : BitVec 32 := 0x100#32
+def kp : BitVec 64 := 0x700000#64
+def skb : BitVec 64 := 0x600000#64
+def nonce : BitVec 64 := 5#64
+
+/-- The fresh replay state. -/
+def fresh : WG.ReplayCounter := { counter := 0, backtrack := Array.replicate 128 0 }
+
+/-! ### Loads -/
+
+theorem load (base : Nat) (bytes : List UInt8) (inside : (base, bytes) ∈ regions)
+    (offset width : Nat) (bound : offset + width ≤ bytes.length) :
+    memory.loadInt (.ofNat 64 (base + offset)) width =
+      some (Int.ofBytes ((bytes.drop offset).take width)) :=
+  build_load regions placed base bytes inside offset width bound
+
+theorem nonce_held : state.data.dmem.loadInt (skb + 0x28) 8 = some (nonce.toNat : Int) :=
+  load 0x600028 _ in_packet 0 8 (by decide)
+
+theorem fields : Layouts.ReplayFields state.data.dmem (windowBase kp) fresh := by
+  refine ⟨?_, by simp only [fresh, Array.size_replicate, Layouts.replayWords], ?_⟩
+  · exact build_load_zero regions placed 0x700088 1032 in_window 0 8 (by decide)
+  · intro j hj
+    have hj' : j < 128 := by simpa only [fresh, Array.size_replicate] using hj
+    have read := build_load_zero regions placed 0x700088 1032 in_window (8 + j * 8) 8 (by omega)
+    have value : fresh.backtrack[j]'hj = 0 := by simp only [fresh, Array.getElem_replicate]
+    rw [value]
+    have address : windowBase kp + .ofNat 64 (Layouts.replay_backtrack + j * Layouts.replayWordBytes) =
+        .ofNat 64 (0x700088 + (8 + j * 8)) := by
+      have base : windowBase kp = .ofNat 64 0x700088 := by decide
+      rw [base, ← BitVec.ofNat_add]; rfl
+    rw [address]
+    exact read
+
+theorem metadata : KcovMetadata layout state.data.dmem := by
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · have read := load 0xffffffff81cc85c0 _ in_task 0 8 (by decide)
+    show Option.map (BitVec.ofInt 64) (memory.loadInt _ 8) = _
+    exact (congrArg (Option.map (BitVec.ofInt 64)) read).trans (by decide)
+  · have read := load 0x5006e0 _ in_mode 0 4 (by decide)
+    show Option.map (BitVec.ofInt 32) (memory.loadInt _ 4) = _
+    exact (congrArg (Option.map (BitVec.ofInt 32)) read).trans (by decide)
+  · have read := load 0x5006e4 _ in_capacity 0 4 (by decide)
+    show Option.map (BitVec.ofInt 32) (memory.loadInt _ 4) = _
+    exact (congrArg (Option.map (BitVec.ofInt 32)) read).trans (by decide)
+  · have read := load 0x5006e8 _ in_area 0 8 (by decide)
+    show Option.map (BitVec.ofInt 64) (memory.loadInt _ 8) = _
+    exact (congrArg (Option.map (BitVec.ofInt 64)) read).trans (by decide)
+  · have read := load 0x500704 _ in_softirq 0 4 (by decide)
+    show Option.map (BitVec.ofInt 32) (memory.loadInt _ 4) = _
+    exact (congrArg (Option.map (BitVec.ofInt 32)) read).trans (by decide)
+
+theorem count_held : load32 state.data.dmem preemptCountAddress = some preempt := by
+  have read := load 0xffffffff81cc85c8 _ in_count 0 4 (by decide)
+  show Option.map (BitVec.ofInt 32) (memory.loadInt _ 4) = _
+  exact (congrArg (Option.map (BitVec.ofInt 32)) read).trans (by decide)
+
+theorem buffer : KcovBuffer layout state.data.dmem := by
+  refine ⟨?_, 0, Nat.zero_le _, ?_⟩
+  · intro word hw
+    have hw' : word < 64 := hw
+    have read := build_load_zero regions placed 0x800000 512 in_buffer (8 * word) 8 (by omega)
+    have address : layout.area + .ofNat 64 (8 * word) = .ofNat 64 (0x800000 + 8 * word) := by
+      rw [BitVec.ofNat_add]; rfl
+    rw [address]
+    exact (congrArg Option.isSome read).trans rfl
+  · have read := build_load_zero regions placed 0x800000 512 in_buffer 0 8 (by decide)
+    show Option.map (BitVec.ofInt 64) (memory.loadInt _ 8) = _
+    exact (congrArg (Option.map (BitVec.ofInt 64)) read).trans (by decide)
+
+theorem coverage : KcovState layout preempt state.data.dmem :=
+  ⟨metadata, count_held, fun _ => buffer⟩
+
+end Binary.C2.Witness
+
+/-! ## The witness: separations, the two mirror runs, revisitability -/
+namespace Binary.C2.Witness
+open Binary TrustBase Leanux Binary.C2 Binary.MemoryBytes
+local instance : Labels := Binary.Image.linkedLabels
+
+/-! ### Address ranges -/
+
+def stackRanges : List (Nat × Nat) := [(0x4007f8, 8), (0x400810, 16)]
+def windowRanges : List (Nat × Nat) := [(0x700088, 1032)]
+def countRanges : List (Nat × Nat) := [(0xffffffff81cc85c8, 4)]
+def metadataRanges : List (Nat × Nat) :=
+  [(0xffffffff81cc85c0, 8), (0x5006e0, 4), (0x5006e4, 4), (0x5006e8, 8), (0x500704, 4)]
+def storageRanges : List (Nat × Nat) := [(0x800000, 8), (0x800000, 512)]
+def packetRanges : List (Nat × Nat) := [(0x600028, 8)]
+
+theorem stack_covers (a : BitVec 64) :
+    stackBytes state.data.regs.rsp.toBitVec a → Covers stackRanges a := by
+  rintro (h | h)
+  · exact ⟨(0x4007f8, 8), List.mem_cons_self, h⟩
+  · exact ⟨(0x400810, 16), List.mem_cons_of_mem _ List.mem_cons_self, h⟩
+
+theorem window_covers (a : BitVec 64) : windowBytes kp a → Covers windowRanges a :=
+  fun h => ⟨(0x700088, 1032), List.mem_cons_self, h⟩
+
+theorem count_covers (a : BitVec 64) : InRange preemptCountAddress 4 a → Covers countRanges a :=
+  fun h => ⟨(0xffffffff81cc85c8, 4), List.mem_cons_self, h⟩
+
+theorem footprint_covers (a : BitVec 64) :
+    Footprint state.data.regs.rsp.toBitVec kp a →
+      Covers (stackRanges ++ (windowRanges ++ countRanges)) a := by
+  rintro (h | h | h)
+  · exact (stack_covers a h).left _
+  · exact Covers.right _ ((window_covers a h).left _)
+  · exact Covers.right _ (Covers.right _ (count_covers a h))
+
+theorem metadata_covers (a : BitVec 64) : KcovMetadataBytes layout a → Covers metadataRanges a := by
+  rintro (h | h | h | h | h)
+  · exact ⟨(0xffffffff81cc85c0, 8), List.mem_of_getElem? (i := 0) rfl, h⟩
+  · exact ⟨(0x5006e0, 4), List.mem_of_getElem? (i := 1) rfl, h⟩
+  · exact ⟨(0x5006e4, 4), List.mem_of_getElem? (i := 2) rfl, h⟩
+  · exact ⟨(0x5006e8, 8), List.mem_of_getElem? (i := 3) rfl, h⟩
+  · exact ⟨(0x500704, 4), List.mem_of_getElem? (i := 4) rfl, h⟩
+
+theorem storage_covers (a : BitVec 64) : KcovStorageBytes layout a → Covers storageRanges a := by
+  rintro (h | h)
+  · exact ⟨(0x800000, 8), List.mem_of_getElem? (i := 0) rfl, h⟩
+  · exact ⟨(0x800000, 512), List.mem_of_getElem? (i := 1) rfl, h⟩
+
+theorem coverage_covers (a : BitVec 64) :
+    coverageBytes layout a → Covers (metadataRanges ++ storageRanges) a := by
+  rintro (h | ⟨_, h⟩)
+  · exact (metadata_covers a h).left _
+  · exact Covers.right _ (storage_covers a h)
+
+/-! ### `Context` -/
+
+theorem stack_mapped (a : BitVec 64) (inside : stackBytes state.data.regs.rsp.toBitVec a) :
+    (state.data.dmem.get? a).isSome = true := by
+  have low : state.data.regs.rsp.toBitVec - 8 = .ofNat 64 0x4007f8 := by decide
+  have high : state.data.regs.rsp.toBitVec + 0x10 = .ofNat 64 0x400810 := by decide
+  rcases inside with ⟨i, hi, rfl⟩ | ⟨i, hi, rfl⟩
+  · rw [low, ← BitVec.ofNat_add]
+    exact build_mapped regions placed 0x4007f8 _ in_stack i (by rw [List.length_replicate]; omega)
+  · rw [high, ← BitVec.ofNat_add, show 0x400810 + i = 0x4007f8 + (24 + i) by omega]
+    exact build_mapped regions placed 0x4007f8 _ in_stack (24 + i)
+      (by rw [List.length_replicate]; omega)
+
+theorem context : Context layout preempt state kp skb nonce where
+  pc := rfl
+  keypair := by decide
+  packet := by decide
+  nonce := nonce_held
+  window := fields_mapped _ kp fresh fields
+  aligned := by decide
+  stack := stack_mapped
+  coverage := coverage
+  stackWindow := fun a h w =>
+    covers_apart stackRanges windowRanges (by decide) a (stack_covers a h) (window_covers a w)
+  stackPreempt := fun a h c =>
+    covers_apart stackRanges countRanges (by decide) a (stack_covers a h) (count_covers a c)
+  windowPreempt := fun a w c =>
+    covers_apart windowRanges countRanges (by decide) a (window_covers a w) (count_covers a c)
+  coverageApart := fun a c f =>
+    covers_apart (metadataRanges ++ storageRanges) (stackRanges ++ (windowRanges ++ countRanges))
+      (by decide) a (coverage_covers a c) (footprint_covers a f)
+  coverageMetadata := fun a _ s m =>
+    covers_apart storageRanges metadataRanges (by decide) a (storage_covers a s) (metadata_covers a m)
+
+/-! ### Revisitability -/
+
+/-- The packet's counter slot is outside everything the range and the callbacks write. -/
+theorem packet_outside (i : Nat) (hi : i < 8) :
+    ¬(Footprint state.data.regs.rsp.toBitVec kp (skb + 0x28 + .ofNat 64 i) ∨
+      ((layout.mode = 2 ∨ layout.mode = 3) ∧ KcovStorageBytes layout (skb + 0x28 + .ofNat 64 i))) := by
+  have here : Covers packetRanges (skb + 0x28 + .ofNat 64 i) :=
+    ⟨(0x600028, 8), List.mem_cons_self, i, hi, rfl⟩
+  rintro (f | ⟨_, s⟩)
+  · exact covers_apart packetRanges (stackRanges ++ (windowRanges ++ countRanges)) (by decide) _
+      here (footprint_covers _ f)
+  · exact covers_apart packetRanges storageRanges (by decide) _ here (storage_covers _ s)
+
+theorem revisit (t : MachineState) (kept : Kept layout preempt kp state t)
+    (stack : ∀ a, stackBytes state.data.regs.rsp.toBitVec a → (t.data.dmem.get? a).isSome = true)
+    (window : ∀ a, windowBytes kp a → (t.data.dmem.get? a).isSome = true) :
+    Context layout (preempt + 0x200) ⟨t.data, Range.entry⟩ kp skb nonce where
+  pc := rfl
+  keypair := by
+    show t.data.regs.r13.toBitVec = kp
+    rw [kept.r13]; exact context.keypair
+  packet := by
+    show t.data.regs.rbx.toBitVec = skb
+    rw [kept.rbx]; exact context.packet
+  nonce := by
+    show t.data.dmem.loadInt (skb + 0x28) 8 = _
+    rw [← kept.frame.loadInt (skb + 0x28) 8 packet_outside]
+    exact nonce_held
+  window := window
+  aligned := by
+    show t.data.regs.rsp.toNat % 8 = 0
+    rw [kept.rsp]; exact context.aligned
+  stack := by
+    show ∀ a, stackBytes t.data.regs.rsp.toBitVec a → _
+    rw [kept.rsp]; exact stack
+  coverage := kept.coverage
+  stackWindow := by
+    show ∀ a, stackBytes t.data.regs.rsp.toBitVec a → _
+    rw [kept.rsp]; exact context.stackWindow
+  stackPreempt := by
+    show ∀ a, stackBytes t.data.regs.rsp.toBitVec a → _
+    rw [kept.rsp]; exact context.stackPreempt
+  windowPreempt := context.windowPreempt
+  coverageApart := by
+    show ∀ a, coverageBytes layout a → ¬Footprint t.data.regs.rsp.toBitVec kp a
+    rw [kept.rsp]; exact context.coverageApart
+  coverageMetadata := context.coverageMetadata
+
+/-! ### The mirror, twice -/
+
+/-- The mirror's `counterValidate` runs to completion on a world holding a fitting state,
+and returns and leaves what the pivot does. -/
+theorem mirror_runs (world : WGWorld) (id : WG.KeypairId) (c : WG.ReplayCounter)
+    (nonce : BitVec 64) (ambient : Ambient) (fits : Fits c) (held : windowOf world id = some c) :
+    ∃ world' ambient',
+      ((WG.counterValidate id nonce.toNat).run world).run ambient =
+        .ok (((validate (ofCounter c) nonce).accepted, world'), ambient') ∧
+      windowOf world' id = some (toCounter (validate (ofCounter c) nonce).window) := by
+  obtain ⟨d, k, hd, hk, rfl⟩ := Mirror.windowOf_holds held
+  obtain ⟨ambient', ran⟩ :=
+    Mirror.counterValidate_mirror world d id k nonce.toNat hd hk fits.size ambient
+  have spec := mirror_follows_spec world _ ambient ambient' id _ nonce _ fits held ran
+  exact ⟨_, ambient', by rw [← spec.1]; exact ran, spec.2.1⟩
+
+theorem fits_toCounter (w : Window) : Fits (toCounter w) where
+  counter := w.counter.isLt
+  size := by simp only [toCounter, Array.size_ofFn]
+  words := by
+    intro i h
+    simp only [toCounter, Array.getElem_ofFn]
+    exact (w.words i).isLt
+
+/-- The pivot accepts counter 5 on the fresh window. -/
+theorem first_accepts : (validate (ofCounter fresh) nonce).accepted = true := by decide +kernel
+
+/-- The window the first visit leaves. -/
+def after : WG.ReplayCounter := toCounter (validate (ofCounter fresh) nonce).window
+
+/-- The pivot refuses counter 5 on the window the first visit leaves. -/
+theorem second_refuses : (validate (ofCounter after) nonce).accepted = false := by decide +kernel
+
+end Binary.C2.Witness
+
+namespace Binary.C2
+open Binary TrustBase Leanux
+local instance : Labels := Binary.Image.linkedLabels
+
+theorem witness_start : WitnessStart := by
+  have fits : Fits Witness.fresh := fields_fit _ _ _ Witness.fields
+  obtain ⟨world₁, ambient₁, first, held₁⟩ :=
+    Witness.mirror_runs (worldOf Witness.fresh) 0 Witness.fresh Witness.nonce ambientStart fits
+      (windowOf_worldOf _)
+  obtain ⟨world₂, ambient₂, second, _⟩ :=
+    Witness.mirror_runs world₁ 0 Witness.after Witness.nonce ambient₁ (Witness.fits_toCounter _) held₁
+  rw [Witness.first_accepts] at first
+  rw [Witness.second_refuses] at second
+  exact ⟨Witness.fetch, Witness.layout, Witness.preempt, Witness.state, Witness.kp, Witness.skb,
+    Witness.nonce, worldOf Witness.fresh, world₁, world₂, ambientStart, ambient₁, ambient₂, 0,
+    Witness.fresh, Witness.reading, Witness.context, Witness.fields, windowOf_worldOf _, first,
+    second, Witness.revisit⟩
+
+#print axioms witness_start
 end Binary.C2
