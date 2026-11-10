@@ -14,6 +14,8 @@ import AllowedipsStorage
 import AllowedipsRootIncoming
 import AllowedipsInternalFrame
 import MemoryBytes
+import PairAllowedipsPlacementSource
+import TrieHeap
 import PairCallSource
 import AllowedipsPlacementSourceStep
 import AllowedipsHeapChecks
@@ -2015,4 +2017,456 @@ theorem exclusionTwo : ExclusionTwo := by
 
 #print axioms exclusionOne
 #print axioms exclusionTwo
+
+/-! ## The walk facts: the induction over `nodePlacement`'s loop -/
+
+/-! ## The walk facts: `nodePlacement`'s accepted run on an ordered trie
+
+The arithmetic lemmas `walk_fls_le_iff` to `walk_common_split` are re-proved
+here from `Leanux/Proofs/WG/AllowedIps/Prefix.lean` (the proof tree is not
+importable from `binary/`). -/
+
+theorem walk_fls_le_iff (x k : Nat) : fls x ≤ k ↔ x < 2 ^ k := by
+  by_cases hx : x = 0
+  · subst x
+    constructor
+    · intro _
+      exact Nat.two_pow_pos k
+    · intro _
+      simp [fls]
+  · simpa [fls, hx, Nat.add_one_le_iff] using (Nat.log2_lt (k := k) hx)
+
+theorem walk_lt_pow_fls (x : Nat) : x < 2 ^ fls x :=
+  (walk_fls_le_iff x _).mp (Nat.le_refl _)
+
+theorem walk_fls_div_pow (x k : Nat) (h : x / 2 ^ k ≠ 0) :
+    fls x = fls (x / 2 ^ k) + k := by
+  have hupper : fls x ≤ fls (x / 2 ^ k) + k := by
+    apply (walk_fls_le_iff _ _).mpr
+    rw [Nat.pow_add]
+    exact (Nat.div_lt_iff_lt_mul (Nat.two_pow_pos k)).mp (walk_lt_pow_fls _)
+  have hxlo : 2 ^ k ≤ x := (Nat.div_ne_zero_iff.mp h).2
+  have hn : ¬ fls x ≤ k := fun hf =>
+    (Nat.not_lt_of_ge hxlo) ((walk_fls_le_iff x k).mp hf)
+  have hk : k ≤ fls x := by omega
+  have hp : 2 ^ (fls x - k) * 2 ^ k = 2 ^ fls x := by
+    rw [← Nat.pow_add, Nat.sub_add_cancel hk]
+  have hquot : x / 2 ^ k < 2 ^ (fls x - k) := by
+    apply (Nat.div_lt_iff_lt_mul (Nat.two_pow_pos k)).mpr
+    rw [hp]
+    exact walk_lt_pow_fls x
+  have hlower := (walk_fls_le_iff _ _).mpr hquot
+  omega
+
+/-- The landed `common` is the width-uniform `bits - fls (a ^^^ b)` in both families. -/
+theorem walk_common_eq (bits a b : Nat) (fam : bits = 32 ∨ bits = 128) :
+    AllowedipsRelation.common bits a b = bits - fls (a ^^^ b) := by
+  rcases fam with rfl | rfl
+  · rfl
+  · simp only [AllowedipsRelation.common]
+    by_cases h : (a ^^^ b) / 2 ^ 64 = 0
+    · have hx : (a ^^^ b) < 2 ^ 64 := (Nat.div_eq_zero_iff_lt (Nat.two_pow_pos 64)).mp h
+      simp [h, Nat.mod_eq_of_lt hx]
+    · simp [h, walk_fls_div_pow (a ^^^ b) 64 h]
+
+theorem walk_xor_eq_zero_iff (a b : Nat) : a ^^^ b = 0 ↔ a = b := by
+  constructor
+  · intro h
+    have := congrArg (fun z => z ^^^ b) h
+    simpa [Nat.xor_assoc] using this
+  · rintro rfl
+    simp
+
+/-- `cidr ≤ common` is equality of the leading `cidr` bits. -/
+theorem walk_common_ge_iff {bits cidr a b : Nat} (fam : bits = 32 ∨ bits = 128)
+    (ha : a < 2 ^ bits) (hb : b < 2 ^ bits) (hc : cidr ≤ bits) :
+    cidr ≤ AllowedipsRelation.common bits a b ↔ a / 2 ^ (bits - cidr) = b / 2 ^ (bits - cidr) := by
+  have hf : fls (a ^^^ b) ≤ bits :=
+    (walk_fls_le_iff _ _).mpr (Nat.xor_lt_two_pow ha hb)
+  rw [walk_common_eq bits a b fam]
+  calc
+    cidr ≤ bits - fls (a ^^^ b) ↔ fls (a ^^^ b) ≤ bits - cidr := by omega
+    _ ↔ a ^^^ b < 2 ^ (bits - cidr) := walk_fls_le_iff _ _
+    _ ↔ (a ^^^ b) / 2 ^ (bits - cidr) = 0 :=
+      (Nat.div_eq_zero_iff_lt (Nat.two_pow_pos _)).symm
+    _ ↔ a / 2 ^ (bits - cidr) = b / 2 ^ (bits - cidr) := by
+      rw [Nat.xor_div_two_pow, walk_xor_eq_zero_iff]
+
+theorem walk_common_le (bits a b : Nat) (fam : bits = 32 ∨ bits = 128) :
+    AllowedipsRelation.common bits a b ≤ bits := by
+  rw [walk_common_eq bits a b fam]
+  omega
+
+/-- One more matching prefix bit is a matching shorter prefix and a matching branch bit. -/
+theorem walk_prefix_succ_eq_iff {bits c a b : Nat} (hc : c < bits) :
+    a / 2 ^ (bits - (c + 1)) = b / 2 ^ (bits - (c + 1)) ↔
+      a / 2 ^ (bits - c) = b / 2 ^ (bits - c) ∧ a / 2 ^ (bits - 1 - c) % 2 = b / 2 ^ (bits - 1 - c) % 2 := by
+  have shape : bits - c = bits - (c + 1) + 1 := by omega
+  have same : bits - 1 - c = bits - (c + 1) := by omega
+  rw [shape, same, Nat.pow_succ, ← Nat.div_div_eq_div_mul, ← Nat.div_div_eq_div_mul]
+  constructor
+  · intro h
+    rw [h]
+    exact ⟨rfl, rfl⟩
+  · rintro ⟨hq, hr⟩
+    have ha := Nat.div_add_mod (a / 2 ^ (bits - (c + 1))) 2
+    have hb := Nat.div_add_mod (b / 2 ^ (bits - (c + 1))) 2
+    omega
+
+/-- What the stop of the walk above a node gives (PLAN.md section 1, rows 3 and 5). -/
+theorem walk_stop_facts {bits key cidr nb nc : Nat} (fam : bits = 32 ∨ bits = 128)
+    (hk : key < 2 ^ bits) (hn : nb < 2 ^ bits) (short : cidr ≤ bits)
+    (stop : cidr < nc ∨ AllowedipsRelation.common bits nb key < nc) :
+    min cidr (AllowedipsRelation.common bits nb key) < nc ∧
+    nb / 2 ^ (bits - min cidr (AllowedipsRelation.common bits nb key)) =
+      key / 2 ^ (bits - min cidr (AllowedipsRelation.common bits nb key)) ∧
+    (cidr ≤ AllowedipsRelation.common bits nb key ∨
+      (AllowedipsRelation.common bits nb key < bits ∧
+        nb / 2 ^ (bits - 1 - AllowedipsRelation.common bits nb key) % 2 ≠
+          key / 2 ^ (bits - 1 - AllowedipsRelation.common bits nb key) % 2)) := by
+  have cle := walk_common_le bits nb key fam
+  refine ⟨by omega, ?_, ?_⟩
+  · exact (walk_common_ge_iff fam hn hk (by omega)).mp (Nat.min_le_right _ _)
+  · by_cases enough : cidr ≤ AllowedipsRelation.common bits nb key
+    · exact .inl enough
+    · have below : AllowedipsRelation.common bits nb key < bits := by omega
+      refine .inr ⟨below, ?_⟩
+      intro sameBit
+      have pre := (walk_common_ge_iff fam hn hk cle).mp (Nat.le_refl _)
+      have more := (walk_prefix_succ_eq_iff below).mpr ⟨pre, sameBit⟩
+      have := (walk_common_ge_iff fam hn hk (by omega)).mpr more
+      omega
+
+/-- The placed node's prefix is strictly shorter than `min cidr common` (row 4). -/
+theorem walk_parent_lt {bits key cidr nb pb pc : Nat} (fam : bits = 32 ∨ bits = 128)
+    (hk : key < 2 ^ bits) (hn : nb < 2 ^ bits) (short : cidr ≤ bits) (shorter : pc < cidr)
+    (keyPrefix : key / 2 ^ (bits - pc) = pb / 2 ^ (bits - pc))
+    (childPrefix : nb / 2 ^ (bits - pc) = pb / 2 ^ (bits - pc))
+    (side : nb / 2 ^ (bits - 1 - pc) % 2 = key / 2 ^ (bits - 1 - pc) % 2) :
+    pc < min cidr (AllowedipsRelation.common bits nb key) := by
+  have more := (walk_prefix_succ_eq_iff (a := nb) (b := key) (show pc < bits by omega)).mpr
+    ⟨childPrefix.trans keyPrefix.symm, side⟩
+  have := (walk_common_ge_iff fam hn hk (by omega)).mpr more
+  omega
+
+/-- The node facts of `ordered`. -/
+theorem walk_ordered_node {d : Device} {id : NodeId} {n : AipNode} (trie : ordered d = true)
+    (present : d.nodes.get? id = some n) :
+    (n.bitlen = 32 ∨ n.bitlen = 128) ∧ n.cidr ≤ n.bitlen ∧ n.bits < 2 ^ n.bitlen ∧
+    ∀ i c, n.bit[i]? = some (some c) → ∃ cn, d.nodes.get? c = some cn ∧ cn.bitlen = n.bitlen ∧
+      n.cidr < cn.cidr ∧ cn.bits / 2 ^ (n.bitlen - n.cidr) = n.bits / 2 ^ (n.bitlen - n.cidr) ∧
+      cn.bits / 2 ^ (n.bitlen - 1 - n.cidr) % 2 = i := by
+  unfold ordered at trie
+  simp only [Bool.and_eq_true, List.all_eq_true] at trie
+  have member : (id,n) ∈ d.nodes.toList := Std.TreeMap.mem_toList_iff_getElem?_eq_some.mpr present
+  have checked := trie.1 (id,n) member
+  simp only [Bool.or_eq_true, beq_iff_eq, decide_eq_true_eq] at checked
+  obtain ⟨⟨⟨⟨family, prefixLength⟩, bound⟩, _⟩, children⟩ := checked
+  refine ⟨family, prefixLength, bound, ?_⟩
+  intro i c childAt
+  have listed : (some c, i) ∈ n.bit.toList.zipIdx := by
+    rw [List.mem_zipIdx_iff_getElem?]
+    simpa using childAt
+  have edge := children (some c, i) listed
+  simp only at edge
+  cases childNode : d.nodes.get? c with
+  | none => rw [childNode] at edge; cases edge
+  | some cn =>
+    rw [childNode] at edge
+    simp only [edgeOrdered, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at edge
+    obtain ⟨⟨⟨sameFamily, longer⟩, shared⟩, side⟩ := edge
+    exact ⟨cn, rfl, sameFamily, longer, shared, side⟩
+
+/-- The root clause of `ordered`. -/
+theorem walk_ordered_root {d : Device} {family : Nat} {id : NodeId} (trie : ordered d = true)
+    (root : rootOf d family = some id) : ∃ n, d.nodes.get? id = some n ∧ n.bitlen = widthOf family := by
+  unfold ordered at trie
+  simp only [Bool.and_eq_true, List.all_eq_true] at trie
+  have roots := trie.2
+  unfold rootOf at root
+  unfold widthOf
+  by_cases four : (family == 4) = true
+  · simp only [four, ↓reduceIte] at root ⊢
+    have checked := roots (d.peerAllowedips.root4,32) (by simp)
+    simp only [root] at checked
+    cases present : d.nodes.get? id with
+    | none => rw [present] at checked; cases checked
+    | some n => rw [present] at checked; exact ⟨n, rfl, by simpa using checked⟩
+  · simp only [four, Bool.false_eq_true, ↓reduceIte] at root ⊢
+    have checked := roots (d.peerAllowedips.root6,128) (by simp)
+    simp only [root] at checked
+    cases present : d.nodes.get? id with
+    | none => rw [present] at checked; cases checked
+    | some n => rw [present] at checked; exact ⟨n, rfl, by simpa using checked⟩
+
+
+/-- The loop invariant: the current node is of the family's width; if a node
+has been placed, the key shares its prefix, its prefix is strictly shorter than
+`cidr`, and the current node is its child on the key's side. -/
+def walk_Inv (d : Device) (root : Option NodeId) (key cidr bits : Nat)
+    (current parent : Option NodeId) : Prop :=
+  (∀ id, current = some id → ∃ n, d.nodes.get? id = some n ∧ n.bitlen = bits) ∧
+  match parent with
+  | none => current = root
+  | some pid => ∃ p, d.nodes.get? pid = some p ∧ p.bitlen = bits ∧ p.cidr < cidr ∧
+      key / 2 ^ (bits - p.cidr) = p.bits / 2 ^ (bits - p.cidr) ∧
+      current = (p.bit[key / 2 ^ (p.bitlen - 1 - p.cidr) % 2]?).join
+
+/-- The walk's answer when it stops with nothing below. -/
+theorem walk_done_empty {d : Device} {root : Option NodeId} {key cidr bits : Nat} {parent : Option NodeId}
+    (inv : walk_Inv d root key cidr bits none parent) :
+    walk d root key cidr bits parent false = true := by
+  obtain ⟨_, placed⟩ := inv
+  cases parent with
+  | none =>
+    simp only at placed
+    simp [walk, below, ← placed]
+  | some pid =>
+    obtain ⟨p, present, family, shorter, keyPrefix, child⟩ := placed
+    have differs : (p.cidr == cidr) = false := by simpa using Nat.ne_of_lt shorter
+    have present : d.nodes[pid]? = some p := present
+    rw [family] at child
+    simp [walk, below, present, family, Nat.le_of_lt shorter, differs, keyPrefix, ← child]
+
+/-- The walk's answer when it stops above a node. -/
+theorem walk_done_stop {d : Device} {root : Option NodeId} {key cidr bits : Nat}
+    {id : NodeId} {n : AipNode} {parent : Option NodeId}
+    (trie : ordered d = true) (fam : bits = 32 ∨ bits = 128) (keyBound : key < 2 ^ bits)
+    (short : cidr ≤ bits) (inv : walk_Inv d root key cidr bits (some id) parent)
+    (present : d.nodes.get? id = some n)
+    (stop : cidr < n.cidr ∨ AllowedipsRelation.common bits n.bits key < n.cidr) :
+    walk d root key cidr bits parent false = true := by
+  obtain ⟨current, placed⟩ := inv
+  obtain ⟨n', present', family⟩ := current id rfl
+  have same : n' = n := Option.some.inj (present'.symm.trans present)
+  rw [same] at family
+  obtain ⟨_, _, bound, _⟩ := walk_ordered_node trie present
+  rw [family] at bound
+  obtain ⟨least, agree, split⟩ := walk_stop_facts fam keyBound bound short stop
+  have splitBool : (decide (cidr ≤ AllowedipsRelation.common bits n.bits key) ||
+      (decide (AllowedipsRelation.common bits n.bits key < bits) &&
+        (n.bits / 2 ^ (bits - 1 - AllowedipsRelation.common bits n.bits key) % 2 !=
+          key / 2 ^ (bits - 1 - AllowedipsRelation.common bits n.bits key) % 2))) = true := by
+    rcases split with enough | ⟨inside, differ⟩
+    · simp [enough]
+    · simp [inside, differ]
+  have present'' : d.nodes[id]? = some n := present
+  cases parent with
+  | none =>
+    simp only at placed
+    simp [walk, below, ← placed, present'', family, least, agree, splitBool]
+  | some pid =>
+    obtain ⟨p, parentPresent, parentFamily, shorter, keyPrefix, child⟩ := placed
+    have differs : (p.cidr == cidr) = false := by simpa using Nat.ne_of_lt shorter
+    obtain ⟨_, _, _, edges⟩ := walk_ordered_node trie parentPresent
+    have childAt : p.bit[key / 2 ^ (p.bitlen - 1 - p.cidr) % 2]? = some (some id) := by
+      cases at_ : p.bit[key / 2 ^ (p.bitlen - 1 - p.cidr) % 2]? with
+      | none => rw [at_] at child; cases child
+      | some value => rw [at_] at child; simp only [Option.join_some] at child; rw [← child]
+    obtain ⟨cn, childPresent, _, _, shared, side⟩ := edges _ id childAt
+    have sameChild : cn = n := Option.some.inj (childPresent.symm.trans present)
+    rw [sameChild, parentFamily] at shared side
+    rw [parentFamily] at childAt
+    have parentShorter := walk_parent_lt fam keyBound bound short shorter keyPrefix shared side
+    have parentPresent : d.nodes[pid]? = some p := parentPresent
+    simp [walk, below, parentPresent, parentFamily, Nat.le_of_lt shorter, differs, keyPrefix, childAt,
+      present'', family, least, agree, splitBool, parentShorter]
+
+
+/-- The walk's answer at a node with exactly this prefix. -/
+theorem walk_done_exact {d : Device} {root : Option NodeId} {key cidr bits : Nat}
+    {id : NodeId} {n : AipNode} {parent : Option NodeId}
+    (trie : ordered d = true) (fam : bits = 32 ∨ bits = 128) (keyBound : key < 2 ^ bits)
+    (short : cidr ≤ bits) (inv : walk_Inv d root key cidr bits (some id) parent)
+    (present : d.nodes.get? id = some n)
+    (matching : ¬AllowedipsRelation.common bits n.bits key < n.cidr) (exactLength : n.cidr = cidr) :
+    walk d root key cidr bits (some id) true = true := by
+  obtain ⟨current, _⟩ := inv
+  obtain ⟨n', present', family⟩ := current id rfl
+  have same : n' = n := Option.some.inj (present'.symm.trans present)
+  rw [same] at family
+  obtain ⟨_, _, bound, _⟩ := walk_ordered_node trie present
+  rw [family] at bound
+  have agree := (walk_common_ge_iff fam bound keyBound (by omega)).mp (Nat.le_of_not_lt matching)
+  rw [exactLength] at agree
+  have present'' : d.nodes[id]? = some n := present
+  simp [walk, present'', family, exactLength, agree]
+
+/-- One more turn of the loop keeps the invariant. -/
+theorem walk_yield {d : Device} {root : Option NodeId} {key cidr bits : Nat}
+    {id : NodeId} {n : AipNode} {parent next : Option NodeId}
+    (trie : ordered d = true) (fam : bits = 32 ∨ bits = 128) (keyBound : key < 2 ^ bits)
+    (inv : walk_Inv d root key cidr bits (some id) parent)
+    (present : d.nodes.get? id = some n) (notLong : ¬cidr < n.cidr)
+    (matching : ¬AllowedipsRelation.common bits n.bits key < n.cidr) (notExact : ¬n.cidr = cidr)
+    (child : n.bit[key / 2 ^ (n.bitlen - 1 - n.cidr) % 2]? = some next) :
+    walk_Inv d root key cidr bits next (some id) := by
+  obtain ⟨current, _⟩ := inv
+  obtain ⟨n', present', family⟩ := current id rfl
+  have same : n' = n := Option.some.inj (present'.symm.trans present)
+  rw [same] at family
+  obtain ⟨_, prefixLength, bound, edges⟩ := walk_ordered_node trie present
+  rw [family] at bound prefixLength
+  have agree := (walk_common_ge_iff fam bound keyBound prefixLength).mp (Nat.le_of_not_lt matching)
+  refine ⟨?_, n, present, family, by omega, agree.symm, by rw [child]; rfl⟩
+  intro nextId isNext
+  rw [isNext] at child
+  obtain ⟨cn, childPresent, childFamily, _⟩ := edges _ nextId child
+  exact ⟨cn, childPresent, childFamily.trans family⟩
+
+/-- One accepted turn: it keeps the invariant or ends with the walk facts. -/
+theorem walk_step {d : Device} {root : Option NodeId} {key cidr bits : Nat}
+    {acc : Placement.Acc} {step : ForInStep Placement.Acc}
+    (trie : ordered d = true) (fam : bits = 32 ∨ bits = 128) (keyBound : key < 2 ^ bits)
+    (short : cidr ≤ bits) (inv : walk_Inv d root key cidr bits acc.2.1 acc.2.2)
+    (selected : Placement.selectStep (Source.Aip.store d) key cidr bits acc = some step) :
+    match step with
+    | .yield next => next.1 = none ∧ walk_Inv d root key cidr bits next.2.1 next.2.2
+    | .done out => ∃ placed exact, out.1 = some (placed,exact) ∧ walk d root key cidr bits placed exact = true := by
+  rcases acc with ⟨answer, current, parent⟩
+  cases current with
+  | none =>
+    cases selected
+    exact ⟨parent, false, rfl, walk_done_empty inv⟩
+  | some id =>
+    cases present : d.nodes.get? id with
+    | none =>
+      have absent : (Source.Aip.store d).nodes[id]? = none := present
+      simp [Placement.selectStep, absent] at selected
+    | some node =>
+      have here : (Source.Aip.store d).nodes[id]? = some node := present
+      by_cases long : cidr < node.cidr
+      · simp [Placement.selectStep, here, long] at selected
+        subst selected
+        exact ⟨parent, false, rfl, walk_done_stop trie fam keyBound short inv present (.inl long)⟩
+      by_cases matching : AllowedipsRelation.common bits node.bits key < node.cidr
+      · simp [Placement.selectStep, here, long, matching] at selected
+        subst selected
+        exact ⟨parent, false, rfl, walk_done_stop trie fam keyBound short inv present (.inr matching)⟩
+      by_cases exactLength : node.cidr = cidr
+      · have matching' : ¬AllowedipsRelation.common bits node.bits key < cidr := exactLength ▸ matching
+        simp [Placement.selectStep, here, matching', exactLength] at selected
+        subst selected
+        exact ⟨some id, true, rfl, walk_done_exact trie fam keyBound short inv present matching exactLength⟩
+      by_cases invalid : node.cidr ≥ node.bitlen
+      · simp [Placement.selectStep, here, long, matching, exactLength, invalid] at selected
+      cases child : node.bit[key / 2 ^ (node.bitlen - 1 - node.cidr) % 2]? with
+      | none => simp [Placement.selectStep, here, long, matching, exactLength, invalid, child] at selected
+      | some next =>
+        simp [Placement.selectStep, here, long, matching, exactLength, invalid, child] at selected
+        subst selected
+        exact ⟨rfl, walk_yield trie fam keyBound inv present long matching exactLength child⟩
+
+
+theorem walk_commonRecords_kept (a : Ambient) (width x : Nat) :
+    (Model.commonRecords a width x).hidden = a.hidden ∧
+      (Model.commonRecords a width x).allocArmed = a.allocArmed := by
+  unfold Model.commonRecords
+  dsimp only
+  split
+  · exact ⟨rfl, rfl⟩
+  · split <;> exact ⟨rfl, rfl⟩
+
+/-- An accepted turn of the loop writes only decision records. -/
+theorem walk_iteration_ambient {key cidr bits : Nat} {acc : Placement.Acc} {store st' : AipStore}
+    {a a' : Ambient} {step : ForInStep Placement.Acc}
+    (run : ((Placement.iteration key cidr bits acc).run store).run a = .ok ((step,st'),a')) :
+    a'.hidden = a.hidden ∧ a'.allocArmed = a.allocArmed := by
+  rcases acc with ⟨answer, current, parent⟩
+  cases current with
+  | none => cases run; exact ⟨rfl, rfl⟩
+  | some id =>
+    cases present : store.nodes[id]? with
+    | none =>
+      simp [Placement.iteration, getNode, StateT.run_bind, Placement.branch_run,
+        Source.except_ok_bind, present, invariant] at run
+      cases run
+    | some node =>
+      by_cases long : cidr < node.cidr <;>
+        by_cases matching : AllowedipsRelation.common bits node.bits key < node.cidr <;>
+        by_cases exactLength : node.cidr = cidr <;>
+        by_cases invalid : node.cidr ≥ node.bitlen <;>
+        cases child : node.bit[key / 2 ^ (node.bitlen - 1 - node.cidr) % 2]?
+      all_goals try simp only [exactLength] at long matching invalid child
+      all_goals simp [Placement.iteration, getNode, StateT.run_bind, StateT.run_pure, Placement.branch_run,
+        Placement.branchCmp_run, Source.except_ok_bind, Source.except_pure, Placement.prefix_run, present,
+        choose, AipNode.bitAt, invariant, long, matching, exactLength, invalid, child] at run
+      all_goals
+        rcases run with ⟨⟨-, -⟩, rfl⟩ <;>
+        exact ⟨by simp [(walk_commonRecords_kept _ _ _).1, Placement.recordCmp, Model.record],
+          by simp [(walk_commonRecords_kept _ _ _).2, Placement.recordCmp, Model.record]⟩
+
+/-- The bounded loop: every accepted prefix of turns keeps the store, writes
+only decision records, and either is still open under the invariant or has
+ended with the walk facts. -/
+theorem walk_loop {d : Device} {root : Option NodeId} {key cidr bits : Nat}
+    (trie : ordered d = true) (fam : bits = 32 ∨ bits = 128) (keyBound : key < 2 ^ bits)
+    (short : cidr ≤ bits) (items : List Nat) :
+    ∀ (acc : Placement.Acc) (a : Ambient) (out : Placement.Acc) (st' : AipStore) (a' : Ambient),
+      ((forIn items acc (fun (_ : Nat) => Placement.iteration key cidr bits)).run (Source.Aip.store d)).run a =
+        .ok ((out,st'),a') →
+      acc.1 = none → walk_Inv d root key cidr bits acc.2.1 acc.2.2 →
+      st' = Source.Aip.store d ∧ a'.hidden = a.hidden ∧ a'.allocArmed = a.allocArmed ∧
+        (out.1 = none ∨ ∃ placed exact, out.1 = some (placed,exact) ∧
+          walk d root key cidr bits placed exact = true) := by
+  induction items with
+  | nil =>
+    intro acc a out st' a' run opened _
+    cases run
+    exact ⟨rfl, rfl, rfl, .inl opened⟩
+  | cons x xs ih =>
+    intro acc a out st' a' run opened inv
+    simp only [List.forIn_cons] at run
+    obtain ⟨step, s1, a1, turn, rest⟩ := bind_ok_run run
+    clear run
+    obtain ⟨selected, rfl⟩ := Placement.iteration_accepted turn
+    obtain ⟨hidden, armed⟩ := walk_iteration_ambient turn
+    have facts := walk_step trie fam keyBound short inv selected
+    cases step with
+    | done value =>
+      cases rest
+      exact ⟨rfl, hidden, armed, .inr facts⟩
+    | yield next =>
+      obtain ⟨stillOpen, nextInv⟩ := facts
+      obtain ⟨same, hidden', armed', result⟩ := ih next a1 out st' a' rest stillOpen nextInv
+      exact ⟨same, hidden'.trans hidden, armed'.trans armed, result⟩
+
+/-- THE WALK FACTS. An accepted `nodePlacement` from the family's root of an
+ordered trie returns a placement with `C1Invariant.walk`'s facts, leaves the
+component store alone, and keeps the pending records and the armed sites. -/
+theorem walk_of_run {d : Device} {family key cidr : Nat} {placed : Option NodeId} {exact : Bool}
+    {a a' : Ambient} {s' : AipStore} (trie : ordered d = true) (families : family = 4 ∨ family = 6)
+    (keyBound : key < 2^widthOf family) (short : cidr ≤ widthOf family)
+    (run : ((WG.nodePlacement (rootOf d family) key cidr (widthOf family)).run (Source.Aip.store d)).run a =
+      .ok (((placed,exact),s'),a')) :
+    walk d (rootOf d family) key cidr (widthOf family) placed exact = true ∧ s' = Source.Aip.store d ∧
+      a'.hidden = a.hidden ∧ a'.allocArmed = a.allocArmed := by
+  have fam : widthOf family = 32 ∨ widthOf family = 128 := by
+    rcases families with rfl | rfl
+    · exact .inl rfl
+    · exact .inr rfl
+  rw [← Placement.run_eq_source] at run
+  unfold Placement.run at run
+  rw [Std.Legacy.Range.forIn_eq_forIn_range'] at run
+  obtain ⟨acc, s1, a1, looped, rest⟩ := bind_ok_run run
+  clear run
+  have initial : walk_Inv d (rootOf d family) key cidr (widthOf family) (rootOf d family) none :=
+    ⟨fun id isRoot => walk_ordered_root trie isRoot, rfl⟩
+  obtain ⟨rfl, hidden, armed, result⟩ := walk_loop trie fam keyBound short _ (none, rootOf d family, none)
+    a acc s1 a1 looped rfl initial
+  cases answer : acc.1 with
+  | none =>
+    rw [answer] at rest
+    cases rest
+  | some value =>
+    rw [answer] at rest
+    cases rest
+    rcases result with stillOpen | ⟨placed', exact', found, facts⟩
+    · rw [answer] at stillOpen
+      cases stillOpen
+    · rw [answer] at found
+      cases found
+      exact ⟨facts, rfl, hidden, armed⟩
+
+#print axioms walk_of_run
 end Binary.Statements.C1.Proof
