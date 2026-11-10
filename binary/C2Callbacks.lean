@@ -264,9 +264,27 @@ theorem const_cmp8_site : ConstCmp8Site :=
     (fun fetch reading =>
       Callback.Cmp8.const_cmp8_rule fetch reading.services (stubs_agree fetch reading.range).2)
 
+/-! ## `bts` and the layout -/
+
+theorem bts_supported : BtsSupported := by
+  intro dst index s p n₁ n₂ j₁ j₂ P Q hn hj
+  change (@Operation.interp _ ⟨.W64⟩ .W64 (.bts dst index) p s n₁ j₁).All P →
+    (@Operation.interp _ ⟨.W64⟩ .W64 (.bts dst index) p s n₂ j₂).All Q
+  simp only [Operation.interp]
+  split
+  · exact False.elim
+  · split
+    · exact False.elim
+    · simp only [Effects.All]
+      split
+      · exact False.elim
+      · intro run pf af zf sf of
+        exact hn _ (run pf af zf sf of)
+
 #print axioms call_site
 #print axioms stubs_agree
 #print axioms pc_site
 #print axioms cmp8_site
 #print axioms const_cmp8_site
+#print axioms bts_supported
 end Binary.C2
