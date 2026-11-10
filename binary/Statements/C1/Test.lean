@@ -1,4 +1,5 @@
 import StatementC1Vacuity
+import C1Interfaces
 
 /-! Executable rendering of the C1 statement packet, revision 2. Not a proof
 and not part of the package build: run with `Statements/C1/run-tests.sh`.
@@ -274,6 +275,43 @@ def storeKey (m : DataMem) (at' width key : Nat) : DataMem :=
 
 def system (cfg : Config) : SystemFlags := {bits := if cfg.direction then 1 <<< 10 else 0}
 
+/-- The proof plan's machine cut (`C1Interfaces.NodeCut`, `Exits`), its
+decidable part, on the states one insertion visits: the common exit
+`add+0x549` is reached once, in flight, with the answer in `ebx`; for the
+cases that keep going below the first allocation on a nonempty trie, the
+landed `NodeInit.boundary` holds at `add+0x156` against the mirror's device
+with the sequence incremented, the new object is in the arena, `rbx` is the
+placed node, and the common exit has the cut's stack pointer and the cut's
+bytes from `rsp+48` up to and including the wrapper's return word. -/
+def cutCheck (L : Layout) (names : Allowedips.Names) (w : World) (s : MachineState)
+    (history : Array MachineState) (case : Proof.Case) (family key cidr pid : Nat) (answer : Int) :
+    Except String Unit := do
+  let add := AllowedipsMutationImage.Add.entry
+  let top := s.data.regs.rsp.toNat
+  let exits := history.filter (·.pc == add + 0x549)
+  let some x := exits[0]? | throw "no state at the common exit"
+  require (exits.size == 1) "the common exit is reached more than once"
+  require (x.data.regs.get (.low .rbx .W32) == BitVec.ofInt 32 answer) "ebx at the common exit is not the answer"
+  require (x.data.regs.rsp.toNat ≤ top && top ≤ x.data.regs.rsp.toNat + insertWindow) "InFlight at the common exit"
+  let cuts := history.filter (·.pc == add + 0x156)
+  if case == .child || case == .cover || case == .split || case == .splitNoMem then
+    let some e := cuts[0]? | throw "no state at add+0x156"
+    require (cuts.size == 1) "add+0x156 is reached more than once"
+    let some d := w.wg.dev | throw "no device"
+    let base ← (NodeInit.boundary names Root.nodeOffsets (Proof.bumped w d) e key cidr pid).mapError
+      (s!"NodeInit.boundary: {·}")
+    require (L.arena.any fun span => span.1 ≤ base && base+nodeSize ≤ span.1+span.2) "the new object is not in the arena"
+    let (placed,_) := Proof.walkOf w d family key cidr
+    let address ← Trie.address names.trie.nodes placed
+    require (address == e.data.regs.rbx.toNat) "rbx at the cut is not the placed node"
+    require (e.data.regs.rsp.toNat ≤ top && top ≤ e.data.regs.rsp.toNat + insertWindow) "InFlight at the cut"
+    require (e.data.system.bits[10] == false) "direction flag at the cut"
+    require (x.data.regs.rsp == e.data.regs.rsp) "the stack pointer at the common exit is not the cut's"
+    let low := e.data.regs.rsp.toNat + 48
+    require (x.data.dmem.loadBytes (.ofNat 64 low) (top+8-low) == e.data.dmem.loadBytes (.ofNat 64 low) (top+8-low))
+      "a word between the cut's rsp+48 and the wrapper's return word changed before the common exit"
+  else require cuts.isEmpty s!"add+0x156 is reached in case {repr case}"
+
 def insertCall (cfg : Config) (input : Input) (seed : UInt64) (th : Thread)
     (family key cidr pid : Nat) (related : Bool) : Except String (Thread × Int) := do
   let L := cfg.layout
@@ -290,6 +328,10 @@ def insertCall (cfg : Config) (input : Input) (seed : UInt64) (th : Thread)
   (insertReady L A c initial family key cidr pid (.ofNat stopAddr)).mapError (s!"PREMISE: {·}")
   let some stream := th.world.ambient.hidden | throw "PREMISE: no pending records"
   let (answer,w') ← ((liftWG (WG.insert family key cidr pid)).run th.world).mapError (s!"MIRROR: {Stop.message ·}")
+  -- the proof plan's derived facts about the mirror's walk (C1Invariant), before the call
+  if related then (Proof.walkCheck th.world family key cidr).mapError (s!"INVARIANT: {·}")
+  -- the mirror's run is the proof plan's pure step (C1Step), up to `Allowedips.target`
+  let case ← (Proof.stepCheck th.world family key cidr pid answer w').mapError (s!"INVARIANT: {·}")
   -- the machine
   let mut r : Run := {state := initial}
   let mut live := th.live
@@ -298,7 +340,9 @@ def insertCall (cfg : Config) (input : Input) (seed : UInt64) (th : Thread)
   let mut log : List Pair.Span := []
   for _ in [:4] do
     r ← (runUntil input.lookup.instructions input.lookup.labels input.lookup.hooks input.lookup.preempt
-      r.state seed true input.lookup.budget cfg.preempt #[input.alloc,input.free] (some r) stopAddr (some #[])).mapError
+      r.state seed true input.lookup.budget cfg.preempt #[input.alloc,input.free] (some r) stopAddr
+      (some #[(AllowedipsMutationImage.Add.entry+0x156).toBitVec.toNat,
+        (AllowedipsMutationImage.Add.entry+0x549).toBitVec.toNat])).mapError
       (s!"CONCLUSION: the machine does not return: {·}")
     if r.state.pc.toBitVec.toNat == stopAddr then break
     let entry := r.state
@@ -307,7 +351,9 @@ def insertCall (cfg : Config) (input : Input) (seed : UInt64) (th : Thread)
       if t.data.regs.rax.toNat != 0 then names := names.allocated t.data.regs.rax.toNat
     else names := {names with trie := {names.trie with
       nodes := names.trie.nodes.filter (·.2 != entry.data.regs.rsi.toNat)}}
-    r := {r with state := t}; live := live'; pending := rest; log := log ++ stores
+    -- a service returns to add+0x156: that state is the proof plan's cut
+    r := {r with state := t,history := if t.pc == AllowedipsMutationImage.Add.entry+0x156 then r.history.push t else r.history}
+    live := live'; pending := rest; log := log ++ stores
   let t := r.state
   let conclusion (ok : Bool) (what : String) : Except String Unit :=
     if ok then pure () else throw s!"CONCLUSION: {what}"
@@ -325,6 +371,9 @@ def insertCall (cfg : Config) (input : Input) (seed : UInt64) (th : Thread)
   if related then
     (assertAt names Root.nodeOffsets t.data.dmem w').mapError (s!"RELATED: {·}")
     require (names.trie.nodes.map (·.2) == live) "RELATED: names and handed-out objects differ"
+    -- the proof plan's invariant (C1Invariant.Inv, its decidable part) and the ordering facts
+    (Proof.invCheck L names w' t.data.dmem).mapError (s!"INVARIANT: {·}")
+    (cutCheck L th.names th.world initial r.history case family key cidr pid answer).mapError (s!"CUT: {·}")
   let deepest := r.writes.foldl (fun low (a,_) => if cfg.stack-4096 ≤ a && a < cfg.stack then min low a else low) cfg.stack
   return ({memory := t.data.dmem,world := w',live,names,deepest := max th.deepest (cfg.stack-deepest)},answer)
 

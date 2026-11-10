@@ -1,4 +1,5 @@
 import StatementC1Vacuity
+import C1Step
 import PairCapture
 import PairAllowedipsCapture
 
@@ -194,6 +195,8 @@ def insertCall (L : Layout) (A : Allocator) (input : Input) (seed : UInt64) (th 
   if index == 0 then
     let some d := w.wg.dev | throw "no device"
     out := note out "emptyTable" (say (emptyTable L memory d))
+    out := note out "proof plan's invariant at the empty table (Initial; C1Invariant.relatedCheck)" (say (
+      Proof.relatedCheck L ⟨L.table,⟨[],L.peers⟩,d.nextNode⟩ w memory))
   let (viewMemory,view,words) := truncated memory c
   out := note out "insertReady (captured window)" (say (insertReady L A view
     {initial with data := {initial.data with dmem := viewMemory}} call.family call.key call.cidr call.pid (.ofNat ra)))
@@ -247,6 +250,10 @@ def insertCall (L : Layout) (A : Allocator) (input : Input) (seed : UInt64) (th 
   out := out ++ [("deepest stack write of the six functions and callbacks",toJson (initial.data.regs.rsp.toNat-deepest))]
   out := note out "mirror's pending records after the call are the unconsumed ones" (check (w'.ambient.hidden == some pending))
   out := note out "landed relation (assertAt) after the call" (say (assertAt names Root.nodeOffsets t.data.dmem w'))
+  out := note out "proof plan's invariant after the call (C1Invariant.invCheck)" (say (Proof.invCheck L names w' t.data.dmem))
+  out := note out "proof plan's walk facts before the call (C1Invariant.walkCheck)" (say (Proof.walkCheck w call.family call.key call.cidr))
+  out := note out "proof plan's step equals the mirror's run (C1Step.stepCheck)" (match Proof.stepCheck w call.family call.key call.cidr call.pid answer w' with
+    | .ok k => s!"ok ({repr k})" | .error e => e)
   return ({world := w',names,live},t,Json.mkObj out)
 
 /-- A compiled lookup under Kraken on the captured heap, with a caller frame
