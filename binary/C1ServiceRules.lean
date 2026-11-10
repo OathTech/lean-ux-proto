@@ -113,6 +113,24 @@ private theorem live_range (g : Geometry A s e) (a : BitVec 64) :
   rw [inRange_iff _ _ (by omega), same]
   omega
 
+/-- The service's scratch and its return word lie in the insertion's stack span. -/
+theorem stack_of_service (g : Geometry A s e) {a : BitVec 64}
+    (inside : Scratch e A.depth a ∨ InRange e.data.regs.rsp.toBitVec 8 a) :
+    (stackSpan A s).contains a := by
+  have low := g.low
+  have high := g.high
+  have window := g.window
+  have top := g.top
+  refine (stack_contains g a).mpr ?_
+  rcases inside with scratch | word
+  · have := (scratch_service g a).mp scratch
+    simp only [insertWindow] at *
+    omega
+  · have same : e.data.regs.rsp.toBitVec.toNat = e.data.regs.rsp.toNat := rfl
+    have := (inRange_iff _ _ (by omega) a).mp word
+    simp only [insertWindow] at *
+    omega
+
 /-! ## Footprints -/
 
 private theorem arena_heap {a : BitVec 64} (inside : L.Arena a) : L.Heap a := by

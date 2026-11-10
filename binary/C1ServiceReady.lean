@@ -26,6 +26,10 @@ structure Ready (L : Layout) (A : Allocator) (c : Context) (s : MachineState) : 
   windowCache : spansApart
     [((s.data.regs.rsp.toBitVec - .ofNat 64 (insertWindow + A.depth)).toNat, insertWindow + A.depth)]
     [(cacheWord,8)] = true
+  heapServices : spansApart L.heap (Trie.callServices c) = true
+  servicesStack : spansApart (Trie.callServices c) [stackSpan A s] = true
+  buffersMetadata : spansApart (Trie.callBuffers c)
+    (Trie.callMetadata c ++ [(preemptCountAddress.toNat,4)]) = true
 
 private theorem spansApart_sub {left right left' right' : List Pair.Span}
     (ok : spansApart left right = true) (subLeft : ∀ x ∈ left', x ∈ left)
@@ -54,11 +58,11 @@ theorem ready_of_insertReady {L : Layout} {A : Allocator} {c : Context} {s : Mac
   obtain ⟨capacity,ok⟩ := require_bind_ok _ _ _ _ ok
   obtain ⟨-,ok⟩ := require_bind_ok _ _ _ _ ok
   obtain ⟨heap,ok⟩ := require_bind_ok _ _ _ _ ok
-  obtain ⟨-,ok⟩ := require_bind_ok _ _ _ _ ok
+  obtain ⟨services,ok⟩ := require_bind_ok _ _ _ _ ok
   obtain ⟨buffers,ok⟩ := require_bind_ok _ _ _ _ ok
   obtain ⟨-,ok⟩ := require_bind_ok _ _ _ _ ok
   have caller := require_ok ok
-  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_⟩
+  refine ⟨?_,?_,?_,?_,?_,?_,?_,?_,?_,?_,?_⟩
   · intro needed
     simpa only [needed, ↓reduceIte, decide_eq_true_eq] using capacity
   · intro i bound
@@ -69,5 +73,12 @@ theorem ready_of_insertReady {L : Layout} {A : Allocator} {c : Context} {s : Mac
   · exact spansApart_sub buffers (fun _ h => h) (by simp [callerSpans, stackSpan])
   · exact spansApart_sub buffers (fun _ h => h) (by simp [callerSpans])
   · exact spansApart_sub caller (fun _ h => h) (by simp [callerSpans])
+  · exact spansApart_sub heap (fun _ h => h) (fun x h => by simp [h])
+  · exact spansApart_sub services (fun _ h => h) (fun _ h => h)
+  · exact spansApart_sub buffers (fun _ h => h) (fun x h => by
+      simp only [List.mem_append] at h ⊢
+      rcases h with h | h
+      · exact .inl (.inr h)
+      · exact .inr h)
 
 end Binary.Statements.C1.Proof

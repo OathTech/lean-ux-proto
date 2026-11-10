@@ -13,7 +13,9 @@ every other premise holds of `Joint.fetch`, the callbacks being the image's.
 `premisesMet` closes the interface proposition AS STATED, with an allocator
 whose `Idle` never holds. The proposition does not ask for more: it has no
 clause that makes the allocator's contract bite (only `Witness` does, by
-demanding `Idle` of an actual state). -/
+demanding `Idle` of an actual state). And no stub of the planned kind, with
+its state in the arena, meets `AllocatorContract` as signed:
+`C1ServiceContractFinding`. -/
 namespace Binary.Statements.C1.Proof
 open Binary.TrustBase Binary.Statements.C1
 
