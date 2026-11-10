@@ -130,4 +130,82 @@ theorem advance_enters (laid : RegionsLaidOut) (pcSite : PcSite) (cmp8Site : Cmp
 
 #print axioms advance_enters
 
+theorem loop_iteration (laid : RegionsLaidOut) (pcSite : PcSite) (cmp8Site : Cmp8Site) :
+    LoopIteration := by
+  intro fetch layout preempt s kp skb nonce w t i e reading ctx at_
+  obtain ⟨⟨d, pc0⟩, history⟩ := e
+  obtain ⟨hpc, carried, quiet, bound, current, count, iterations, s10, s18⟩ := at_
+  dsimp only at hpc carried current count iterations s10 s18
+  subst hpc
+  rw [show loopPC = regionPC 48 by decide]
+  apply call_step pcSite laid reading ctx 48 "L_ffffffff810f31f0" (by decide) rfl (by decide)
+    (by decide) (by decide) d history carried quiet
+  intro d1 h1 c1 rbp1 r141 r151 e10 e18 q1
+  have k13 : d1.regs.r13.toBitVec = kp := by rw [c1.r13, ctx.keypair]
+  have cleared_ : d1.regs.r14.toBitVec + d1.regs.rbp.toBitVec =
+      cur w + BitVec.ofNat 64 (i + 1) := by rw [r141, rbp1, current, count]
+  have word := c1.window.wordLoad _
+    (and127_lt (d1.regs.r14.toBitVec + d1.regs.rbp.toBitVec))
+  rw [← wordOff_address, ← k13] at word
+  apply region_step laid reading 49 6 (by decide) (by decide) d1 h1 q1 (r49 d1 _ word)
+  rintro ⟨⟨r2, z2, f2, y2, m2⟩, pc2⟩ h2 ⟨hr, hm, hp⟩ - q2
+  dsimp only at hr hm hp
+  subst hr hp
+  rw [k13, wordOff_address] at hm
+  have q2 := q2 (show regionPC 49 + 4 + 4 + 3 + 3 + 3 + 12 ∉ exits by decide)
+  rw [show regionPC 49 + 4 + 4 + 3 + 3 + 3 + 12 = regionPC 55 by decide]
+  have inside : ∀ a, InRange (wordAddress kp
+      ((d1.regs.r14.toBitVec + d1.regs.rbp.toBitVec) &&& 127).toNat) 8 a → windowBytes kp a :=
+    fun a => word_window (and127_lt _)
+  have s10_2 : m2.loadInt (s.data.regs.rsp.toBitVec + 0x10) 8 = some (t.toNat : Int) := by
+    rw [hm]
+    exact (window_store_slot ctx _ _ _ _ _ inside (fun a => slot10_stack)).trans (e10.trans s10)
+  have s18_2 : m2.loadInt (s.data.regs.rsp.toBitVec + 0x18) 8 = some ((t >>> 6).toNat : Int) := by
+    rw [hm]
+    exact (window_store_slot ctx _ _ _ _ _ inside (fun a => slot18_stack)).trans (e18.trans s18)
+  refine call_step cmp8Site laid reading ctx 55 "L_ffffffff810f40a0" (by decide) rfl (by decide)
+    (by decide) (by decide) _ h2 (w := cleared w (i + 1)) ?_ q2 ?_
+  · refine c1.store ctx _ 8 0 (fun a ia => .inr (inside a ia)) hm ?_ rfl rfl rfl rfl
+    have stored := c1.window.setWord _
+      (and127_lt (d1.regs.r14.toBitVec + d1.regs.rbp.toBitVec)) 0#64
+    rw [cleared_] at stored
+    rw [show m2 = _ from hm, cleared_]
+    exact stored
+  intro d3 h3 c3 rbp3 r143 r153 e10_3 e18_3 q3
+  dsimp only at rbp3 r143 r153 e10_3 e18_3
+  have s10_3 := e10_3.trans s10_2
+  have s18_3 := e18_3.trans s18_2
+  have limit128 : top w t ≤ 128 := Nat.min_le_right _ _
+  have count3 : d3.regs.rbp.toBitVec = BitVec.ofNat 64 (i + 1 + 1) := by
+    rw [rbp3]
+    show 1#64 + d1.regs.rbp.toBitVec = _
+    rw [rbp1, count]
+    bv_omega
+  have current3 : d3.regs.r14.toBitVec = cur w := by rw [r143, r141, current]
+  have iterations3 : d3.regs.r15.toBitVec = BitVec.ofNat 64 (top w t) := by
+    rw [r153, r151, iterations]
+  apply region_step laid reading 56 2 (by decide) (by decide) d3 h3 q3 (r56 d3)
+  rintro ⟨⟨r4, z4, f4, y4, m4⟩, pc4⟩ h4 ⟨hr, hm4, hp⟩ - q4
+  dsimp only at hr hm4 hp
+  subst hr hm4
+  rw [count3, iterations3] at hp
+  apply Eventually.done
+  by_cases again : i + 1 < top w t
+  · simp only [again, ↓reduceIte]
+    simp only [show BitVec.ofNat 64 (i + 1 + 1) ≤ BitVec.ofNat 64 (top w t) by bv_omega,
+      ↓reduceIte] at hp
+    subst hp
+    exact ⟨show regionPC 48 = loopPC by decide, c3.move rfl rfl rfl rfl rfl,
+      q4 (show regionPC 48 ∉ exits by decide), again, current3, count3, iterations3, s10_3, s18_3⟩
+  · simp only [again, ↓reduceIte]
+    simp only [show ¬(BitVec.ofNat 64 (i + 1 + 1) ≤ BitVec.ofNat 64 (top w t)) by bv_omega,
+      ↓reduceIte] at hp
+    subst hp
+    have last : i + 1 = top w t := by omega
+    refine ⟨show regionPC 56 + 3 + 2 = storePC by decide, ?_,
+      q4 (show regionPC 56 + 3 + 2 ∉ exits by decide), s10_3, s18_3⟩
+    rw [← last]
+    exact c3.move rfl rfl rfl rfl rfl
+
+#print axioms loop_iteration
 end Binary.C2
