@@ -1,4 +1,4 @@
-import C1Service.CallbackCmp8Image
+import CallbackCmp8Image
 import CallbackLeafHistory
 
 /-! The rules for the KCOV callbacks as conclusions of image execution, stated once.

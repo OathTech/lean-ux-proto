@@ -1,19 +1,14 @@
-import C1Service.CallbackText
-import C1Service.CallbackCmp8Rule
+import C1ServiceCallbackText
+import CallbackCmp8
 import StatementC1CallbackImage
 
-/-! `__sanitizer_cov_trace_cmp8` for the allowed-IPs results, FROM the shared
-rule `Binary.Callback.Cmp8.Cmp8Rule` (stated once for results C1 and C2 on
-branch `task/binary-c2`, commit a6de3eed, and proved there by C2's work
-package 1). Nothing is executed here: this module supplies the rule's
-agreement premise from C1's image terms and shows that the callbacks' text is
-apart from the allowed-IPs image, which the rule leaves to its user.
-
-`C1Service.CallbackCmp8Image` and `C1Service.CallbackCmp8Rule` are the two
-shared files of a6de3eed; the second differs from the original in its import
-line only (lake builds a module only under a registered root's name). At
-integration they are replaced by the originals and the two imports here
-repointed. -/
+/-! `__sanitizer_cov_trace_cmp8` for the allowed-IPs results, from the shared
+rule `Binary.Callback.Cmp8.Cmp8Rule`, stated once for results C1 and C2 and
+proved in `CallbackCmp8` (`cmp8_rule`; the three `CallbackCmp8*` modules are
+taken unchanged from branch `task/binary-c2-wp1` at 414969d4). Nothing is
+executed here: this module supplies the rule's agreement premise from C1's
+image terms and shows that the callbacks' text is apart from the allowed-IPs
+image, which the rule leaves to its user. -/
 namespace Binary.Callback.Cmp8
 open TrustBase
 local instance : Labels := Image.linkedLabels
@@ -69,14 +64,13 @@ theorem text_apart {pc : Int64} (inside : Text pc) : AllowedipsImage.fetch pc = 
           omega
         | none => simp [second] at entry
 
-/-- The contract of the allowed-IPs results for `__sanitizer_cov_trace_cmp8`,
-from the shared rule. -/
-theorem cmp8_contract (rule : Cmp8Rule) (fetch : Int64 → Option Decoded)
+/-- The contract of the allowed-IPs results for `__sanitizer_cov_trace_cmp8`. -/
+theorem cmp8_contract (fetch : Int64 → Option Decoded)
     (services : ServiceDecoderAgreement fetch)
     (reading : ∀ pc i, StatementC1CallbackImage.fetch pc = some i → fetch pc = some i) :
     AllowedipsTraceCmp8Contract fetch := by
   intro s ra pc ready frame
-  have leaf := cmp8_kcov rule fetch services (c1_agreement fetch reading) s ra pc ready frame
+  have leaf := cmp8_kcov cmp8_rule fetch services (c1_agreement fetch reading) s ra pc ready frame
   apply eventually_weaken (historyStep fetch) _ _ _ _ leaf
   rintro t ⟨returned,framed,effect,interior⟩
   exact ⟨returned,framed,effect,fun q member => (interior q member).1.2,

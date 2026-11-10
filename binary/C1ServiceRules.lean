@@ -1,4 +1,4 @@
-import C1Service.Ready
+import C1ServiceReady
 import MemoryInvariant
 import SystemInvariant
 import PairFrameProof

@@ -1,4 +1,4 @@
-import C1Service.CallbackText
+import C1ServiceCallbackText
 import CallbackWrappers
 import CallbackAgreement
 import StatementC1CallbackImage
