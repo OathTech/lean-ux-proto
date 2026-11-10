@@ -1353,6 +1353,28 @@ realism and physical frame premises.
 
 | Allowed-IPs `lookup` and `common_bits`, both families | In progress; no function theorem claimed | 56 (35 lookup, 21 common_bits), plus existing peer-get | Under construction; additional variable cmp1/cmp8 callbacks reached | `cb2348e` | Paused for replanning (2026-10-16). Both-family Pre witnesses execute to RET; complete entry/common_bits/peer-get/return-tail components checked with union cut frames. Bounded loop and function correspondence/transport remain open; recovery record is in the single adequacy report. M2 review will recheck M1 fixes. |
 
+Result C2 of the binary track, the receive replay window
+([closing report](2026-11-10-c2-replay-window.md), [signed statement](2026-11-10-c2-final-statement.md)),
+is in two parts: three clauses closed in the binary package, which does not
+import the proof tree, and the transported clause and the headline in the
+bridge library, the one file outside `Leanux/Proofs/` that imports it.
+
+| Result | Theorem | Where | Statement | Review | Mirror commit | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| C2: the s5 receive range `[0xffffffff8139d2a6, 0xffffffff8139d3ea)` computes the mirror's `counterValidate`, exits cleanly, and a replay witness | `Binary.C2.refines`, `Binary.C2.exits_cleanly`, `Binary.C2.replay_witness` | `binary/C2Headline.lean` (statement: `binary/C2Statement.lean`) | [final statement](2026-11-10-c2-final-statement.md) | Pending: the independent landing review | `218d3ffd` | Current over the mirror's `Leanux.WG.RxData` as imported by path (no mirror file differs from `218d3ffd`). Closed on the standard three axioms; no resource raise in its files. Premises: the two image readings, `Context`, the ten-patch Kraken with its `bts`. Gate: `scripts/binary-proof-gate`. External kernel replay of the export pending |
+| C2 bridge: no packet counter accepted twice by the s5 receive range, and the headline | `Binary.C2.Bridge.no_counter_accepted_twice`, `Binary.C2.Bridge.headline` (`HeadlineRefinement`), `replay_refused`; from `Binary.C2.refines` and `CounterWindow.mirror_step`, `CounterWindow.accepted_nodup` | `binary/bridge/C2Bridge.lean` | [final statement](2026-11-10-c2-final-statement.md) | Pending: the independent landing review | `218d3ffd` | Current. Holds over the four `CounterWindow` modules (`Model`, `Refinement`, `MirrorCalls`, `Bounds`) as validated at the proof gate over mirror `218d3ffd`; their last source change is `b32bb164`. No resource raise in the bridge or in the four modules. Gate: `scripts/c2-bridge-gate`. The exemption from the import rule that admits this file awaits the owner's signoff |
+
+How the bridge's lag is reported: its result is about the mirror's
+`counterValidate` only through those four modules and `Leanux.WG.RxData`.
+When a mirror change lands, the `ReplayWindow` row says whether S2
+(`mirror_step`'s source) is current or lagging over the new mirror commit;
+the bridge's row takes the same word and the same commit, and its last cell
+begins with that word. `scripts/c2-bridge-gate` prints the last commit of
+the four modules, the last commit of the mirror and the commit this row
+names at every claim point, and fails if the row says Current while a
+mirror file differs from the commit it names. A lagging row does not block
+a mirror change; it is repaired on the proof tree and the bridge gate rerun.
+
 On the separate `task/binary-proof-refactor` branch, the
 [sequential sibling experiment](2026-10-16-goal-binary-proof-refactoring.md#sibling-sequential-experiment-result)
 adds `Binary.Sequential.lookup_simulation` for the same full index lookup.
