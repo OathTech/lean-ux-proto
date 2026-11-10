@@ -213,7 +213,138 @@ theorem root_allocated (below : NodeBelowTop) (alloc : AllocRule) (premises : Pr
     exact trunk.atAdd.seqWord
   · rw [← readNat_frame (before := t1) (after := v) frameV _ 72 (fun y inside => notCall y (nodeHeap y inside))]
     exact zero1
+
+/-- The landed boundary of the root initialization holds at +0x443. -/
+theorem root_boundary (trunk : Trunk L A c s w v4 key cidr pid ra names stream d seq a)
+    (bound : cidr ≤ (if v4 then 32 else 128))
+    (empty : (if v4 then d.peerAllowedips.root4 else d.peerAllowedips.root6) = none)
+    {rest : List HiddenRecord} {n : Nat} {v : MachineState}
+    (at' : AtBoundary L A c s v4 names rest d seq a n v) :
+    Root.boundary names Root.nodeOffsets (bumped w d) v key cidr pid = .ok () := by
+  have fs := frameSize_range v4
+  have wide := window_wide A
+  have room := trunk.sep.room
+  have top := trunk.sep.top
+  have room' : insertWindow + A.depth ≤ s.data.regs.rsp.toBitVec.toNat := room
+  have top' : s.data.regs.rsp.toBitVec.toNat + 8 ≤ 2^64 := top
+  have stackAt := trunk.atAdd.stackAt
+  have vspBV : v.data.regs.rsp.toBitVec = s.data.regs.rsp.toBitVec - .ofNat 64 (frameSize v4 + 96) := by
+    rw [at'.stack]
+    show a.regs.rsp.toBitVec - BitVec.ofNat 64 96 = _
+    rw [stackAt, sub_sub_ofNat]
+  have vspNat : v.data.regs.rsp.toNat = s.data.regs.rsp.toBitVec.toNat - (frameSize v4 + 96) := by
+    show v.data.regs.rsp.toBitVec.toNat = _
+    rw [vspBV, toNat_sub_ofNat _ _ (by omega)]
+  have nq : 0 < (if v4 then 32 else 128)/8 ∧ (if v4 then 32 else 128)/8 ≤ (if v4 then 36 else 48) := by
+    cases v4 <;> decide
+  have kq : 36 ≤ (if v4 then 36 else 48) ∧ (if v4 then 36 else 48) + 8 ≤ frameSize v4 := by
+    cases v4 <;> decide
+  have r13BV : v.data.regs.r13.toBitVec = s.data.regs.rsp.toBitVec - .ofNat 64 (if v4 then 36 else 48) := by
+    rw [at'.r13, trunk.atAdd.query]
+    cases v4 <;> rfl
+  have r13Nat : v.data.regs.r13.toNat = s.data.regs.rsp.toBitVec.toNat - (if v4 then 36 else 48) := by
+    show v.data.regs.r13.toBitVec.toNat = _
+    rw [r13BV, toNat_sub_ofNat _ _ (by omega)]
+  have aboveLoad (k m : Nat) (hk : k + 8 ≤ frameSize v4) (hm : m ≤ k) :
+      v.data.dmem.loadInt (s.data.regs.rsp.toBitVec - .ofNat 64 k) m =
+        a.dmem.loadInt (s.data.regs.rsp.toBitVec - .ofNat 64 k) m := by
+    refine (at'.frame.loadInt _ m (fun i hi h => ?_)).symm
+    have inWindow : InRange (s.data.regs.rsp.toBitVec - .ofNat 64 (insertWindow + A.depth))
+        (insertWindow + A.depth + 8) (s.data.regs.rsp.toBitVec - .ofNat 64 k + .ofNat 64 i) :=
+      below_sub _ k m _ _ (by omega) (by omega) _ ⟨i,hi,rfl⟩
+    rcases h with h | h | h
+    · exact below_under _ k m (insertWindow + A.depth) _ (by omega) (by omega) (by omega) _ ⟨i,hi,rfl⟩ h
+    · exact trunk.sep.bytesStack _ (writes_bytes h) inWindow
+    · exact trunk.sep.heapStack _ h inWindow
+  have argCidr : (a.regs.get (.low .rcx .W32)).toNat = cidr := trunk.atAdd.cidr.trans trunk.cidr
+  have tableTop := (Root.table_valid_geometry (related_valid trunk.relatedA)).1
+  have argSlot : a.regs.rdi.toNat = names.table+(if (if v4 then 32 else 128) = 32 then 0 else 8) := by
+    have h := congrArg BitVec.toNat trunk.slotAt
+    have small : (if (if v4 then 32 else 128) = 32 then 0 else 8) ≤ 8 := by
+      repeat' split
+      all_goals omega
+    have lt : names.table+(if (if v4 then 32 else 128) = 32 then 0 else 8) < 2^64 := by omega
+    rw [BitVec.toNat_ofNat, Nat.mod_eq_of_lt lt] at h
+    exact h
+  apply boundary_of_fields
+  refine {
+    asserted := assertAt_of_related rfl at'.related at'.shape
+    device := ⟨bump d,rfl,?_⟩
+    pc := at'.pc
+    family := by rw [at'.bits]; cases v4 <;> simp
+    owner := by rw [at'.r14, trunk.atAdd.peer, trunk.peers]; exact trunk.peer
+    cidrRead := ?_
+    cidrBound := by rw [at'.bits]; exact bound
+    allocated := by rw [at'.rbx]; exact at'.object.valid
+    zero := by rw [at'.rbx]; exact at'.zero
+    query := ?_
+    saved := ?_
+    apart := ?_ }
+  · rw [at'.bits]
+    cases v4 <;> simpa [bump] using empty
+  · apply readNat_of_load
+    show v.data.dmem.loadInt (.ofNat 64 (v.data.regs.rsp.toNat+16)) 4 = some (cidr : Int)
+    rw [at'.stack, frame_address, at'.loads (8+16) 4 (by decide) (by decide)]
+    have read := memory_cidr a
+    rw [slot_base a 7 (by decide)] at read
+    have same : a.regs.get (.low .rcx .W32) = BitVec.extractLsb' 0 32 a.regs.rcx.toBitVec := by
+      simp [Reg64s.get,Reg64s.get64,Reg.base,Reg.offset,BitVec.take,BitVec.drop]
+    rw [← argCidr, same]
+    exact read
+  · rw [at'.bits]
+    have keyWord := trunk.atAdd.keyWord
+    cases v4
+    · simp only [Bool.false_eq_true, ↓reduceIte] at keyWord r13BV
+      have rdHigh : readNat v v.data.regs.r13.toNat 8 = .ok (key/2^64) := by
+        apply readNat_of_load
+        rw [Root.ofNat_uint64, r13BV, aboveLoad 48 8 (by decide) (by decide)]
+        exact keyWord.1
+      have rdLow : readNat v (v.data.regs.r13.toNat+8) 8 = .ok (key % 2^64) := by
+        apply readNat_of_load
+        rw [BitVec.ofNat_add, Root.ofNat_uint64, r13BV, sub_add_ofNat _ 48 8 (by omega),
+          show (48-8 : Nat) = 40 from rfl, aboveLoad 40 8 (by decide) (by decide)]
+        exact keyWord.2
+      simp [Placement.queryLocals, Placement.query6, rdHigh, rdLow, require, bind, Except.bind,
+        Nat.div_add_mod']
+    · simp only [↓reduceIte] at keyWord r13BV
+      have rd : readNat v v.data.regs.r13.toNat 4 = .ok key := by
+        apply readNat_of_load
+        rw [Root.ofNat_uint64, r13BV, aboveLoad 36 4 (by decide) (by decide)]
+        exact keyWord
+      simp [Placement.queryLocals, Placement.query4, rd, require, bind, Except.bind]
+  · apply readNat_of_load
+    show v.data.dmem.loadInt (.ofNat 64 (v.data.regs.rsp.toNat+8)) 8 = some _
+    rw [at'.stack, frame_address, at'.loads (8+8) 8 (by decide) (by decide)]
+    have read := memory_read a 8 6 (by decide) (by decide) (by decide)
+    rw [slot_base a 6 (by decide)] at read
+    rw [at'.bits, ← argSlot]
+    exact read
+  · rw [at'.rbx]
+    apply apart_of_bytes
+    · intro span member
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+      rcases member with rfl | rfl | rfl
+      · rw [at'.bits]
+        exact ⟨by show v.data.regs.r13.toNat + _ ≤ 2^64; rw [r13Nat]; omega,nq.1⟩
+      · exact ⟨by show v.data.regs.rsp.toNat + 8 + 8 ≤ 2^64; rw [vspNat]; omega,Nat.zero_lt_succ _⟩
+      · exact ⟨by show v.data.regs.rsp.toNat + 16 + 4 ≤ 2^64; rw [vspNat]; omega,Nat.zero_lt_succ _⟩
+    · exact fun span member => (at'.object.writeSpans trunk v.data at'.rbx span member).1
+    · intro stackSpan member heapSpan written x inside covered
+      have inHeap := (at'.object.writeSpans trunk v.data at'.rbx heapSpan written).2 x covered
+      apply trunk.sep.heapStack x inHeap
+      simp only [List.mem_cons, List.not_mem_nil, or_false] at member
+      rcases member with rfl | rfl | rfl
+      · have inside' : InRange (.ofNat 64 v.data.regs.r13.toNat) (v.data.regs.rbp.toNat/8) x := inside
+        rw [Root.ofNat_uint64, r13BV, at'.bits] at inside'
+        exact below_sub _ _ _ _ _ (by omega) (by omega) x inside'
+      · have inside' : InRange (.ofNat 64 (v.data.regs.rsp.toNat+8)) 8 x := inside
+        rw [BitVec.ofNat_add, Root.ofNat_uint64, vspBV, sub_add_ofNat _ _ 8 (by omega)] at inside'
+        exact below_sub _ _ _ _ _ (by omega) (by omega) x inside'
+      · have inside' : InRange (.ofNat 64 (v.data.regs.rsp.toNat+16)) 4 x := inside
+        rw [BitVec.ofNat_add, Root.ofNat_uint64, vspBV, sub_add_ofNat _ _ 16 (by omega)] at inside'
+        exact below_sub _ _ _ _ _ (by omega) (by omega) x inside'
 end
 
 #print axioms root_allocated
+#print axioms root_boundary
 end C1Trunk
