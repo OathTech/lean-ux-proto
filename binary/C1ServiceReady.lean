@@ -50,6 +50,7 @@ theorem ready_of_insertReady {L : Layout} {A : Allocator} {c : Context} {s : Mac
   obtain ⟨-,ok⟩ := require_bind_ok _ _ _ _ ok
   obtain ⟨cache,-,ok⟩ := bind_ok ok
   obtain ⟨-,ok⟩ := require_bind_ok _ _ _ _ ok
+  obtain ⟨-,ok⟩ := require_bind_ok _ _ _ _ ok
   unfold frameReady at ok
   obtain ⟨-,ok⟩ := require_bind_ok _ _ _ _ ok
   obtain ⟨mapped,ok⟩ := require_bind_ok _ _ _ _ ok

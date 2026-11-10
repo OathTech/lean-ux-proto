@@ -156,7 +156,7 @@ variable {fetch : Int64 → Option Decoded}
 theorem alloc_clause (agree : ∀ pc i, Stub.fetch pc = some i → fetch pc = some i)
     (tableAt : Nat) (peers : List (PeerId × Nat)) (c : Context) (s : MachineState) (ra : UInt64)
     (live : List Nat) (record : HiddenRecord) (stream : List HiddenRecord)
-    (entry : s.pc = allocEntry) (frame : EntryFrame s ra) (ready : ServiceReady allocator c s)
+    (entry : s.pc = allocEntry) (frame : EntryFrame s ra) (ready : ServiceReady (layout tableAt peers) allocator c s)
     (cache : s.data.regs.rdi.toNat = (layout tableAt peers).cache)
     (idle : Idle s.data.dmem live (record :: stream)) :
     Eventually (instructionStep fetch) (fun t =>
@@ -218,6 +218,7 @@ theorem alloc_clause (agree : ∀ pc i, Stub.fetch pc = some i → fetch pc = so
     rw [address]
     simp only [slots] at small
     refine ⟨by simp only [slot, objects]; omega,by simp only [slot, objects]; omega,
+      by simp only [slot, objects, nodeSize]; omega,
       ⟨(arenaBase,arenaSize),List.mem_singleton.mpr rfl,
         by simp only [slot, objects, arenaBase]; omega,
         by simp only [slot, objects, arenaBase, arenaSize, nodeSize]; omega⟩,?_,?_,?_⟩
@@ -243,7 +244,7 @@ theorem alloc_clause (agree : ∀ pc i, Stub.fetch pc = some i → fetch pc = so
 theorem free_clause (agree : ∀ pc i, Stub.fetch pc = some i → fetch pc = some i)
     (tableAt : Nat) (peers : List (PeerId × Nat)) (c : Context) (s : MachineState) (ra : UInt64)
     (live : List Nat) (stream : List HiddenRecord)
-    (entry : s.pc = freeEntry) (frame : EntryFrame s ra) (ready : ServiceReady allocator c s)
+    (entry : s.pc = freeEntry) (frame : EntryFrame s ra) (ready : ServiceReady (layout tableAt peers) allocator c s)
     (idle : Idle s.data.dmem live stream) :
     Eventually (instructionStep fetch) (fun t =>
       Returned s t ra ∧

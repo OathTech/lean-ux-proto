@@ -251,10 +251,46 @@ theorem protected_apart (ready : Ready L A c s) (g : Geometry A s e)
 
 /-! ## The service's entry and return -/
 
-/-- `ServiceReady` at a service entry inside an insertion. -/
-theorem serviceReady (ready : Ready L A c s) (flight : InFlight L A c s e) : ServiceReady A c e := by
+/-- The repaired readiness holds at every service entry inside an insertion:
+the two rules stay derivable. -/
+theorem separated (ready : Ready L A c s) (flight : InFlight L A c s e) : Separated L A c e := by
   have g := ready.geometry flight.low flight.high
-  refine ⟨flight.coverage,ready.capacity,flight.forward,?_⟩
+  have stack (a : BitVec 64)
+      (inside : Scratch e A.depth a ∨ InRange e.data.regs.rsp.toBitVec 8 a) :
+      (stackSpan A s).contains a := stack_of_service g inside
+  have coverage (a : BitVec 64) (read : c.bytes a) : ∃ span ∈ Trie.callServices c, span.contains a := by
+    obtain ⟨span,member,contains⟩ := Trie.readSpans_cover read
+    exact ⟨span,by simp [Trie.callServices, member],contains⟩
+  refine ⟨?_,?_,?_,?_⟩
+  · rintro a inside ⟨span,member,contains⟩
+    exact spansApart_sound ready.heapStack (show span ∈ L.heap by simp [Layout.heap, member])
+      (by simp) contains (stack a inside)
+  · intro a inside read
+    obtain ⟨span,member,contains⟩ := coverage a read
+    exact spansApart_sound ready.servicesStack member (by simp) contains (stack a inside)
+  · rintro a read ⟨span,member,contains⟩
+    obtain ⟨service,serviceMember,serviceContains⟩ := coverage a read
+    exact spansApart_sound ready.heapServices (show span ∈ L.heap by simp [Layout.heap, member])
+      serviceMember contains serviceContains
+  · intro a write
+    obtain ⟨buffer,member,contains⟩ := Trie.writeSpans_cover write
+    have bufferMember : buffer ∈ Trie.callBuffers c := by simp [Trie.callBuffers, member]
+    constructor
+    · intro metadata
+      obtain ⟨span,spanMember,spanContains⟩ := Trie.metadataSpans_cover metadata
+      exact spansApart_sound ready.buffersMetadata bufferMember
+        (show span ∈ Trie.callMetadata c ++ [(preemptCountAddress.toNat,4)] by
+          simp [Trie.callMetadata, spanMember]) contains spanContains
+    · intro count
+      exact spansApart_sound ready.buffersMetadata bufferMember
+        (show (preemptCountAddress.toNat,4) ∈ Trie.callMetadata c ++ [(preemptCountAddress.toNat,4)] by
+          simp) contains
+        (by simpa only [Pair.Span.contains, BitVec.ofNat_toNat, BitVec.setWidth_eq] using count)
+
+/-- `ServiceReady` at a service entry inside an insertion. -/
+theorem serviceReady (ready : Ready L A c s) (flight : InFlight L A c s e) : ServiceReady L A c e := by
+  have g := ready.geometry flight.low flight.high
+  refine ⟨flight.coverage,ready.capacity,flight.forward,?_,separated ready flight⟩
   intro i bound
   have low := g.low
   have high := g.high

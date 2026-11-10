@@ -79,6 +79,7 @@ theorem insertReady_facts {L : Statements.C1.Layout} {A : Allocator} {c : Contex
   obtain ⟨keyOk,checked⟩ := require_bind_ok _ _ _ _ checked
   obtain ⟨cache,cacheAt,checked⟩ := bind_ok checked
   obtain ⟨cacheOk,checked⟩ := require_bind_ok _ _ _ _ checked
+  obtain ⟨-,checked⟩ := require_bind_ok _ _ _ _ checked
   simp only [Bool.and_eq_true, bne_iff_ne, beq_iff_eq] at peerOk
   have cacheEq : cache = L.cache := eq_of_beq cacheOk
   have keyFact := Trie.networkKeyCheck_sound keyOk

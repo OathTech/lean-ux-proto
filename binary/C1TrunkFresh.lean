@@ -69,7 +69,7 @@ theorem object_of_result (below : NodeBelowTop) (premises : Premises fetch L A)
     Object L names t.data.regs.rax.toNat ∧ readNat t t.data.regs.rax.toNat nodeSize = .ok 0 ∧
     A.Idle t.data.dmem (names.trie.nodes.map (·.2) ++ [t.data.regs.rax.toNat]) rest := by
   have top := below fetch L A premises _ record rest t result ok
-  obtain ⟨nonzero,aligned,arena,apartLive,zero,idle⟩ := result.2 ok
+  obtain ⟨nonzero,aligned,-,arena,apartLive,zero,idle⟩ := result.2 ok
   refine ⟨⟨by omega,aligned,top,arena,?_⟩,zero,idle⟩
   apply validate_allocate trunk.relatedA (by omega) aligned top
   · intro span member

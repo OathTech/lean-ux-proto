@@ -63,6 +63,7 @@ theorem ready_facts {L : Layout} {A : Allocator} {c : Context} {s : MachineState
   obtain ⟨_,ready⟩ := require_bind_ok _ _ _ _ ready
   obtain ⟨cache,cacheRead,ready⟩ := bind_ok ready
   obtain ⟨cacheEq,ready⟩ := require_bind_ok _ _ _ _ ready
+  obtain ⟨-,ready⟩ := require_bind_ok _ _ _ _ ready
   unfold frameReady at ready
   obtain ⟨abi,ready⟩ := require_bind_ok _ _ _ _ ready
   obtain ⟨mapped,ready⟩ := require_bind_ok _ _ _ _ ready

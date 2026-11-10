@@ -71,7 +71,7 @@ theorem split_allocated (below : NodeBelowTop) (alloc : AllocRule) {fetch : Int6
     (eventually_flight (Second.second_allocation alloc fetch L A premises c s a family key cidr pid ra live
       record stream bound base ready apart arena pc flight high low calls boundRead baseRead shorter site idle))
   rintro t ⟨⟨pcT,stack,rbx,rbp,r12,r13,r14,r15,result,flightT,callsT,covered,frameC,kept⟩,mapped,_⟩
-  obtain ⟨nonzero,aligned,inArena,fresh,zero,idleT⟩ := result.2 success
+  obtain ⟨nonzero,aligned,-,inArena,fresh,zero,idleT⟩ := result.2 success
   have top := below fetch L A premises live record stream t result success
   refine ⟨t.data.regs.rax.toNat,pcT,stack,rbx,rbp,r12,r13,r14,r15,rfl,nonzero,aligned,inArena,fresh,zero,top,
     idleT,flightT,callsT,?_,mapped⟩

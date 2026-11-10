@@ -3,6 +3,7 @@ import C1ServiceCallbacks
 import C1ServiceCallbackContracts
 import C1ServiceJointFetch
 import C1ServiceStubContract
+import C1ServiceStubIdle
 
 /-! Result C1, work package 4: `Premises` at the common decoder, and
 `PremisesMet`.
@@ -68,7 +69,8 @@ theorem premises_with_stub (tableAt : Nat) (peers : List (PeerId × Nat)) :
 
 /-- ACCEPTANCE. -/
 theorem premisesMet : PremisesMet :=
-  ⟨_,_,_,(premises_with_stub 0 []).1,(premises_with_stub 0 []).2,by decide⟩
+  ⟨_,_,_,(premises_with_stub 0 []).1,(premises_with_stub 0 []).2,by decide,
+    _,[],Stub.idle_initial {} [] (by decide) (by simp) (by simp)⟩
 
 #print axioms premises_of_contract
 #print axioms premises_with_stub
