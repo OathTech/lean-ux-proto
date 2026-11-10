@@ -1090,4 +1090,15 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   (4) and (5) came from the proof architect and the service package's
   prover; [AGENT, coordinator] the exact wording of each change is the
   statement author's, checked by the reviewer.
+- **2026-11-10 [USER]** Two further changes to C1's signed statement, after
+  the independent review of revision 3 and a finding from the trunk's
+  proof, both as the coordinator recommended: (1) in the clause admitting
+  the caller's reference on a peer, taking a reference is paired with the
+  mirror's `peerGetMaybeZero` returning the peer, which is what the
+  kernel's `set_peer` does for an existing peer, and no longer with
+  `peerGet`; (2) the insertion's entry premise gains the separation of the
+  stack window from the peers as whole objects, which the landed
+  node-initialization boundary requires and the heap separation alone does
+  not give. The reviewer confirms the two hunks before the remaining proof
+  work starts.
 
