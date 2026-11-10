@@ -2,22 +2,23 @@ import C1Interfaces
 import C1ServiceCallbacks
 import C1ServiceCallbackContracts
 import C1ServiceJointFetch
+import C1ServiceStubContract
 
 /-! Result C1, work package 4: `Premises` at the common decoder, and
 `PremisesMet`.
 
-`premises_of_contract` is the part with content: for any stub code inside the
-stub's interval and any layout and allocator whose contract that code meets,
-every other premise holds of `Joint.fetch`, the callbacks being the image's.
+`premises_of_contract`: for any stub code inside the stub's interval and any
+layout and allocator whose contract that code meets, every other premise
+holds of `Joint.fetch`, the callbacks being the image's.
 
-`premisesMet` closes the interface proposition AS STATED, with an allocator
-whose `Idle` never holds. The proposition does not ask for more: it has no
-clause that makes the allocator's contract bite (only `Witness` does, by
-demanding `Idle` of an actual state). And no stub of the planned kind, with
-its state in the arena, meets `AllocatorContract` as signed:
-`C1ServiceContractFinding`. -/
+`premisesMet` closes the interface proposition with the stub of
+`C1ServiceStub` (twelve instructions at `allocEntry`, one at `freeEntry`),
+which meets `AllocatorContract` as signed (`Stub.contract`), and whose `Idle`
+holds of actual memories (`Stub.idle_initial`). The proposition itself does
+not ask that `Idle` can hold: an allocator that is never idle would also
+close it. -/
 namespace Binary.Statements.C1.Proof
-open Binary.TrustBase Binary.Statements.C1
+open Leanux Leanux.WG Binary.TrustBase Binary.Statements.C1
 
 /-- Every premise but the allocator's contract, and the callbacks from the
 image, at the common decoder. -/
@@ -39,24 +40,37 @@ theorem premises_of_contract {stub : Int64 → Option Decoded}
     bhEnable := Callback.Text.bh_contract _ services
     allocator := contract },image⟩
 
-/-- An allocator that is never idle: every clause of the contract holds of it
-vacuously, whatever code is at the two service addresses. -/
-def neverIdle : Allocator := ⟨fun _ _ _ => False,8⟩
+/-- The stub's code lies in the stub's interval. -/
+theorem stub_within : Joint.Within Stub.fetch Joint.stubLow Joint.stubHigh := by
+  intro pc decoded here
+  unfold Stub.fetch at here
+  cases first : Image.fetchIn allocEntry Stub.allocCode pc with
+  | some found =>
+    have range := Callback.Text.fetchIn_address first (by decide +kernel)
+    have low : Joint.stubLow ≤ allocEntry.toBitVec.toNat := by decide +kernel
+    have high : allocEntry.toBitVec.toNat + Callback.Text.extent Stub.allocCode ≤ Joint.stubHigh := by
+      decide +kernel
+    omega
+  | none =>
+    rw [first] at here
+    have range := Callback.Text.fetchIn_address (show Image.fetchIn freeEntry Stub.freeCode pc =
+      some decoded from here) (by decide +kernel)
+    have low : Joint.stubLow ≤ freeEntry.toBitVec.toNat := by decide +kernel
+    have high : freeEntry.toBitVec.toNat + Callback.Text.extent Stub.freeCode ≤ Joint.stubHigh := by
+      decide +kernel
+    omega
 
-theorem neverIdle_contract (fetch : Int64 → Option Decoded) (L : Layout) :
-    AllocatorContract fetch L neverIdle :=
-  ⟨fun _ _ _ _ idle _ => idle,
-   fun _ _ _ _ _ _ _ _ _ _ _ _ idle => False.elim idle,
-   fun _ _ _ _ _ _ _ _ _ _ _ idle => False.elim idle⟩
+/-- Every premise at the common decoder with the stub, for any table and peers. -/
+theorem premises_with_stub (tableAt : Nat) (peers : List (PeerId × Nat)) :
+    Premises (Joint.fetch Stub.fetch) (Stub.layout tableAt peers) Stub.allocator ∧
+      CallbacksFromImage (Joint.fetch Stub.fetch) :=
+  premises_of_contract stub_within (Stub.contract (Joint.stub_agrees stub_within) tableAt peers)
 
-theorem no_stub : Joint.Within (fun _ => none) Joint.stubLow Joint.stubHigh :=
-  fun _ _ here => by cases here
-
-/-- ACCEPTANCE (as stated; see the module comment for what it does not show). -/
+/-- ACCEPTANCE. -/
 theorem premisesMet : PremisesMet :=
-  have met := premises_of_contract no_stub (neverIdle_contract (Joint.fetch fun _ => none) ⟨0,[],[],0⟩)
-  ⟨_,_,_,met.1,met.2,by decide⟩
+  ⟨_,_,_,(premises_with_stub 0 []).1,(premises_with_stub 0 []).2,by decide⟩
 
 #print axioms premises_of_contract
+#print axioms premises_with_stub
 #print axioms premisesMet
 end Binary.Statements.C1.Proof

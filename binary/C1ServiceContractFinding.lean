@@ -29,11 +29,12 @@ the contract.
 arena word to a value that a successful allocation changes meets the
 contract, as soon as it is idle in one admissible entry state.
 
-Consequence: `Witness` (which needs `Idle` of an actual state and
-`Premises`) cannot be proved with a stub of the planned kind, and
-`PremisesMet` can only be closed with an allocator that is never idle. A
-service that conforms as signed would have to find out at run time where the
-caller's coverage context lies and keep its own state out of its way.
+Consequence: no allocator that keeps mutable state in ordinarily mapped
+memory meets the contract as signed. It CAN be met, by a service whose one
+mutable byte has unmapped neighbours, so that no read of two or more bytes
+contains it: `C1ServiceStub`, `Stub.contract`. That stub is what
+`PremisesMet` is closed with. It is evidence that the signed text is
+satisfiable, and that what it admits is not an allocator.
 
 The smallest repair is to let `ServiceReady` say what the caller's conditions
 already give (`Separated` below): the service's stack, the arena and the

@@ -167,8 +167,8 @@ theorem add_within :
 
 /-- The interval reserved for the stub at the two service addresses
 (`allocEntry` 0xffffffff81196d20, `freeEntry` 0xffffffff81199b10). -/
-def stubLow : Nat := 18446744071580540192
-def stubHigh : Nat := 18446744071580556287
+def stubLow : Nat := 18446744071580511520
+def stubHigh : Nat := 18446744071580523535
 
 /-- The common decoder, for any stub code in the stub's interval. -/
 def fetch (stub : Int64 → Option Decoded) (pc : Int64) : Option Decoded :=

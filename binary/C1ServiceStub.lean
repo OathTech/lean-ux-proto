@@ -45,12 +45,13 @@ lea    0x1(%rcx),%eax
 mov    %al,(%rdi)
 movzbl 0xa00100(%rcx),%edx
 cmp    $0x1,%edx
-jne L_ffffffff81196d40
-shl    $0x7,%rcx
-lea    0xa01000(%rcx),%rax
+jne L_ffffffff81196d4d
+lea    0x0(,%rcx,8),%rcx
+lea    0x0(,%rcx,8),%rcx
+lea    0xa01000(,%rcx,2),%rax
 ret
 xor    %eax,%eax
-ret")) [3, 3, 2, 7, 3, 2, 4, 7, 1, 2, 1]
+ret")) [3, 3, 2, 7, 3, 2, 8, 8, 8, 1, 2, 1]
 
 /-- `kmem_cache_free` as a stub: nothing is reused. -/
 def freeCode : List (Kraken.Sized Directive) :=
