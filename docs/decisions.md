@@ -1072,4 +1072,22 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   - The packets' Lean statement files are not landed with the documents;
     they stay on the working branches until the final statements are put
     to the user.
+- **2026-11-10 [USER]** C1's signed statement is revised once more before
+  any proof is accepted, taking five changes together as the coordinator
+  recommended, and the revision goes back to the independent reviewer and
+  then to the user as a diff: (1) the allocator's result clause gains the
+  bound that the returned object ends below 2^64, which the landed relation
+  already requires of every node; (2) the closed world admits the caller
+  moving a reference between peers between insertions, as a clause beside
+  the frame condition paired with the mirror's `peerGet` and `peerPut`;
+  (3) the generated ten-instruction listing of the two comparison
+  callbacks stays in the witness's claim; (4) the service-readiness premise
+  gains the separation the insertion's entry premise already provides
+  (service stack, arena and coverage bytes pairwise apart, coverage buffer
+  apart from its metadata), without which no allocator with ordinary
+  internal state meets the contract; (5) the witness clause is restated so
+  that it is provable from the headline's shape. The findings behind (1),
+  (4) and (5) came from the proof architect and the service package's
+  prover; [AGENT, coordinator] the exact wording of each change is the
+  statement author's, checked by the reviewer.
 
