@@ -1,0 +1,21 @@
+#!/bin/sh
+# Compile and run the executed tests of the C2 final statement, in dependency order,
+# against a built binary package (which holds C2Image and C2Statement). The tests are in
+# no lake target. usage (from the worktree root):
+#   binary/packets/c2/check [Module ...]      default: all three
+# C2_BUILT_TREE names a worktree whose binary package is built (default: this one).
+# Outputs go to .tmp/c2-packet/build and may be deleted afterwards.
+set -eu
+here=$(cd "$(dirname "$0")" && pwd)
+root=$(cd "$here/../../.." && pwd)
+tree=${C2_BUILT_TREE:-$root}
+out="$root/.tmp/c2-packet/build"
+mkdir -p "$out"
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+LP=$(cd "$tree/binary" && ../scripts/in-bundle lake env printenv LEAN_PATH)
+[ $# -gt 0 ] || set -- C2Test C2Sequence C2Adversarial
+cd "$here"
+for module in "$@"; do
+  echo "== $module"
+  cap "$tree/scripts/in-bundle" env LEAN_PATH="$LP:$out" lean -o "$out/$module.olean" "$module.lean"
+done
