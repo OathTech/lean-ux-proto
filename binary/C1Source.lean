@@ -14,6 +14,7 @@ import AllowedipsStorage
 import AllowedipsRootIncoming
 import AllowedipsInternalFrame
 import MemoryBytes
+import AllowedipsAllocationNames
 import PairAllowedipsPlacementSource
 import TrieHeap
 import PairCallSource
@@ -3541,4 +3542,71 @@ theorem add_insert_accepted_partial {g g' : WGWorld} {a a' : Ambient} {d : Devic
       exact ⟨post.1,post.2.1,post.2.2.1,post.2.2.2.1,post.2.2.2.2.1,post.2.2.2.2.2,walked⟩
 
 #print axioms add_insert_accepted_partial
+
+/-! ## `RunIsStep` -/
+
+/-- An accepted lifted run is an accepted run of the WireGuard computation. -/
+theorem run_liftWG_acc {α : Type} {x : WG.M α} {w w' : World} {v : α}
+    (run : (liftWG x).run w = .ok (v,w')) :
+    ∃ g' a', (x.run w.wg).run w.ambient = .ok ((v,g'),a') ∧ w' = {w with wg := g', ambient := a'} := by
+  have unfolded : (liftWG x).run w =
+      ((x.run w.wg).run w.ambient >>= fun p => pure (p.1.1,{w with wg := p.1.2, ambient := p.2})) := rfl
+  rw [unfolded] at run
+  cases inner : (x.run w.wg).run w.ambient with
+  | error e => rw [inner] at run; cases run
+  | ok p =>
+    rw [inner] at run
+    cases run
+    exact ⟨p.1.2,p.2,rfl,rfl⟩
+
+theorem run_short {d : Device} {family key cidr pid : Nat} {placed : Option NodeId} {exact : Bool}
+    {outcomes : List Bool}
+    (notLong : (Proof.step d family key cidr pid placed exact outcomes).case ≠ .tooLong) :
+    cidr ≤ widthOf family := by
+  by_cases long : cidr > widthOf family
+  · exfalso
+    apply notLong
+    unfold widthOf at long
+    simp only [Proof.step,long,↓reduceIte]
+  · omega
+
+
+theorem run_fresh {L : Layout} {A : Allocator} {w : World} {m : Mem 64} {d : Device}
+    (related : Related L A w m) (device : w.wg.dev = some d) : d.nodes.get? d.nextNode = none := by
+  obtain ⟨names,stream,_,_,asserted,_⟩ := related
+  obtain ⟨d',device',corresponds,_⟩ := assertAt_ok asserted
+  cases Option.some.inj (device'.symm.trans device)
+  cases present : d.nodes.get? d.nextNode with
+  | none => rfl
+  | some n =>
+    have member : (d.nextNode,n) ∈ (Allowedips.target d).nodes :=
+      Std.TreeMap.mem_toList_iff_getElem?_eq_some.mpr present
+    exact absurd (target_nodes_below corresponds _ member) (Nat.lt_irrefl _)
+
+theorem runIsStep : RunIsStep := by
+  intro L A c s w w' family key cidr pid ra answer inv ready run
+  obtain ⟨d,device⟩ : ∃ d, w.wg.dev = some d := by
+    obtain ⟨names,stream,_,_,asserted,_⟩ := inv
+    obtain ⟨d,device,_⟩ := assertAt_ok asserted
+    exact ⟨d,device⟩
+  obtain ⟨stream,hidden,clean,armed190,armed205,armed234⟩ := ordered_clean inv
+  obtain ⟨families,keyBound,_⟩ := ordered_ready_facts ready
+  obtain ⟨g',a',accepted,rfl⟩ := run_liftWG_acc run
+  obtain ⟨placed,exact,spec⟩ := add_insert_accepted_partial device
+    ⟨hidden,clean,armed190,armed205,armed234⟩ families (run_fresh inv device) accepted
+  obtain ⟨result,world,recordsAfter,armedSame,sites,outcomes,walked⟩ := spec _ rfl
+  refine ⟨d,stream,placed,exact,_,{
+    device := device, records := hidden, trie := ordered_of_related inv device,
+    families := families, keyBound := keyBound, model := rfl, result := result,
+    after := ⟨_,by rw [world],rfl⟩, recordsAfter := recordsAfter, sites := sites, outcomes := outcomes,
+    armedAfter := ?_, walked := ?_ }⟩
+  · simp only [Statements.C1.armed,List.all_cons,List.all_nil,armedSame,armed190,armed205,armed234,
+      Bool.and_self]
+  · intro notLong notNoMem notRoot
+    have trieOrdered : ordered d = true := ordered_of_related inv device
+    obtain ⟨ambient,finalAmbient,finalStore,placement⟩ := walked notLong notNoMem notRoot
+    exact ⟨⟨ambient,finalAmbient,finalStore,placement⟩,
+      (walk_of_run (d := bump d) (show ordered (bump d) = true from trieOrdered) families keyBound (run_short notLong) placement).1⟩
+
+#print axioms runIsStep
 end Binary.Statements.C1.Proof
