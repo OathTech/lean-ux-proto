@@ -83,7 +83,36 @@ theorem StepFacts.two_records {w w' : World} {family key cidr pid : Nat} {answer
   | [first], sites, _ => cases h : st.consumed <;> simp [h] at sites
   | [], sites, _ => simp at sites
 
+/-- The records of the covering case: the stream starts with one record of
+site 78, and what is left afterwards is the stream without it. -/
+theorem StepFacts.one_record {w w' : World} {family key cidr pid : Nat} {answer : Int} {d : Device}
+    {stream : List HiddenRecord} {placed : Option NodeId} {exact : Bool} {st : Step}
+    (facts : StepFacts w family key cidr pid answer w' d stream placed exact st)
+    (case : st.case = .cover) :
+    ∃ first rest, stream = first :: rest ∧ first.site = 78 ∧ stream.drop st.consumed = rest ∧
+      (first.bytes.head? = some 0 ∨ first.bytes.head? = some 1) := by
+  have sites := facts.sites
+  have expected : st.case.sites = [78] := by rw [case]; rfl
+  rw [expected] at sites
+  have outcomes := facts.outcomes
+  match stream, sites, outcomes with
+  | first :: rest, sites, outcomes =>
+    match consumed : st.consumed, sites, outcomes with
+    | 0, sites, _ => simp at sites
+    | n+1, sites, outcomes =>
+      simp only [List.take_succ_cons,List.map_cons,List.cons.injEq] at sites
+      obtain ⟨one,tail⟩ := sites
+      have none : rest.take n = [] := List.map_eq_nil_iff.mp tail
+      refine ⟨first,rest,rfl,one,?_,?_⟩
+      · simp only [List.drop_succ_cons]
+        rcases List.take_eq_nil_iff.mp none with zero|empty
+        · rw [zero]; rfl
+        · rw [empty]; simp
+      · exact outcomes first (by simp [List.take_succ_cons])
+  | [], sites, _ => simp at sites
+
 #print axioms inv_of_relation
+#print axioms StepFacts.one_record
 #print axioms StepFacts.final
 #print axioms StepFacts.two_records
 end Binary.Statements.C1.Proof
