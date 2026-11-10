@@ -53,7 +53,13 @@ scripts/in-bundle lean --version
 cap scripts/in-bundle "$binary_python" -B binary/run.py --bootstrap-only
 cap scripts/in-bundle lake -d binary build
 cap scripts/in-bundle "$binary_python" scripts/binary-proof-gate
+cap scripts/in-bundle "$binary_python" scripts/c2-bridge-gate    # builds C2Bridge: result C2's headline
 ```
+
+Both gates are claim-point checks of the binary track. The binary gate does
+not build the bridge, so the headline of result C2 is checked only by the
+second line. `scripts/in-bundle` resets `PATH`, so the gates cannot find
+`capped` themselves and print a notice: wrap the whole command, as above.
 
 The root and binary toolchain pins currently agree; compare them
 before reusing these commands after a toolchain change.

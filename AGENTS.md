@@ -142,7 +142,8 @@ the gate's build does not cover.
 
 The exempt file is the binary track's bridge: it joins the replay-window
 refinement proved in the binary package with the landed `CounterWindow`
-theorems. Its gate, run at the binary track's claim points:
+theorems. Its gate, run at the binary track's claim points and after a
+change to any of the four modules (the proof gate does not build the bridge):
 `capped -- scripts/in-bundle scripts/c2-bridge-gate` builds the lake target
 `C2Bridge` of `binary/lakefile.toml`, fails on an axiom of its theorems
 beyond the standard three or on a forbidden token in `binary/bridge/`, and
