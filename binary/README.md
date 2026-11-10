@@ -19,6 +19,7 @@ recipe here that promises to regenerate it from a fresh clone.
 | Index lookup | `LookupAdequacy.lookup_simulation` relates the complete lookup and bucket loop to an accepted mirror run, including NULL, zero-count and live peer-get paths; transport lemmas carry properties through the relation | Named service, serialization, permission and initial-memory premises; only the hit paths have theorem witnesses showing the lookup premises can be met. A NULL-owner witness and general kernel-entry realism remain unproved |
 | Replay-state frame | `LookupSnapshotTransport.lookup_snapshot_transport` preserves the represented frontier and source-live lifetime/replay fields through lookup | Initial representation and separation are extra premises, not supplied by the existing lookup Pre witness; no physical allocator-membership or whole-receive theorem |
 | Sequential paired execution | Checked entry assertions and retained-heap composition for selected index operations, plus a sequential allowed-IPs lookup and bounded callback proofs | No concurrent-context result; input coupling and service/permission contracts remain where stated. A dying-peer retry is a source refusal in the trie experiment |
+| Receive replay window (C2) | `Binary.C2.refines`: the 70-instruction inlined `counter_validate` range of `wg_packet_rx_poll`, `[0xffffffff8139d2a6, 0xffffffff8139d3ea)`, computes the mirror's `counterValidate` (exit, acceptance byte, window bytes). `exits_cleanly`: from every entry state it reaches an exit without faulting and keeps what `Kept` says. `replay_witness`: one counter presented twice to a retained window is accepted, then refused. In the bridge library, `Binary.C2.Bridge.no_counter_accepted_twice` and `headline : HeadlineRefinement`: over visits between which the window bytes are unchanged, no packet counter is accepted twice. All closed, no hypothesis beyond the statement's premises | A single-CPU, coverage-instrumented build with no lock: nothing carries to an SMP build. The entry context (`Context`) is argued from the disassembly, not derived, and no captured kernel state was checked against it. That the window is unchanged between visits is a premise about the rest of the kernel. The range ends at `setb %bpl`: that a replayed packet is dropped (the unlock, the branch, the drop path, that every delivery passes through the range) is not claimed. Decoder agreement is tested, not proved; Kraken's semantics with the tenth patch is the base; `Refines` says no more than the mirror. See the [closing report](../docs/2026-11-10-c2-replay-window.md) |
 | Allowed-IPs mutation scaling | Tested component proofs for placement, reassignment and initialization/publication segments; an extended lookup reconstruction | Zero newly completed functions in this increment. Insertion, allocation/failure handling and full function/sequence composition remain open |
 
 The milestone-1 [review obligations at landing](../docs/2026-10-19-binary-landing-assessment.md#outstanding-review-obligations-at-landing)
@@ -76,7 +77,14 @@ boundary; their tests are not a proof of ISA fidelity. Unsupported forms fail
 explicitly.
 
 The package imports the operational mirror by path and does not import
-`Leanux.Proofs`. Its local source-model definitions and execution equations
+`Leanux.Proofs`. One file outside the package's default library does:
+[`bridge/C2Bridge.lean`](bridge/C2Bridge.lean), the non-default lake library
+`C2Bridge`, imports the package and exactly four modules of the proof tree
+(`Leanux.Proofs.WG.CounterWindow.Model`, `.Refinement`, `.MirrorCalls`,
+`.Bounds`) to join C2's refinement with the landed uniqueness theorem. It has
+its own gate, `scripts/c2-bridge-gate`; the exemption from the proof tree's
+import rule that admits it is recorded in [AGENTS.md](../AGENTS.md).
+The package's local source-model definitions and execution equations
 are in `AllowedipsSourceModel.lean` and `AllowedipsSourceRun.lean`.
 
 **Compatibility exception:** `BinaryProofs.allowNonModules = true` permits
@@ -104,7 +112,17 @@ cd binary
 cap ../scripts/in-bundle lake env leanexport LookupSnapshotTransport LookupWitness LookupHitWitness \
   AllowedipsWitnessPre PairCallbackSurface PairCallWitness \
   PairAllowedipsLookupAdequacy AllowedipsCommonChecked AllowedipsInsertionSurface \
+  C2Headline \
   > ../.tmp/binary-check.ndjson
+```
+
+Result C2's closure, the bridge and its four proof-tree modules included, is
+exported on its own after the bridge is built (`cap scripts/in-bundle lake -d
+binary build C2Bridge`, from the worktree root); then, in `binary/`:
+
+```sh
+cap ../scripts/in-bundle lake env leanexport C2Headline C2Bridge > ../.tmp/c2-check.ndjson
+cap ../scripts/in-bundle lake check --from-export ../.tmp/c2-check.ndjson
 ```
 
 Require export exit status 0. A partial file from a failed export is not a
@@ -197,6 +215,7 @@ as acceptance of the current source.
 | [Executable correspondence](../docs/2026-10-16-plan-executable-binary-correspondence.md) | Constructed/captured entry states, trie loop and complete-call experiments |
 | [Index subsystem](../docs/2026-10-18-paired-index-subsystem.md) | Removal, replacement and retained-heap composition |
 | [Index insertion](../docs/2026-10-18-paired-index-insertion.md) | Recorded inputs, service contracts and mixed sequences |
+| [Replay window, C2](../docs/2026-11-10-c2-replay-window.md) | The closed refinement headline for the receive counter window, its premises, the bridge library and its gate |
 | [Callback proofs](../docs/2026-10-19-paired-callbacks.md) | Bounded image callbacks and first-return permissions |
 | [s5 landing assessment](../docs/2026-10-19-binary-landing-assessment.md) | Port to the split mirror, relocation, repairs and acceptance |
 | [Allowed-IPs scaling](../docs/2026-10-20-binary-allowedips.md) | Partial mutation result, open composition and reproduction commands |
