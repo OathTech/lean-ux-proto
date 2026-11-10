@@ -131,9 +131,24 @@ def FailedInsertInvisible : Prop :=
         Eventually (instructionStep fetch) (fun t' =>
           Returned s' t' ra' ∧ t'.data.regs.rax.toNat = 0) s') s
 
-/-- WHAT IS SIGNED (revision 2): the headline together with the evidence
-against vacuity it relies on. The exclusions follow from `Headline` and
-facts about the mirror; the witness is independent of it. -/
+/-- WHAT IS SIGNED: the headline together with the evidence against vacuity
+it relies on. The exclusions follow from `Headline` and facts about the
+mirror; the witness is independent of it.
+
+What it establishes, in the words its summary and register entry use: the
+compiled `wg_allowedips_insert_v4`, `_v6`, `add.isra.0`, `lookup`,
+`common_bits` and `wg_peer_get_maybe_zero` of the s5 image return what the
+mirror returns along any sequence of insertions and lookups from an empty
+table, **given any code at the two service addresses that meets the stated
+contract; the image's allocator is not shown to, and under this semantic
+base cannot be**. About how the compiled code uses that service it
+establishes that the code calls it only with the cache and the flags the
+contract names and from states the contract covers; relies on nothing about
+a returned object but that it is zeroed, aligned, inside the arena and apart
+from the nodes handed out; never depends on the service's stack scratch, on
+the caller-saved registers it returns, on free arena bytes or on the bytes
+of a released object; and releases exactly the node it allocated, once, on
+the one failing path. -/
 def Signed : Prop :=
   Headline ∧ Witness ∧ InsertThenLookup ∧ FailedInsertInvisible
 
