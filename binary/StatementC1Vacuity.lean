@@ -1,4 +1,5 @@
 import StatementC1Headline
+import StatementC1CallbackImage
 
 /-! Result C1, final statement: the kernel-checked evidence against vacuity that
 the result carries, as statements (no theorem, no proof), and `Signed`. `Witness` says the
@@ -20,8 +21,18 @@ def HeapSame (L : Layout) (t s : MachineState) : Prop :=
 
 def outcome (site : Nat) (ok : Bool) : HiddenRecord := ⟨site, (if ok then 1 else 0) :: List.replicate 39 0⟩
 
-/-- WITNESS (revision 2). Some `fetch`, layout and allocator meet every
-premise, and an actual execution runs, from a physically empty table with
+/-- The code at every coverage and BH-enable callback the premises name is
+the image's: `fetch` returns the committed decoded terms of
+`__sanitizer_cov_trace_pc`, `_cmp4`, `_const_cmp1`, `_const_cmp4`,
+`write_comp_data` and `__local_bh_enable_ip` (the landed `ServiceImage`) and
+of `__sanitizer_cov_trace_cmp1` and `_cmp8` (`StatementC1CallbackImage`). -/
+def CallbacksFromImage (fetch : Int64 → Option Decoded) : Prop :=
+  ServiceDecoderAgreement fetch ∧
+  ∀ pc instruction, StatementC1CallbackImage.fetch pc = some instruction → fetch pc = some instruction
+
+/-- WITNESS. Some `fetch`, layout and allocator meet every premise, the
+callbacks being the image's own code (`CallbacksFromImage`: only the code at
+`allocEntry` and `freeEntry` may be a stub), and an actual execution runs, from a physically empty table with
 the allocator idle and five answers pending, through: an insertion into the
 empty table; an insertion that allocates twice (the intermediate node,
 while a node is handed out); an insertion whose second allocation is
@@ -37,7 +48,7 @@ def Witness : Prop :=
     (s1 t1 s2 t2 s3 t3 s4 t4 : MachineState) (h1 h2 h3 h4 : List MachineState)
     (k1 n1 p1 k2 n2 p2 k3 n3 p3 key pointer : Nat) (found : PeerId) (ra : UInt64)
     (stream : List HiddenRecord),
-    Premises fetch L A ∧
+    Premises fetch L A ∧ CallbacksFromImage fetch ∧
     w0.wg.dev = some d0 ∧ armed w0 = true ∧
     w0.ambient.hidden = some ([outcome 77 true, outcome 78 true, outcome 79 true,
       outcome 78 true, outcome 79 false] ++ stream) ∧
