@@ -7,6 +7,9 @@ import C1BelowStep
 import C1BelowUndo
 import C1BelowRollback
 import C1BelowAlloc
+import C1BelowSplitSegment
+import C1BelowSplitReturn
+import C1BelowSplitRootReturn
 
 /-! Result C1, work package 3: the paths below the placement. This module is the package's root in
 `binary/lakefile.toml`: add modules named `C1Below*.lean` and import them here.
