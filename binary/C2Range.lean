@@ -1,5 +1,6 @@
 import C2CutAssembly
 import C2RangeTail
+import C2RangeAdvance
 
 /-! Work package 2 of result C2: the five segments of the range (`HeadSegment`,
 `AdvanceEnters`, `LoopIteration`, `AdvanceStores`, `TailSegment` of `C2CutInterfaces`),
