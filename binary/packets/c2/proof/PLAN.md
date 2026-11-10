@@ -6,6 +6,9 @@ This plan cuts its proof into three packages with interfaces fixed in Lean. Noth
 in the statement files is changed, and nothing is proved about the image yet: the
 assembly theorems are conditional on the packages' propositions.
 
+Since this plan was written the three packages closed and the integration pass joined
+them: see `docs/2026-11-10-c2-replay-window.md`. The plan is kept as written.
+
 ## What is fixed in Lean
 
 | File | Holds | Who edits |

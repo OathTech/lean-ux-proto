@@ -1,8 +1,10 @@
 # C2 bridge library: a proposal, with the exact changes it needs
 
-Status: **proposal, nothing applied.** No line of `AGENTS.md`, `scripts/proof-gate`
-or any other gate is changed on this branch. The changes below are for the owner to
-approve at landing, as the decision of 2026-11-10 in `docs/decisions.md` requires.
+Status: **applied on the branch by the integration pass, as the landing proposal; not
+in force until the owner signs.** Each change is its own commit, and the text applied
+differs from the text below in two places; both are listed in section 6 of
+`docs/2026-11-10-c2-replay-window.md`, which supersedes this file. The rest of this file
+is the proposal as written before the work packages closed.
 
 ## What the bridge is
 
