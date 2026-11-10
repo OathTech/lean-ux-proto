@@ -8,6 +8,12 @@ import AllowedipsValidateConstruct
 import PairRequire
 import AllowedipsSourceRun
 import Init.Internal.Order.While
+import PairAllowedipsLookupAdequacy
+import AllowedipsSourceFrames
+import AllowedipsStorage
+import AllowedipsRootIncoming
+import AllowedipsInternalFrame
+import MemoryBytes
 
 /-! Result C1, work package 1: the source side and the invariant's algebra. This module is the package's root in
 `binary/lakefile.toml`. The brief is `binary/Statements/C1/proof/WP1.md`.
@@ -18,6 +24,8 @@ not the package's to edit. -/
 namespace Binary.Statements.C1.Proof
 open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.Statements.C1
+open Binary.CommonBitsCoverage
+local instance : Labels := Image.linkedLabels
 
 /-- A sub-range of an object lies in any range that contains the object. -/
 theorem inRange_widen {b a off size total : Nat} (lo : b ≤ a) (fits : a+off+size ≤ b+total)
@@ -599,4 +607,885 @@ theorem connectNode_acc {slot : Slot} {id : NodeId} {d : Device} {s' : AipStore}
       simp only [connect,present',setSlot,parentPresent']
       rfl
 
+
+/-! ## `LookupStep` for `Inv` -/
+
+/-! ## `LookupStep` for `Inv` -/
+
+/-! ### The mirror's lookup leaves the pending records and the armed sites alone -/
+
+/-- What `Related` reads of the ambient state. -/
+def pendingView (w : World) : Option (List HiddenRecord) × List String :=
+  (w.ambient.hidden,w.ambient.allocArmed)
+
+open MirrorHistory LookupSourceFrame in
+theorem frames_branch_pending (d : Decision) (b : Bool) :
+    Frames pendingView (branchLogged d b) := by
+  unfold branchLogged
+  apply frames_bind (frames_lift (show Preserves pendingView (branch d b) from by
+    intro w x w' run
+    cases run
+    rfl))
+  intro answer
+  apply frames_bind (frames_mark _ _)
+  intro _
+  exact frames_pure _ answer
+
+open MirrorHistory LookupSourceFrame AllowedipsSource in
+theorem frames_choices_pending (w : World) (choices : Choices) :
+    pendingView (records w choices) = pendingView w ∧
+      ∀ p ∈ choicePoints w choices, pendingView p.world = pendingView w :=
+  ⟨(congrArg pendingView (records_world w choices)).trans rfl,
+    fun p member => (congrArg pendingView (choicePoints_world w choices p member)).trans rfl⟩
+
+open MirrorHistory LookupSourceFrame AllowedipsSource in
+theorem frames_commonBits_pending (node : AipNode) (key bits : Nat) :
+    Frames pendingView (AllowedipsSource.commonBits node key bits) := by
+  intro initial history w answer points final same prior run
+  rw [commonBits_run] at run
+  cases run
+  obtain ⟨after,during⟩ := frames_choices_pending w (commonChoices node key bits)
+  refine ⟨after.trans same,?_⟩
+  intro p member
+  rcases List.mem_append.mp member with old | added
+  · exact prior p old
+  · exact (during p added).trans same
+
+open MirrorHistory LookupSourceFrame AllowedipsSource in
+theorem frames_swapEndian_pending (bits : Nat) :
+    Frames pendingView (AllowedipsSource.swapEndian bits) := by
+  intro initial history w answer points final same prior run
+  rw [swapEndian_run] at run
+  cases run
+  obtain ⟨after,during⟩ := frames_choices_pending w (swapChoices bits)
+  refine ⟨after.trans same,?_⟩
+  intro p member
+  rcases List.mem_append.mp member with old | added
+  · exact prior p old
+  · exact (during p added).trans same
+
+open MirrorHistory LookupSourceFrame AllowedipsSource in
+theorem frames_iteration_pending (bits key : Nat) (acc : Acc) :
+    Frames pendingView (iteration bits key acc) := by
+  unfold iteration
+  cases acc.2.1 with
+  | none =>
+    apply frames_bind (frames_branch_pending _ _)
+    intro _
+    exact frames_pure _ _
+  | some id =>
+    apply frames_bind (frames_branch_pending _ _)
+    intro _
+    apply frames_bind (frames_lift (preserves_getNode _ id))
+    intro n
+    apply frames_bind (show Frames pendingView (AllowedipsSource.prefixMatches n key bits) from by
+      unfold AllowedipsSource.prefixMatches
+      apply frames_bind (frames_called _ (frames_commonBits_pending n key bits))
+      intro common
+      exact frames_pure _ _)
+    intro matching
+    apply frames_bind (frames_branch_pending _ _)
+    intro matching
+    cases matching with
+    | false => exact frames_pure _ _
+    | true =>
+      apply frames_bind (frames_branch_pending _ _)
+      intro hasPeer
+      cases hasPeer <;> apply frames_bind (frames_branch_pending _ _) <;> intro full
+      all_goals cases full with
+      | true => exact frames_pure _ _
+      | false =>
+        apply frames_bind (frames_lift (preserves_choose _ n key))
+        intro bit
+        apply frames_bind (frames_lift (preserves_bitAt _ n bit))
+        intro next
+        exact frames_pure _ _
+
+open MirrorHistory LookupSourceFrame AllowedipsSource in
+theorem frames_findNode_pending (trie : Option NodeId) (bits key : Nat) :
+    Frames pendingView (AllowedipsSource.findNode trie bits key) := by
+  rw [findNode_bounded]
+  have loops : ∀ fuel acc, Frames pendingView (loop bits key fuel acc) := by
+    intro fuel
+    induction fuel with
+    | zero => intro acc; exact frames_pure _ acc
+    | succ fuel ih =>
+      intro acc
+      unfold loop
+      apply frames_bind (frames_iteration_pending bits key acc)
+      intro step
+      cases step with
+      | done answer => exact frames_pure _ answer
+      | yield next => exact ih next
+  apply frames_bind (loops 130 _)
+  intro acc
+  unfold AllowedipsSource.finish
+  cases acc.1 with
+  | none => exact frames_lift (preserves_throw _ _)
+  | some answer => exact frames_pure _ answer
+
+open MirrorHistory LookupSourceFrame in
+theorem frames_count_pending (old : Nat) : Frames pendingView (count old) := by
+  intro initial history w answer points w' same prior run
+  have erased := count_erases old history w
+  rw [run] at erased
+  have actual : (refcountIncNotZero old : M Bool).run w = .ok (answer,w') := erased.symm
+  have small := PeerMirror.accepted_count_bound old w w' answer actual
+  rw [count_run_logged old history w small] at run
+  cases run
+  refine ⟨?_,?_⟩
+  · refine Eq.trans ?_ same
+    unfold PeerMirror.countRecords
+    split <;> rfl
+  · intro p member
+    rcases List.mem_append.mp member with original | added
+    · exact prior p original
+    · refine Eq.trans ?_ same
+      by_cases zero : old = 0 <;>
+        simp [countPoints, PeerMirror.countRecords, PeerMirror.recordCmp, LookupMirror.record, zero] at added <;>
+        rcases added with rfl | rfl | rfl | rfl <;> rfl
+
+open MirrorHistory LookupSourceFrame in
+theorem frames_peerGet_pending (peer : Option PeerId) : Frames pendingView (peerGet peer) := by
+  unfold MirrorHistory.peerGet
+  apply frames_bind (frames_branch_pending _ _)
+  intro null
+  cases null with
+  | true => exact frames_pure _ _
+  | false =>
+    cases peer with
+    | none => exact frames_lift (preserves_throw _ _)
+    | some pid =>
+      apply frames_bind (frames_lift (preserves_pure pendingView ()))
+      intro _
+      apply frames_bind (frames_lift (preserves_getPeer pendingView pid))
+      intro p
+      apply frames_bind (frames_count_pending p.refcount)
+      intro live
+      apply frames_bind (frames_branch_pending _ _)
+      intro dead
+      cases dead with
+      | true => exact frames_pure _ _
+      | false =>
+        apply frames_bind (frames_lift (show Preserves pendingView (Source.setPeer pid _) from by
+          intro w x w' run
+          cases run
+          rfl))
+        intro _
+        exact frames_pure _ _
+
+open MirrorHistory LookupSourceFrame AllowedipsSource in
+theorem frames_lookup_pending (root : Option NodeId) (bits key : Nat) :
+    Frames pendingView (AllowedipsSource.lookup root bits key) := by
+  unfold AllowedipsSource.lookup
+  apply frames_called
+  apply frames_bind (frames_swapEndian_pending bits)
+  intro _
+  apply frames_bind (frames_findNode_pending root bits key)
+  intro node
+  apply frames_bind (frames_branch_pending _ _)
+  intro found
+  cases found with
+  | false => exact frames_pure _ _
+  | true =>
+    cases node with
+    | none =>
+      apply frames_bind (frames_lift (preserves_throw _ _))
+      intro _
+      exact frames_pure _ _
+    | some id =>
+      apply frames_bind (frames_lift (preserves_getNode _ id))
+      intro n
+      apply frames_bind (frames_called _ (frames_peerGet_pending n.peer))
+      intro peer
+      apply frames_bind (frames_branch_pending _ _)
+      intro gone
+      cases gone with
+      | false => exact frames_pure _ _
+      | true =>
+        apply frames_bind (frames_lift (show Preserves pendingView
+          (unsupported "lookup retry after a dying peer" : M Unit) from by
+            intro w x w' run
+            cases run))
+        intro _
+        exact frames_pure _ _
+
+/-- An accepted lookup of the mirror consumes no record and arms or disarms no site. -/
+theorem lookup_pending {root : Option NodeId} {bits key : Nat} {w final : World}
+    {answer : Option PeerId} (accepted : (Source.lookup root bits key).run w = .ok (answer,final)) :
+    final.ambient.hidden = w.ambient.hidden ∧ final.ambient.allocArmed = w.ambient.allocArmed := by
+  obtain ⟨points,logged⟩ := AllowedipsSource.lookup_accepted root bits key [] w final answer accepted
+  have framed := (frames_lookup_pending root bits key (pendingView w) [] w answer points final rfl
+    (by intro p member; cases member) logged).1
+  exact ⟨congrArg Prod.fst framed,congrArg Prod.snd framed⟩
+
+#print axioms lookup_pending
+
+/-! ### Span arithmetic for the executable separations -/
+
+theorem spansApart_of {left right : List Pair.Span}
+    (h : ∀ a ∈ left, ∀ b ∈ right,
+      a.1+a.2 ≤ 2^64 ∧ b.1+b.2 ≤ 2^64 ∧ (a.1+a.2 ≤ b.1 ∨ b.1+b.2 ≤ a.1)) :
+    spansApart left right = true := by
+  unfold spansApart
+  simp only [List.all_eq_true,Bool.and_eq_true,decide_eq_true_eq,disjointRanges,Bool.or_eq_true]
+  intro a ha b hb
+  obtain ⟨x,y,z⟩ := h a ha b hb
+  exact ⟨⟨x,y⟩,z⟩
+
+theorem spansApart_mem {left right : List Pair.Span} (ok : spansApart left right = true)
+    {a b : Pair.Span} (ha : a ∈ left) (hb : b ∈ right) :
+    a.1+a.2 ≤ 2^64 ∧ b.1+b.2 ≤ 2^64 ∧ (a.1+a.2 ≤ b.1 ∨ b.1+b.2 ≤ a.1) := by
+  have checked := List.all_eq_true.mp (List.all_eq_true.mp ok a ha) b hb
+  have parts : (a.1+a.2 ≤ 2^64 ∧ b.1+b.2 ≤ 2^64) ∧ (a.1+a.2 ≤ b.1 ∨ b.1+b.2 ≤ a.1) := by
+    simpa [disjointRanges] using checked
+  exact ⟨parts.1.1,parts.1.2,parts.2⟩
+
+/-- Every span of the first list lies, as a range of numbers, inside a span of the second. -/
+def Within (inner outer : List Pair.Span) : Prop :=
+  ∀ a ∈ inner, ∃ b ∈ outer, b.1 ≤ a.1 ∧ a.1+a.2 ≤ b.1+b.2
+
+theorem Within.of_subset {inner outer : List Pair.Span} (subset : ∀ a ∈ inner, a ∈ outer) :
+    Within inner outer := fun a member => ⟨a,subset a member,Nat.le_refl _,Nat.le_refl _⟩
+
+theorem Within.append {left right outer : List Pair.Span}
+    (l : Within left outer) (r : Within right outer) : Within (left ++ right) outer := by
+  intro a member
+  rcases List.mem_append.mp member with h | h
+  · exact l a h
+  · exact r a h
+
+theorem Within.trans {a b c : List Pair.Span} (ab : Within a b) (bc : Within b c) : Within a c := by
+  intro x member
+  obtain ⟨y,my,l,h⟩ := ab x member
+  obtain ⟨z,mz,l',h'⟩ := bc y my
+  exact ⟨z,mz,by omega,by omega⟩
+
+theorem spansApart_within {left right inner inner' : List Pair.Span}
+    (ok : spansApart left right = true) (l : Within inner left) (r : Within inner' right) :
+    spansApart inner inner' = true := by
+  apply spansApart_of
+  intro a ha b hb
+  obtain ⟨a',ma,la,ua⟩ := l a ha
+  obtain ⟨b',mb,lb,ub⟩ := r b hb
+  obtain ⟨x,y,z⟩ := spansApart_mem ok ma mb
+  refine ⟨by omega,by omega,?_⟩
+  rcases z with z | z
+  · exact .inl (by omega)
+  · exact .inr (by omega)
+
+/-! ### What `lookupReady` gives -/
+
+structure FrameFacts (L : Layout) (c : Context) (s : MachineState) (ra : UInt64)
+    (query : Pair.Span) : Prop where
+  abi : (s.data.regs.rsp.toNat % 8 == 0 &&
+    s.data.dmem.loadInt s.data.regs.rsp.toBitVec 8 == some (ra.toNat : Int)) = true
+  stack : ((List.range lookupWindow).all fun i =>
+    (s.data.dmem.get? (s.data.regs.rsp.toBitVec - .ofNat 64 (i+1))).isSome) = true
+  coverage : Trie.coverageCheck c s.data.dmem = true
+  coverageBh : Trie.coverageDataCheck ⟨c.coverage,c.preempt+512⟩ s.data.dmem = true
+  hardirq : ((c.preempt+512) &&& 0x000f0000 == 0) = true
+  pending : (if LookupPendingRead c.preempt then
+    s.data.dmem.loadInt softirqPendingAddress 2 == some 0 else true) = true
+  heap : spansApart L.heap (callerSpans s lookupWindow query false ++ Trie.callServices c ++
+    Trie.callBuffers c) = true
+  service : spansApart (Trie.callServices c) [(callerSpans s lookupWindow query false).head!] = true
+  buffer : spansApart (Trie.callBuffers c) (callerSpans s lookupWindow query false ++
+    Trie.callMetadata c ++ [(preemptCountAddress.toNat,4)]) = true
+  preempt : spansApart ([(callerSpans s lookupWindow query false).head!] ++ Trie.callMetadata c ++
+    Trie.callHeaders c) [(preemptCountAddress.toNat,4)] = true
+  caller : spansApart [((s.data.regs.rsp.toBitVec - .ofNat 64 lookupWindow).toNat,lookupWindow)]
+    (callerSpans s lookupWindow query false).tail! = true
+
+theorem frameReady_lookup {L : Layout} {c : Context} {s : MachineState} {ra : UInt64}
+    {query : Pair.Span} (run : frameReady L c s ra lookupWindow query false true = .ok ()) :
+    FrameFacts L c s ra query := by
+  unfold frameReady at run
+  obtain ⟨abi,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨stack,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨coverage,run⟩ := require_bind_ok _ _ _ _ run
+  simp only [Bool.false_eq_true,↓reduceIte] at run
+  obtain ⟨coverageBh,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨hardirq,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨pending,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨heap,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨service,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨buffer,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨preempt,run⟩ := require_bind_ok _ _ _ _ run
+  exact ⟨abi,stack,coverage,coverageBh,hardirq,pending,heap,service,buffer,preempt,require_ok run⟩
+
+structure ReadyFacts (L : Layout) (c : Context) (s : MachineState) (family key : Nat)
+    (ra : UInt64) : Prop where
+  families : family = 4 ∨ family = 6
+  entry : s.pc = AllowedipsImage.Lookup.entry
+  root : readNat s (L.table + (if family == 4 then AllowedipsMutationLayout.root4
+    else AllowedipsMutationLayout.root6)) 8 = .ok s.data.regs.rdi.toNat
+  width : s.data.regs.rsi.toNat = (if family == 4 then 32 else 128)
+  address : Trie.networkKeyCheck s.data.dmem s.data.regs.rdx.toBitVec (if family == 4 then 32 else 128) key = true
+  frame : FrameFacts L c s ra (s.data.regs.rdx.toNat,(if family == 4 then 32 else 128)/8)
+
+theorem lookupReady_facts {L : Layout} {c : Context} {s : MachineState} {family key : Nat}
+    {ra : UInt64} (run : lookupReady L c s family key ra = .ok ()) : ReadyFacts L c s family key ra := by
+  unfold lookupReady at run
+  obtain ⟨familyOk,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨entry,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨word,read,run⟩ := bind_ok run
+  obtain ⟨root,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨width,run⟩ := require_bind_ok _ _ _ _ run
+  obtain ⟨address,run⟩ := require_bind_ok _ _ _ _ run
+  refine ⟨by simpa using familyOk,by simpa using entry,?_,by simpa using width,address,frameReady_lookup run⟩
+  have equal : s.data.regs.rdi.toNat = word := by simpa using root
+  rw [equal]
+  exact read
+
+/-! ### The heap's spans, as ranges of numbers -/
+
+theorem nodeField_arena {L : Layout} {names : Allowedips.Names}
+    (arena : ∀ node ∈ names.trie.nodes, ∃ span ∈ L.arena, span.1 ≤ node.2 ∧ node.2+nodeSize ≤ span.1+span.2)
+    {id base offset size : Nat} (named : (id,base) ∈ names.trie.nodes)
+    (field : (offset,size) ∈ nodeFields Root.nodeOffsets) :
+    ∃ b ∈ L.arena, b.1 ≤ base+offset ∧ base+offset+size ≤ b.1+b.2 := by
+  obtain ⟨object,inArena,low,high⟩ := arena (id,base) named
+  have bound := nodeFields_within (offset,size) field
+  simp only at bound low high
+  exact ⟨object,inArena,by omega,by omega⟩
+
+theorem readSpans_within {L : Layout} {names : Allowedips.Names}
+    (table : names.table = L.table) (peers : names.trie.peers = L.peers)
+    (arena : ∀ node ∈ names.trie.nodes, ∃ span ∈ L.arena, span.1 ≤ node.2 ∧ node.2+nodeSize ≤ span.1+span.2) :
+    Within (readSpans names Root.nodeOffsets) L.heap := by
+  intro span member
+  unfold readSpans at member
+  rw [table,peers] at member
+  rcases List.mem_append.mp member with tablePart | rest
+  · exact ⟨span,List.mem_append_left _ (List.mem_append_left _ tablePart),Nat.le_refl _,Nat.le_refl _⟩
+  rcases List.mem_append.mp rest with nodePart | peerPart
+  · obtain ⟨⟨id,base⟩,named,field⟩ := List.mem_flatMap.mp nodePart
+    obtain ⟨⟨offset,size⟩,listed,rfl⟩ := List.mem_map.mp field
+    obtain ⟨object,inArena,low,high⟩ := nodeField_arena arena named listed
+    exact ⟨object,List.mem_append_right _ inArena,low,high⟩
+  · exact ⟨span,List.mem_append_left _ (List.mem_append_right _ peerPart),Nat.le_refl _,Nat.le_refl _⟩
+
+theorem count_fixed {L : Layout} {names : Allowedips.Names} (peers : names.trie.peers = L.peers) :
+    ∀ span ∈ Trie.countSpans names.trie Root.nodeOffsets, span ∈ L.fixed := by
+  intro span member
+  unfold Trie.countSpans at member
+  rw [peers] at member
+  obtain ⟨⟨id,base⟩,named,rfl⟩ := List.mem_map.mp member
+  exact List.mem_append_right _ (List.mem_flatMap.mpr ⟨(id,base),named,
+    List.mem_map.mpr ⟨(Root.nodeOffsets.peerRefcount,4),by simp [peerFields],rfl⟩⟩)
+
+theorem trieSpans_within {L : Layout} {names : Allowedips.Names}
+    (arena : ∀ node ∈ names.trie.nodes, ∃ span ∈ L.arena, span.1 ≤ node.2 ∧ node.2+nodeSize ≤ span.1+span.2) :
+    Within (Trie.trieSpans names.trie Root.nodeOffsets) L.arena := by
+  intro span member
+  obtain ⟨⟨id,base⟩,named,field⟩ := List.mem_flatMap.mp member
+  obtain ⟨⟨offset,size⟩,listed,rfl⟩ := List.mem_map.mp field
+  exact nodeField_arena arena named (List.mem_append_left _ listed)
+
+theorem decoderSpans_within {L : Layout} {names : Allowedips.Names}
+    (peers : names.trie.peers = L.peers)
+    (arena : ∀ node ∈ names.trie.nodes, ∃ span ∈ L.arena, span.1 ≤ node.2 ∧ node.2+nodeSize ≤ span.1+span.2) :
+    Within (Trie.decoderSpans names.trie Root.nodeOffsets) L.heap := by
+  intro span member
+  rcases List.mem_append.mp member with node | count
+  · obtain ⟨b,inArena,low,high⟩ := trieSpans_within arena span node
+    exact ⟨b,List.mem_append_right _ inArena,low,high⟩
+  · exact ⟨span,List.mem_append_left _ (count_fixed peers span count),Nat.le_refl _,Nat.le_refl _⟩
+
+theorem count_objects {L : Layout} {names : Allowedips.Names} (peers : names.trie.peers = L.peers) :
+    Within (Trie.countSpans names.trie Root.nodeOffsets)
+      ([(L.table,AllowedipsMutationLayout.tableSize)] ++ L.peers.map fun (_,a) => (a,Layouts.peerSize)) := by
+  intro span member
+  unfold Trie.countSpans at member
+  rw [peers] at member
+  obtain ⟨⟨id,base⟩,named,rfl⟩ := List.mem_map.mp member
+  refine ⟨(base,Layouts.peerSize),List.mem_append_right _ (List.mem_map.mpr ⟨(id,base),named,rfl⟩),?_,?_⟩
+  · exact Nat.le_add_right _ _
+  · simp only [Root.nodeOffsets,Layouts.peer_refcount,Layouts.peerSize]
+    omega
+
+theorem spansApart_append_right {left first second : List Pair.Span}
+    (a : spansApart left first = true) (b : spansApart left second = true) :
+    spansApart left (first ++ second) = true := by
+  apply spansApart_of
+  intro x hx y hy
+  rcases List.mem_append.mp hy with h | h
+  · exact spansApart_mem a hx h
+  · exact spansApart_mem b hx h
+
+theorem spansApart_symm {left right : List Pair.Span} (ok : spansApart left right = true) :
+    spansApart right left = true := by
+  apply spansApart_of
+  intro x hx y hy
+  obtain ⟨p,q,r⟩ := spansApart_mem ok hy hx
+  exact ⟨q,p,r.symm⟩
+
+/-! ### The table against the named objects, from the interpretation check -/
+
+theorem table_apart {names : Allowedips.Names} {o : AllowedipsProbe.Offsets}
+    (valid : Allowedips.validate names o = .ok ()) :
+    names.table+AllowedipsMutationLayout.tableSize < 2^64 ∧
+    ∀ span ∈ allocations names o,
+      disjointRanges span.1 span.2 names.table AllowedipsMutationLayout.tableSize = true := by
+  unfold Allowedips.validate at valid
+  obtain ⟨_,_,valid⟩ := bind_ok valid
+  obtain ⟨tableOk,valid⟩ := check_ok _ _ _ _ valid
+  obtain ⟨_,_,valid⟩ := bind_ok valid
+  obtain ⟨_,_,valid⟩ := bind_ok valid
+  obtain ⟨_,valid,_⟩ := bind_ok valid
+  have bound : (0 < names.table ∧ names.table % 8 = 0) ∧
+      names.table+AllowedipsMutationLayout.tableSize < 2^64 := by simpa using tableOk
+  refine ⟨bound.2,?_⟩
+  exact forIn_ok (P := fun span : Nat×Nat =>
+      disjointRanges span.1 span.2 names.table AllowedipsMutationLayout.tableSize = true)
+    (fun span _ _ _ run => by
+      rcases span with ⟨a,size⟩
+      dsimp only at run ⊢
+      by_cases apart : disjointRanges a size names.table AllowedipsMutationLayout.tableSize = true
+      · simp only [apart,↓reduceIte] at run
+        exact ⟨(),(Except.ok.inj run).symm,apart⟩
+      · simp only [apart] at run
+        cases run) valid
+
+/-- The words the structural check reads are apart from the peers' counts. -/
+theorem metadata_count_apart {names : Allowedips.Names} {m : DataMem} {d : Device}
+    (related : Allowedips.Corresponds names Root.nodeOffsets m d) :
+    spansApart (metadataSpans names Root.nodeOffsets)
+      (Trie.countSpans names.trie Root.nodeOffsets) = true := by
+  have g := geometry related
+  obtain ⟨tableBound,tableApart⟩ := table_apart (Allowedips.reconstruct_fields related).valid
+  have symmetric : ∀ a b : Pair.Span, disjointRanges a.1 a.2 b.1 b.2 = true →
+      disjointRanges b.1 b.2 a.1 a.2 = true := by
+    intro a b h
+    simpa only [disjointRanges,Bool.or_comm] using h
+  apply spansApart_of
+  intro a ha b hb
+  obtain ⟨⟨pid,p⟩,peerNamed,rfl⟩ := List.mem_map.mp hb
+  have peerObject : (p,Layouts.peerSize) ∈ allocations names Root.nodeOffsets :=
+    List.mem_append_right _ (List.mem_map.mpr ⟨(pid,p),peerNamed,rfl⟩)
+  have peerBound := g.bounded _ peerObject
+  have count : Root.nodeOffsets.peerRefcount = 1056 := rfl
+  have size : Layouts.peerSize = 1520 := rfl
+  simp only [count,size] at peerBound ⊢
+  rcases List.mem_append.mp ha with tablePart | rest
+  · obtain ⟨⟨offset,width⟩,field,rfl⟩ := List.mem_map.mp tablePart
+    have inside : offset+width ≤ 24 := by
+      simp only [tableFields,List.mem_cons,List.not_mem_nil,or_false,Prod.mk.injEq] at field
+      rcases field with ⟨rfl,rfl⟩ | ⟨rfl,rfl⟩ | ⟨rfl,rfl⟩ <;> decide
+    have apart := tableApart _ peerObject
+    simp only [disjointRanges,Bool.or_eq_true,decide_eq_true_eq,size,
+      show AllowedipsMutationLayout.tableSize = 24 from rfl] at apart tableBound
+    simp only
+    omega
+  rcases List.mem_append.mp rest with nodePart | peerPart
+  · obtain ⟨⟨id,base⟩,named,field⟩ := List.mem_flatMap.mp nodePart
+    obtain ⟨⟨offset,width⟩,listed,rfl⟩ := List.mem_map.mp field
+    have inside := nodeFields_within (offset,width) listed
+    have nodeObject : (base,Root.nodeOffsets.nodeSize) ∈ allocations names Root.nodeOffsets :=
+      List.mem_append_left _ (List.mem_map.mpr ⟨(id,base),named,rfl⟩)
+    have nodeBound := g.bounded _ nodeObject
+    have different : (base,Root.nodeOffsets.nodeSize) ≠ (p,Layouts.peerSize) := by
+      intro equal
+      have sizes : Root.nodeOffsets.nodeSize = Layouts.peerSize := congrArg Prod.snd equal
+      exact absurd sizes (by decide)
+    have apart := Trie.pairwise_mem_ne symmetric g.apart nodeObject peerObject different
+    simp only [disjointRanges,Bool.or_eq_true,decide_eq_true_eq,size,
+      show Root.nodeOffsets.nodeSize = 72 from rfl] at apart nodeBound
+    simp only [show nodeSize = 72 from rfl] at inside
+    simp only
+    omega
+  · obtain ⟨⟨id,base⟩,named,field⟩ := List.mem_flatMap.mp peerPart
+    obtain ⟨⟨offset,width⟩,listed,rfl⟩ := List.mem_map.mp field
+    have otherObject : (base,Layouts.peerSize) ∈ allocations names Root.nodeOffsets :=
+      List.mem_append_right _ (List.mem_map.mpr ⟨(id,base),named,rfl⟩)
+    have otherBound := g.bounded _ otherObject
+    have inside : (offset = 1096 ∨ offset = 1104) ∧ width = 8 := by
+      simp only [listFields,List.mem_cons,List.not_mem_nil,or_false,Prod.mk.injEq,
+        show AllowedipsMutationLayout.allowedips_list = 1096 from rfl] at listed
+      rcases listed with ⟨rfl,rfl⟩ | ⟨rfl,rfl⟩
+      · exact ⟨.inl rfl,rfl⟩
+      · exact ⟨.inr rfl,rfl⟩
+    simp only [size] at otherBound
+    by_cases same : base = p
+    · subst base
+      simp only
+      omega
+    · have different : (base,Layouts.peerSize) ≠ (p,Layouts.peerSize) :=
+        fun equal => same (congrArg Prod.fst equal)
+      have apart := Trie.pairwise_mem_ne symmetric g.apart otherObject peerObject different
+      simp only [disjointRanges,Bool.or_eq_true,decide_eq_true_eq,size] at apart
+      simp only
+      omega
+
+/-! ### The landed entry check from `Inv` and `lookupReady` -/
+
+theorem loadInt_mapped (m : Mem 64) (base : BitVec 64) (n : Nat)
+    (mapped : ∀ i < n, (m.get? (base + .ofNat 64 i)).isSome = true) :
+    (m.loadInt base n).isSome = true := by
+  have bytes : m.loadBytes base n =
+      some ((List.range n).map fun i => (m.get? (base + .ofNat 64 i)).getD 0) := by
+    rw [MemoryBytes.loadBytes_iff]
+    refine ⟨by simp,?_⟩
+    intro i hi
+    have bound : i < n := by simpa using hi
+    have present := mapped i bound
+    simp only [List.getElem_map,List.getElem_range]
+    cases read : m.get? (base + .ofNat 64 i) with
+    | none => rw [read] at present; cases present
+    | some b => rfl
+  simp only [Mem.loadInt,bytes,Option.map_some,Option.isSome_some]
+
+theorem root_family {s : State} {id : NodeId} {node : AipNode}
+    (ok : structureCheck s id node = .ok ()) :
+    (s.table.root4 = some id → node.bitlen = 32) ∧ (s.table.root6 = some id → node.bitlen = 128) := by
+  rw [structureCheck_walk] at ok
+  obtain ⟨incoming,roots,_⟩ := bind_ok ok
+  have each := forIn_ok (P := fun entry : Option NodeId×Slot×Nat =>
+      entry.1 = some id → node.bitlen = entry.2.2)
+    (fun entry _ before after run => by
+      unfold rootStep at run
+      by_cases here : entry.1 = some id
+      · simp only [here,beq_self_eq_true,↓reduceIte] at run
+        obtain ⟨width,run⟩ := check_ok _ _ _ _ run
+        exact ⟨_,(Except.ok.inj run).symm,fun _ => eq_of_beq width⟩
+      · have differs : (entry.1 == some id) = false := by simpa using here
+        simp only [differs,Bool.false_eq_true,↓reduceIte] at run
+        exact ⟨_,(Except.ok.inj run).symm,fun at_ => absurd at_ here⟩) roots
+  exact ⟨each (s.table.root4,.root4,32) (by simp),each (s.table.root6,.root6,128) (by simp)⟩
+
+/-- A root word the reconstruction decoded: it is the address the interpretation
+gives the root, and the node there has the slot's family. -/
+theorem root_slot {names : Allowedips.Names} {o : AllowedipsProbe.Offsets} {m : DataMem} {d : Device}
+    (related : Allowedips.Corresponds names o m d) {path : String} {raw width : Nat}
+    {root : Option NodeId} (decoded : Trie.pointer names.trie.nodes path raw = .ok root)
+    (family : ∀ (id : NodeId) (node : AipNode), root = some id →
+      (id,node) ∈ (Allowedips.target d).nodes → node.bitlen = width) :
+    Trie.address names.trie.nodes root = .ok raw ∧
+    ∀ id, root = some id → ∃ node, Trie.decodeNode names.trie o m raw = .ok node ∧ node.width = width := by
+  have fields := Allowedips.reconstruct_fields related
+  have unique := (Trie.reconstruct_fields related.trie).nodeIds
+  unfold Trie.pointer at decoded
+  by_cases zero : raw = 0
+  · subst raw
+    have equal : none = root := Except.ok.inj decoded
+    subst root
+    exact ⟨rfl,by intro id h; cases h⟩
+  · simp only [beq_iff_eq,zero,↓reduceIte] at decoded
+    cases found : names.trie.nodes.find? (·.2 == raw) with
+    | none => rw [found] at decoded; cases decoded
+    | some pair =>
+      rw [found] at decoded
+      have equal : some pair.1 = root := Except.ok.inj decoded
+      subst root
+      have member := List.mem_of_find?_eq_some found
+      have address : pair.2 = raw := by simpa using List.find?_some found
+      subst raw
+      refine ⟨?_,?_⟩
+      · simp only [Trie.address,Trie.find_identity unique member]
+        rfl
+      · intro id atRoot
+        cases Option.some.inj atRoot
+        obtain ⟨⟨current,node⟩,listed,run⟩ := fields.nodes.left pair member
+        obtain ⟨same,core⟩ := Allowedips.decodeNode_fields run
+        subst current
+        exact ⟨Trie.targetNode node,core,family pair.1 node rfl listed⟩
+
+theorem trie_assertAt {names : Allowedips.Names} {o : AllowedipsProbe.Offsets} {m : DataMem}
+    {w : World} {d : Device} (device : w.wg.dev = some d)
+    (related : Allowedips.Corresponds names o m d) (shape : heap names (target d) m = .ok ()) :
+    Trie.assertAt names.trie o m w = .ok () := by
+  have core : Trie.heap (Trie.target d) [d.peerAllowedips.root4,d.peerAllowedips.root6] = .ok () := by
+    rw [← trieState_target]
+    exact ((heap_checks names (target d) m).mp shape).1
+  have trie : Trie.reconstruct names.trie o m = .ok (Trie.target d) := related.trie
+  unfold Trie.assertAt
+  rw [device,trie]
+  dsimp only [Except.mapError,Bind.bind,Except.bind]
+  simpa only [beq_self_eq_true,↓reduceIte] using core
+
+/-- The probe input the landed lookup theorem is instantiated at: only its
+offsets are read by the entry check. -/
+def lookupInput : AllowedipsProbe.Input :=
+  { instructions := #[], labels := #[], hooks := #[], offsets := Root.nodeOffsets, entry := 0,
+    commonEntry := 0, preempt := 0, entryPreempt := 0, budget := 0, trace := .null, operation := 0 }
+
+theorem callerSpans_lookup (s : MachineState) (query : Pair.Span) :
+    callerSpans s lookupWindow query false =
+      [((s.data.regs.rsp.toBitVec-144).toNat,152),query] := rfl
+
+theorem network_key_bound {m : DataMem} {base : BitVec 64} {family key : Nat}
+    (checked : Trie.networkKeyCheck m base (if family == 4 then 32 else 128) key = true) :
+    key < 2^(if family == 4 then 32 else 128) := by
+  unfold Trie.networkKeyCheck at checked
+  by_cases v4 : (family == 4) = true
+  · simp only [v4,↓reduceIte,beq_self_eq_true] at checked ⊢
+    cases read : load32 m base with
+    | none => rw [read] at checked; cases checked
+    | some word =>
+      rw [read] at checked
+      have equal : (Allowedips.swap32 word).toNat = key := by simpa using checked
+      rw [← equal]
+      exact (Allowedips.swap32 word).isLt
+  · simp only [v4,Bool.false_eq_true,↓reduceIte] at checked ⊢
+    cases high : load64 m base with
+    | none => simp [high] at checked
+    | some hi =>
+      cases low : load64 m (base+8) with
+      | none => rw [high,low] at checked; cases checked
+      | some lo =>
+        rw [high,low] at checked
+        have equal : (Allowedips.swap64 hi).toNat*2^64+(Allowedips.swap64 lo).toNat = key := by
+          simpa using checked
+        have a := (Allowedips.swap64 hi).isLt
+        have b := (Allowedips.swap64 lo).isLt
+        omega
+
+theorem callInput_of {names : Trie.Names} {o : AllowedipsProbe.Offsets} {m : DataMem}
+    {root : Option NodeId} {width key raw : Nat} (widths : width = 32 ∨ width = 128)
+    (bound : key < 2^width) (address : Trie.address names.nodes root = .ok raw)
+    (node : ∀ id, root = some id → ∃ node, Trie.decodeNode names o m raw = .ok node ∧ node.width = width) :
+    Trie.callInput names o m root width key = .ok () := by
+  unfold Trie.callInput
+  have valid : ((width == 32 || width == 128) && decide (key < 2^width)) = true := by
+    rcases widths with rfl | rfl <;> simpa using bound
+  refine check_of _ _ _ _ valid ?_
+  cases root with
+  | none => rfl
+  | some id =>
+    obtain ⟨decoded,read,family⟩ := node id rfl
+    simp only [address,bind,Except.bind,read,Except.mapError,family,beq_self_eq_true,↓reduceIte]
+    rfl
+
+/-- What a lookup writes outside the peers' counts lies inside what the caller
+keeps apart from the heap. -/
+theorem lookup_writes_within (s : MachineState) (c : Context) (query : Pair.Span) :
+    Within (Trie.callStack s false ++ Trie.callBuffers c ++ [(preemptCountAddress.toNat,4)])
+      ([((s.data.regs.rsp.toBitVec-144).toNat,152),query] ++ Trie.callServices c ++ Trie.callBuffers c) := by
+  intro span member
+  rcases List.mem_append.mp member with rest | preempt
+  · rcases List.mem_append.mp rest with stack | buffer
+    · obtain rfl : span = ((s.data.regs.rsp.toBitVec-144).toNat,144) := by
+        simpa [Trie.callStack] using stack
+      exact ⟨_,List.mem_append_left _ (List.mem_append_left _ (List.mem_cons_self ..)),
+        Nat.le_refl _,by simp only; omega⟩
+    · exact ⟨span,List.mem_append_right _ buffer,Nat.le_refl _,Nat.le_refl _⟩
+  · obtain rfl := List.mem_singleton.mp preempt
+    exact ⟨_,List.mem_append_left _ (List.mem_append_right _
+      (by simp [Trie.callServices,Trie.readSpans])),Nat.le_refl _,Nat.le_refl _⟩
+
+theorem lookup_boundary {L : Layout} {c : Context} {s : MachineState} {w : World}
+    {d : Device} {family key : Nat} {ra : UInt64} {names : Allowedips.Names}
+    (table : names.table = L.table) (peers : names.trie.peers = L.peers)
+    (device : w.wg.dev = some d)
+    (related : Allowedips.Corresponds names Root.nodeOffsets s.data.dmem d)
+    (shape : heap names (target d) s.data.dmem = .ok ())
+    (apart : spansApart ([(L.table,AllowedipsMutationLayout.tableSize)] ++
+      L.peers.map fun (_,a) => (a,Layouts.peerSize)) L.arena = true)
+    (arena : ∀ node ∈ names.trie.nodes, ∃ span ∈ L.arena, span.1 ≤ node.2 ∧ node.2+nodeSize ≤ span.1+span.2)
+    (ready : lookupReady L c s family key ra = .ok ()) :
+    lookupBoundary names lookupInput c s w family key ra = .ok () := by
+  have facts := lookupReady_facts ready
+  have frame := facts.frame
+  have heapApart : spansApart L.heap
+      ([((s.data.regs.rsp.toBitVec-144).toNat,152),(s.data.regs.rdx.toNat,(if family == 4 then 32 else 128)/8)] ++
+        Trie.callServices c ++ Trie.callBuffers c) = true := frame.heap
+  have serviceApart : spansApart (Trie.callServices c) [((s.data.regs.rsp.toBitVec-144).toNat,152)] = true :=
+    frame.service
+  have bufferApart : spansApart (Trie.callBuffers c)
+      ([((s.data.regs.rsp.toBitVec-144).toNat,152),(s.data.regs.rdx.toNat,(if family == 4 then 32 else 128)/8)] ++
+        Trie.callMetadata c ++ [(preemptCountAddress.toNat,4)]) = true := frame.buffer
+  have preemptApart : spansApart ([((s.data.regs.rsp.toBitVec-144).toNat,152)] ++ Trie.callMetadata c ++
+      Trie.callHeaders c) [(preemptCountAddress.toNat,4)] = true := frame.preempt
+  have callerApart : spansApart [((s.data.regs.rsp.toBitVec-144).toNat,144)]
+      [(s.data.regs.rdx.toNat,(if family == 4 then 32 else 128)/8)] = true := frame.caller
+  have fields := Allowedips.reconstruct_fields related
+  have writesWithin := lookup_writes_within s c (s.data.regs.rdx.toNat,(if family == 4 then 32 else 128)/8)
+  -- lookupBoundary's own separation
+  have metadataApart : spansApart (metadataSpans names lookupInput.offsets)
+      (lookupWrites names lookupInput.offsets c s) = true := by
+    apply spansApart_append_right
+    · exact spansApart_within heapApart
+        ((Within.of_subset (metadataSpans_subset names _)).trans (readSpans_within table peers arena))
+        writesWithin
+    · exact metadata_count_apart related
+  -- the landed entry check
+  have widths : (if family == 4 then 32 else 128) = 32 ∨ (if family == 4 then 32 else 128) = 128 := by
+    split
+    · exact .inl rfl
+    · exact .inr rfl
+  have keyBound := network_key_bound facts.address
+  obtain ⟨raw,rootRead,rootAddress,rootNode⟩ : ∃ raw,
+      readNat s (L.table + (if family == 4 then AllowedipsMutationLayout.root4
+        else AllowedipsMutationLayout.root6)) 8 = .ok raw ∧
+      Trie.address names.trie.nodes
+        (if family == 4 then d.peerAllowedips.root4 else d.peerAllowedips.root6) = .ok raw ∧
+      ∀ id, (if family == 4 then d.peerAllowedips.root4 else d.peerAllowedips.root6) = some id →
+        ∃ node, Trie.decodeNode names.trie Root.nodeOffsets s.data.dmem raw = .ok node ∧
+          node.width = (if family == 4 then 32 else 128) := by
+    have checks := ((heap_checks names (target d) s.data.dmem).mp shape).2
+    by_cases v4 : (family == 4) = true
+    · obtain ⟨raw,read,decoded⟩ := fields.root4
+      obtain ⟨address,node⟩ := root_slot (width := 32) related decoded
+        (fun id node atRoot listed => (root_family (checks id node listed).1).1 atRoot)
+      simp only [v4,↓reduceIte]
+      rw [← table]
+      exact ⟨raw,readNat_of_word read,address,node⟩
+    · obtain ⟨raw,read,decoded⟩ := fields.root6
+      obtain ⟨address,node⟩ := root_slot (width := 128) related decoded
+        (fun id node atRoot listed => (root_family (checks id node listed).1).2 atRoot)
+      simp only [v4,Bool.false_eq_true,↓reduceIte]
+      rw [← table]
+      exact ⟨raw,readNat_of_word read,address,node⟩
+  have rdi : s.data.regs.rdi.toNat = raw := Except.ok.inj (facts.root.symm.trans rootRead)
+  have input : Trie.callInput names.trie Root.nodeOffsets s.data.dmem
+      (if family == 4 then d.peerAllowedips.root4 else d.peerAllowedips.root6)
+      (if family == 4 then 32 else 128) key = .ok () :=
+    callInput_of widths keyBound rootAddress rootNode
+  have stackTrue : Trie.callStack s true = [((s.data.regs.rsp.toBitVec-144).toNat,152)] := rfl
+  have stackFalse : Trie.callStack s false = [((s.data.regs.rsp.toBitVec-144).toNat,144)] := rfl
+  have frameOk : Trie.callFrameCheck names.trie Root.nodeOffsets c s ra
+      (if family == 4 then 32 else 128) key = .ok () := by
+    unfold Trie.callFrameCheck
+    refine check_of _ _ _ _ frame.abi ?_
+    refine check_of _ _ _ _ ?_ ?_
+    · apply List.all_eq_true.mpr
+      intro i hi
+      have small : i < 18 := List.mem_range.mp hi
+      apply loadInt_mapped
+      intro j hj
+      have mapped := List.all_eq_true.mp frame.stack ((i+1)*8-j-1)
+        (List.mem_range.mpr (by simp only [lookupWindow]; omega))
+      have equal : s.data.regs.rsp.toBitVec - BitVec.ofNat 64 ((i+1)*8-j-1+1) =
+          s.data.regs.rsp.toBitVec - BitVec.ofNat 64 ((i+1)*8) + BitVec.ofNat 64 j := by
+        bv_omega
+      rw [← equal]
+      exact mapped
+    refine check_of _ _ _ _ facts.address ?_
+    refine check_of _ _ _ _ (by rw [frame.coverage,frame.coverageBh]; rfl) ?_
+    refine check_of _ _ _ _ frame.hardirq ?_
+    refine check_of _ _ _ _ frame.pending ?_
+    refine check_of _ _ _ _ (spansApart_within heapApart (decoderSpans_within peers arena) writesWithin) ?_
+    refine check_of _ _ _ _ ?_ ?_
+    · have size : (if ((if family == 4 then 32 else 128) == 32) = true then 4 else 16) =
+          (if family == 4 then 32 else 128)/8 := by
+        by_cases v4 : (family == 4) = true <;> simp [v4]
+      rw [size,stackFalse]
+      apply spansApart_append_right
+      · exact spansApart_symm callerApart
+      · apply spansApart_symm
+        refine spansApart_within bufferApart
+          (Within.of_subset fun span member => List.mem_append_left _ member)
+          (Within.of_subset fun span member => ?_)
+        obtain rfl := List.mem_singleton.mp member
+        simp
+    refine check_of _ _ _ _ ?_ ?_
+    · rw [stackFalse]
+      refine spansApart_within serviceApart (Within.of_subset fun _ member => member) ?_
+      intro span member
+      obtain rfl := List.mem_singleton.mp member
+      exact ⟨_,List.mem_singleton.mpr rfl,Nat.le_refl _,by simp only; omega⟩
+    refine check_of _ _ _ _ ?_ ?_
+    · rw [stackTrue]
+      refine spansApart_within bufferApart (Within.of_subset fun _ member => member)
+        (Within.of_subset fun span member => ?_)
+      simp only [List.mem_append,List.mem_cons,List.not_mem_nil,or_false] at member ⊢
+      rcases member with (rfl | h) | h
+      · exact .inl (.inl (.inl rfl))
+      · exact .inl (.inr h)
+      · exact .inr h
+    refine check_of _ _ _ _ ?_ ?_
+    · rw [stackTrue]
+      apply spansApart_append_right
+      · refine spansApart_within heapApart
+          (Within.of_subset fun span member => List.mem_append_left _ (count_fixed peers span member))
+          (Within.of_subset fun span member => ?_)
+        simp only [List.mem_append,List.mem_cons,List.not_mem_nil,or_false] at member ⊢
+        rcases member with rfl | h
+        · exact .inl (.inl (.inl rfl))
+        · exact .inl (.inr h)
+      · exact spansApart_within apart (count_objects peers) (trieSpans_within arena)
+    rw [stackTrue,preemptApart]
+    rfl
+  have callOk : Trie.callBoundary names.trie lookupInput c s w
+      (if family == 4 then d.peerAllowedips.root4 else d.peerAllowedips.root6)
+      (if family == 4 then 32 else 128) key ra = .ok () := by
+    unfold Trie.callBoundary
+    rw [show lookupInput.offsets = Root.nodeOffsets from rfl]
+    rw [trie_assertAt device related shape,input,rootAddress]
+    refine check_of _ _ _ _ ?_ frameOk
+    simp [facts.entry,rdi,facts.width]
+  unfold lookupBoundary
+  rw [show lookupInput.offsets = Root.nodeOffsets from rfl]
+  rw [assertAt_of_related device related shape]
+  simp only [device]
+  refine check_of _ _ _ _ (by simpa using facts.families) ?_
+  exact check_of _ _ _ _ metadataApart callOk
+
+theorem address_bound {names : List (Nat×Nat)} {id : Option Nat} {raw : Nat}
+    (ok : Trie.address names id = .ok raw) (bounded : ∀ id a, (id,a) ∈ names → a < 2^64) :
+    raw < 2^64 := by
+  cases id with
+  | none => cases ok; decide
+  | some id =>
+    simp only [Trie.address] at ok
+    cases found : names.find? (·.1 == id) with
+    | none => rw [found] at ok; cases ok
+    | some pair =>
+      rw [found] at ok
+      have equal : pair.2 = raw := Except.ok.inj ok
+      exact equal ▸ bounded pair.1 pair.2 (List.mem_of_find?_eq_some found)
+
+/-- `LookupStep` for `Inv`, from the landed `lookup_checked`. -/
+theorem lookupHolds : LookupHolds := by
+  intro fetch L A premises c s w w' d family key ra answer pointer related device ready accepted address
+  obtain ⟨names,stream,table,peers,asserted,armedBefore,hidden,sites,apart,arena,idle⟩ := related
+  obtain ⟨d',device',corresponds,shape⟩ := assertAt_ok asserted
+  obtain rfl : d' = d := Option.some.inj (device'.symm.trans device)
+  have boundary := lookup_boundary table peers device corresponds shape apart arena ready
+  have run := lookup_checked fetch premises.lookup premises.peer premises.callbacks premises.cmp1
+    premises.constCmp4 premises.callbacks.constCmp1 premises.bhEnable device boundary accepted
+  have facts := lookupReady_facts ready
+  have heapApart : spansApart L.heap
+      ([((s.data.regs.rsp.toBitVec-144).toNat,152),(s.data.regs.rdx.toNat,(if family == 4 then 32 else 128)/8)] ++
+        Trie.callServices c ++ Trie.callBuffers c) = true := facts.frame.heap
+  have arenaWrites : spansApart L.arena
+      (Trie.callStack s false ++ Trie.callBuffers c ++ [(preemptCountAddress.toNat,4)]) = true :=
+    spansApart_within heapApart (Within.of_subset fun span member => List.mem_append_right _ member)
+      (lookup_writes_within s c _)
+  have countArena : spansApart (Trie.countSpans names.trie Root.nodeOffsets) L.arena = true :=
+    spansApart_within apart (count_objects peers) (Within.of_subset fun _ member => member)
+  obtain ⟨hiddenSame,armedSame⟩ := lookup_pending accepted
+  apply eventually_weaken (instructionStep fetch) _ _ _ _ run
+  rintro t ⟨post,⟨dFinal,deviceFinal,correspondsFinal,shapeFinal⟩,frame⟩
+  refine ⟨post.returned,?_,?_,?_⟩
+  · have bound : pointer < 2^64 := address_bound address fun id a member =>
+      Nat.lt_of_le_of_lt (Nat.le_add_right _ _)
+        ((Trie.reconstruct_fields corresponds.trie).peerRange id a (peers ▸ member)).2
+    rw [← peers] at address
+    rw [post.result,Trie.address_value address]
+    change (BitVec.ofNat 64 pointer).toNat = pointer
+    rw [BitVec.toNat_ofNat,Nat.mod_eq_of_lt bound]
+  · refine ⟨names,stream,table,peers,assertAt_of_related deviceFinal correspondsFinal shapeFinal,?_,
+      hiddenSame.trans hidden,sites,apart,arena,
+      premises.allocator.frame s.data.dmem t.data.dmem _ _ idle ?_⟩
+    · unfold armed at armedBefore ⊢
+      rw [armedSame]
+      exact armedBefore
+    · intro a inArena _
+      obtain ⟨object,listed,inside⟩ := inArena
+      apply frame a
+      rintro (written | count)
+      · obtain ⟨span,member,at_⟩ := Trie.callTotalWrites_cover s c a written
+        exact spansApart_sound arenaWrites listed member inside at_
+      · obtain ⟨span,member,at_⟩ := Trie.countSpans_cover names.trie _ a count
+        exact spansApart_sound countArena member listed at_ inside
+  · intro a outside
+    apply frame a
+    rintro (written | count)
+    · exact outside (.inl written)
+    · obtain ⟨span,member,at_⟩ := Trie.countSpans_cover names.trie _ a count
+      exact outside (.inr ⟨span,List.mem_append_left _ (count_fixed peers span member),at_⟩)
+
+#print axioms lookupHolds
 end Binary.Statements.C1.Proof
