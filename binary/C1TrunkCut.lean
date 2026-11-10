@@ -59,6 +59,31 @@ theorem node_boundary_of_fields {names o world machine key cidr pid base}
     f.zero,f.query,m36,m43,m44,f.queryApart,apart,require,bind,Except.bind,Except.mapError,
     pure,Except.pure]
 
+/-- The other direction of the finding: whatever state a trunk delivers with
+`NodeCut`, the landed boundary there says the three stack bytes are apart
+from every peer object. So `TrunkToNode` as stated implies this separation at
+its cut state, for every state the signed conditions admit. -/
+theorem cut_stack_off_peers {fetch : Int64 → Option Decoded} {L : Statements.C1.Layout} {A : Allocator}
+    {c : Context} {s : MachineState} {ra : UInt64} {w : World} {d : Device} {key cidr pid : Nat}
+    {stream : List HiddenRecord} {placed : Option NodeId} {names : Allowedips.Names} {base : Nat}
+    {e : MachineState}
+    (cut : NodeCut fetch L A c s ra w d key cidr pid stream placed names base e) :
+    ∀ peer ∈ L.peers, ∀ offset ∈ [36,43,44], ∀ x,
+      Pair.Span.contains (e.data.regs.rsp.toNat+offset,1) x →
+      ¬Pair.Span.contains (peer.2,Layouts.peerSize) x := by
+  intro peer member offset which x inside covered
+  have fields := NodeInit.boundary_fields cut.boundary
+  have atStack : (e.data.regs.rsp.toNat+offset,1) ∈
+      [(e.data.regs.rsp.toNat+36,1),(e.data.regs.rsp.toNat+43,1),(e.data.regs.rsp.toNat+44,1)] := by
+    simp only [List.mem_cons, List.not_mem_nil, or_false] at which
+    rcases which with rfl | rfl | rfl <;> simp
+  have isPeer : (peer.2,Layouts.peerSize) ∈
+      [(base,72),(names.table,24)] ++ allocations names Root.nodeOffsets := by
+    refine List.mem_append_right _ (List.mem_append_right _ (List.mem_map.mpr ⟨peer,?_,rfl⟩))
+    rw [cut.peers]
+    exact member
+  exact spansApart_sound fields.stackApart atStack isPeer inside covered
+
 section
 variable {fetch : Int64 → Option Decoded} {L : Statements.C1.Layout} {A : Allocator} {c : Context}
   {s : MachineState} {w : World} {v4 : Bool} {key cidr pid : Nat} {ra : UInt64}
@@ -343,6 +368,7 @@ theorem node_cut (framed : FramedHolds) (premises : Premises fetch L A)
 end
 
 #print axioms node_boundary_of_fields
+#print axioms cut_stack_off_peers
 #print axioms node_boundary
 #print axioms node_cut
 end C1Trunk
