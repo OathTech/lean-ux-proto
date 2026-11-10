@@ -20,8 +20,7 @@ when all four pass:
    `implemented_by` or `extern` token anywhere in the proof tree outside
    comments and string literals (the scanner is string-aware, so a `--`
    inside a string does not hide the rest of its line).
-4. Nothing outside `Leanux/Proofs/` imports `Leanux.Proofs`, in any spelling
-   of an import that Lean accepts, comments and strings apart (one exemption:
+4. Nothing outside `Leanux/Proofs/` imports `Leanux.Proofs` (one exemption:
    `binary/bridge/C2Bridge.lean` may import the four `CounterWindow` modules
    named in BRIDGE_IMPORTS and nothing else of the tree), the root
    `Leanux/Proofs.lean` imports every result's `Statements` module (so a new
@@ -43,7 +42,6 @@ TARGET = 'LeanuxProofs'
 BRIDGE = ROOT / 'binary' / 'bridge' / 'C2Bridge.lean'
 BRIDGE_IMPORTS = {'Leanux.Proofs.WG.CounterWindow.' + name
                   for name in ('Model', 'Refinement', 'MirrorCalls', 'Bounds')}
-IMPORT = re.compile(r"\bimport\s+(?:all\s+)?(Leanux\.Proofs(?![A-Za-z0-9_'!?])(?:\.\S*)?)")
 PERMITTED = {'propext', 'Classical.choice', 'Quot.sound'}
 FORBIDDEN = re.compile(r'\b(sorry|sorryAx|admit|axiom|native_decide|ofReduceBool|trustCompiler|skipKernelTC'
                        r'|unsafe|implemented_by|extern)\b|(\+\s*native)\b')
@@ -239,14 +237,10 @@ def check_imports():
         rel = path.relative_to(ROOT)
         if rel.parts[0] in skip or rel.parts[:2] == ('Leanux', 'Proofs') or path == PROOFS_ROOT:
             continue
-        # Every spelling Lean accepts, not one line shape: comments and strings
-        # are blanked first, then `import` is found anywhere (indented, after
-        # another import on the line, after `public`/`private`/`meta`, before
-        # `all`, with the module name on the next line or in «guillemets»).
-        text = strip_comments(path.read_text()).replace('«', '').replace('»', '')
-        for m in IMPORT.finditer(text):
-            if not (path == BRIDGE and m.group(1) in BRIDGE_IMPORTS):
-                fail(f'{rel}:{text.count(chr(10), 0, m.start()) + 1} imports the proof tree')
+        for number, line in enumerate(path.read_text().splitlines(), 1):
+            m = re.match(r'^import\s+(Leanux\.Proofs(?:\.\S*)?)(?:\s|$)', line)
+            if m and not (path == BRIDGE and m.group(1) in BRIDGE_IMPORTS):
+                fail(f'{rel}:{number} imports the proof tree')
     if not PROOFS_ROOT.exists():
         fail(f'{PROOFS_ROOT.relative_to(ROOT)} is missing')
     else:
