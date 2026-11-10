@@ -163,12 +163,20 @@ theorem leave (fetch : Int64 → Option Decoded)
       f.data.regs.r14 = s.regs.r14 ∧ f.data.regs.r15 = s.regs.r15 ∧
       f.data.regs.rax = t.data.regs.rax ∧ f.data.dmem = t.data.dmem) t := by
   have stackAt := atAdd.stackAt
-  have frameA := atAdd.frameAt
+  have fs := frameSize_range v4
+  have zero : s.regs.rsp.toBitVec - .ofNat 64 0 = s.regs.rsp.toBitVec := by simp
+  have raA : a.dmem.loadInt s.regs.rsp.toBitVec 8 = some (ra.toNat : Int) := by
+    rw [← zero, ← atAdd.frameAt.loadInt _ 8 (fun i hi h => by
+      rcases h with h | h | h
+      · exact below_under _ 0 8 _ _ (by omega) (by omega) (by omega) _ ⟨i,hi,rfl⟩ h
+      · exact seqStack _ h (below_sub _ 0 8 200 208 (by omega) (by omega) _ ⟨i,hi,rfl⟩)
+      · exact buffer _ h (below_sub _ 0 8 200 208 (by omega) (by omega) _ ⟨i,hi,rfl⟩)), zero]
+    exact returnWord
   cases v4
   · exact leave_core fetch decoder false 16 rfl W wide room top stackAt atAdd.r13 atAdd.r12 atAdd.rbp
-      atAdd.rbx atAdd.r14 atAdd.r15 frameA returnWord buffer seqStack heapStack returned frame
+      atAdd.rbx atAdd.r14 atAdd.r15 raA buffer heapStack returned frame
   · exact leave_core fetch decoder true 8 rfl W wide room top stackAt atAdd.r13 atAdd.r12 atAdd.rbp
-      atAdd.rbx atAdd.r14 atAdd.r15 frameA returnWord buffer seqStack heapStack returned frame
+      atAdd.rbx atAdd.r14 atAdd.r15 raA buffer heapStack returned frame
 
 #print axioms related_at_add
 #print axioms entry_base

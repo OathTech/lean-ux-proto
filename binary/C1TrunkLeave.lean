@@ -20,13 +20,8 @@ theorem leave_core (fetch : Int64 → Option Decoded)
     (rbpA : a.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 24) 8 = some (s.regs.rbp.toNat : Int))
     (rbxA : a.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 32) 8 = some (s.regs.rbx.toNat : Int))
     (r14A : a.regs.r14 = s.regs.r14) (r15A : a.regs.r15 = s.regs.r15)
-    (frameA : EqualOutside (fun x =>
-      InRange (s.regs.rsp.toBitVec - .ofNat 64 (40+locals)) (40+locals) x ∨
-      InRange (s.regs.rdi.toBitVec+16) 8 x ∨ c.writes x) s.dmem a.dmem)
-    (returnWord : s.dmem.loadInt s.regs.rsp.toBitVec 8 = some (ra.toNat : Int))
+    (raA : a.dmem.loadInt s.regs.rsp.toBitVec 8 = some (ra.toNat : Int))
     (buffer : ∀ x, c.writes x → ¬InRange (s.regs.rsp.toBitVec - .ofNat 64 200) 208 x)
-    (seqStack : ∀ x, InRange (s.regs.rdi.toBitVec+16) 8 x →
-      ¬InRange (s.regs.rsp.toBitVec - .ofNat 64 200) 208 x)
     (heapStack : ∀ x, H x → ¬InRange (s.regs.rsp.toBitVec - .ofNat 64 200) 208 x)
     (returned : Returned ⟨a,Add.entry⟩ t (site v4).toUInt64)
     (frame : EqualOutside (fun x =>
@@ -63,12 +58,8 @@ theorem leave_core (fetch : Int64 → Option Decoded)
     · exact heapStack _ h (below_sub _ k 8 200 208 (by omega) (by omega) _ ⟨i,hi,rfl⟩)
   have zero : s.regs.rsp.toBitVec - .ofNat 64 0 = s.regs.rsp.toBitVec := by simp
   have top0 : a.dmem.loadInt (s.regs.rsp.toBitVec - .ofNat 64 0) 8 = some (ra.toNat : Int) := by
-    rw [← frameA.loadInt _ 8 (fun i hi h => by
-      rcases h with h | h | h
-      · exact below_under _ 0 8 (40+locals) (40+locals) (by omega) (by omega) (by omega) _ ⟨i,hi,rfl⟩ h
-      · exact seqStack _ h (below_sub _ 0 8 200 208 (by omega) (by omega) _ ⟨i,hi,rfl⟩)
-      · exact buffer _ h (below_sub _ 0 8 200 208 (by omega) (by omega) _ ⟨i,hi,rfl⟩)), zero]
-    exact returnWord
+    rw [zero]
+    exact raA
   have h0 : Return.saved t.data locals = .ok s.regs.rbx := by
     apply saved_of_load
     have e := addr 0 (by omega)
