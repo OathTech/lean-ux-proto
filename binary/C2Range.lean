@@ -5,8 +5,7 @@ import C2RangeHead
 
 /-! Work package 2 of result C2: the five segments of the range (`HeadSegment`,
 `AdvanceEnters`, `LoopIteration`, `AdvanceStores`, `TailSegment` of `C2CutInterfaces`),
-each from the propositions of work package 1 as hypotheses. Brief:
-packets/c2/proof/WP2.md.
+each from the propositions of work package 1 as hypotheses.
 
 The proofs are in the modules named `C2Range*`, each registered as a root of
 `BinaryProofs`: `C2RangeHistory` (a history-keeping `region_eventually`),

@@ -6,7 +6,6 @@ import CallbackCmp8
 of `C2CutInterfaces`. The package owns this file. All of its proofs are here: a further flat module is
 not buildable without a lakefile entry, and one in a subdirectory would be outside the
 source scan of `scripts/binary-proof-gate`.
-Brief: packets/c2/proof/WP1.md.
 
 | Proposition | Theorem |
 | --- | --- |

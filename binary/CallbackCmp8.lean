@@ -10,7 +10,6 @@ file named `CallbackCmp8*` other than `CallbackCmp8Image` and `CallbackCmp8Rule`
 are frozen. Neutral: nothing here may import a `C2*` or a `StatementC1*` module, so
 that the C1 branch can take the proofs unchanged. All of the proofs are in this file (a
 further flat module is not buildable without a lakefile entry).
-Brief: packets/c2/proof/WP1.md.
 
 | Proposition | Theorem |
 | --- | --- |

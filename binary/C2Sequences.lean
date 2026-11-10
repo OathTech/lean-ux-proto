@@ -6,8 +6,7 @@ import MemoryBytes
 import C2CutAssembly
 
 /-! Work package 3 of result C2: representation, the mirror link, first exits and the
-witness (`WindowMapped` to `WitnessStart` of `C2CutInterfaces`). Brief:
-packets/c2/proof/WP3.md.
+witness (`WindowMapped` to `WitnessStart` of `C2CutInterfaces`).
 
 One file: a module imported from this root is built only if it is itself a root in the
 lakefile, and the package keeps to its one registered root; the sections below would
