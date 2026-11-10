@@ -8,8 +8,20 @@ import CallbackLeafHistory
 `ConstCmp8Rule`) from the image. Work package 1 of result C2 owns this file and every
 file named `CallbackCmp8*` other than `CallbackCmp8Image` and `CallbackCmp8Rule`, which
 are frozen. Neutral: nothing here may import a `C2*` or a `StatementC1*` module, so
-that the C1 branch can take the proofs unchanged. New files are imported from here; the
-lakefile is not edited. Brief: packets/c2/proof/WP1.md. -/
+that the C1 branch can take the proofs unchanged. All of the proofs are in this file (a
+further flat module is not buildable without a lakefile entry).
+Brief: packets/c2/proof/WP1.md.
+
+| Proposition | Theorem |
+| --- | --- |
+| `PcRule` | `pc_rule` |
+| `Cmp8Rule` | `cmp8_rule` |
+| `ConstCmp8Rule` | `const_cmp8_rule` |
+
+Also here, for callers of the rules: `Covered` (a plan's stores have the coverage
+shape), `kcov_covered` and `record_covered` (the landed plans and the tag-indexed plan
+have it), and `Leaf.callback` (a rule applied from `KcovState`, with the separations
+asked for only in a recording mode). -/
 
 /-! ## Coverage readiness
 

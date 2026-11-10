@@ -1,12 +1,19 @@
 import C2CutInterfaces
 import CallbackCmp8
-import GuardedCallHistory
 
 /-! Work package 1 of result C2, the C2 side: `StubsAgree`, `BtsSupported`,
 `RegionsLaidOut` and the three call-site rules (`PcSite`, `Cmp8Site`, `ConstCmp8Site`)
-of `C2CutInterfaces`. The package owns this file and every file named `C2Callbacks*`.
-New files are imported from here; the lakefile is not edited.
-Brief: packets/c2/proof/WP1.md. -/
+of `C2CutInterfaces`. The package owns this file. All of its proofs are here: a further flat module is
+not buildable without a lakefile entry, and one in a subdirectory would be outside the
+source scan of `scripts/binary-proof-gate`.
+Brief: packets/c2/proof/WP1.md.
+
+| Proposition | Theorem |
+| --- | --- |
+| `StubsAgree` | `stubs_agree` |
+| `PcSite`, `Cmp8Site`, `ConstCmp8Site` | `pc_site`, `cmp8_site`, `const_cmp8_site` (closed: no hypothesis) |
+| `BtsSupported` | `bts_supported` |
+| `RegionsLaidOut` | `regions_laid_out` | -/
 
 /-! ## The call-site rule from a callback rule
 
