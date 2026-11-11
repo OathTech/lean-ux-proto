@@ -4,10 +4,10 @@ Branch `task/binary-c2`. Status: the headline is closed on the branch; it is
 not on `main`. The independent landing review
 (`docs/2026-11-10-review-c2-landing.md`, `bf36a236` on
 `task/review-c2-landing`) says land with named changes; section 9 disposes
-of each finding. What stands between the branch and a landed result is the
-owner's: his signature on the final statement, his signoff on a change to a
-standing rule (section 6), and the kernel replay run outside the sandbox
-(section 5).
+of each finding. Since this report was written the result has landed: the
+user signed the final statement and accepted the rule change of section 6
+on 2026-11-10 (docs/decisions.md; main at `308732b2`), and ran the kernel
+replay of section 5 on 2026-11-11, which the default kernel accepts.
 
 ## 1. What is proved
 
@@ -189,6 +189,15 @@ modules (which the build of the first row recompiled).
 | Kernel replay, diagnostic inside the sandbox | `lake check --from-export=… --inadvisably-no-sandbox` | exit 0 in about 3 minutes: "Lean default kernel accepts the solution", axioms `propext`, `Quot.sound`, `Classical.choice`. Not trustworthy by its own banner (sandbox disabled); it needed `/usr/bin` appended to `PATH` for `git` |
 
 The gate proper is the same replay run by the owner outside the sandbox.
+The user ran it on 2026-11-11 from the landed commit `308732b2`: `C2Bridge`
+built immediately before the export (130 jobs), the export of `C2Headline`
+and `C2Bridge` (1,095,410,711 bytes), and `lake check` with the checker's
+own sandbox on: "Lean default kernel accepts the solution", axioms
+`propext`, `Quot.sound`, `Classical.choice`. The check line that works
+through `scripts/in-bundle` is the one now in `binary/README.md`: it needs
+`/usr/bin` on the bundle's `PATH` and `COMPARATOR_BWRAP` set to the system
+`bwrap`, because the bundle stages its own copy, which the distribution's
+user-namespace profile does not cover.
 Two cautions from the landing review. The export reads whatever was last
 built, and the replay accepted a stale output in the reviewer's first try:
 build `C2Bridge` from the merged source immediately before exporting. And
@@ -283,7 +292,7 @@ window model in the package).
 1. The owner's signature on the final statement, with the one-word docstring
    correction of section 9 (D1) if he takes it.
 2. The owner's signoff on section 6, and on the merge.
-3. The kernel replay outside the sandbox (section 5).
+3. The kernel replay outside the sandbox (section 5): done, accepted.
 4. The bridge's row in the register lags when `ReplayWindow` S2 lags; the
    bridge gate prints the commits at every claim point.
 5. The tests that the ten Kraken patches carry are compiled by no gate; they
