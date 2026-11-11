@@ -133,8 +133,9 @@ the table, the address bytes, a non-NULL registered peer, the `node_cache`
 word, the stack window apart from every peer object, and `frameReady`: ABI
 return word, mapped stack, valid coverage state, capacity, direction flag,
 and the separations of heap, stack, buffer, metadata and preemption count)
-and `lookupReady`. `Initial` assumes `emptyTable` and the mirror's three
-allocation sites armed. The semantic base is Kraken at the ten-patch pin
+and `lookupReady`. `Initial` assumes `emptyTable`, the mirror's three
+allocation sites armed, and a pending record list of allocation records
+for those sites only. The semantic base is Kraken at the ten-patch pin
 `96d48487` and the trust declarations of `binary/TrustBase.lean`.
 
 ## 3. What is not claimed, and what is accepted knowingly
@@ -148,7 +149,14 @@ From the final statement (its sections 7 and 8) and the statement review:
    outside: a `wg set` or `wg setconf` that creates its peers and gives
    them allowed addresses in one message is covered for its first peer
    only. A later result on removal or the dump replaces this one; it cannot
-   extend it.
+   extend it. The world is closed on the mirror's side too: `Initial` and
+   the relation the proof exhibits require the mirror to be armed at the
+   three allocation sites and its whole pending record list to consist of
+   allocation records for those sites (`StatementC1Headline.lean:159-162`).
+   So the headline is silent about a mirror world with any other hidden
+   record pending, at the empty table or later, as in a differential run,
+   and about an unarmed mirror. The tests, the witness and the capture's
+   checker use constructed worlds with allocation records only.
 2. **Nothing is claimed of the kernel's allocator.** The result is about
    the six WireGuard functions against any code at the two service
    addresses that meets the contract. The image's allocator is not shown to
