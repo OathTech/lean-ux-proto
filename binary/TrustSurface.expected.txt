@@ -1589,6 +1589,7 @@ Binary.RandomService.return_recorded : ∀ (fetch : Int64 → Option.{0} Binary.
 Binary.C2.exits_cleanly : Binary.C2.ExitsCleanly
 Binary.C2.refines : Binary.C2.Refines
 Binary.C2.replay_witness : Binary.C2.ReplayWitness
+Binary.Statements.C1.Proof.signed : Binary.Statements.C1.Signed
 def Binary.Pair.Allowedips.NodeInit.EntryWrites : Binary.Pair.Allowedips.Names → MachineData → Nat → BitVec 64 → Prop :=
 fun names s base a =>
   Binary.InRange (BitVec.ofNat 64 base) 72 a ∨
@@ -4188,6 +4189,813 @@ def Binary.C2.windowOf : Leanux.WGWorld → Leanux.WG.KeypairId → Option.{0} L
 fun world id =>
   Option.map.{0, 0} (fun x => x.receivingCounter)
     (Option.bind.{0, 0} world.dev fun d => Std.TreeMap.get?.{0, 0} d.keypairs id)
+structure Binary.Statements.C1.Layout : Type
+number of parameters: 0
+fields:
+  Binary.Statements.C1.Layout.table : Nat
+  Binary.Statements.C1.Layout.peers : List.{0} (Prod.{0, 0} Leanux.WG.PeerId Nat)
+  Binary.Statements.C1.Layout.arena : List.{0} Binary.Pair.Span
+  Binary.Statements.C1.Layout.cache : Nat
+constructor:
+  Binary.Statements.C1.Layout.mk (table : Nat) (peers : List.{0} (Prod.{0, 0} Leanux.WG.PeerId Nat))
+    (arena : List.{0} Binary.Pair.Span) (cache : Nat) : Binary.Statements.C1.Layout
+def Binary.Statements.C1.Layout.fixed : Binary.Statements.C1.Layout → List.{0} Binary.Pair.Span :=
+fun L =>
+  HAppend.hAppend.{0, 0, 0}
+    (List.map.{0, 0}
+      (fun x =>
+        match x with
+        | Prod.mk.{0, 0} offset size => Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} L.table offset) size)
+      Binary.Pair.Allowedips.tableFields)
+    (List.flatMap.{0, 0}
+      (fun x =>
+        match x with
+        | Prod.mk.{0, 0} fst a =>
+          List.map.{0, 0}
+            (fun x =>
+              match x with
+              | Prod.mk.{0, 0} offset size => Prod.mk.{0, 0} (HAdd.hAdd.{0, 0, 0} a offset) size)
+            (Binary.Pair.Allowedips.peerFields Binary.Pair.Allowedips.Root.nodeOffsets))
+      L.peers)
+def Binary.Statements.C1.Layout.heap : Binary.Statements.C1.Layout → List.{0} Binary.Pair.Span :=
+fun L => HAppend.hAppend.{0, 0, 0} L.fixed L.arena
+def Binary.Statements.C1.Layout.Arena : Binary.Statements.C1.Layout → BitVec 64 → Prop :=
+fun L a => Exists.{1} fun span => Membership.mem.{0, 0} L.arena span ∧ span.contains a
+def Binary.Statements.C1.Layout.Heap : Binary.Statements.C1.Layout → BitVec 64 → Prop :=
+fun L a => Exists.{1} fun span => Membership.mem.{0, 0} L.heap span ∧ span.contains a
+def Binary.Statements.C1.allocEntry : Int64 :=
+Int64.ofNat 18446744071580511520
+def Binary.Statements.C1.freeEntry : Int64 :=
+Int64.ofNat 18446744071580523280
+def Binary.Statements.C1.cacheWord : Nat :=
+18446744071595474528
+def Binary.Statements.C1.allocSites : List.{0} (Prod.{0, 0} Nat Nat) :=
+List.cons.{0} (Prod.mk.{0, 0} 18446744071582649604 78)
+  (List.cons.{0} (Prod.mk.{0, 0} 18446744071582649938 79)
+    (List.cons.{0} (Prod.mk.{0, 0} 18446744071582650354 77) List.nil.{0}))
+def Binary.Statements.C1.freeSite : Nat :=
+18446744071582650962
+def Binary.Statements.C1.nodeSize : Nat :=
+72
+structure Binary.Statements.C1.Allocator : Type
+number of parameters: 0
+fields:
+  Binary.Statements.C1.Allocator.Idle : Mem 64 → List.{0} Nat → List.{0} Leanux.HiddenRecord → Prop
+  Binary.Statements.C1.Allocator.depth : Nat
+constructor:
+  Binary.Statements.C1.Allocator.mk (Idle : Mem 64 → List.{0} Nat → List.{0} Leanux.HiddenRecord → Prop) (depth : Nat) :
+    Binary.Statements.C1.Allocator
+def Binary.Statements.C1.Scratch : MachineState → Nat → BitVec 64 → Prop :=
+fun s depth => Binary.InRange (HSub.hSub.{0, 0, 0} s.data.regs.rsp.toBitVec (BitVec.ofNat 64 depth)) depth
+def Binary.Statements.C1.Kept : List.{0} Nat → BitVec 64 → Prop :=
+fun kept a =>
+  Exists.{1} fun object =>
+    Membership.mem.{0, 0} kept object ∧ Binary.InRange (BitVec.ofNat 64 object) Binary.Statements.C1.nodeSize a
+def Binary.Statements.C1.ServiceWrites : Binary.Statements.C1.Layout →
+  Binary.Statements.C1.Allocator → Binary.CommonBitsCoverage.Context → MachineState → List.{0} Nat → BitVec 64 → Prop :=
+fun L A c s kept a =>
+  Binary.Statements.C1.Scratch s A.depth a ∨ L.Arena a ∧ ¬Binary.Statements.C1.Kept kept a ∨ c.writes a
+structure Binary.Statements.C1.Separated (L : Binary.Statements.C1.Layout) (A : Binary.Statements.C1.Allocator)
+  (c : Binary.CommonBitsCoverage.Context) (s : MachineState) : Prop
+number of parameters: 4
+fields:
+  Binary.Statements.C1.Separated.stackArena : ∀ (a : BitVec 64),
+      Binary.Statements.C1.Scratch s A.depth a ∨ Binary.InRange s.data.regs.rsp.toBitVec 8 a → ¬L.Arena a
+  Binary.Statements.C1.Separated.stackCoverage : ∀ (a : BitVec 64),
+      Binary.Statements.C1.Scratch s A.depth a ∨ Binary.InRange s.data.regs.rsp.toBitVec 8 a → ¬c.bytes a
+  Binary.Statements.C1.Separated.coverageArena : ∀ (a : BitVec 64), c.bytes a → ¬L.Arena a
+  Binary.Statements.C1.Separated.bufferMetadata : ∀ (a : BitVec 64),
+      c.writes a → ¬c.metadataBytes a ∧ ¬Binary.InRange Binary.TrustBase.preemptCountAddress 4 a
+constructor:
+  Binary.Statements.C1.Separated.mk {L : Binary.Statements.C1.Layout} {A : Binary.Statements.C1.Allocator}
+    {c : Binary.CommonBitsCoverage.Context} {s : MachineState}
+    (stackArena :
+      ∀ (a : BitVec 64),
+        Binary.Statements.C1.Scratch s A.depth a ∨ Binary.InRange s.data.regs.rsp.toBitVec 8 a → ¬L.Arena a)
+    (stackCoverage :
+      ∀ (a : BitVec 64),
+        Binary.Statements.C1.Scratch s A.depth a ∨ Binary.InRange s.data.regs.rsp.toBitVec 8 a → ¬c.bytes a)
+    (coverageArena : ∀ (a : BitVec 64), c.bytes a → ¬L.Arena a)
+    (bufferMetadata :
+      ∀ (a : BitVec 64), c.writes a → ¬c.metadataBytes a ∧ ¬Binary.InRange Binary.TrustBase.preemptCountAddress 4 a) :
+    Binary.Statements.C1.Separated L A c s
+structure Binary.Statements.C1.ServiceReady (L : Binary.Statements.C1.Layout) (A : Binary.Statements.C1.Allocator)
+  (c : Binary.CommonBitsCoverage.Context) (s : MachineState) : Prop
+number of parameters: 4
+fields:
+  Binary.Statements.C1.ServiceReady.coverage : c.At s.data.dmem
+  Binary.Statements.C1.ServiceReady.capacity : c.Needed → LT.lt.{0} 0 c.coverage.capacity.toNat
+  Binary.Statements.C1.ServiceReady.forward : Eq.{1} (getElem.{0, 0, 0} s.data.system.bits 10 ⋯) false
+  Binary.Statements.C1.ServiceReady.stackMapped : ∀ (i : Nat),
+      LT.lt.{0} i A.depth →
+        Eq.{1}
+          (Option.isSome.{0}
+            (Std.ExtHashMap.get?.{0, 0} s.data.dmem
+              (HAdd.hAdd.{0, 0, 0} (HSub.hSub.{0, 0, 0} s.data.regs.rsp.toBitVec (BitVec.ofNat 64 A.depth))
+                (BitVec.ofNat 64 i))))
+          true
+  Binary.Statements.C1.ServiceReady.separated : Binary.Statements.C1.Separated L A c s
+constructor:
+  Binary.Statements.C1.ServiceReady.mk {L : Binary.Statements.C1.Layout} {A : Binary.Statements.C1.Allocator}
+    {c : Binary.CommonBitsCoverage.Context} {s : MachineState} (coverage : c.At s.data.dmem)
+    (capacity : c.Needed → LT.lt.{0} 0 c.coverage.capacity.toNat)
+    (forward : Eq.{1} (getElem.{0, 0, 0} s.data.system.bits 10 ⋯) false)
+    (stackMapped :
+      ∀ (i : Nat),
+        LT.lt.{0} i A.depth →
+          Eq.{1}
+            (Option.isSome.{0}
+              (Std.ExtHashMap.get?.{0, 0} s.data.dmem
+                (HAdd.hAdd.{0, 0, 0} (HSub.hSub.{0, 0, 0} s.data.regs.rsp.toBitVec (BitVec.ofNat 64 A.depth))
+                  (BitVec.ofNat 64 i))))
+            true)
+    (separated : Binary.Statements.C1.Separated L A c s) : Binary.Statements.C1.ServiceReady L A c s
+def Binary.Statements.C1.AllocResult : Binary.Statements.C1.Layout →
+  Binary.Statements.C1.Allocator →
+    List.{0} Nat → Leanux.HiddenRecord → List.{0} Leanux.HiddenRecord → MachineState → Prop :=
+fun L A live record stream t =>
+  have a := t.data.regs.rax.toNat;
+  (Eq.{1} (List.head?.{0} record.bytes) (some.{0} 0) → Eq.{1} a 0 ∧ A.Idle t.data.dmem live stream) ∧
+    (Eq.{1} (List.head?.{0} record.bytes) (some.{0} 1) →
+      Ne.{1} a 0 ∧
+        Eq.{1} (HMod.hMod.{0, 0, 0} a 8) 0 ∧
+          LT.lt.{0} (HAdd.hAdd.{0, 0, 0} a Binary.Statements.C1.nodeSize) (HPow.hPow.{0, 0, 0} 2 64) ∧
+            (Exists.{1} fun span =>
+                Membership.mem.{0, 0} L.arena span ∧
+                  LE.le.{0} (Prod.fst.{0, 0} span) a ∧
+                    LE.le.{0} (HAdd.hAdd.{0, 0, 0} a Binary.Statements.C1.nodeSize)
+                      (HAdd.hAdd.{0, 0, 0} (Prod.fst.{0, 0} span) (Prod.snd.{0, 0} span))) ∧
+              (∀ (other : Nat),
+                  Membership.mem.{0, 0} live other →
+                    Eq.{1}
+                      (Binary.Pair.disjointRanges a Binary.Statements.C1.nodeSize other Binary.Statements.C1.nodeSize)
+                      true) ∧
+                Eq.{1} (readNat t a Binary.Statements.C1.nodeSize) (Except.ok.{0, 0} 0) ∧
+                  A.Idle t.data.dmem (HAppend.hAppend.{0, 0, 0} live (List.cons.{0} a List.nil.{0})) stream)
+structure Binary.Statements.C1.AllocatorContract (fetch : Int64 → Option.{0} Binary.Decoded)
+  (L : Binary.Statements.C1.Layout) (A : Binary.Statements.C1.Allocator) : Prop
+number of parameters: 3
+fields:
+  Binary.Statements.C1.AllocatorContract.frame : ∀ (m m' : Mem 64) (live : List.{0} Nat)
+      (stream : List.{0} Leanux.HiddenRecord),
+      A.Idle m live stream →
+        (∀ (a : BitVec 64),
+            L.Arena a →
+              ¬Binary.Statements.C1.Kept live a →
+                Eq.{1} (Std.ExtHashMap.get?.{0, 0} m a) (Std.ExtHashMap.get?.{0, 0} m' a)) →
+          A.Idle m' live stream
+  Binary.Statements.C1.AllocatorContract.alloc : ∀ (c : Binary.CommonBitsCoverage.Context) (s : MachineState)
+      (ra : UInt64) (live : List.{0} Nat) (record : Leanux.HiddenRecord) (stream : List.{0} Leanux.HiddenRecord),
+      Eq.{1} s.pc Binary.Statements.C1.allocEntry →
+        Binary.TrustBase.EntryFrame s ra →
+          Binary.Statements.C1.ServiceReady L A c s →
+            Eq.{1} s.data.regs.rdi.toNat L.cache →
+              Eq.{1} (s.data.regs.get (Reg.low Reg64.rsi Width.W32)) 3520#32 →
+                Membership.mem.{0, 0} Binary.Statements.C1.allocSites (Prod.mk.{0, 0} ra.toNat record.site) →
+                  A.Idle s.data.dmem live (List.cons.{0} record stream) →
+                    Eventually (Binary.instructionStep fetch)
+                      (fun t =>
+                        Binary.TrustBase.Returned s t ra ∧
+                          Binary.EqualOutside (Binary.Statements.C1.ServiceWrites L A c s live) s.data.dmem
+                              t.data.dmem ∧
+                            c.At t.data.dmem ∧ Binary.Statements.C1.AllocResult L A live record stream t)
+                      s
+  Binary.Statements.C1.AllocatorContract.free : ∀ (c : Binary.CommonBitsCoverage.Context) (s : MachineState)
+      (ra : UInt64) (live : List.{0} Nat) (stream : List.{0} Leanux.HiddenRecord),
+      Eq.{1} s.pc Binary.Statements.C1.freeEntry →
+        Binary.TrustBase.EntryFrame s ra →
+          Binary.Statements.C1.ServiceReady L A c s →
+            Eq.{1} ra.toNat Binary.Statements.C1.freeSite →
+              Eq.{1} s.data.regs.rdi.toNat L.cache →
+                Membership.mem.{0, 0} live s.data.regs.rsi.toNat →
+                  A.Idle s.data.dmem live stream →
+                    Eventually (Binary.instructionStep fetch)
+                      (fun t =>
+                        Binary.TrustBase.Returned s t ra ∧
+                          Binary.EqualOutside
+                              (Binary.Statements.C1.ServiceWrites L A c s (List.erase.{0} live s.data.regs.rsi.toNat))
+                              s.data.dmem t.data.dmem ∧
+                            c.At t.data.dmem ∧ A.Idle t.data.dmem (List.erase.{0} live s.data.regs.rsi.toNat) stream)
+                      s
+constructor:
+  Binary.Statements.C1.AllocatorContract.mk {fetch : Int64 → Option.{0} Binary.Decoded}
+    {L : Binary.Statements.C1.Layout} {A : Binary.Statements.C1.Allocator}
+    (frame :
+      ∀ (m m' : Mem 64) (live : List.{0} Nat) (stream : List.{0} Leanux.HiddenRecord),
+        A.Idle m live stream →
+          (∀ (a : BitVec 64),
+              L.Arena a →
+                ¬Binary.Statements.C1.Kept live a →
+                  Eq.{1} (Std.ExtHashMap.get?.{0, 0} m a) (Std.ExtHashMap.get?.{0, 0} m' a)) →
+            A.Idle m' live stream)
+    (alloc :
+      ∀ (c : Binary.CommonBitsCoverage.Context) (s : MachineState) (ra : UInt64) (live : List.{0} Nat)
+        (record : Leanux.HiddenRecord) (stream : List.{0} Leanux.HiddenRecord),
+        Eq.{1} s.pc Binary.Statements.C1.allocEntry →
+          Binary.TrustBase.EntryFrame s ra →
+            Binary.Statements.C1.ServiceReady L A c s →
+              Eq.{1} s.data.regs.rdi.toNat L.cache →
+                Eq.{1} (s.data.regs.get (Reg.low Reg64.rsi Width.W32)) 3520#32 →
+                  Membership.mem.{0, 0} Binary.Statements.C1.allocSites (Prod.mk.{0, 0} ra.toNat record.site) →
+                    A.Idle s.data.dmem live (List.cons.{0} record stream) →
+                      Eventually (Binary.instructionStep fetch)
+                        (fun t =>
+                          Binary.TrustBase.Returned s t ra ∧
+                            Binary.EqualOutside (Binary.Statements.C1.ServiceWrites L A c s live) s.data.dmem
+                                t.data.dmem ∧
+                              c.At t.data.dmem ∧ Binary.Statements.C1.AllocResult L A live record stream t)
+                        s)
+    (free :
+      ∀ (c : Binary.CommonBitsCoverage.Context) (s : MachineState) (ra : UInt64) (live : List.{0} Nat)
+        (stream : List.{0} Leanux.HiddenRecord),
+        Eq.{1} s.pc Binary.Statements.C1.freeEntry →
+          Binary.TrustBase.EntryFrame s ra →
+            Binary.Statements.C1.ServiceReady L A c s →
+              Eq.{1} ra.toNat Binary.Statements.C1.freeSite →
+                Eq.{1} s.data.regs.rdi.toNat L.cache →
+                  Membership.mem.{0, 0} live s.data.regs.rsi.toNat →
+                    A.Idle s.data.dmem live stream →
+                      Eventually (Binary.instructionStep fetch)
+                        (fun t =>
+                          Binary.TrustBase.Returned s t ra ∧
+                            Binary.EqualOutside
+                                (Binary.Statements.C1.ServiceWrites L A c s (List.erase.{0} live s.data.regs.rsi.toNat))
+                                s.data.dmem t.data.dmem ∧
+                              c.At t.data.dmem ∧ A.Idle t.data.dmem (List.erase.{0} live s.data.regs.rsi.toNat) stream)
+                        s) :
+    Binary.Statements.C1.AllocatorContract fetch L A
+structure Binary.Statements.C1.Premises (fetch : Int64 → Option.{0} Binary.Decoded) (L : Binary.Statements.C1.Layout)
+  (A : Binary.Statements.C1.Allocator) : Prop
+number of parameters: 3
+fields:
+  Binary.Statements.C1.Premises.insertion : Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch
+  Binary.Statements.C1.Premises.lookup : Binary.TrustBase.AllowedipsDecoderAgreement fetch
+  Binary.Statements.C1.Premises.peer : Binary.TrustBase.AnchoredDecoderAgreement fetch
+  Binary.Statements.C1.Premises.tracePc : Binary.TrustBase.TracePcContract fetch
+  Binary.Statements.C1.Premises.callbacks : Binary.CommonBits.Callbacks fetch
+  Binary.Statements.C1.Premises.cmp1 : Binary.TrustBase.AllowedipsTraceCmp1Contract fetch
+  Binary.Statements.C1.Premises.constCmp4 : Binary.TrustBase.AllowedipsTraceConstCmp4Contract fetch
+  Binary.Statements.C1.Premises.bhEnable : Binary.TrustBase.AllowedipsBhEnableContract fetch
+  Binary.Statements.C1.Premises.allocator : Binary.Statements.C1.AllocatorContract fetch L A
+constructor:
+  Binary.Statements.C1.Premises.mk {fetch : Int64 → Option.{0} Binary.Decoded} {L : Binary.Statements.C1.Layout}
+    {A : Binary.Statements.C1.Allocator} (insertion : Binary.TrustBase.AllowedipsMutationDecoderAgreement fetch)
+    (lookup : Binary.TrustBase.AllowedipsDecoderAgreement fetch)
+    (peer : Binary.TrustBase.AnchoredDecoderAgreement fetch) (tracePc : Binary.TrustBase.TracePcContract fetch)
+    (callbacks : Binary.CommonBits.Callbacks fetch) (cmp1 : Binary.TrustBase.AllowedipsTraceCmp1Contract fetch)
+    (constCmp4 : Binary.TrustBase.AllowedipsTraceConstCmp4Contract fetch)
+    (bhEnable : Binary.TrustBase.AllowedipsBhEnableContract fetch)
+    (allocator : Binary.Statements.C1.AllocatorContract fetch L A) : Binary.Statements.C1.Premises fetch L A
+def Binary.Statements.C1.insertWindow : Nat :=
+200
+def Binary.Statements.C1.lookupWindow : Nat :=
+144
+def Binary.Statements.C1.callerSpans : MachineState → Nat → Binary.Pair.Span → Bool → List.{0} Binary.Pair.Span :=
+fun s window query cache =>
+  HAppend.hAppend.{0, 0, 0}
+    (List.cons.{0}
+      (Prod.mk.{0, 0} (HSub.hSub.{0, 0, 0} s.data.regs.rsp.toBitVec (BitVec.ofNat 64 window)).toNat
+        (HAdd.hAdd.{0, 0, 0} window 8))
+      (List.cons.{0} query List.nil.{0}))
+    (ite.{1} (Eq.{1} cache true) (List.cons.{0} (Prod.mk.{0, 0} Binary.Statements.C1.cacheWord 8) List.nil.{0})
+      List.nil.{0})
+def Binary.Statements.C1.frameReady : Binary.Statements.C1.Layout →
+  Binary.CommonBitsCoverage.Context →
+    MachineState → UInt64 → Nat → Binary.Pair.Span → Bool → Bool → Except.{0, 0} String Unit :=
+fun L c s ra window query cache bh => do
+  Binary.Pair.require
+      (BEq.beq.{0} (HMod.hMod.{0, 0, 0} s.data.regs.rsp.toNat 8) 0 &&
+        BEq.beq.{0} (Mem.loadInt s.data.dmem s.data.regs.rsp.toBitVec 8) (some.{0} ↑ra.toNat))
+      "c1.abi-return"
+  Binary.Pair.require
+      (List.all.{0} (List.range window) fun i =>
+        Option.isSome.{0}
+          (Std.ExtHashMap.get?.{0, 0} s.data.dmem
+            (HSub.hSub.{0, 0, 0} s.data.regs.rsp.toBitVec (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} i 1)))))
+      "c1.stack-mapping"
+  Binary.Pair.require (Binary.Pair.Trie.coverageCheck c s.data.dmem) "c1.coverage"
+  have __do_jp : Unit → Except.{0, 0} String Unit := fun __r =>
+    have __do_jp := fun __r =>
+      have preempt := List.cons.{0} (Prod.mk.{0, 0} Binary.TrustBase.preemptCountAddress.toNat 4) List.nil.{0};
+      have own := Binary.Statements.C1.callerSpans s window query cache;
+      do
+      Binary.Pair.require
+          (Binary.Pair.spansApart L.heap
+            (HAppend.hAppend.{0, 0, 0} (HAppend.hAppend.{0, 0, 0} own (Binary.Pair.Trie.callServices c))
+              (Binary.Pair.Trie.callBuffers c)))
+          "c1.heap-separation"
+      Binary.Pair.require
+          (Binary.Pair.spansApart (Binary.Pair.Trie.callServices c) (List.cons.{0} (List.head!.{0} own) List.nil.{0}))
+          "c1.service-stack"
+      Binary.Pair.require
+          (Binary.Pair.spansApart (Binary.Pair.Trie.callBuffers c)
+            (HAppend.hAppend.{0, 0, 0} (HAppend.hAppend.{0, 0, 0} own (Binary.Pair.Trie.callMetadata c)) preempt))
+          "c1.buffer-separation"
+      Binary.Pair.require
+          (Binary.Pair.spansApart
+            (HAppend.hAppend.{0, 0, 0}
+              (HAppend.hAppend.{0, 0, 0} (List.cons.{0} (List.head!.{0} own) List.nil.{0})
+                (Binary.Pair.Trie.callMetadata c))
+              (Binary.Pair.Trie.callHeaders c))
+            preempt)
+          "c1.preempt-separation"
+      Binary.Pair.require
+          (Binary.Pair.spansApart
+            (List.cons.{0}
+              (Prod.mk.{0, 0} (HSub.hSub.{0, 0, 0} s.data.regs.rsp.toBitVec (BitVec.ofNat 64 window)).toNat window)
+              List.nil.{0})
+            (List.tail!.{0} own))
+          "c1.caller-separation";
+    ite.{1} (Eq.{1} bh true)
+      (do
+        Binary.Pair.require
+            (Binary.Pair.Trie.coverageDataCheck { coverage := c.coverage, preempt := HAdd.hAdd.{0, 0, 0} c.preempt 512 }
+              s.data.dmem)
+            "c1.coverage-bh"
+        Binary.Pair.require (BEq.beq.{0} (HAnd.hAnd.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} c.preempt 512) 983040) 0)
+            "c1.hardirq"
+        let __r ←
+          Binary.Pair.require
+              (ite.{1} (Binary.TrustBase.LookupPendingRead c.preempt)
+                (BEq.beq.{0} (Mem.loadInt s.data.dmem Binary.TrustBase.softirqPendingAddress 2) (some.{0} 0)) true)
+              "c1.pending-softirq"
+        __do_jp __r)
+      (__do_jp ())
+  ite.{1} (Eq.{1} cache true)
+      (do
+        Binary.Pair.require (ite.{1} c.Needed (decide (LT.lt.{0} 0 c.coverage.capacity.toNat)) true)
+            "c1.coverage-capacity"
+        let __r ←
+          Binary.Pair.require
+              (BEq.beq.{0} (getElem.{0, 0, 0} s.data.system.bits 10 Binary.Statements.C1.frameReady._proof_4) false)
+              "c1.direction-flag"
+        __do_jp __r)
+      (__do_jp ())
+def Binary.Statements.C1.insertReady : Binary.Statements.C1.Layout →
+  Binary.Statements.C1.Allocator →
+    Binary.CommonBitsCoverage.Context → MachineState → Nat → Nat → Nat → Nat → UInt64 → Except.{0, 0} String Unit :=
+fun L A c s family key cidr pid ra => do
+  Binary.Pair.require (BEq.beq.{0} family 4 || BEq.beq.{0} family 6) "c1.family"
+  have width : Nat := ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) 32 128
+  Binary.Pair.require
+      (BEq.beq.{0} s.pc
+        (ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) Binary.AllowedipsMutationImage.Insert4.entry
+          Binary.AllowedipsMutationImage.Insert6.entry))
+      "c1.insert-entry"
+  Binary.Pair.require (BEq.beq.{0} s.data.regs.rdi.toNat L.table) "c1.insert-table"
+  let peer ← Binary.Pair.Trie.address L.peers (some.{0} pid)
+  Binary.Pair.require (bne.{0} peer 0 && BEq.beq.{0} s.data.regs.rcx.toNat peer) "c1.insert-peer"
+  Binary.Pair.require (BEq.beq.{0} (HMod.hMod.{0, 0, 0} s.data.regs.rdx.toNat 256) cidr) "c1.insert-cidr"
+  Binary.Pair.require (Binary.Pair.Trie.networkKeyCheck s.data.dmem s.data.regs.rsi.toBitVec width key)
+      "c1.insert-address"
+  let __do_lift ← readNat s Binary.Statements.C1.cacheWord 8
+  Binary.Pair.require (BEq.beq.{0} __do_lift L.cache) "c1.node-cache"
+  Binary.Pair.require
+      (Binary.Pair.spansApart
+        (List.cons.{0}
+          (Prod.mk.{0, 0}
+            (HSub.hSub.{0, 0, 0} s.data.regs.rsp.toBitVec
+                (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} Binary.Statements.C1.insertWindow A.depth))).toNat
+            (HAdd.hAdd.{0, 0, 0} Binary.Statements.C1.insertWindow A.depth))
+          List.nil.{0})
+        (List.map.{0, 0}
+          (fun x =>
+            match x with
+            | Prod.mk.{0, 0} fst a => Prod.mk.{0, 0} a Binary.Layouts.peerSize)
+          L.peers))
+      "c1.stack-peers"
+  Binary.Statements.C1.frameReady L c s ra (HAdd.hAdd.{0, 0, 0} Binary.Statements.C1.insertWindow A.depth)
+      (Prod.mk.{0, 0} s.data.regs.rsi.toNat (HDiv.hDiv.{0, 0, 0} width 8)) true false
+def Binary.Statements.C1.lookupReady : Binary.Statements.C1.Layout →
+  Binary.CommonBitsCoverage.Context → MachineState → Nat → Nat → UInt64 → Except.{0, 0} String Unit :=
+fun L c s family key ra => do
+  Binary.Pair.require (BEq.beq.{0} family 4 || BEq.beq.{0} family 6) "c1.family"
+  have width : Nat := ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) 32 128
+  have slot : Nat :=
+    HAdd.hAdd.{0, 0, 0} L.table
+      (ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) Binary.AllowedipsMutationLayout.root4
+        Binary.AllowedipsMutationLayout.root6)
+  Binary.Pair.require (BEq.beq.{0} s.pc Binary.AllowedipsImage.Lookup.entry) "c1.lookup-entry"
+  let __do_lift ← readNat s slot 8
+  Binary.Pair.require (BEq.beq.{0} s.data.regs.rdi.toNat __do_lift) "c1.lookup-root"
+  Binary.Pair.require (BEq.beq.{0} s.data.regs.rsi.toNat width) "c1.lookup-width"
+  Binary.Pair.require (Binary.Pair.Trie.networkKeyCheck s.data.dmem s.data.regs.rdx.toBitVec width key)
+      "c1.lookup-address"
+  Binary.Statements.C1.frameReady L c s ra Binary.Statements.C1.lookupWindow
+      (Prod.mk.{0, 0} s.data.regs.rdx.toNat (HDiv.hDiv.{0, 0, 0} width 8)) false true
+def Binary.Statements.C1.armed : Leanux.World → Bool :=
+fun w =>
+  List.all.{0} (List.cons.{0} "allocNode190" (List.cons.{0} "allocNode205" (List.cons.{0} "allocNode234" List.nil.{0})))
+    (List.contains.{0} w.ambient.allocArmed)
+def Binary.Statements.C1.emptyTable : Binary.Statements.C1.Layout →
+  Mem 64 → Leanux.WG.Device → Except.{0, 0} String Unit :=
+fun L m d =>
+  have s := { data := { dmem := m }, pc := 0 };
+  do
+  Binary.Pair.require (decide (LT.lt.{0} 0 L.table) && BEq.beq.{0} (HMod.hMod.{0, 0, 0} L.table 8) 0) "c1.table-address"
+  let __do_lift ← readNat s (HAdd.hAdd.{0, 0, 0} L.table Binary.AllowedipsMutationLayout.root4) 8
+  let __do_lift_1 ← readNat s (HAdd.hAdd.{0, 0, 0} L.table Binary.AllowedipsMutationLayout.root6) 8
+  Binary.Pair.require (BEq.beq.{0} __do_lift 0 && BEq.beq.{0} __do_lift_1 0) "c1.roots"
+  let __do_lift ← readNat s (HAdd.hAdd.{0, 0, 0} L.table Binary.AllowedipsMutationLayout.seq) 8
+  Binary.Pair.require (BEq.beq.{0} __do_lift d.peerAllowedips.seq.toNat) "c1.seq"
+  Binary.Pair.require
+      (Option.isNone.{0} d.peerAllowedips.root4 && Option.isNone.{0} d.peerAllowedips.root6 &&
+        Std.TreeMap.isEmpty.{0, 0} d.nodes)
+      "c1.mirror-empty"
+  Binary.Pair.require
+      (BEq.beq.{0} (List.map.{0, 0} (fun x => Prod.fst.{0, 0} x) L.peers)
+        (List.map.{0, 0} (fun x => Prod.fst.{0, 0} x) (Std.TreeMap.toList.{0, 0} d.peers)))
+      "c1.peer-identities"
+  forIn.{0, 0, 0, 0} L.peers PUnit.unit.{1} fun x __s =>
+      match x with
+      | Prod.mk.{0, 0} id a =>
+        match Std.TreeMap.get?.{0, 0} d.peers id with
+        | some.{0} p =>
+          have head := HAdd.hAdd.{0, 0, 0} a Binary.AllowedipsMutationLayout.allowedips_list;
+          do
+          Binary.Pair.require
+              (decide (LT.lt.{0} 0 a) && BEq.beq.{0} (HMod.hMod.{0, 0, 0} a 8) 0 && List.isEmpty.{0} p.allowedipsList)
+              "c1.peer-address"
+          let __do_lift ← readNat s head 8
+          let __do_lift_2 ← readNat s (HAdd.hAdd.{0, 0, 0} head 8) 8
+          Binary.Pair.require (BEq.beq.{0} __do_lift head && BEq.beq.{0} __do_lift_2 head) "c1.peer-list"
+          let __do_lift ← readNat s (HAdd.hAdd.{0, 0, 0} a Binary.Pair.Allowedips.Root.nodeOffsets.peerRefcount) 4
+          Binary.Pair.require (BEq.beq.{0} __do_lift p.refcount) "c1.peer-refcount"
+          pure.{0, 0} (ForInStep.yield.{0} PUnit.unit.{1})
+        | x => do
+          throw.{0, 0, 0} "c1.peer"
+          pure.{0, 0} (ForInStep.yield.{0} PUnit.unit.{1})
+  have objects : List.{0} Binary.Pair.Span :=
+    HAppend.hAppend.{0, 0, 0}
+      (List.cons.{0} (Prod.mk.{0, 0} L.table Binary.AllowedipsMutationLayout.tableSize) List.nil.{0})
+      (List.map.{0, 0}
+        (fun x =>
+          match x with
+          | Prod.mk.{0, 0} fst a => Prod.mk.{0, 0} a Binary.Layouts.peerSize)
+        L.peers)
+  Binary.Pair.require
+      (List.all.{0} (List.zipIdx.{0} objects) fun x =>
+        match x with
+        | Prod.mk.{0, 0} (Prod.mk.{0, 0} a size) i =>
+          decide (LT.lt.{0} (HAdd.hAdd.{0, 0, 0} a size) (HPow.hPow.{0, 0, 0} 2 64)) &&
+            List.all.{0} (List.drop.{0} (HAdd.hAdd.{0, 0, 0} i 1) objects) fun x =>
+              match x with
+              | Prod.mk.{0, 0} b size' => Binary.Pair.disjointRanges a size b size')
+      "c1.object-overlap"
+  Binary.Pair.require (Binary.Pair.spansApart objects L.arena) "c1.arena-overlap"
+def Binary.Statements.C1.Signed : Prop :=
+Binary.Statements.C1.Headline ∧
+  Binary.Statements.C1.Witness ∧ Binary.Statements.C1.InsertThenLookup ∧ Binary.Statements.C1.FailedInsertInvisible
+def Binary.Statements.C1.Headline : Prop :=
+∀ (fetch : Int64 → Option.{0} Binary.Decoded) (L : Binary.Statements.C1.Layout) (A : Binary.Statements.C1.Allocator),
+  Binary.Statements.C1.Premises fetch L A →
+    Exists.{1} fun Inv =>
+      Binary.Statements.C1.Initial L A Inv ∧
+        Binary.Statements.C1.Framed L Inv ∧
+          Binary.Statements.C1.Referenced L Inv ∧
+            Binary.Statements.C1.InsertStep fetch L A Inv ∧ Binary.Statements.C1.LookupStep fetch L Inv
+def Binary.Statements.C1.Initial : Binary.Statements.C1.Layout →
+  Binary.Statements.C1.Allocator → (Leanux.World → Mem 64 → Prop) → Prop :=
+fun L A Inv =>
+  ∀ (w : Leanux.World) (d : Leanux.WG.Device) (m : Mem 64) (stream : List.{0} Leanux.HiddenRecord),
+    Eq.{1} w.wg.dev (some.{0} d) →
+      Eq.{1} (Binary.Statements.C1.armed w) true →
+        Eq.{1} w.ambient.hidden (some.{0} stream) →
+          (∀ (record : Leanux.HiddenRecord),
+              Membership.mem.{0, 0} stream record →
+                Membership.mem.{0, 0} (List.map.{0, 0} (fun x => Prod.snd.{0, 0} x) Binary.Statements.C1.allocSites)
+                  record.site) →
+            Eq.{1} (Binary.Statements.C1.emptyTable L m d) (Except.ok.{0, 0} ()) →
+              A.Idle m List.nil.{0} stream → Inv w m
+def Binary.Statements.C1.Framed : Binary.Statements.C1.Layout → (Leanux.World → Mem 64 → Prop) → Prop :=
+fun L Inv =>
+  ∀ (w : Leanux.World) (m m' : Mem 64),
+    Inv w m →
+      (∀ (a : BitVec 64), L.Heap a → Eq.{1} (Std.ExtHashMap.get?.{0, 0} m a) (Std.ExtHashMap.get?.{0, 0} m' a)) →
+        Inv w m'
+def Binary.Statements.C1.CountMoved : Binary.Statements.C1.Layout →
+  Leanux.WG.PeerId → Nat → Nat → Mem 64 → Mem 64 → Prop :=
+fun L pid before after m m' =>
+  Exists.{1} fun peer =>
+    Eq.{1} (Binary.Pair.Trie.address L.peers (some.{0} pid)) (Except.ok.{0, 0} peer) ∧
+      Eq.{1}
+          (readNat { data := { dmem := m }, pc := 0 }
+            (HAdd.hAdd.{0, 0, 0} peer Binary.Pair.Allowedips.Root.nodeOffsets.peerRefcount) 4)
+          (Except.ok.{0, 0} before) ∧
+        Eq.{1}
+            (readNat { data := { dmem := m' }, pc := 0 }
+              (HAdd.hAdd.{0, 0, 0} peer Binary.Pair.Allowedips.Root.nodeOffsets.peerRefcount) 4)
+            (Except.ok.{0, 0} after) ∧
+          ∀ (a : BitVec 64),
+            L.Heap a →
+              ¬Binary.InRange
+                    (BitVec.ofNat 64 (HAdd.hAdd.{0, 0, 0} peer Binary.Pair.Allowedips.Root.nodeOffsets.peerRefcount)) 4
+                    a →
+                Eq.{1} (Std.ExtHashMap.get?.{0, 0} m a) (Std.ExtHashMap.get?.{0, 0} m' a)
+def Binary.Statements.C1.Referenced : Binary.Statements.C1.Layout → (Leanux.World → Mem 64 → Prop) → Prop :=
+fun L Inv =>
+  ∀ (w w' : Leanux.World) (m m' : Mem 64) (pid : Leanux.WG.PeerId) (count : Nat),
+    Inv w m →
+      Eq.{1} (StateT.run.{0, 0} (Leanux.liftWG (Leanux.WG.peerGetMaybeZero (some.{0} pid))) w)
+              (Except.ok.{0, 0} (Prod.mk.{0, 0} (some.{0} pid) w')) ∧
+            Binary.Statements.C1.CountMoved L pid count (HAdd.hAdd.{0, 0, 0} count 1) m m' ∨
+          Eq.{1} (StateT.run.{0, 0} (Leanux.liftWG (Leanux.WG.peerPut (some.{0} pid))) w)
+              (Except.ok.{0, 0} (Prod.mk.{0, 0} () w')) ∧
+            LT.lt.{0} 1 count ∧ Binary.Statements.C1.CountMoved L pid count (HSub.hSub.{0, 0, 0} count 1) m m' →
+        Inv w' m'
+def Binary.Statements.C1.SeqAdvanced : Binary.Statements.C1.Layout → MachineState → MachineState → Prop :=
+fun L s t =>
+  Exists.{1} fun before =>
+    Eq.{1} (readNat s (HAdd.hAdd.{0, 0, 0} L.table Binary.AllowedipsMutationLayout.seq) 8) (Except.ok.{0, 0} before) ∧
+      Eq.{1} (readNat t (HAdd.hAdd.{0, 0, 0} L.table Binary.AllowedipsMutationLayout.seq) 8)
+        (Except.ok.{0, 0} (HMod.hMod.{0, 0, 0} (HAdd.hAdd.{0, 0, 0} before 1) (HPow.hPow.{0, 0, 0} 2 64)))
+def Binary.Statements.C1.InsertWrites : Binary.Statements.C1.Layout →
+  Binary.Statements.C1.Allocator → Binary.CommonBitsCoverage.Context → MachineState → BitVec 64 → Prop :=
+fun L A c s a =>
+  Binary.Statements.C1.Scratch s (HAdd.hAdd.{0, 0, 0} Binary.Statements.C1.insertWindow A.depth) a ∨
+    c.writes a ∨ L.Heap a
+def Binary.Statements.C1.LookupWrites : Binary.Statements.C1.Layout →
+  Binary.CommonBitsCoverage.Context → MachineState → BitVec 64 → Prop :=
+fun L c s a => Binary.AllowedipsEntry.TotalWrites s c.coverage c.preempt a ∨ L.Heap a
+def Binary.Statements.C1.InsertStep : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.Statements.C1.Layout → Binary.Statements.C1.Allocator → (Leanux.World → Mem 64 → Prop) → Prop :=
+fun fetch L A Inv =>
+  ∀ (c : Binary.CommonBitsCoverage.Context) (s : MachineState) (w w' : Leanux.World) (family key cidr pid : Nat)
+    (ra : UInt64) (answer : Int),
+    Inv w s.data.dmem →
+      Eq.{1} (Binary.Statements.C1.insertReady L A c s family key cidr pid ra) (Except.ok.{0, 0} ()) →
+        Eq.{1} (StateT.run.{0, 0} (Leanux.liftWG (Leanux.WG.insert family key cidr pid)) w)
+            (Except.ok.{0, 0} (Prod.mk.{0, 0} answer w')) →
+          Eventually (Binary.instructionStep fetch)
+            (fun t =>
+              Binary.TrustBase.Returned s t ra ∧
+                Eq.{1} (t.data.regs.get (Reg.low Reg64.rax Width.W32)) (BitVec.ofInt 32 answer) ∧
+                  Binary.Statements.C1.SeqAdvanced L s t ∧
+                    Inv w' t.data.dmem ∧
+                      Binary.EqualOutside (Binary.Statements.C1.InsertWrites L A c s) s.data.dmem t.data.dmem)
+            s
+def Binary.Statements.C1.LookupStep : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.Statements.C1.Layout → (Leanux.World → Mem 64 → Prop) → Prop :=
+fun fetch L Inv =>
+  ∀ (c : Binary.CommonBitsCoverage.Context) (s : MachineState) (w w' : Leanux.World) (d : Leanux.WG.Device)
+    (family key : Nat) (ra : UInt64) (answer : Option.{0} Leanux.WG.PeerId) (pointer : Nat),
+    Inv w s.data.dmem →
+      Eq.{1} w.wg.dev (some.{0} d) →
+        Eq.{1} (Binary.Statements.C1.lookupReady L c s family key ra) (Except.ok.{0, 0} ()) →
+          Eq.{1}
+              (StateT.run.{0, 0}
+                (Binary.Source.lookup
+                  (ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) d.peerAllowedips.root4 d.peerAllowedips.root6)
+                  (ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) 32 128) key)
+                w)
+              (Except.ok.{0, 0} (Prod.mk.{0, 0} answer w')) →
+            Eq.{1} (Binary.Pair.Trie.address L.peers answer) (Except.ok.{0, 0} pointer) →
+              Eventually (Binary.instructionStep fetch)
+                (fun t =>
+                  Binary.TrustBase.Returned s t ra ∧
+                    Eq.{1} t.data.regs.rax.toNat pointer ∧
+                      Inv w' t.data.dmem ∧
+                        Binary.EqualOutside (Binary.Statements.C1.LookupWrites L c s) s.data.dmem t.data.dmem)
+                s
+def Binary.Statements.C1.Witness : Prop :=
+Exists.{1} fun fetch =>
+  Exists.{1} fun L =>
+    Exists.{1} fun A =>
+      Binary.Statements.C1.Premises fetch L A ∧
+        Binary.Statements.C1.CallbacksFromImage fetch ∧
+          Binary.Statements.C1.Executed fetch L A ∧ Binary.Statements.C1.ServiceActive fetch L A
+def Binary.Statements.C1.CallbacksFromImage : (Int64 → Option.{0} Binary.Decoded) → Prop :=
+fun fetch =>
+  Binary.TrustBase.ServiceDecoderAgreement fetch ∧
+    ∀ (pc : Int64) (instruction : Binary.Decoded),
+      Eq.{1} (Binary.StatementC1CallbackImage.fetch pc) (some.{0} instruction) →
+        Eq.{1} (fetch pc) (some.{0} instruction)
+def Binary.Statements.C1.Executed : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.Statements.C1.Layout → Binary.Statements.C1.Allocator → Prop :=
+fun fetch L A =>
+  Exists.{1} fun w0 =>
+    Exists.{1} fun w1 =>
+      Exists.{1} fun w2 =>
+        Exists.{1} fun w3 =>
+          Exists.{1} fun w4 =>
+            Exists.{1} fun d0 =>
+              Exists.{1} fun d3 =>
+                Exists.{1} fun c1 =>
+                  Exists.{1} fun c2 =>
+                    Exists.{1} fun c3 =>
+                      Exists.{1} fun c4 =>
+                        Exists.{1} fun s1 =>
+                          Exists.{1} fun t1 =>
+                            Exists.{1} fun s2 =>
+                              Exists.{1} fun t2 =>
+                                Exists.{1} fun s3 =>
+                                  Exists.{1} fun t3 =>
+                                    Exists.{1} fun s4 =>
+                                      Exists.{1} fun t4 =>
+                                        Exists.{1} fun h1 =>
+                                          Exists.{1} fun h2 =>
+                                            Exists.{1} fun h3 =>
+                                              Exists.{1} fun h4 => Exists.{1} fun k1 => Exists.{1} fun n1 => ⋯
+def Binary.Statements.C1.ServiceActive : (Int64 → Option.{0} Binary.Decoded) →
+  Binary.Statements.C1.Layout → Binary.Statements.C1.Allocator → Prop :=
+fun fetch L A =>
+  LT.lt.{0} 0 A.depth ∧
+    Exists.{1} fun c =>
+      Exists.{1} fun s =>
+        Exists.{1} fun t =>
+          Exists.{1} fun ra =>
+            Exists.{1} fun live =>
+              Exists.{1} fun record =>
+                Exists.{1} fun stream =>
+                  Exists.{1} fun history =>
+                    Eq.{1} s.pc Binary.Statements.C1.allocEntry ∧
+                      Binary.TrustBase.EntryFrame s ra ∧
+                        Binary.Statements.C1.ServiceReady L A c s ∧
+                          Eq.{1} s.data.regs.rdi.toNat L.cache ∧
+                            Eq.{1} (s.data.regs.get (Reg.low Reg64.rsi Width.W32)) 3520#32 ∧
+                              Membership.mem.{0, 0} Binary.Statements.C1.allocSites
+                                  (Prod.mk.{0, 0} ra.toNat record.site) ∧
+                                A.Idle s.data.dmem live (List.cons.{0} record stream) ∧
+                                  c.Needed ∧
+                                    Eq.{1} (List.head?.{0} record.bytes) (some.{0} 1) ∧
+                                      Binary.Statements.C1.Ran fetch s t ra history ∧
+                                        (Exists.{1} fun a =>
+                                            Binary.Statements.C1.Scratch s A.depth a ∧
+                                              Ne.{1} (Std.ExtHashMap.get?.{0, 0} s.data.dmem a)
+                                                (Std.ExtHashMap.get?.{0, 0} t.data.dmem a)) ∧
+                                          Exists.{1} fun a =>
+                                            c.writes a ∧
+                                              Ne.{1} (Std.ExtHashMap.get?.{0, 0} s.data.dmem a)
+                                                (Std.ExtHashMap.get?.{0, 0} t.data.dmem a)
+def Binary.Statements.C1.Ran : (Int64 → Option.{0} Binary.Decoded) →
+  MachineState → MachineState → UInt64 → List.{0} MachineState → Prop :=
+fun fetch s t ra history =>
+  Binary.ActualHistory fetch s history ∧
+    Eq.{1} (List.getLast?.{0} history) (some.{0} t) ∧ Binary.TrustBase.Returned s t ra
+def Binary.Statements.C1.HeapSame : Binary.Statements.C1.Layout → MachineState → MachineState → Prop :=
+fun L t s =>
+  ∀ (a : BitVec 64),
+    L.Heap a → Eq.{1} (Std.ExtHashMap.get?.{0, 0} t.data.dmem a) (Std.ExtHashMap.get?.{0, 0} s.data.dmem a)
+def Binary.Statements.C1.outcome : Nat → Bool → Leanux.HiddenRecord :=
+fun site ok => { site := site, bytes := List.cons.{0} (ite.{1} (Eq.{1} ok true) 1 0) (List.replicate.{0} 39 0) }
+def Binary.Statements.C1.InsertThenLookup : Prop :=
+∀ (fetch : Int64 → Option.{0} Binary.Decoded) (L : Binary.Statements.C1.Layout) (A : Binary.Statements.C1.Allocator),
+  Binary.Statements.C1.Premises fetch L A →
+    ∀ (w : Leanux.World) (d : Leanux.WG.Device) (c : Binary.CommonBitsCoverage.Context) (s : MachineState)
+      (family key cidr pid peer : Nat) (ra : UInt64) (stream : List.{0} Leanux.HiddenRecord),
+      Eq.{1} w.wg.dev (some.{0} d) →
+        Eq.{1} (Binary.Statements.C1.armed w) true →
+          Eq.{1} w.ambient.hidden
+              (some.{0} (List.cons.{0} { site := 77, bytes := List.cons.{0} 1 (List.replicate.{0} 39 0) } stream)) →
+            (∀ (record : Leanux.HiddenRecord),
+                Membership.mem.{0, 0} stream record →
+                  Membership.mem.{0, 0} (List.map.{0, 0} (fun x => Prod.snd.{0, 0} x) Binary.Statements.C1.allocSites)
+                    record.site) →
+              Eq.{1} (Binary.Statements.C1.emptyTable L s.data.dmem d) (Except.ok.{0, 0} ()) →
+                A.Idle s.data.dmem List.nil.{0}
+                    (List.cons.{0} { site := 77, bytes := List.cons.{0} 1 (List.replicate.{0} 39 0) } stream) →
+                  Eq.{1} (Binary.Statements.C1.insertReady L A c s family key cidr pid ra) (Except.ok.{0, 0} ()) →
+                    LE.le.{0} cidr (ite.{1} (Eq.{1} family 4) 32 128) →
+                      Eq.{1} (Binary.Pair.Trie.address L.peers (some.{0} pid)) (Except.ok.{0, 0} peer) →
+                        Binary.Statements.C1.MirrorAccepts w family key cidr pid →
+                          Eventually (Binary.instructionStep fetch)
+                            (fun t =>
+                              Binary.TrustBase.Returned s t ra ∧
+                                Eq.{1} (t.data.regs.get (Reg.low Reg64.rax Width.W32)) 0#32 ∧
+                                  ∀ (s' : MachineState) (c' : Binary.CommonBitsCoverage.Context) (ra' : UInt64),
+                                    Binary.Statements.C1.LookupAfter L t s' c' family key ra' →
+                                      Eventually (Binary.instructionStep fetch)
+                                        (fun t' =>
+                                          Binary.TrustBase.Returned s' t' ra' ∧
+                                            Eq.{1} t'.data.regs.rax.toNat peer ∧ Ne.{1} peer 0)
+                                        s')
+                            s
+def Binary.Statements.C1.FailedInsertInvisible : Prop :=
+∀ (fetch : Int64 → Option.{0} Binary.Decoded) (L : Binary.Statements.C1.Layout) (A : Binary.Statements.C1.Allocator),
+  Binary.Statements.C1.Premises fetch L A →
+    ∀ (w : Leanux.World) (d : Leanux.WG.Device) (c : Binary.CommonBitsCoverage.Context) (s : MachineState)
+      (family key cidr pid : Nat) (ra : UInt64) (stream : List.{0} Leanux.HiddenRecord),
+      Eq.{1} w.wg.dev (some.{0} d) →
+        Eq.{1} (Binary.Statements.C1.armed w) true →
+          Eq.{1} w.ambient.hidden
+              (some.{0} (List.cons.{0} { site := 77, bytes := List.cons.{0} 0 (List.replicate.{0} 39 0) } stream)) →
+            (∀ (record : Leanux.HiddenRecord),
+                Membership.mem.{0, 0} stream record →
+                  Membership.mem.{0, 0} (List.map.{0, 0} (fun x => Prod.snd.{0, 0} x) Binary.Statements.C1.allocSites)
+                    record.site) →
+              Eq.{1} (Binary.Statements.C1.emptyTable L s.data.dmem d) (Except.ok.{0, 0} ()) →
+                A.Idle s.data.dmem List.nil.{0}
+                    (List.cons.{0} { site := 77, bytes := List.cons.{0} 0 (List.replicate.{0} 39 0) } stream) →
+                  Eq.{1} (Binary.Statements.C1.insertReady L A c s family key cidr pid ra) (Except.ok.{0, 0} ()) →
+                    LE.le.{0} cidr (ite.{1} (Eq.{1} family 4) 32 128) →
+                      Binary.Statements.C1.MirrorAccepts w family key cidr pid →
+                        Eventually (Binary.instructionStep fetch)
+                          (fun t =>
+                            Binary.TrustBase.Returned s t ra ∧
+                              Eq.{1} (t.data.regs.get (Reg.low Reg64.rax Width.W32)) (BitVec.ofInt 32 (-12)) ∧
+                                ∀ (s' : MachineState) (c' : Binary.CommonBitsCoverage.Context) (ra' : UInt64),
+                                  Binary.Statements.C1.LookupAfter L t s' c' family key ra' →
+                                    Eventually (Binary.instructionStep fetch)
+                                      (fun t' => Binary.TrustBase.Returned s' t' ra' ∧ Eq.{1} t'.data.regs.rax.toNat 0)
+                                      s')
+                          s
+def Binary.Statements.C1.LookupAfter : Binary.Statements.C1.Layout →
+  MachineState → MachineState → Binary.CommonBitsCoverage.Context → Nat → Nat → UInt64 → Prop :=
+fun L t s c family key ra =>
+  Binary.Statements.C1.HeapSame L t s ∧
+    Eq.{1} (Binary.Statements.C1.lookupReady L c s family key ra) (Except.ok.{0, 0} ())
+def Binary.Statements.C1.MirrorAccepts : Leanux.World → Nat → Nat → Nat → Nat → Prop :=
+fun w family key cidr pid =>
+  Exists.{1} fun answer =>
+    Exists.{1} fun w' =>
+      Exists.{1} fun d' =>
+        Exists.{1} fun found =>
+          Exists.{1} fun w'' =>
+            Eq.{1} (StateT.run.{0, 0} (Leanux.liftWG (Leanux.WG.insert family key cidr pid)) w)
+                (Except.ok.{0, 0} (Prod.mk.{0, 0} answer w')) ∧
+              Eq.{1} w'.wg.dev (some.{0} d') ∧
+                Eq.{1}
+                  (StateT.run.{0, 0}
+                    (Binary.Source.lookup
+                      (ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) d'.peerAllowedips.root4 d'.peerAllowedips.root6)
+                      (ite.{1} (Eq.{1} (BEq.beq.{0} family 4) true) 32 128) key)
+                    w')
+                  (Except.ok.{0, 0} (Prod.mk.{0, 0} found w''))
+def Binary.StatementC1CallbackImage.fetch : Int64 → Option.{0} Binary.Decoded :=
+fun pc => do
+  let __x ←
+    List.find?.{0} (fun row => BEq.beq.{0} (Prod.fst.{0, 0} row) pc.toUInt64.toNat)
+        Binary.StatementC1CallbackImage.decoded
+  match __x with
+    | Prod.mk.{0, 0} fst (Prod.mk.{0, 0} size code) =>
+      match code with
+      | some.{0} instruction => some.{0} { instruction := instruction, size := size }
+      | x => none.{0}
+def Binary.StatementC1CallbackImage.decoded : List.{0} (Prod.{0, 0} Nat (Prod.{0, 0} Nat (Option.{0} Instr))) :=
+List.cons.{0}
+  (Prod.mk.{0, 0} 18446744071579844672
+    (Prod.mk.{0, 0} 4
+      (some.{0}
+        (Instr.regular Width.W64 Width.W64
+          (Operation.mov ↑(Reg.low Reg64.rcx Width.W64)
+            ↑↑{ base := some.{0} (RegOrRip.reg Reg64.rsp), idx := none.{0} })))))
+  (List.cons.{0}
+    (Prod.mk.{0, 0} 18446744071579844676
+      (Prod.mk.{0, 0} 4
+        (some.{0}
+          (Instr.regular Width.W64 Width.W32
+            (Operation.movzx ↑(Reg.low Reg64.rdx Width.W32) ↑(Reg.low Reg64.rsi Width.W8))))))
+    (List.cons.{0}
+      (Prod.mk.{0, 0} 18446744071579844680
+        (Prod.mk.{0, 0} 4
+          (some.{0}
+            (Instr.regular Width.W64 Width.W32
+              (Operation.movzx ↑(Reg.low Reg64.rsi Width.W32) ↑(Reg.low Reg64.rdi Width.W8))))))
+      (List.cons.{0}
+        (Prod.mk.{0, 0} 18446744071579844684
+          (Prod.mk.{0, 0} 2
+            (some.{0}
+              (Instr.regular Width.W64 Width.W32
+                (Operation.xor ↑(Reg.low Reg64.rdi Width.W32) ↑↑(Reg.low Reg64.rdi Width.W32))))))
+        (List.cons.{0}
+          (Prod.mk.{0, 0} 18446744071579844686
+            (Prod.mk.{0, 0} 5
+              (some.{0}
+                (Instr.regular Width.W64 Width.W64
+                  (Operation.jmp
+                    (RelRegOrMem.rel ((↑"L_ffffffff810f3fb0").sub ConstExpr.after_current_instruction)))))))
+          (List.cons.{0}
+            (Prod.mk.{0, 0} 18446744071579844768
+              (Prod.mk.{0, 0} 4
+                (some.{0}
+                  (Instr.regular Width.W64 Width.W64
+                    (Operation.mov ↑(Reg.low Reg64.rcx Width.W64)
+                      ↑↑{ base := some.{0} (RegOrRip.reg Reg64.rsp), idx := none.{0} })))))
+            (List.cons.{0}
+              (Prod.mk.{0, 0} 18446744071579844772
+                (Prod.mk.{0, 0} 3
+                  (some.{0}
+                    (Instr.regular Width.W64 Width.W64
+                      (Operation.mov ↑(Reg.low Reg64.rdx Width.W64) ↑↑(Reg.low Reg64.rsi Width.W64))))))
+              (List.cons.{0}
+                (Prod.mk.{0, 0} 18446744071579844775
+                  (Prod.mk.{0, 0} 3
+                    (some.{0}
+                      (Instr.regular Width.W64 Width.W64
+                        (Operation.mov ↑(Reg.low Reg64.rsi Width.W64) ↑↑(Reg.low Reg64.rdi Width.W64))))))
+                (List.cons.{0}
+                  (Prod.mk.{0, 0} 18446744071579844778
+                    (Prod.mk.{0, 0} 5
+                      (some.{0}
+                        (Instr.regular Width.W64 Width.W32 (Operation.mov ↑(Reg.low Reg64.rdi Width.W32) ↑↑6)))))
+                  (List.cons.{0}
+                    (Prod.mk.{0, 0} 18446744071579844783
+                      (Prod.mk.{0, 0} 5
+                        (some.{0}
+                          (Instr.regular Width.W64 Width.W64
+                            (Operation.jmp
+                              (RelRegOrMem.rel ((↑"L_ffffffff810f3fb0").sub ConstExpr.after_current_instruction)))))))
+                    List.nil.{0})))))))))
 
 TRUST DECLARATIONS: binary/TrustBase.lean (verbatim)
 import FiniteExecution

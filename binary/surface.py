@@ -87,11 +87,14 @@ HEADLINES = [
     'Binary.C2.exits_cleanly',
     'Binary.C2.refines',
     'Binary.C2.replay_witness',
+
+    # Result C1, the compiled allowed-IPs insertion: the final statement, closed.
+    'Binary.Statements.C1.Proof.signed',
 ]
 IMPORTS = ['LookupSnapshotTransport', 'LookupWitness', 'LookupHitWitness', 'AllowedipsWitnessPre',
            'PairCallbackSurface', 'PairCallWitness',
            'PairAllowedipsLookupAdequacy', 'AllowedipsCommonChecked', 'AllowedipsInsertionSurface',
-           'C2Headline']
+           'C2Headline', 'C1Signed']
 # These definitions determine the meaning of the headline and its environment
 # premises outside TrustBase. The expected text is a specification, not a log.
 DEFINITIONS = [
@@ -184,6 +187,36 @@ DEFINITIONS = [
     'Binary.C2.NoCounterAcceptedTwice', 'Binary.C2.ReplayWitness',
     'Binary.C2.Kept', 'Binary.C2.accepted', 'Binary.C2.acceptedNonces', 'Binary.C2.exitPC',
     'Binary.C2.windowOf',
+
+    # Result C1. ASSUMED: the premises (with the contract for the code at the two service
+    # addresses), the caller's conditions and the starting point, and every new definition they
+    # mention.
+    'Binary.Statements.C1.Layout', 'Binary.Statements.C1.Layout.fixed', 'Binary.Statements.C1.Layout.heap',
+    'Binary.Statements.C1.Layout.Arena', 'Binary.Statements.C1.Layout.Heap',
+    'Binary.Statements.C1.allocEntry', 'Binary.Statements.C1.freeEntry', 'Binary.Statements.C1.cacheWord',
+    'Binary.Statements.C1.allocSites', 'Binary.Statements.C1.freeSite', 'Binary.Statements.C1.nodeSize',
+    'Binary.Statements.C1.Allocator', 'Binary.Statements.C1.Scratch', 'Binary.Statements.C1.Kept',
+    'Binary.Statements.C1.ServiceWrites', 'Binary.Statements.C1.Separated',
+    'Binary.Statements.C1.ServiceReady', 'Binary.Statements.C1.AllocResult',
+    'Binary.Statements.C1.AllocatorContract', 'Binary.Statements.C1.Premises',
+    'Binary.Statements.C1.insertWindow', 'Binary.Statements.C1.lookupWindow',
+    'Binary.Statements.C1.callerSpans', 'Binary.Statements.C1.frameReady',
+    'Binary.Statements.C1.insertReady', 'Binary.Statements.C1.lookupReady', 'Binary.Statements.C1.armed',
+    'Binary.Statements.C1.emptyTable',
+    # Result C1. CLAIMED: `Signed`, the headline and its five clauses, the witness and the two
+    # exclusions, and every new definition they mention. The cut of the proof (the invariant,
+    # the step model, the interface propositions, the packages' lemmas) is not surface.
+    'Binary.Statements.C1.Signed', 'Binary.Statements.C1.Headline', 'Binary.Statements.C1.Initial',
+    'Binary.Statements.C1.Framed', 'Binary.Statements.C1.CountMoved', 'Binary.Statements.C1.Referenced',
+    'Binary.Statements.C1.SeqAdvanced', 'Binary.Statements.C1.InsertWrites',
+    'Binary.Statements.C1.LookupWrites', 'Binary.Statements.C1.InsertStep',
+    'Binary.Statements.C1.LookupStep', 'Binary.Statements.C1.Witness',
+    'Binary.Statements.C1.CallbacksFromImage', 'Binary.Statements.C1.Executed',
+    'Binary.Statements.C1.ServiceActive', 'Binary.Statements.C1.Ran', 'Binary.Statements.C1.HeapSame',
+    'Binary.Statements.C1.outcome', 'Binary.Statements.C1.InsertThenLookup',
+    'Binary.Statements.C1.FailedInsertInvisible', 'Binary.Statements.C1.LookupAfter',
+    'Binary.Statements.C1.MirrorAccepts', 'Binary.StatementC1CallbackImage.fetch',
+    'Binary.StatementC1CallbackImage.decoded',
 ]
 EXPECTED = ROOT / 'binary/TrustSurface.expected.txt'
 
