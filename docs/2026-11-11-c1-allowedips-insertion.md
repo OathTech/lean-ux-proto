@@ -4,9 +4,10 @@
 closed: `Binary.Statements.C1.Proof.signed : Signed`, with no hypothesis,
 on the standard three axioms. The statement is revision 4 of the
 [final statement](2026-11-10-c1-final-statement.md) as put to the owner.
-**The owner signed revision 2; revision 4 is not yet signed, and the
-signature is given at the landing.** An independent landing review has not
-yet been done. Every judgement here is the integrator's [AGENT] unless it
+**No revision of the statement has been signed by the owner; revision 4
+is signed at the landing.** The [independent landing review](2026-11-11-review-c1-landing.md)
+says to land with named changes to documents and records; section 9 has
+their dispositions. Every judgement here is the integrator's [AGENT] unless it
 says otherwise.
 
 ## 1. What is proved
@@ -201,8 +202,11 @@ shows that the premises are not vacuous; it is not a model of a kernel.
    `Kept` in `ServiceWrites` and `frame`); the contract promised a return
    from states where no stack-using code can return (H2: `ServiceReady`);
    the witness did not pin the callbacks to the image's code (F1:
-   `CallbacksFromImage`). The owner signed revision 2 with F1 repaired
-   [USER 2026-11-10, `docs/decisions.md`].
+   `CallbacksFromImage`). At commissioning the choices were left to the
+   coordinator's recommendation, with the final text to be put to the
+   owner before any proof is accepted [AGENT, coordinator, 2026-11-10,
+   `docs/decisions.md`]; revision 2, with F1 repaired, was the text the
+   proof started from. It was not signed.
 3. The proof found four more. Top of memory: `AllocResult` admitted an
    object ending at 2^64, which the landed interpretation refuses (the
    bound added, revision 3). The contract excluded every allocator with
@@ -317,12 +321,12 @@ checks that. `binary/README.md` has the same block for C2's roots.
 
 ## 7. Open items
 
-1. The owner's signature on revision 4, and the independent landing review.
+1. The owner's signature on revision 4 and the merge approval; the
+   coordinator records them in `docs/decisions.md` when they are given.
 2. The external kernel replay of the export (the block above).
 3. `StatementC1Vacuity.lean`'s docstring on `Signed` begins "WHAT IS
-   SIGNED": the statement files are left exactly as put to the owner.
-   `docs/decisions.md` calls the statement signed in two entries about its
-   revisions; those are the coordinator's to word.
+   SIGNED": the statement files are left exactly as put to the owner, and
+   the docstring becomes true at the signature.
 4. The witness's stub keeps a shape revision 3 made unnecessary (section 3).
 5. The trust surface prints the definitions of the C1 statement files; the
    package definitions they draw in that were not already printed

@@ -1062,7 +1062,7 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
     bridge and checks its axioms; the register records lag. The change to
     AGENTS.md and to `scripts/proof-gate` is put to the user with the diff
     at landing, as every rule change is.
-  - C1 is signed as `Signed` of revision 2 with the reviewer's finding F1
+  - C1 is to be signed as `Signed` of revision 2 with the reviewer's finding F1
     repaired (the witness pins the coverage callbacks to the image's code),
     accepted knowingly as closed-world, as a claim about the six WireGuard
     functions against any code at the two service addresses that meets the
@@ -1072,7 +1072,7 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   - The packets' Lean statement files are not landed with the documents;
     they stay on the working branches until the final statements are put
     to the user.
-- **2026-11-10 [USER]** C1's signed statement is revised once more before
+- **2026-11-10 [USER]** C1's statement is revised once more before
   any proof is accepted, taking five changes together as the coordinator
   recommended, and the revision goes back to the independent reviewer and
   then to the user as a diff: (1) the allocator's result clause gains the
@@ -1090,7 +1090,7 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   (4) and (5) came from the proof architect and the service package's
   prover; [AGENT, coordinator] the exact wording of each change is the
   statement author's, checked by the reviewer.
-- **2026-11-10 [USER]** Two further changes to C1's signed statement, after
+- **2026-11-10 [USER]** Two further changes to C1's statement, after
   the independent review of revision 3 and a finding from the trunk's
   proof, both as the coordinator recommended: (1) in the clause admitting
   the caller's reference on a peer, taking a reference is paired with the

@@ -1,8 +1,8 @@
 # C1: the final statement, revision 4
 
 2026-11-10, branch `task/binary-c1`. **Status: this is the final statement as
-put to the owner. The owner signed revision 2; revision 4, the text below,
-is not yet signed: the signature is given at the landing.** The proof is
+put to the owner. No revision of this statement has been signed by the
+owner: revision 4, the text below, is signed at the landing.** The proof is
 closed since ([closing report](2026-11-11-c1-allowedips-insertion.md)); the
 working briefs this document names (`proof/PLAN.md` and the package briefs)
 and the service package's finding file were removed when the branch was
@@ -14,7 +14,7 @@ review of revision 3 and a finding of the trunk's proof, in two more
 (the last entry there; revision 4: changes A and B below), for the reviewer
 and then the owner. **Nothing is proved here** about the image:
 the statement files contain `def … : Prop` and executable definitions only.
-Revision 2 of this document (the capture's result and the text then signed)
+Revision 2 of this document (the capture's result and the text as it then stood)
 is commit `7d39d508`; its capture section is appendix C, unchanged except
 where marked. Every judgement below is mine [AGENT]; the decisions to make
 the seven changes are the owner's [USER].
@@ -950,7 +950,7 @@ QEMU's `qemu64` CPU under TCG, 256 MiB, one CPU, `nokaslr`.
 This is section 1 of revision 2 of this document: the recording-armed
 capture of real insertions, run against revision 2's text. Its counts are
 revision 2's; the rerun of its checks on revision 3 is in section 5. Its
-closing judgement, that the proof could start as signed, was overtaken by
+closing judgement, that the proof could start on the text as it stood, was overtaken by
 the three findings behind this revision and is not repeated.
 
 ### What was run
@@ -1045,7 +1045,7 @@ Three checkers read the captures (commands in [appendix B](#appendix-b-reproduct
    caller holds a reference on the peer it is configuring: between the last
    insertion for one peer and the first for the next it lowers one peer's
    count and raises the other's, both heap words. With peers created in the
-   same `wg set` (`b1_trie_routing`) it also creates the peer. As signed,
+   same `wg set` (`b1_trie_routing`) it also creates the peer. As stated,
    the result therefore speaks about the insertions of the first peer
    configured after the table is empty (5 of the grid's 13 calls, 2 of
    `b1`'s 8) and not about the rest of the same `wg set`. Nothing is wrong
