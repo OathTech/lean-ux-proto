@@ -26,6 +26,7 @@ order=[]
 for g,names in groups.items():
     for n in names:
         src+=f'#print {n}\n#eval IO.println "@@@"\n'; order.append((g,n))
+Path(W+'/.tmp/c1').mkdir(parents=True, exist_ok=True)
 open(W+'/.tmp/c1/Surface.lean','w').write(src)
 lp=subprocess.run(['../scripts/in-bundle','lake','env','printenv','LEAN_PATH'],cwd=W+'/binary',capture_output=True,text=True).stdout.strip()
 r=subprocess.run((['capped','--'] if shutil.which('capped') else [])+['../scripts/in-bundle','env',f'LEAN_PATH={lp}','lean',W+'/.tmp/c1/Surface.lean'],cwd=W+'/binary',capture_output=True,text=True)

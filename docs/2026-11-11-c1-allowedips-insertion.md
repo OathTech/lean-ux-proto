@@ -304,12 +304,13 @@ The tests, the capture tooling and the three regression files are not
 built by a gate: like C2's statement tests, they are by-hand claim-point
 checks, documented here and in the final statement's appendix B.
 
-The kernel replay proper is the owner's, outside the sandbox. From this
-worktree (its `.deps/kraken` is the bootstrapped ten-patch checkout; the
-main checkout's is the unpatched upstream clone and the build fails there):
+The kernel replay proper is the owner's, outside the sandbox. From the
+root of a checkout of the source being checked whose `.deps/kraken` is the
+bootstrapped ten-patch checkout (`binary/run.py --bootstrap-only`; the main
+checkout's `.deps/kraken` is the unpatched upstream clone and the build
+fails there):
 
 ```sh
-cd /home/dev/projects/lean-ux-proto/.worktrees/binary-c1
 capped -m 48G -- scripts/in-bundle lake -d binary build        # from the source being checked, immediately before the export
 cd binary
 capped -m 48G -- ../scripts/in-bundle lake env leanexport C1Signed > ../.tmp/c1-check.ndjson   # exit 0 required
