@@ -346,7 +346,13 @@ The tests, the capture tooling and the three regression files are not
 built by a gate: like C2's statement tests, they are by-hand claim-point
 checks, documented here and in the final statement's appendix B.
 
-The kernel replay proper is the owner's, outside the sandbox. From the
+The kernel replay proper is the owner's, outside the sandbox. It was run by
+the user in their own shell on 2026-11-11 (the export written 02:10 UTC,
+1,783,858,960 bytes, the same size as the integrator's and the reviewer's)
+from this branch at `97f1c2e9`, with the three commands below after a build
+of 1,321 jobs: "Lean default kernel accepts the solution", axioms
+`propext`, `Quot.sound`, `Classical.choice`. The Lean sources at that head
+are those of `842e9339`; the later commits are documents. From the
 root of a checkout of the source being checked whose `.deps/kraken` is the
 bootstrapped ten-patch checkout (`binary/run.py --bootstrap-only`; the main
 checkout's `.deps/kraken` is the unpatched upstream clone and the build
@@ -375,7 +381,7 @@ checks that. `binary/README.md` has the same block for C2's roots.
 
 1. The owner's signature on revision 4 and the merge approval; the
    coordinator records them in `docs/decisions.md` when they are given.
-2. The external kernel replay of the export (the block above).
+2. The external kernel replay of the export (the block above): done, accepted, as recorded in section 6 with the block.
 3. `StatementC1Vacuity.lean`'s docstring on `Signed` begins "WHAT IS
    SIGNED": the statement files are left exactly as put to the owner, and
    the docstring becomes true at the signature.
