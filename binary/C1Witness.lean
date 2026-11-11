@@ -1,4 +1,4 @@
-import C1Signed
+import C1Joined
 import C1ServiceHistory
 import C1WitnessContract
 import C1WitnessMemory
@@ -20,8 +20,7 @@ allocator state with a 16-byte scratch, and the concrete scene of
   each next entry state takes its heap bytes from the previous final memory
   (`over`), so `Framed` carries the invariant across. The mirror's four runs
   are the evaluations of `C1WitnessMirror`.
-
-The hand-over is `binary/Statements/C1/proof/OPEN.md`. -/
+ -/
 namespace Binary.Statements.C1.Witness
 open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.CommonBitsCoverage Binary.Statements.C1 Binary.Statements.C1.Proof
@@ -162,7 +161,7 @@ end Binary.Statements.C1.Witness
 namespace Binary.Statements.C1.Proof
 open Binary.Statements.C1 Binary.Statements.C1.Witness
 
-/-- ACCEPTANCE. The witness of the signed statement is inhabited: the active
+/-- ACCEPTANCE. The witness of the final statement is inhabited: the active
 stub meets every premise with the image's callbacks, the four calls run, and
 the service uses its stack and writes the coverage buffer. -/
 theorem witnessHolds : WitnessHolds :=

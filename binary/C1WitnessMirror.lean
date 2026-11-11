@@ -1,5 +1,5 @@
 import C1WitnessScene
-import C1Signed
+import C1Joined
 
 /-! Result C1, open proposition `WitnessHolds`: the mirror's four runs.
 
