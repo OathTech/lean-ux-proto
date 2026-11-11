@@ -1,5 +1,10 @@
 # C1, the compiled allowed-IPs insertion: closing report
 
+Landed: the user signed the final statement at revision 4 and approved the
+merge on 2026-11-11 (docs/decisions.md), and had run the external kernel
+replay, which the default kernel accepts (section 6). Where the text below
+says the signature is given at the landing, that is now done.
+
 2026-11-11, branch `task/binary-c1`. Result C1 of the binary track is
 closed: `Binary.Statements.C1.Proof.signed : Signed`, with no hypothesis,
 on the standard three axioms. The statement is revision 4 of the
@@ -204,10 +209,10 @@ From the final statement (its sections 7 and 8) and the statement review:
     heap word, so a second lookup is not such a state. Sequences are the
     headline's business (N7).
 
-For item 10, the change proposed for the owner's decision at the signature,
-to the docstring of `Signed` in `binary/StatementC1Vacuity.lean`. It is not
-applied; a docstring change alters no Lean term, and the trust surface
-prints no docstring.
+For item 10, the change to the docstring of `Signed` in
+`binary/StatementC1Vacuity.lean`. The user accepted it with the signature
+on 2026-11-11 and it is applied; a docstring change alters no Lean term,
+and the trust surface prints no docstring.
 
 ```diff
  contract; the image's allocator is not shown to, and under this semantic

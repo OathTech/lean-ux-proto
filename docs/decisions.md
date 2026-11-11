@@ -1116,4 +1116,16 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   evasion; the landing review's hardening proposals for the import check
   were not taken for that reason [AGENT, coordinator: which proposals,
   listed in docs/2026-11-10-c2-replay-window.md, section 9].
+- **2026-11-11 [USER]** C1 lands. The user signed the final statement at
+  revision 4 (docs/2026-11-10-c1-final-statement.md; the statement files as
+  of `fa4277bb`) and approved the merge to `main`. On the one open wording
+  point the user took the coordinator's recommendation [AGENT,
+  coordinator]: the paragraph of `Signed`'s docstring about how the
+  compiled code uses the service now says that its items are consequences
+  by argument and not clauses of the statement; a docstring changes no
+  Lean term. No rule or gate changes with this landing. The user ran the
+  external kernel replays of both results outside the sandbox on
+  2026-11-11: C2 from `308732b2` and C1 from `97f1c2e9` (before the
+  docstring rewording), each accepted by the default kernel on the
+  standard axioms.
 

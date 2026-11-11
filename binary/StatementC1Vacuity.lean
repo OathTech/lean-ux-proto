@@ -184,8 +184,11 @@ mirror returns along any sequence of insertions and lookups from an empty
 table, with the caller's references on registered peers taken and dropped
 between them, **given any code at the two service addresses that meets the stated
 contract; the image's allocator is not shown to, and under this semantic
-base cannot be**. About how the compiled code uses that service it
-establishes that the code calls it only with the cache and the flags the
+base cannot be**. About how the compiled code uses that service the
+following are not clauses of the statement but consequences by argument
+(the theorem holds for every service that meets the contract, so the
+compiled code cannot depend on what the contract leaves open): the code
+calls it only with the cache and the flags the
 contract names and from states the contract covers; relies on nothing about
 a returned object but that it is zeroed, aligned, inside the arena, ending
 below 2^64 and apart from the nodes handed out; never depends on the service's stack scratch, on
