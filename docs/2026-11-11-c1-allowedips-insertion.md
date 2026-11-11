@@ -178,6 +178,48 @@ From the final statement (its sections 7 and 8) and the statement review:
    pending worker, a short record list, reference-count saturation.
 8. **The mirror's definition of an accepted run is inside the claim**: 389
    declarations of the closure, not in the printed line counts.
+9. **The witness is IPv4 only and takes three of the nine insertion paths**
+   (empty root, intermediate node, rollback) and a lookup hit. That an
+   allocator with ordinary mapped state can meet the contract is argued
+   (`StateWord.lean`) and tested (the test service), not shown by a checked
+   witness (landing review, N1).
+10. **One paragraph of `Signed`'s docstring describes consequences by
+    argument, not clauses**: "About how the compiled code uses that service
+    it establishes that …". The proposed rewording is put to the owner
+    with the signature, below; the statement file is not changed (N2).
+11. **The landed definitions the statement draws in are not in the text
+    put to the owner nor in the printed surface**: `Context` with `At`,
+    `CoverageAt`, `Needed`, `writes`, `bytes`, `metadataBytes`
+    (`binary/CommonBitsCoverage.lean:9-36`); `Trie.coverageCheck`,
+    `coverageDataCheck` and the span lists (`PairLoopCheck.lean`,
+    `PairCallCheck.lean:12-50`); `spansApart` (`PairSpan.lean:10`) and
+    `disjointRanges` (`PairMemory.lean:27`); `InRange` and `EqualOutside`
+    (`Memory.lean:34-39`); `instructionStep` (`Execution.lean:25`);
+    `readNat`, `Trie.address`, `AllowedipsEntry.TotalWrites`; Kraken's
+    `Eventually`. The reviewer read each and found nothing but what its
+    name says (N4).
+12. **"Every later lookup" in the two exclusions means the next lookup**,
+    from any state that agrees with the insertion's final state on the
+    heap (`LookupAfter`): a lookup that finds a peer raises its count, a
+    heap word, so a second lookup is not such a state. Sequences are the
+    headline's business (N7).
+
+For item 10, the change proposed for the owner's decision at the signature,
+to the docstring of `Signed` in `binary/StatementC1Vacuity.lean`. It is not
+applied; a docstring change alters no Lean term, and the trust surface
+prints no docstring.
+
+```diff
+ contract; the image's allocator is not shown to, and under this semantic
+-base cannot be**. About how the compiled code uses that service it
+-establishes that the code calls it only with the cache and the flags the
++base cannot be**. About how the compiled code uses that service the
++following are not clauses of the statement but consequences by argument
++(the theorem holds for every service that meets the contract, so the
++compiled code cannot depend on what the contract leaves open): the code
++calls it only with the cache and the flags the
+ contract names and from states the contract covers; relies on nothing about
+```
 
 The witness's artificial aspects, as its prover reports them. The witness
 shows that the premises are not vacuous; it is not a model of a kernel.
