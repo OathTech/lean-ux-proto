@@ -253,8 +253,10 @@ For the recorded comparison and capture commands, use the
 [detailed execution recipes](REPRODUCING.md#allowed-ips-mutation-scaling).
 The [export command above](#check-the-proof-boundary) includes the nine roots
 used for the mutation experiment. The [closing report](../docs/2026-10-20-binary-allowedips.md)
-gives the component boundaries and measured results; full insertion remains
-open.
+gives the component boundaries and measured results of that experiment.
+Insertion has since been closed as result C1 (`C1Signed`, exported on its
+own above; [closing report](../docs/2026-11-11-c1-allowedips-insertion.md));
+removal, the dump and the walk-by-peer remain open.
 
 ## Detailed reports
 
