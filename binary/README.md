@@ -146,7 +146,7 @@ and the replay accepts a stale output without complaint. Then, in `binary/`:
 
 ```sh
 cap ../scripts/in-bundle lake env leanexport C2Headline C2Bridge > ../.tmp/c2-check.ndjson
-COMPARATOR_BWRAP=/usr/bin/bwrap cap ../scripts/in-bundle lake check --from-export ../.tmp/c2-check.ndjson
+cap ../scripts/in-bundle sh -c 'PATH="$PATH:/usr/bin" COMPARATOR_BWRAP=/usr/bin/bwrap exec lake check --from-export ../.tmp/c2-check.ndjson'
 ```
 
 Result C1's closure is exported on its own as well (about 1.8 GB), after
@@ -154,27 +154,39 @@ Result C1's closure is exported on its own as well (about 1.8 GB), after
 
 ```sh
 cap ../scripts/in-bundle lake env leanexport C1Signed > ../.tmp/c1-check.ndjson
-COMPARATOR_BWRAP=/usr/bin/bwrap cap ../scripts/in-bundle lake check --from-export ../.tmp/c1-check.ndjson
+cap ../scripts/in-bundle sh -c 'PATH="$PATH:/usr/bin" COMPARATOR_BWRAP=/usr/bin/bwrap exec lake check --from-export ../.tmp/c1-check.ndjson'
 ```
 
-`scripts/in-bundle` resets `PATH` and its `PATH` does not include
-`/usr/bin`, so the checker does not find its sandbox helper by name: set
-`COMPARATOR_BWRAP` to your `bwrap` (the variable passes through
-`in-bundle`; `/usr/bin/bwrap` is the devboxes' location). If the checker
-then reports that it cannot find `git`, run it with the directory of `git`
-appended inside the bundle: `cap ../scripts/in-bundle sh -c
-'PATH="$PATH:/usr/bin" lake check --from-export ../.tmp/c1-check.ndjson'`.
+The check lines need both settings, and the single quotes matter (`PATH`
+must expand inside the bundle):
+
+- `lake check` finds its sandbox helper by running `which`, which lives in
+  `/usr/bin`; `scripts/in-bundle` resets `PATH` without `/usr/bin`, so
+  without the appended directory the lookup fails ("bwrap … was not
+  found").
+- `in-bundle` puts a staged copy of `bwrap` on `PATH`
+  (`.tools/sysroot/usr/bin/bwrap`), and `which bwrap` would resolve to it.
+  On a distribution that restricts unprivileged user namespaces by path
+  (Ubuntu's AppArmor profile is attached to `/usr/bin/bwrap`), the staged
+  copy must not be the one used: set `COMPARATOR_BWRAP` to the system
+  `bwrap`. Where that lives is a box matter; `/usr/bin/bwrap` is the
+  devboxes' value.
+- A line "Lean default kernel rejected the solution" directly after a
+  `bwrap` error line (for example `bwrap: loopback: Failed RTM_NEWADDR:
+  Operation not permitted`) is the sandbox failing to start, not a kernel
+  verdict.
 
 Require export exit status 0. A partial file from a failed export is not a
 valid gate input. Still in `binary/`, run:
 
 ```sh
-COMPARATOR_BWRAP=/usr/bin/bwrap cap ../scripts/in-bundle lake check --from-export ../.tmp/binary-check.ndjson
+cap ../scripts/in-bundle sh -c 'PATH="$PATH:/usr/bin" COMPARATOR_BWRAP=/usr/bin/bwrap exec lake check --from-export ../.tmp/binary-check.ndjson'
 ```
 
-On the shared devboxes, the user runs the `lake check` lines outside nono: the
-checker's own sandbox cannot start inside it. An inside-nono check with
-`--inadvisably-no-sandbox` is a diagnostic run and does not replace that gate.
+On the shared devboxes, the user runs the `lake check` lines outside nono:
+that run is the gate. In the form above the checker's sandbox has also
+started inside nono (2026-11-11); such a run, like one with
+`--inadvisably-no-sandbox`, is a diagnostic and does not replace the gate.
 The export avoids a sandboxed build of this package's parent path dependencies.
 Exports can be large; delete the temporary file after checking it.
 
