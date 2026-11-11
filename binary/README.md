@@ -20,7 +20,7 @@ recipe here that promises to regenerate it from a fresh clone.
 | Replay-state frame | `LookupSnapshotTransport.lookup_snapshot_transport` preserves the represented frontier and source-live lifetime/replay fields through lookup | Initial representation and separation are extra premises, not supplied by the existing lookup Pre witness; no physical allocator-membership or whole-receive theorem |
 | Sequential paired execution | Checked entry assertions and retained-heap composition for selected index operations, plus a sequential allowed-IPs lookup and bounded callback proofs | No concurrent-context result; input coupling and service/permission contracts remain where stated. A dying-peer retry is a source refusal in the trie experiment |
 | Receive replay window (C2) | `Binary.C2.refines`: the 70-instruction inlined `counter_validate` range of `wg_packet_rx_poll`, `[0xffffffff8139d2a6, 0xffffffff8139d3ea)`, computes the mirror's `counterValidate` (exit, acceptance byte, window bytes). `exits_cleanly`: from every entry state it reaches an exit without faulting and keeps what `Kept` says. `replay_witness`: one counter presented twice to a retained window is accepted, then refused. In the bridge library, `Binary.C2.Bridge.no_counter_accepted_twice` and `headline : HeadlineRefinement`: over visits between which the window bytes are unchanged, no packet counter is accepted twice. All closed, no hypothesis beyond the statement's premises | A single-CPU, coverage-instrumented build with no lock: nothing carries to an SMP build. The entry context (`Context`) is argued from the disassembly, not derived, and no captured kernel state was checked against it. That the window is unchanged between visits is a premise about the rest of the kernel. The range ends at `setb %bpl`: that a replayed packet is dropped (the unlock, the branch, the drop path, that every delivery passes through the range) is not claimed. Decoder agreement is tested, not proved; Kraken's semantics with the tenth patch is the base; `Refines` says no more than the mirror. See the [closing report](../docs/2026-11-10-c2-replay-window.md) |
-| Allowed-IPs mutation scaling | Tested component proofs for placement, reassignment and initialization/publication segments; an extended lookup reconstruction | Zero newly completed functions in this increment. Insertion, allocation/failure handling and full function/sequence composition remain open |
+| Allowed-IPs insertion (C1) | `Binary.Statements.C1.Proof.signed : Signed` (`C1Signed.lean`; statement `StatementC1*.lean`), closed with no hypothesis. `Headline`: for every decoder, layout and allocator meeting `Premises`, there is an invariant that holds at a physically empty table, survives changes outside the heap and the caller taking or dropping a reference on an existing peer, and is carried by every accepted call of `wg_allowedips_insert_v4/_v6` (through `add`, on all nine paths, allocation failure and rollback included) and of `lookup`, each returning the mirror's answer. With it a witness that the premises can be met and the calls run, and two exclusions (an insertion is then found; a failed insertion is invisible). The component theorems of the earlier increment (placement, reassignment, initialization and publication segments) are what the proof is built from | Closed-world from an empty table: peer creation or removal between insertions is outside, so a `wg set` that creates its peers is covered for its first peer only. A claim about the six WireGuard functions against any code at the two service addresses that meets `AllocatorContract`; the image's allocator is not shown to meet it and under this semantic base cannot. Parent pointers and peer lists are not claimed. A single-CPU, coverage-instrumented image and a sequential model. Decoder agreement is tested, not proved. The caller's conditions are premises, shown at 20 captured calls and not proved of any real call. The witness is a stub with artificial aspects ([closing report](../docs/2026-11-11-c1-allowedips-insertion.md)). Removal, the dump and the walk-by-peer remain open |
 
 The milestone-1 [review obligations at landing](../docs/2026-10-19-binary-landing-assessment.md#outstanding-review-obligations-at-landing)
 remain open as stated there, including the NULL-owner `Pre_lookup` witness,
@@ -29,8 +29,9 @@ separation premises, general entry realism and subsystem-wide scaling.
 Concrete NULL-owner execution tests do not supply the missing theorem witness.
 
 The two allowed-IPs rows describe different stages: the sequential lookup
-experiment predates the unfinished mutation work. Passing a component proof
-or an executable test does not complete the larger function theorem.
+experiment predates the insertion result, which is the first completed
+mutation function. Passing a component proof or an executable test does not
+complete a larger function theorem.
 The detailed [binary register](../docs/proofs.md#binary-adequacy-standalone-charter-target)
 and reports below name statements, premises and historical validation commits.
 
@@ -120,7 +121,11 @@ contracts against [`TrustSurface.expected.txt`](TrustSurface.expected.txt).
 A passing comparison means those declarations match the reviewable specification;
 it does not prove the contracts. The mirror proof gate is separate.
 
-Kernel replay is a further check. From the worktree root, create a temporary
+Kernel replay is a further check. Run it in a worktree whose `.deps/kraken`
+is the bootstrapped, patched checkout (`binary/run.py --bootstrap-only`
+above), and whose package has just been built from the source being checked.
+The main checkout's `.deps/kraken` is the unpatched shared upstream clone:
+the build fails there. From the worktree root, create a temporary
 output directory, then export from `binary/` after the build succeeds:
 
 ```sh
@@ -141,17 +146,33 @@ and the replay accepts a stale output without complaint. Then, in `binary/`:
 
 ```sh
 cap ../scripts/in-bundle lake env leanexport C2Headline C2Bridge > ../.tmp/c2-check.ndjson
-cap ../scripts/in-bundle lake check --from-export ../.tmp/c2-check.ndjson
+COMPARATOR_BWRAP=/usr/bin/bwrap cap ../scripts/in-bundle lake check --from-export ../.tmp/c2-check.ndjson
 ```
+
+Result C1's closure is exported on its own as well (about 1.8 GB), after
+`cap scripts/in-bundle lake -d binary build` from the worktree root:
+
+```sh
+cap ../scripts/in-bundle lake env leanexport C1Signed > ../.tmp/c1-check.ndjson
+COMPARATOR_BWRAP=/usr/bin/bwrap cap ../scripts/in-bundle lake check --from-export ../.tmp/c1-check.ndjson
+```
+
+`scripts/in-bundle` resets `PATH` and its `PATH` does not include
+`/usr/bin`, so the checker does not find its sandbox helper by name: set
+`COMPARATOR_BWRAP` to your `bwrap` (the variable passes through
+`in-bundle`; `/usr/bin/bwrap` is the devboxes' location). If the checker
+then reports that it cannot find `git`, run it with the directory of `git`
+appended inside the bundle: `cap ../scripts/in-bundle sh -c
+'PATH="$PATH:/usr/bin" lake check --from-export ../.tmp/c1-check.ndjson'`.
 
 Require export exit status 0. A partial file from a failed export is not a
 valid gate input. Still in `binary/`, run:
 
 ```sh
-cap ../scripts/in-bundle lake check --from-export ../.tmp/binary-check.ndjson
+COMPARATOR_BWRAP=/usr/bin/bwrap cap ../scripts/in-bundle lake check --from-export ../.tmp/binary-check.ndjson
 ```
 
-On the shared devboxes, the user runs this last command outside nono: the
+On the shared devboxes, the user runs the `lake check` lines outside nono: the
 checker's own sandbox cannot start inside it. An inside-nono check with
 `--inadvisably-no-sandbox` is a diagnostic run and does not replace that gate.
 The export avoids a sandboxed build of this package's parent path dependencies.
@@ -198,6 +219,7 @@ cap scripts/in-bundle "$binary_python" -B binary/generate_index_mutators.py --ch
 cap scripts/in-bundle "$binary_python" -B binary/generate_random_service.py --check
 cap scripts/in-bundle "$binary_python" -B binary/generate_random_layout.py --check
 cap scripts/in-bundle "$binary_python" -B binary/generate_c2.py --check
+cap scripts/in-bundle "$binary_python" -B binary/generate_c1_callbacks.py --check
 
 # Paired index lookup and allowed-IPs mutation experiments
 cap scripts/in-bundle "$binary_python" -B binary/pair_run.py --trace d1_wrong_receiver_index_same_bucket

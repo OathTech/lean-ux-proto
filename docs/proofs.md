@@ -1375,6 +1375,14 @@ names at every claim point, and fails if the row says Current while a
 mirror file differs from the commit it names. A lagging row does not block
 a mirror change; it is repaired on the proof tree and the bridge gate rerun.
 
+Result C1 of the binary track, the compiled allowed-IPs insertion
+([closing report](2026-11-11-c1-allowedips-insertion.md), [final statement as put to the owner](2026-11-10-c1-final-statement.md), revision 4, whose signature is given at the landing),
+is closed in the binary package, which does not import the proof tree.
+
+| Result | Theorem | Where | Statement | Review | Mirror commit | Status |
+| --- | --- | --- | --- | --- | --- | --- |
+| C1: from a physically empty table, every accepted call of `wg_allowedips_insert_v4/_v6` (through `add`) and of `lookup` in the s5 image returns the mirror's answer and carries a hidden invariant, for any code at the two service addresses that meets the stated contract; with a witness and two exclusions | `Binary.Statements.C1.Proof.signed : Binary.Statements.C1.Signed` (`Headline ∧ Witness ∧ InsertThenLookup ∧ FailedInsertInvisible`) | `binary/C1Signed.lean` (statement: `binary/StatementC1Contracts.lean`, `StatementC1Headline.lean`, `StatementC1CallbackImage.lean`, `StatementC1Vacuity.lean`) | [final statement](2026-11-10-c1-final-statement.md) | [Statement review](2026-11-10-review-statement-packet-c1.md); the independent landing review is pending | `1b7a3b70` | Current over the mirror as imported by path (`Leanux.WG.AllowedIps`, `Peer`, `State`, `Types`, `Device` and the kernel definitions; the last mirror source change is `1b7a3b70`); the witness's text copy of the mirror's `add` is proved equal to it, so a change to `Leanux.WG.add` breaks the build. Closed on the standard three axioms; no resource raise and no linter suppression in its files. Gate: `scripts/binary-proof-gate`. External kernel replay of the export pending. Limits, each in the [closing report](2026-11-11-c1-allowedips-insertion.md#3-what-is-not-claimed-and-what-is-accepted-knowingly): closed-world from an empty table, with the caller's reference on existing peers admitted and peer creation between insertions not. A claim about the six WireGuard functions against any code at the two service addresses meeting the stated contract: the image's allocator is not shown to meet it and under this semantic base cannot. Parent pointers and peer lists are not claimed. A single-CPU, coverage-instrumented image and a sequential model. Decoder agreement is tested, not proved. The caller's conditions are premises. The witness is a stub with artificial aspects, listed in the closing report |
+
 On the separate `task/binary-proof-refactor` branch, the
 [sequential sibling experiment](2026-10-16-goal-binary-proof-refactoring.md#sibling-sequential-experiment-result)
 adds `Binary.Sequential.lookup_simulation` for the same full index lookup.
