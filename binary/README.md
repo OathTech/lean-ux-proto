@@ -231,6 +231,7 @@ cap scripts/in-bundle "$binary_python" -B binary/generate_index_mutators.py --ch
 cap scripts/in-bundle "$binary_python" -B binary/generate_random_service.py --check
 cap scripts/in-bundle "$binary_python" -B binary/generate_random_layout.py --check
 cap scripts/in-bundle "$binary_python" -B binary/generate_c2.py --check
+cap scripts/in-bundle "$binary_python" -B binary/generate_allowedips_mutation.py --check
 cap scripts/in-bundle "$binary_python" -B binary/generate_c1_callbacks.py --check
 
 # Paired index lookup and allowed-IPs mutation experiments

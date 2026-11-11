@@ -288,6 +288,7 @@ the commits after it change documents only. `scripts/in-bundle` resets
 | Mirror build | `capped -m 24G -- scripts/in-bundle lake build` | 66 jobs, completed |
 | Unit tier | the `unittest` line of AGENTS.md, wrapped in `capped` | 149 tests, OK (1 skipped) |
 | Statement tests and the three regression files | `capped -m 24G -- binary/Statements/C1/run-tests.sh` | PASS, exit 0, about 25 minutes; output identical to revision 4's run. `TopOfMemory`, `StateWord` and `StackOffPeers` elaborate, their theorems on the standard axioms. 23 searches hold (the baseline over 108 insertions and 486 lookups, the others over 36 and 168 each, 23 distinct mirror decisions), the two closed-world runs hold with 21 reference steps between calls, `ServiceActive` holds of the test service and fails of the quiet one, and each refused variant is refused |
+| The insertion's own terms against the ELF, by hand | `capped -m 8G -- scripts/in-bundle /usr/bin/python3 -B binary/generate_allowedips_mutation.py --check` | "AllowedipsMutationImage.lean: checked", with its two layout files: the committed terms of `wg_allowedips_insert_v4`, `_v6` and `add.isra.0` |
 | Callback listing against the ELF, by hand | `capped -m 8G -- scripts/in-bundle /usr/bin/python3 -B binary/generate_c1_callbacks.py --check` | "StatementC1CallbackImage.lean: checked" |
 | Capture checks on the five kept captures | `Check.lean` and `summarise.py` on the raw captures in `.tmp/c1` | 73 lines of `Check.lean` output over five traces (40, 6, 9, 9, 9), byte-identical to revision 4's run; the summary identical, 60 kinds of check all ok, no problem listed |
 | One trace re-recorded and re-captured under the ten-patch pin | `capped -m 24G -- binary/Statements/C1/capture/run-capture.sh alloc:a2_allowedips_split_nomem`, with the earlier recording and capture set aside | exit 0, fresh guest boot, capture stamped Kraken `96d48487`; 2 insertions, 3 allocations (one slow path, one forced NULL), 1 release; 58 kinds of check all ok, `PROBLEMS []`. Against the nine-patch capture of the same trace the nine lines of `Check.lean` output differ in one field only, the count of bytes changed inside two service calls (704 against 709, 269 against 270), which varies between boots |
@@ -355,6 +356,7 @@ cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
 cap scripts/in-bundle lake -d binary build
 cap scripts/in-bundle /usr/bin/python3 scripts/binary-proof-gate
 cap scripts/in-bundle /usr/bin/python3 scripts/c2-bridge-gate
+cap scripts/in-bundle /usr/bin/python3 -B binary/generate_allowedips_mutation.py --check   # the terms of the two wrappers and add
 cap scripts/in-bundle /usr/bin/python3 -B binary/generate_c1_callbacks.py --check
 cap scripts/in-bundle /usr/bin/python3 -B binary/allowedips_mutation.py      # writes the tests' input
 cap binary/Statements/C1/run-tests.sh                                        # the three regression files, then the tests; about 25 minutes
