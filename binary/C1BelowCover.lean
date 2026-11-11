@@ -10,9 +10,9 @@ the trunk strengthened with `CutExtra`.
 comparison at `add+0x267`) with this file's segments (`cover_parent_exit`,
 `cover_root_exit`: comparison to `add+0x549`, machine and data). Nothing is
 assumed beyond `NodeCut`, `CutExtra`, the caller's conditions, `Inv` at
-entry and `StepFacts`. `pathCover_plus` is NOT the interface proposition
-`PathCover` (`TrunkToNode → Path .cover`): it takes the strengthened trunk
-`TrunkToNodePlus`, because `NodeCut` lacks the facts in `CutExtra`. -/
+entry and `StepFacts`. `pathCover_plus` is `PathCoverPlus` (`C1Cut`): it
+takes the strengthened trunk `TrunkToNodePlus`, because `NodeCut` lacks the
+facts in `CutExtra`. -/
 namespace Binary.Statements.C1.Proof
 open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.CommonBitsCoverage Binary.Statements.C1

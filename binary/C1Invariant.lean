@@ -38,7 +38,7 @@ def Inv (L : Layout) (A : Allocator) (w : World) (m : Mem 64) : Prop := Related 
 
 /-- A handed-out node ends strictly below the top of the address space. The
 landed interpretation check (`Trie.validate`) demands this of every node, and
-the signed contract's `AllocResult` promises only `≤` (through the arena
+the stated contract's `AllocResult` promises only `≤` (through the arena
 span). See `C1Interfaces.NodeBelowTop`. -/
 def belowTop (a : Nat) : Bool := a + nodeSize < 2^64
 

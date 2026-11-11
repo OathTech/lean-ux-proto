@@ -75,10 +75,9 @@ theorem trunk_of_plus (trunk : TrunkToNodePlus) : TrunkToNode := by
 
 /-! ## What packages 2 and 3 deliver across the cut
 
-The plus forms of `TrunkHolds`, `PathCover`, `PathSplit` and
-`PathSplitNoMem` (`C1Interfaces`). `C1Assembly` consumes these four. Of the
-original four, `TrunkHolds` follows by `trunk_of_plus`; the three paths from
-the bare `TrunkToNode` are not proved by anyone and are not used. -/
+`TrunkHolds` (`C1Interfaces`) in its strengthened form, and package 3's
+three paths from it. `C1Assembly` consumes these four. `TrunkHolds` itself
+follows by `trunk_of_plus`. -/
 
 /-- PACKAGE 2. The trunk to the cut in its strengthened form. -/
 def TrunkPlusHolds : Prop := NodeBelowTop → FramedHolds → AllocRule → TrunkToNodePlus

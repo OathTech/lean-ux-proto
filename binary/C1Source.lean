@@ -24,7 +24,7 @@ import AllowedipsTrieEdgeFacts
 import PairAllowedipsLookupFrame
 
 /-! Result C1, work package 1: the source side and the invariant's algebra. This module is the package's root in
-`binary/lakefile.toml`. The brief is `binary/Statements/C1/proof/WP1.md`.
+`binary/lakefile.toml`.
 
 The package is this one file: the library lists its roots one by one, so a
 module `C1SourceX` beside it is not a library module, and the lake file is
@@ -2114,7 +2114,7 @@ theorem walk_prefix_succ_eq_iff {bits c a b : Nat} (hc : c < bits) :
     have hb := Nat.div_add_mod (b / 2 ^ (bits - (c + 1))) 2
     omega
 
-/-- What the stop of the walk above a node gives (PLAN.md section 1, rows 3 and 5). -/
+/-- What the stop of the walk above a node gives (the ordering facts of `C1Invariant.walk`). -/
 theorem walk_stop_facts {bits key cidr nb nc : Nat} (fam : bits = 32 ∨ bits = 128)
     (hk : key < 2 ^ bits) (hn : nb < 2 ^ bits) (short : cidr ≤ bits)
     (stop : cidr < nc ∨ AllowedipsRelation.common bits nb key < nc) :

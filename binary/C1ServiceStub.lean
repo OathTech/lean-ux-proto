@@ -5,15 +5,17 @@ allocator state, and the parts of `AllocatorContract` that execute nothing
 (`frame`, and what the `alloc` clause's conclusion needs of a store to the
 state byte).
 
-The stub is shaped by the finding in `C1ServiceContractFinding`: under the
-contract as signed, a conforming service may not change any byte that some
+The stub is shaped by a finding of this package (kept as the regression
+`Statements/C1/proof/StateWord.lean`; revision 3 of the statement repaired
+the contract, so the shape is no longer needed): under the
+contract as stated at revision 2, a conforming service may not change any byte that some
 coverage context valid at its entry reads. Every read of a coverage context
 is at least two bytes wide. So the stub keeps its ONE mutable byte, the
 number of answers given so far, at an address whose two neighbours are
 unmapped: no coverage context, no stack scratch and no return word can
 contain it. Everything else the allocator needs is read-only (the pending
 outcomes, one byte each) or computed (object `k` is at `objects + 128*k`).
-This is a stub that meets the signed text, not a model of an allocator. -/
+This is a stub that meets the statement's text, not a model of an allocator. -/
 namespace Binary.Statements.C1.Stub
 open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.CommonBitsCoverage Binary.Statements.C1 Binary.Statements.C1.Proof

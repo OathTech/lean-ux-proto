@@ -3,7 +3,7 @@ import PairServiceCall
 import MemoryBytes
 
 /-! Result C1, open proposition `WitnessHolds`: the active stub meets
-`AllocatorContract` as signed (`contract`), and from an entry state whose
+`AllocatorContract` as stated (`contract`), and from an entry state whose
 coverage buffer is in use with room for a record it returns having changed a
 byte of its scratch and a byte of the buffer (`alloc_active`).
 
@@ -457,7 +457,7 @@ theorem free_clause (agree : ∀ pc i, Witness.fetch pc = some i → fetch pc = 
     exact ⟨count,stateRead,room,before,after,outcomes,zeroed,
       fun object member => lives object (List.mem_of_mem_erase member)⟩
 
-/-- THE ACTIVE STUB MEETS THE CONTRACT AS SIGNED, at any decoder that holds
+/-- THE ACTIVE STUB MEETS THE CONTRACT AS STATED, at any decoder that holds
 its code and whose PC callback meets the landed contract. -/
 theorem contract (agree : ∀ pc i, Witness.fetch pc = some i → fetch pc = some i)
     (tracePc : TracePcContract fetch) (tableAt : Nat) (peers : List (PeerId × Nat)) :

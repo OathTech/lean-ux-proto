@@ -5,8 +5,7 @@ import C1BelowTrunk
 /-! Result C1, work package 3: the rollback path (case `splitNoMem`) from
 the cut, and the whole path from the strengthened trunk. `NodeCut` alone
 does not suffice (see `CutExtra`); with `CutExtra` beside it the path
-closes: `pathSplitNoMem_plus` has the interface's `PathSplitNoMem` with
-`TrunkToNodePlus` in place of `TrunkToNode`. -/
+closes: `pathSplitNoMem_plus` is `PathSplitNoMemPlus` of `C1Cut`. -/
 namespace Binary.Statements.C1.Proof
 open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.CommonBitsCoverage Binary.Statements.C1
@@ -35,7 +34,7 @@ theorem rollback_from_cut (alloc : AllocRule) (free : FreeRule)
     (by rw [compared.held.stack,compared.held.down]; rfl)
     reached.idle summary reached.heap reached.saved
 
-/-- `PathSplitNoMem` with the trunk handing over `CutExtra` beside `NodeCut`. -/
+/-- `PathSplitNoMemPlus`: the trunk hands over `CutExtra` beside `NodeCut`. -/
 theorem pathSplitNoMem_plus : AllocRule → FreeRule → TrunkToNodePlus → Path .splitNoMem :=
   fun alloc free trunk => path_of_segment_plus (.inr (.inr rfl)) trunk
     (fun _ _ _ premises _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ inv ready _ facts case cut extra =>

@@ -2,8 +2,7 @@ import C1Source
 
 /-! Result C1, proposition `ReferencedHolds` (`C1Interfaces`): the invariant
 survives the caller taking or dropping one reference on a registered peer
-between calls. This module is the prover's root in `binary/lakefile.toml`;
-the hand-over is `binary/Statements/C1/proof/OPEN.md`, section 1.
+between calls. This module is a root in `binary/lakefile.toml`.
 
 Three steps. (1) The mirror's `peerGetMaybeZero` returning the peer, and its
 `peerPut` from a count above one, each leave the device as it was with that

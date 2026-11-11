@@ -6,7 +6,7 @@ import C1TrunkChild
 
 /-! Result C1, work package 2: the trunk of the compiled insertion and the paths that end above the placement. This module is the package's root in
 `binary/lakefile.toml`: add modules named `C1Trunk*.lean` and import them here.
-The brief is `binary/Statements/C1/proof/WP2.md`. The acceptance theorems
+The acceptance theorems
 are here; their parts are in the `C1Trunk*` modules. -/
 namespace Binary.Statements.C1.Proof
 open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
@@ -266,7 +266,7 @@ theorem pathChild_of_stackOffPeers : C1Trunk.StackOffPeers → PathChild := by
 /-- PACKAGE 2, for package 3: the trunk in the strengthened form package 3's
 paths take (`TrunkToNodePlus`, in `C1Cut`).
 NOT the interface's `TrunkHolds`: `C1Trunk.StackOffPeers` is an extra
-hypothesis, not derivable from the signed text (see `C1TrunkCut`). -/
+hypothesis, not derivable from the statement's text (see `C1TrunkCut`). -/
 theorem trunkToNodePlus_of_stackOffPeers :
     C1Trunk.StackOffPeers → NodeBelowTop → FramedHolds → AllocRule → TrunkToNodePlus :=
   C1Trunk.trunkToNodePlus

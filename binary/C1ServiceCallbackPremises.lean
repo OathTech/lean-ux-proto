@@ -14,7 +14,7 @@ holds of `Joint.fetch`, the callbacks being the image's.
 
 `premisesMet` closes the interface proposition with the stub of
 `C1ServiceStub` (twelve instructions at `allocEntry`, one at `freeEntry`),
-which meets `AllocatorContract` as signed (`Stub.contract`), and whose `Idle`
+which meets `AllocatorContract` as stated (`Stub.contract`), and whose `Idle`
 holds of actual memories (`Stub.idle_initial`). The proposition itself does
 not ask that `Idle` can hold: an allocator that is never idle would also
 close it. -/

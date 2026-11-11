@@ -10,7 +10,7 @@ are apart from every peer OBJECT (`allocations names o`, 1520 bytes each).
 The caller's conditions (`frameReady`'s `c1.heap-separation`) keep the stack
 window apart from `L.heap`, which holds only the peer's WORDS (the reference
 count and the list head: `Layout.fixed`). A stack window lying inside a peer
-object between those words meets every signed condition, and the landed
+object between those words meets every stated condition, and the landed
 boundary then fails. The two `example`s below execute both checks on such a
 layout. The cut is proved here from `StackOffPeers`, stated as an explicit
 hypothesis; nothing is restated. -/
@@ -20,7 +20,7 @@ open Binary.TrustBase Binary.CommonBitsCoverage Binary.Instrumentation
 open Binary.Statements.C1 Binary.Statements.C1.Proof Leanux Leanux.WG
 local instance : Labels := Image.linkedLabels
 
-/-- NOT DERIVABLE FROM THE SIGNED TEXT (a statement finding of this
+/-- NOT DERIVABLE FROM THE STATEMENT'S TEXT (as it stood at revision 3) (a statement finding of this
 package, beside `NodeBelowTop`). The insertion's stack window is apart from
 every peer object. `insertReady` keeps the window apart from the peer's
 reference count and list head only. -/
@@ -33,7 +33,7 @@ def StackOffPeers : Prop :=
       ¬Pair.Span.contains (peer.2,Layouts.peerSize) x
 
 /-- Evidence, executed: one peer at 0x10000, a stack pointer 600 bytes into
-it, a window of 208 bytes below it with the return word. The signed
+it, a window of 208 bytes below it with the return word. The stated
 separation of the heap from the window holds. -/
 example : spansApart (Statements.C1.Layout.heap ⟨0x1000,[(1,0x10000)],[(0x20000,0x1000)],0⟩)
     [(0x10000+600-208,216)] = true := by decide
@@ -62,7 +62,7 @@ theorem node_boundary_of_fields {names o world machine key cidr pid base}
 /-- The other direction of the finding: whatever state a trunk delivers with
 `NodeCut`, the landed boundary there says the three stack bytes are apart
 from every peer object. So `TrunkToNode` as stated implies this separation at
-its cut state, for every state the signed conditions admit. -/
+its cut state, for every state the stated conditions admit. -/
 theorem cut_stack_off_peers {fetch : Int64 → Option Decoded} {L : Statements.C1.Layout} {A : Allocator}
     {c : Context} {s : MachineState} {ra : UInt64} {w : World} {d : Device} {key cidr pid : Nat}
     {stream : List HiddenRecord} {placed : Option NodeId} {names : Allowedips.Names} {base : Nat}

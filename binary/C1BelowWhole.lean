@@ -73,8 +73,8 @@ theorem split_from_cut (below : NodeBelowTop) (alloc : AllocRule) {fetch : Int64
   | some p => exact x.parent_exit k premises inv facts case dropped zero hasBelow
 
 /-- PACKAGE 3, case `split`, from the trunk that hands over `CutExtra`
-beside `NodeCut` (`TrunkToNodePlus`). `PathSplit` itself, from
-`TrunkToNode`, is not provable: `NodeCut` lacks the facts of `CutExtra`. -/
+beside `NodeCut` (`TrunkToNodePlus`): `PathSplitPlus` of `C1Cut`. From the
+bare `TrunkToNode` it is not provable: `NodeCut` lacks the facts of `CutExtra`. -/
 theorem pathSplit_plus : NodeBelowTop → AllocRule → TrunkToNodePlus → Path .split :=
   fun below alloc trunk => path_of_segment_plus (.inr (.inl rfl)) trunk
     (fun _ _ _ premises _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ inv ready _ facts case cut extra =>

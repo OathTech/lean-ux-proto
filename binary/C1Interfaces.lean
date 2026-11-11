@@ -6,7 +6,7 @@ import PairMappedMemory
 /-! Result C1, proof plan: the interface propositions between the four work
 packages, as `def … : Prop`. No theorem here. `C1Assembly` proves `Signed`
 from them. Each proposition names the package that proves it and the landed
-theorems it may use; `binary/Statements/C1/proof/PLAN.md` has the graph.
+theorems it may use.
 
 Reading guide. One accepted insertion is described once, on the source side,
 by `StepFacts` (the mirror's run is the pure `C1Step.step`, with the walk
@@ -14,7 +14,7 @@ facts of `C1Invariant.walk`). Each path of the compiled code is then one
 proposition `Path k`: from the invariant and the caller's conditions to the
 conclusion of `InsertStep`, for runs whose step is case `k`. The packages
 that execute instructions meet in three places only: the two service rules
-(`AllocRule`, `FreeRule`, derived once from the signed contract) and one
+(`AllocRule`, `FreeRule`, derived once from the stated contract) and one
 machine cut inside `add` (`TrunkToNode`, the landed `NodeInit.boundary` at
 `add+0x156` with what is needed to return from there). -/
 namespace Binary.Statements.C1.Proof
@@ -22,7 +22,7 @@ open Leanux Leanux.WG Binary.Pair Binary.Pair.Allowedips Binary.TrustBase
 open Binary.CommonBitsCoverage Binary.Statements.C1
 local instance : Labels := Image.linkedLabels
 
-/-! ## The node bound (derived from the signed text since revision 3) -/
+/-! ## The node bound (derived from the statement's text since revision 3) -/
 
 /-- A node the service hands out ends strictly below 2^64. The landed
 interpretation check (`Trie.validate`, inside `assertAt`, hence inside `Inv`)
@@ -323,15 +323,9 @@ def PathNodeNoMem : Prop := FramedHolds → AllocRule → Path .nodeNoMem
 def PathChild : Prop := NodeBelowTop → FramedHolds → AllocRule → Path .child
 /-- PACKAGE 2. The trunk to the cut, for package 3. -/
 def TrunkHolds : Prop := NodeBelowTop → FramedHolds → AllocRule → TrunkToNode
-/-- PACKAGE 3. Covering node, at the root and below a parent. May use
-`NodeInit.initialization_core_checked`, `common_checked`, and T1, T2 as
-lemma sources. -/
-def PathCover : Prop := TrunkToNode → Path .cover
-/-- PACKAGE 3. Intermediate node, two allocations, at the root and below a
-parent. T5 as lemma source. -/
-def PathSplit : Prop := NodeBelowTop → AllocRule → TrunkToNode → Path .split
-/-- PACKAGE 3. The second allocation refused: unlink, release, `-ENOMEM`. -/
-def PathSplitNoMem : Prop := AllocRule → FreeRule → TrunkToNode → Path .splitNoMem
+/-! Package 3's three paths (covering node, intermediate node, the second
+allocation refused) are stated in `C1Cut`, from the strengthened trunk:
+`NodeCut` alone does not determine the machine's behaviour from the cut. -/
 
 /-! ## The headline with the invariant fixed, and what follows from it -/
 

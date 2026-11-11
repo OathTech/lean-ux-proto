@@ -1,7 +1,7 @@
 import C1ServiceStubRun
 import MemoryBytes
 
-/-! Result C1, work package 4: the stub meets `AllocatorContract` as signed.
+/-! Result C1, work package 4: the stub meets `AllocatorContract` as stated.
 
 The one byte the stub changes has unmapped neighbours, so no read of two or
 more bytes (every read of a coverage context, the return word) can contain
@@ -266,7 +266,7 @@ theorem free_clause (agree : ∀ pc i, Stub.fetch pc = some i → fetch pc = som
     exact ⟨count,stateRead,room,before,after,outcomes,zeroed,
       fun object member => lives object (List.mem_of_mem_erase member)⟩
 
-/-- THE STUB MEETS THE CONTRACT AS SIGNED, at any decoder that holds its code. -/
+/-- THE STUB MEETS THE CONTRACT AS STATED, at any decoder that holds its code. -/
 theorem contract (agree : ∀ pc i, Stub.fetch pc = some i → fetch pc = some i)
     (tableAt : Nat) (peers : List (PeerId × Nat)) :
     AllocatorContract fetch (layout tableAt peers) allocator :=
