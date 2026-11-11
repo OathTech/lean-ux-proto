@@ -1,6 +1,13 @@
 # C1: the final statement, revision 4
 
-2026-11-10, branch `task/binary-c1`. The signed statement of result C1 (the
+2026-11-10, branch `task/binary-c1`. **Status: this is the final statement as
+put to the owner. The owner signed revision 2; revision 4, the text below,
+is not yet signed: the signature is given at the landing.** The proof is
+closed since ([closing report](2026-11-11-c1-allowedips-insertion.md)); the
+working briefs this document names (`proof/PLAN.md` and the package briefs)
+and the service package's finding file were removed when the branch was
+prepared for landing. The statement of
+result C1 (the
 compiled allowed-IPs insertion) revised in the five places decided in
 `docs/decisions.md` (2026-11-10; revision 3) and, after the independent
 review of revision 3 and a finding of the trunk's proof, in two more
@@ -208,7 +215,7 @@ already in it, through the mirror's lookup. The drop is unchanged.
 **Change B (revision 4): the stack window is apart from whole peers.** The
 trunk's finding (`task/binary-c1-wp2`, `C1TrunkCut`): the landed
 `NodeInit.boundary` needs three bytes of `add`'s stack apart from every peer
-as a whole 1520-byte object, and the signed heap separation kept the window
+as a whole 1520-byte object, and the stated heap separation kept the window
 apart from a peer's reference count (offset 1056) and list head (1096)
 only. The hunk, in `insertReady` before its call of `frameReady`:
 
@@ -240,7 +247,7 @@ allocator with `Idle := False` closed it). It now also asks that the
 allocator be idle in some memory, and its description says only what it
 states.
 
-## 2. The signed text, in reading order
+## 2. The text put to the owner for signature, in reading order
 
 `binary/StatementC1Contracts.lean` (135 source lines, 116 in revision 2),
 `binary/StatementC1Headline.lean` (291, 252),
@@ -251,7 +258,7 @@ below; the files carry them. `InsertStep`, `LookupStep`, `Initial`,
 textually unchanged from revision 2; `insertReady` gained one clause
 (change B, appendix A).
 
-**What is signed:**
+**What is put for signature:**
 
 ```lean
 def Signed : Prop :=
@@ -446,8 +453,8 @@ def Witness : Prop :=
 
 `SeqAdvanced`, the write sets, `Ran`, `HeapSame`, `outcome`, the two
 exclusions, the layout, the literals, the executable caller conditions and
-the ten instruction terms are in [appendix A](#appendix-a-the-rest-of-the-signed-text).
-They are part of what is signed.
+the ten instruction terms are in [appendix A](#appendix-a-the-rest-of-the-text-put-for-signature).
+They are part of what is put for signature.
 
 ## 3. The difference from revision 2
 
@@ -465,7 +472,7 @@ removed, in twelve hunks; the raw diff is [appendix D](#appendix-d-the-diff-agai
 | Headline `@@ -158` | New `CountMoved`, `Referenced` | The clause itself | 2 |
 | Headline `@@ -158`, within `Referenced` | The take is `peerGetMaybeZero (some pid)` returning `some pid`; the comment cites the kernel's lines | The operation `set_peer` performs on an existing peer (R1); `peerGet` leaves the claim | A |
 | Headline `@@ -215` | `Referenced L Inv` in `Headline`'s conjunction; its comment | The clause is claimed | 2 |
-| Headline `@@ -241` | The same conjunct in `HeadlineExplicit` (not signed) | Keeps "implies `Headline`" true | 2 |
+| Headline `@@ -241` | The same conjunct in `HeadlineExplicit` (not part of what is put for signature) | Keeps "implies `Headline`" true | 2 |
 | Vacuity `@@ -3` | File comment | Comment only | 5 |
 | Vacuity `@@ -30`, `@@ -67` | `Witness` split into `Executed`, `ServiceActive` and the conjunction; the mid-history clause removed; comments | Provable from the headline's shape | 5 |
 | Vacuity `@@ -133` | The comment on `Signed` (the register wording): the witness's relation to the headline; "with the caller's references on registered peers taken and dropped between them"; "ending below 2^64" | Says what the revised result establishes. Comment only, but it is the wording the register entry will use | 1, 2, 5 |
@@ -640,7 +647,7 @@ should know that the decision did not anticipate:
 4. **The witness is weaker in one respect** (section 1, change 5), and its
    satisfiability by a stub is argued and tested, not proved.
 
-Smaller: `HeadlineExplicit` (unsigned) gained the same conjunct; the comment
+Smaller: `HeadlineExplicit` (not part of what is put for signature) gained the same conjunct; the comment
 on `Signed`, which is the register wording, changed in three phrases.
 
 ## 8. What the owner is accepting knowingly
@@ -698,7 +705,7 @@ exit is outside. New with revision 4 among the caller's conditions: the
 insertion's stack window does not lie in a peer object (true of the 20
 captured calls, where the stack is a kernel stack).
 
-## Appendix A: the rest of the signed text
+## Appendix A: the rest of the text put for signature
 
 ```lean
 def SeqAdvanced (L : Layout) (s t : MachineState) : Prop :=
