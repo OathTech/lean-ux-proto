@@ -406,3 +406,29 @@ cap binary/Statements/C1/run-tests.sh                                        # t
 cap binary/Statements/C1/capture/run-capture.sh                              # boots guests; about 10 minutes
 cap scripts/in-bundle /usr/bin/python3 -B binary/Statements/C1/measure-surface.py
 ```
+
+## 9. Dispositions of the landing review's findings
+
+The [independent landing review](2026-11-11-review-c1-landing.md)
+(`6a70659d` on `task/review-c1-landing`, of this branch at `6d712422`):
+land with named changes, all to documents and records, none to the Lean.
+One commit per finding; no Lean file and no gate changed.
+
+| Finding | Disposition | Commit |
+| --- | --- | --- |
+| S1. The record of the signature | Fixed, as corrected by the coordinator, whose wording the error was: no revision of the statement has been signed by the owner. The closing report, the final statement and its index row say so; in `docs/decisions.md` the commissioning bullet reads "is to be signed" and the two revision entries say "C1's statement". The entry recording the owner's signature and merge approval is not added here: the coordinator adds it when they are given (open item 1) | `736d0c5a` |
+| S2. The closed-world condition on the mirror's side | Fixed: stated in section 3 item 1 and section 2, in the register row and in the README row | `b23c8419` |
+| S3. The ELF check of the insertion's own terms | Fixed: `generate_allowedips_mutation.py --check` is in the README's image checks and in this report's validation table and reproduction block; run once, three files checked | `e295a33f` |
+| S4. A stale sentence in the README | Fixed | `d06ae8af` |
+| S5. Two reproduction slips | Fixed: `measure-surface.py` creates `.tmp/c1`; the replay block is relative to the checkout's root and says which checkout | `39fa3c77` |
+| N1. What the witness covers | Stated in section 3, item 9 | `5a5ba2ee` |
+| N2. The docstring of `Signed` | Stated in section 3, item 10, with a proposed rewording as a diff for the owner's decision at the signature; the statement file is unchanged | `5a5ba2ee` |
+| N3. `Premises.peer` also fixes `wg_index_hashtable_lookup`'s terms | No change asked. Answered here: "six functions" in the documents is the set the claim is about; the decoder premise says more, a true fact of the image checked by `generate.py --check` and unused by the proof's paths | |
+| N4. What the printed surface does not print | Stated in section 3, item 11, with the reviewer's file references; open item 5 stands | `5a5ba2ee` |
+| N5. The captures' Kraken stamp | No change asked. Section 6 says which captures were recorded under which pin and that one was re-recorded | |
+| N6. `HeadlineExplicit` is closed too | No change asked. Not registered and not claimed, by the decision to keep the relation out of the claim; `explicit_of_for headlineFor referencedHolds` proves it if a later result wants it | |
+| N7. "Every later lookup" is the next lookup | Stated in section 3, item 12 | `5a5ba2ee` |
+| N8. Speed | No change asked | |
+
+After these changes the binary gate was run once on the final head, wrapped
+in `capped`: PASS (build 1321 jobs, 75 terminal statements on the standard axioms, surface diff PASS, no forbidden token).
