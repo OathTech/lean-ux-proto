@@ -109,11 +109,24 @@ def finish_workload(remote, process, boot, trace, timeout):
     return dict(completedOperations=completed, qemuReturncode=returncode)
 
 
+def select_invocation(anchor, requested, ordinal, remote, regs, offsets):
+    """Replacement/insertion selection depends only on call order.
+
+    Removal retains its older linked-entry diagnostic. In particular, never
+    inspect replacement's linkage to decide whether to count/select a call.
+    """
+    if anchor in ('replace', 'insert'):
+        return ordinal == requested
+    if anchor == 'remove':
+        return remote.word(regs['rsi'] + offsets['hash'] + offsets['pprev']) != 0
+    raise ValueError('unknown invocation selector')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--anchor', choices=['remove', 'replace', 'insert'], required=True)
     parser.add_argument('--call-index', type=int, default=0,
-                        help='zero-based selected call within the operation (insert only)')
+                        help='zero-based all-call ordinal within the operation (replace/insert)')
     parser.add_argument('--input', type=Path, required=True)
     parser.add_argument('--check', type=Path, required=True)
     parser.add_argument('--operation', type=int, required=True)
@@ -125,8 +138,8 @@ def main():
     args = parser.parse_args()
     if not 0 < args.instruction_budget <= 1000000:
         raise ValueError('invalid instruction budget')
-    if args.call_index < 0 or (args.anchor != 'insert' and args.call_index):
-        raise ValueError('call-index is nonnegative and only supported for insertion')
+    if args.call_index < 0 or (args.anchor == 'remove' and args.call_index):
+        raise ValueError('call-index is nonnegative and supported for replacement/insertion')
     probe = json.loads(args.input.read_text())
     check, out = args.check.resolve(), args.out.resolve()
     report = json.loads((check / 'report.json').read_text())
@@ -172,12 +185,9 @@ def main():
                     raise ValueError('unexpected stop while selecting invocation')
                 completed = completed_operations(boot, probe['trace']['id'])
                 if len(completed) > args.operation:
-                    raise ValueError('selected operation passed without the requested linked mutator')
+                    raise ValueError('selected operation passed without the requested mutator')
                 if len(completed) == args.operation:
-                    previous = remote.word(regs['rsi']+probe['offsets']['hash']+probe['offsets']['pprev'])
-                    if args.anchor == 'insert' and selected == args.call_index:
-                        break
-                    if args.anchor != 'insert' and previous:
+                    if select_invocation(args.anchor, args.call_index, selected, remote, regs, probe['offsets']):
                         break
                     selected += 1
                 remote.breakpoint(entry, False)
@@ -237,6 +247,8 @@ def main():
                           trace=probe['trace']['id'], operation=args.operation, instructionBudget=args.instruction_budget,
                           executionMode='sequential', recordingMode='pc', executedPCs=executed, completedOperations=completed,
                           occurrence=occurrence, initial=initial, returned=dict(registers=returned, blocks=final_blocks),
+                          selection='linked entry' if args.anchor == 'remove' else 'operation ordinal',
+                          operationCallIndex=selected,
                           randomServices=random_services)
             if args.finish_workload:
                 result['postCaptureCompletion'] = finish_workload(
