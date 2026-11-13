@@ -129,6 +129,11 @@ the paired experiment's carry to the split mirror and pinned s5 image, its
 separate build/gate and runtime validation, and the open milestone-1 review
 obligations. Current setup commands are in [binary/README.md](../binary/README.md).
 
+The [execution-based binary assessment](2026-11-13-binary-assessment.md)
+tests the current foundation and archived extension against fresh captures,
+distinguishes admitted executions from conditional results, and proposes a
+scoped recovery process.
+
 | Document | Contents |
 | --- | --- |
 | [2026-10-21-proof-probes.md](2026-10-21-proof-probes.md) | Three bounded probes after Campaign 3: outcomes, evidence limits, validation and reproduction |
