@@ -134,6 +134,10 @@ tests the current foundation and archived extension against fresh captures,
 distinguishes admitted executions from conditional results, and proposes a
 scoped recovery process.
 
+The [binary remediation plan](2026-11-13-binary-remediation-plan.md)
+sets out staged repairs, their evidence and stop conditions, and the
+proposed independent review process.
+
 | Document | Contents |
 | --- | --- |
 | [2026-10-21-proof-probes.md](2026-10-21-proof-probes.md) | Three bounded probes after Campaign 3: outcomes, evidence limits, validation and reproduction |
