@@ -144,8 +144,10 @@ joins full-buffer lookup admission and replay, investigates the
 [replacement source cut](2026-11-13-replacement-source-cut.md), and tests
 the [clean C2 native frame](2026-11-13-c2-native-frame.md). The later
 [replacement observer](2026-11-13-replacement-observer.md) implements and
-tests the proposed interior source cut. C2 remains unresolved; no archived
-whole-driver claim is adopted.
+tests the proposed interior source cut. Its
+[independent review](2026-11-13-review-replacement-observer.md) records the
+missing-return false pass, its correction, and the remaining admission limits.
+C2 remains unresolved; no archived whole-driver claim is adopted.
 
 | Document | Contents |
 | --- | --- |

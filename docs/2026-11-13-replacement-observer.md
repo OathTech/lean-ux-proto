@@ -50,8 +50,8 @@ fields are not claimed extensionally equal by the observer comparison.
 ## Validation
 
 Discovery and fresh held-out combined validation pass on checker
-`5530a339`. Independent review is complete; broader mirror validation is
-still in progress. Both boots complete all six operations and exit successfully.
+`5530a339`. Independent review and the surrounding mirror validation are
+complete. Both boots complete all six operations and exit successfully.
 
 The discovery source reaches one entry and consumes 11 of 24 records,
 retaining the exact 13-record suffix. Three completed-operation checkpoints
@@ -104,7 +104,8 @@ Completed surrounding checks, over the observer mirror change:
 
 | Check | Result |
 | --- | --- |
-| Fast mirror units | 149 tests pass, with one image-dependent test skipped in the initial invocation; its explicit-image rerun is pending |
+| Full differential check | 2,326 agreements across 53,862 operations; no failures or abort; 1,514,586 operand obligations matched by 1,119,328 distinct native rows |
+| Fast mirror units | Initial 149-test run succeeds with one image-location skip; all 14 Linux harness tests pass on the explicit-image rerun, including the skipped test |
 | Fixed-width executable | Five wrap witnesses pass |
 | Steering, lifecycle and underload controls | 6/6 expected rejections |
 | Timer control | 1/1 expected hidden-record rejection |
@@ -112,6 +113,8 @@ Completed surrounding checks, over the observer mirror change:
 | Kernel allocation controls | 15/15 assertions pass |
 | Evaluator allocation controls | 5/5 expected cases pass |
 | Pipe sentinels | Both rejected; baseline 24 agreements and 277 operations |
+| WireGuard sentinels | 15/15 rejected; zero survivors, inconclusive or infrastructure-only outcomes |
+| Netlink / W47 / W9 domain controls | 3/3, 3/3 and 1/1 pass |
 
 The pipe clock mutant stops one trace on an extra `current_time` request;
 its 24 batch-wide hidden mismatches are not 24 independent counterexamples.
@@ -121,7 +124,29 @@ The older local state-input mutator runner also passes the discovery
 capture at both seeds, preserving its narrower claim and visible
 completed-prefix projection mismatch.
 
-The full differential run and WireGuard sentinels remain in progress.
+The clean model/fixed-width build passes 135 jobs without warnings. Two
+temporary sentinel mutations produced unused-variable warnings; restoring
+their sources removed them. No warning suppression was added. The selected
+dispatch sentinel has a non-FIFO witness, and the NAPI sentinel has a `bc`
+placement witness; neither is an inconclusive run reported as rejection.
+
+The full differential check exits 0 on the pinned s5 image. It took
+3 hours 2 minutes 18 seconds, with 11 console-output-limit splits and no
+chunk retries. It ran over the observer mirror code at `ffb3d8df`; its
+reported HEAD is `cb1b1105`, with documentation-only edits in progress.
+No implementation or validation logic changed during the run.
+
+This agreement retains the checker's existing domain and observability
+limits. The suite includes 23 `failslab` domain-extension traces, not
+ordinary unmodified-kernel executions. Of 1,598 registered decisions, 53
+were never evaluated and 692 showed only one outcome; 587 have no KCOV
+witness. The report records 751,005 decision occurrences without an order
+witness, 383,109 order comparisons including 13,724 ties, 1,726 shared-exit
+cases, and the existing operand exclusions
+for the root-user reference count (1,049) and epoll generation fields
+(1,172). Full-suite agreement does not establish exhaustive branch or
+instruction-order coverage, or discharge the binary obligations below.
+
 The first full-check invocation failed before boot because the default
 unsuffixed kernel directory was absent; selecting the pinned s5 directory
 corrected that setup failure once. Native recording likewise needed one
@@ -139,7 +164,8 @@ repair; no validation or harness logic was changed during this run.
 ## Limits and next work
 
 This is successful replacement inside `c_remove_after_handshake`, under the
-existing single-CPU sequential-call setup. Removal/insertion callers,
+existing single-CPU sequential-call setup with interrupts and timers deferred
+during native stepping. Removal/insertion callers,
 general lifecycles, concurrent interference, universal permissions/services,
 lookup transport's joint representation/separation premises and the
 archived C2 frame remain conditional or unresolved. See the
@@ -184,3 +210,14 @@ Repeat capture/admission into a fresh held-out directory after fixing the
 checker. The combined Python driver is the claim point; the Lean predicate
 executable alone does not establish record provenance. Raw captures and
 reports are ephemeral; preserve conclusions and commands, then regenerate.
+
+For the surrounding full regression, with `LEANUX_KERNEL_DIR` pointing at
+the pinned s5 image:
+
+```sh
+CAPPED_MEM_MAX=16G cap scripts/in-bundle "$binary_python" -B -m evaluator.check
+```
+
+The existing control and sentinel commands are documented in
+[AGENTS.md](../AGENTS.md); their results above are separate from binary
+admission and from acceptance of the proof tree.
