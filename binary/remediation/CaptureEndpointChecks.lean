@@ -1,4 +1,4 @@
-import PairMutatorCapture
+import PairCapture
 
 /-! Regression controls for the streaming endpoint comparison. The bytes
 are deliberately small synthetic inputs, not captured execution evidence. -/
@@ -18,7 +18,7 @@ def main : IO UInt32 := do
   let first : Block := ⟨0x1000, #[1, 2, 3]⟩
   let overlap : Block := ⟨0x1001, #[2, 3]⟩
   let endpoint : Endpoint := ⟨registers, #[first, overlap]⟩
-  let extent := Binary.Pair.MutatorCapture.checkReturnExtent
+  let extent := checkReturnExtent
   liftE (extent #[first, overlap] #[first, overlap])
   rejected "empty return capture" (extent #[first, overlap] #[])
   rejected "missing return block" (extent #[first, overlap] #[first])

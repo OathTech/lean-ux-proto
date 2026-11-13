@@ -185,11 +185,22 @@ def compareReturn (snapshot : Snapshot) (actual : Run) : Except String Nat := do
     throw "captured instruction sequence differs from Kraken execution"
   compareEndpoint snapshot.returned actual.state
 
+/-- Index lookup and mutator collectors reread exactly their entry ranges at
+return. Check that protocol before comparing bytes: omitted ranges must not
+reduce the evidence required by those runners. Other collectors can have a
+different extent protocol, so the generic endpoint comparator stays separate. -/
+def checkReturnExtent (initial returned : Array Block) : Except String Unit := do
+  unless !initial.isEmpty && initial.all (fun b => !b.bytes.isEmpty) &&
+      initial.map (fun b => (b.address, b.bytes.size)) ==
+        returned.map (fun b => (b.address, b.bytes.size)) do
+    throw "capture.return-extent"
+
 def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except String Json := do
   unless snapshot.executionMode == "sequential" do
     throw "captured replay requires the declared sequential environment; ordinary execution may interleave interrupts"
   unless (← input.trace.getObjValAs? String "id") == snapshot.trace && input.operation == snapshot.operation &&
       snapshot.completedOperations.toList == List.range snapshot.operation do throw "snapshot workload/invocation mismatch"
+  checkReturnExtent snapshot.initial.blocks snapshot.returned.blocks
   let world ← replayPrefix input.trace input.operation
   let some d := world.wg.dev | throw "recorded source prefix has no device"
   let initial ← snapshot.initial.registers.state (← loadMemory snapshot.initial.blocks)
