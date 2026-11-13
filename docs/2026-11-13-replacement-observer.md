@@ -50,8 +50,8 @@ fields are not claimed extensionally equal by the observer comparison.
 ## Validation
 
 Discovery and fresh held-out combined validation pass on checker
-`5530a339`. Independent review and broader mirror validation are still in
-progress. Both boots complete all six operations and exit successfully.
+`5530a339`. Independent review is complete; broader mirror validation is
+still in progress. Both boots complete all six operations and exit successfully.
 
 The discovery source reaches one entry and consumes 11 of 24 records,
 retaining the exact 13-record suffix. Three completed-operation checkpoints
@@ -83,6 +83,14 @@ truncated and relocated return ranges. Final admission uses that correction.
 The earlier successful complete capture did not validate the defective
 checker against incomplete captures.
 
+The [independent review](2026-11-13-review-replacement-observer.md)
+reproduced that false pass, verified its rejection after the correction,
+and independently passed the complete discovery driver. Its findings are
+disposed individually: F1 is fixed by the extent check; F2 is fixed by
+selecting the host Python before entering the bundle; F3 remains an explicit
+unadmitted full-postcondition obligation in this report and the register.
+The review found no further implementation defect within the declared pilot.
+
 The binary trust gate passes its unchanged 71-headline surface with only
 standard axioms. Fresh `leanchecker --fresh PairMutatorCapture` replay also
 passes over the corrected implementation. Image and Kraken pins are
@@ -91,6 +99,42 @@ unchanged. The hook changes the operational mirror at
 revision and is lagging. Its historical checkpoints remain historical.
 Binary runtime checks and local kernel replay do not establish acceptance
 of that proof tree or the sandboxed external proof-acceptance gate.
+
+Completed surrounding checks, over the observer mirror change:
+
+| Check | Result |
+| --- | --- |
+| Fast mirror units | 149 tests pass, with one image-dependent test skipped in the initial invocation; its explicit-image rerun is pending |
+| Fixed-width executable | Five wrap witnesses pass |
+| Steering, lifecycle and underload controls | 6/6 expected rejections |
+| Timer control | 1/1 expected hidden-record rejection |
+| Seccomp controls | 3/3 expected unsupported-path rejections |
+| Kernel allocation controls | 15/15 assertions pass |
+| Evaluator allocation controls | 5/5 expected cases pass |
+| Pipe sentinels | Both rejected; baseline 24 agreements and 277 operations |
+
+The pipe clock mutant stops one trace on an extra `current_time` request;
+its 24 batch-wide hidden mismatches are not 24 independent counterexamples.
+The other pipe mutant produces nine control-flow mismatches and 15
+agreements. These controls completed without aborts or semantic retries.
+The older local state-input mutator runner also passes the discovery
+capture at both seeds, preserving its narrower claim and visible
+completed-prefix projection mismatch.
+
+The full differential run and WireGuard sentinels remain in progress.
+The first full-check invocation failed before boot because the default
+unsuffixed kernel directory was absent; selecting the pinned s5 directory
+corrected that setup failure once. Native recording likewise needed one
+pre-boot correction to place its output under the configured artifact root.
+Neither setup failure is counted as a passing run.
+
+The full check exposes an existing performance problem in
+`evaluator.check.operand_agreement`: repeated filtering of native rows for
+each source obligation. The `e_ring_carry` capture has 303,174 source
+decisions, 107,636 operand obligations and up to 45,969 native rows in one
+operation. The obligation/row products total about 4.44 billion potential
+filter visits. This needs a separate semantics-preserving performance
+repair; no validation or harness logic was changed during this run.
 
 ## Limits and next work
 
