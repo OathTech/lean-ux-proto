@@ -290,6 +290,8 @@ def main():
     parser.add_argument('--instruction-budget', type=int, default=100000)
     parser.add_argument('--execution-mode', choices=['sequential', 'ordinary'], default='sequential',
                         help='Sequential stepping defers IRQs/timers within the captured call')
+    parser.add_argument('--partial-coverage', action='store_true',
+                        help='Diagnostic only: capture a buffer prefix; the checked lookup replay refuses it')
     args = parser.parse_args()
     if not 0 < args.instruction_budget <= 1000000:
         raise ValueError('instruction budget must be between 1 and 1000000')
@@ -350,7 +352,8 @@ def main():
             if completed != list(range(probe['operation'])):
                 raise ValueError(f'invocation is not in the selected operation: completed {completed}')
             print(f'capturing entry {entry:#x}, occurrence {occurrence}, query {probe["query"]:#x}', flush=True)
-            initial = capture(remote, regs, probe, layout, args.instruction_budget)
+            initial = capture(remote, regs, probe, layout, args.instruction_budget,
+                              full_coverage=not args.partial_coverage)
             return_pc = remote.word(regs['rsp'])
             remote.breakpoint(entry, False)
             executed = []

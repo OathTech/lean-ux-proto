@@ -71,6 +71,17 @@ name = "binary-pair-mutator-capture"
 root = "PairMutatorCaptureMain"
 
 [[lean_exe]]
+name = "binary-replacement-observe"
+root = "ReplacementObserveMain"
+
+[[lean_exe]]
+name = "binary-replacement-admit"
+root = "ReplacementAdmitMain"
+
+[[lean_lib]]
+name = "ReplacementObserve"
+
+[[lean_exe]]
 name = "binary-pair-insert"
 root = "PairInsertMain"
 

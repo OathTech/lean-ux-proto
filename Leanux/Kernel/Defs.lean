@@ -1486,6 +1486,23 @@ structure InboxDatagram where
   dst : Nat := 0
   deriving Repr, BEq
 
+/-- Read-only diagnostic output at the original replacement caller's entry.
+    This is a WireGuard slice, not a second operational store or a full
+    product-world snapshot. The remaining records are copied without
+    normalization or consumption; consumers identify the operation/call. -/
+structure ReplacementEntryObservation where
+  peer : WG.PeerId
+  keypair : WG.KeypairId
+  device : Option WG.Device
+  peerCounter : Nat
+  keypairCounter : Nat
+  hidden : Option (List HiddenRecord)
+  steps : Array Step
+  netRxSection : Nat
+  suspended : List Activation
+  pendingWork : List Nat
+  unitPeers : List (Nat × Nat × Nat)
+
 /-- The ambient part of the state every module has (the state split,
     docs/2026-10-15-design-state-split.md, section 2): the record stream and
     its placeholders, the decision log and the NET_RX stamp, the dispatch
@@ -1560,6 +1577,11 @@ structure Ambient where
   /-- In the domain filter: the allocation sites the steering schedule
       names. Their every encounter needs an entry (design section 5.1). -/
   allocSteered : List String := []
+  /-- Optional append-only source-entry observations. `none` disables them.
+      Stored in pure state so speculative scheduler runs discard their
+      observations with the copied world. No operational decision reads
+      this output; only the diagnostic runner enables or consumes it. -/
+  replacementEntries : Option (Array ReplacementEntryObservation) := none
 
 /-! ## The per-subsystem worlds (the state split,
     docs/2026-10-15-design-state-split.md, sections 2 and 3): WireGuard's

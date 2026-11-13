@@ -56,9 +56,9 @@ def addressOf (n : Names) (owner : IndexOwner) : Except String Nat := do
   return a
 
 def advance (input : ProbeInput) (seed : UInt64) (r : Run) (stops : Array Nat)
-    (frame : CallFrame := {}) : Except String Run :=
+    (frame : CallFrame := {}) (historyPCs : Option (Array Nat) := none) : Except String Run :=
   runUntil input.instructions input.labels input.hooks input.preempt r.state seed true
-    frame.budget frame.entryPreempt stops (some r) frame.returnPC
+    frame.budget frame.entryPreempt stops (some r) frame.returnPC historyPCs
 
 def assertHeader (input : ProbeInput) (s : Session) (query : Nat) (kinds : List IndexKind)
     (remaining : List IndexEntry) (frame : CallFrame := {}) : Except String Unit := do
@@ -132,7 +132,8 @@ def assertReturn (input : ProbeInput) (n : Names) (initial : MachineState)
 Each side chooses its own successor. Headers are checked after at least one
 binary instruction, and occurrences include an explicit call/iteration index. -/
 def lookupFrom (input : ProbeInput) (seed : UInt64) (s : Session) (query : Nat)
-    (kinds : List IndexKind) (initial : MachineState) (frame : CallFrame) : Except String (Session × Json) := do
+    (kinds : List IndexKind) (initial : MachineState) (frame : CallFrame)
+    (historyPCs : Option (Array Nat) := none) : Except String (Session × Json) := do
   unless query < 2^32 do throw "query is outside its ABI width"
   assertMemory s.names input.offsets initial.data.dmem s.world
   unless initial.pc == Image.Lookup.entry && initial.data.regs.rdi.toNat == s.names.table &&
@@ -143,7 +144,7 @@ def lookupFrom (input : ProbeInput) (seed : UInt64) (s : Session) (query : Nat)
       (← readNat initial input.preempt 4) == frame.entryPreempt do throw "entry frame differs from bytes"
   let r : Run := {state := initial, history := #[initial], coverage := s.binary.coverage}
   let (entries, world) ← (Source.indexBucket query).run s.world |>.mapError Stop.message
-  let mut paired := {s with world, binary := ← advance input seed r #[header, helper, tail] frame}
+  let mut paired := {s with world, binary := ← advance input seed r #[header, helper, tail] frame historyPCs}
   let mut remaining := entries
   let mut acc : LookupMirror.Acc := (none, false)
   let mut visits := 0
@@ -160,14 +161,14 @@ def lookupFrom (input : ProbeInput) (seed : UInt64) (s : Session) (query : Nat)
     visits := visits + 1
     paired := {paired with
       world := nextWorld
-      binary := ← advance input seed paired.binary #[header, helper, tail] frame}
+      binary := ← advance input seed paired.binary #[header, helper, tail] frame historyPCs}
   let reached := paired.binary.state.pc.toBitVec.toNat
   unless remaining.isEmpty do throw "binary left the bucket while the source still has iterations"
   unless reached == (if acc.1.isSome then helper else tail) do
     throw s!"loop exit: independently reached binary PC {reached} disagrees with source {repr acc}"
   assertMemory paired.names input.offsets paired.binary.state.data.dmem paired.world
   let (answer, after) ← (LookupMirror.finish acc).run paired.world |>.mapError Stop.message
-  let result ← advance input seed paired.binary #[] frame
+  let result ← advance input seed paired.binary #[] frame historyPCs
   unless result.pcs.size ≤ frame.budget do throw "whole-call instruction budget exhausted"
   assertMemory paired.names input.offsets result.state.data.dmem after
   assertReturn input paired.names initial result answer frame

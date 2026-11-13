@@ -33,6 +33,70 @@ or an executable test does not complete the larger function theorem.
 The detailed [binary register](../docs/proofs.md#binary-adequacy-standalone-charter-target)
 and reports below name statements, premises and historical validation commits.
 
+The [current admission inventory](../docs/proofs.md#current-admission-inventory-2026-11-13)
+separates all eight result groups from their historical checkpoints. It names
+the actual entry/return checkers, remaining universal hypotheses and missing
+caller or representation checks. The
+[remediation plan](../docs/2026-11-13-binary-remediation-plan.md) describes
+the remaining stages; the current package contains the assessment,
+capture/checker repairs and the bounded source-entry pilot below. The existing
+71 headline theorems and their premises are unchanged. Their trust checks
+check proof acceptance; they do not renew admission of all those premises on
+real executions.
+
+The retained C2 and source-cut experiments are reproducible diagnostics,
+including failures of proposed obligations. They are not additional adequacy
+results. The following work remains outside this package:
+
+- `archive/restart-2026-11` at `6248d601a289`: the November C1 insertion and
+  C2 receive-window results.
+- `archive/whole-driver-pilot-2026-11-12` at `8b498e7ec207`: the whole-driver
+  composition, its service contracts, and `WDAdapter`'s parameterized mirror
+  at `Models.ofAnswers` / `Models.fed`. `ParamCopyEq` at `Models.mirror`
+  does not justify those supplied-service instances.
+- `archive/foundation-packet-2026-11-12` at `fb903d5c9d04`: the unaccepted
+  whole-driver foundation proposal.
+
+A reusable toolkit and new service/composition proofs remain proposed
+follow-ons; the bounded diagnostics here do not implement that scaling work.
+The [mirror proof register](../docs/proofs.md#current-register) records that the
+separate mirror proof tree has not been carried over the observer change.
+
+The [replacement observer pilot](../docs/2026-11-13-replacement-observer.md)
+executes the original caller to the selected entry and matches its exact
+same-boot record frontier before checking `Replace.callBoundary` and the
+native instruction/return capture. Discovery and held-out executions pass.
+This is a bounded entry-admission result; the full `Replace.Post` clauses,
+broader caller contexts and universal environment premises remain unadmitted.
+Stage 1 remains incomplete; this pilot does not supply the admission needed
+for the plan's later proof and composition stages.
+
+`capture_lookup.py` now captures the complete coverage allocation by default;
+its `--partial-coverage` option is diagnostic only. The checked lookup replay
+refuses a partial allocation and invokes `IndexLookup.callBoundary` before
+executing the call. Lookup and removal/replacement also require return ranges
+to match their entry ranges in address and length before replay; omitting or
+truncating a returned range cannot reduce the required comparison. The
+[landing review](../docs/2026-11-13-review-binary-landing.md) includes an
+independent native hit replay and omitted-range rejection. Lookup keeps the
+initial interpreter state, instruction PCs and access records without retaining
+every intermediate memory map. Native
+return bytes are compared directly, avoiding a second comparison-only memory
+map. These changes preserve the image's capacity and predicate. They do not
+discharge universal permissions, establish the transport representation, or
+check a native frame over uncaptured bytes.
+
+An inherited checker defect remains in `PairAllowedipsCapture`,
+`PairInsertCapture` (including random-service returns), and
+`PairAllowedipsInsertCapture`: comparisons consume the supplied ranges
+without independently enforcing their complete capture extents. Code
+inspection identifies omitted-range false-pass paths; these paths have not
+been reproduced on native captures in this landing review. The index
+lookup/mutator repair does not repair those different protocols. Intact
+historical captures retain their bounded evidence, but these runners do not
+yet reliably reject incomplete evidence. Their extent validation remains
+open Stage 1 work.
+
 ## Build from a clone
 
 Use a non-main worktree as described in [setup](../REPRODUCING.md). The
@@ -194,6 +258,7 @@ as acceptance of the current source.
 | [Callback proofs](../docs/2026-10-19-paired-callbacks.md) | Bounded image callbacks and first-return permissions |
 | [s5 landing assessment](../docs/2026-10-19-binary-landing-assessment.md) | Port to the split mirror, relocation, repairs and acceptance |
 | [Allowed-IPs scaling](../docs/2026-10-20-binary-allowedips.md) | Partial mutation result, open composition and reproduction commands |
+| [Remediation landing review](../docs/2026-11-13-review-binary-landing.md) | Independent runtime and native-capture checks, resolved helper defect and inherited extent defects still open |
 
 A typed heap view over the machine semantics is follow-on work on a separate
 branch. It is not part of the results above; the design is preserved at

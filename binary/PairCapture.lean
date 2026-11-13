@@ -1,5 +1,5 @@
 import SourceAdapter
-import PairIndex
+import PairIndexChecked
 
 namespace Binary.Pair.Capture
 open Lean Leanux Leanux.WG
@@ -155,7 +155,9 @@ byte as well as all general registers and the status flags Kraken represents.
 This deliberately starts stronger than the source observation relation: any
 undefined/dead-scratch discrepancy must be diagnosed before relaxing the test. -/
 def compareEndpoint (endpoint : Endpoint) (actual : MachineState) : Except String Nat := do
-  let expected ← endpoint.registers.state (← loadMemory endpoint.blocks)
+  -- Registers/flags need no second memory map. Compare each captured byte
+  -- directly below; overlapping blocks must agree with the same actual byte.
+  let expected ← endpoint.registers.state {}
   unless actual.pc == expected.pc do throw "captured endpoint PC differs"
   for reg in [Reg64.rax, .rbx, .rcx, .rdx, .rsi, .rdi, .rsp, .rbp,
       .r8, .r9, .r10, .r11, .r12, .r13, .r14, .r15] do
@@ -163,7 +165,10 @@ def compareEndpoint (endpoint : Endpoint) (actual : MachineState) : Except Strin
       throw s!"captured endpoint {repr reg}: Kraken={actual.data.regs.get64 reg}, kernel={expected.data.regs.get64 reg}"
   let mut checked := 0
   for block in endpoint.blocks do
+    unless block.address > 0 && block.address + block.bytes.size ≤ 2^64 do
+      throw "NULL or wrapping capture block"
     for i in [:block.bytes.size] do
+      unless block.bytes[i]! < 256 do throw "captured byte exceeds eight bits"
       let address := BitVec.ofNat 64 (block.address + i)
       let some byte := actual.data.dmem.get? address | throw s!"captured endpoint byte missing at {address}"
       unless byte.toNat == block.bytes[i]! do
@@ -180,23 +185,40 @@ def compareReturn (snapshot : Snapshot) (actual : Run) : Except String Nat := do
     throw "captured instruction sequence differs from Kraken execution"
   compareEndpoint snapshot.returned actual.state
 
+/-- Index lookup and mutator collectors reread exactly their entry ranges at
+return. Check that protocol before comparing bytes: omitted ranges must not
+reduce the evidence required by those runners. Other collectors can have a
+different extent protocol, so the generic endpoint comparator stays separate. -/
+def checkReturnExtent (initial returned : Array Block) : Except String Unit := do
+  unless !initial.isEmpty && initial.all (fun b => !b.bytes.isEmpty) &&
+      initial.map (fun b => (b.address, b.bytes.size)) ==
+        returned.map (fun b => (b.address, b.bytes.size)) do
+    throw "capture.return-extent"
+
 def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except String Json := do
   unless snapshot.executionMode == "sequential" do
     throw "captured replay requires the declared sequential environment; ordinary execution may interleave interrupts"
   unless (← input.trace.getObjValAs? String "id") == snapshot.trace && input.operation == snapshot.operation &&
       snapshot.completedOperations.toList == List.range snapshot.operation do throw "snapshot workload/invocation mismatch"
+  checkReturnExtent snapshot.initial.blocks snapshot.returned.blocks
   let world ← replayPrefix input.trace input.operation
   let some d := world.wg.dev | throw "recorded source prefix has no device"
   let initial ← snapshot.initial.registers.state (← loadMemory snapshot.initial.blocks)
   let n ← names input snapshot layout initial d
   let frame ← callFrame input snapshot layout initial
+  unless snapshot.initial.coverageCapturedWords == snapshot.initial.capacity do
+    throw "checked lookup replay requires the complete captured coverage allocation"
   let mut coverage := #[]
   for i in [:snapshot.initial.coverageUsed] do
     coverage := coverage.push (← readNat initial (frame.coverage + 8*(i+1)) 8)
   let session : Session := {names := n, world, binary := {state := initial, coverage}}
   let mut outcomes := #[]
   for seed in [(0 : UInt64), 0xffffffffffffffff] do
-    let (after, report) ← (lookupFrom input seed session input.query [.handshake] initial frame).mapError
+    -- All PCs/accesses and the live loop assertions remain checked. No
+    -- consumer here reads retained machine snapshots; keeping one per store
+    -- copies the large array-backed memory table and can exhaust the cap.
+    let (after, report) ← (IndexLookup.runFrom input seed session input.query [.handshake]
+      initial frame (some #[])).mapError
       (fun e => s!"captured invocation, seed {seed}: {e}")
     assertMemory n input.offsets (← loadMemory snapshot.returned.blocks) after.world
     let checked ← compareReturn snapshot after.binary
@@ -205,6 +227,10 @@ def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except Stri
       ("coverage_added", toJson (after.binary.coverage.size - coverage.size))])
   return Json.mkObj [("status", toJson "pass"), ("origin", toJson "actual QEMU entry and return; no relocation or heap construction"),
     ("environment", toJson "sequential QEMU stepping, IRQs and timers deferred within call"),
+    ("entry_predicate", toJson "IndexLookup.callBoundary"),
+    ("capacity", toJson snapshot.initial.capacity),
+    ("captured_words", toJson snapshot.initial.coverageCapturedWords),
+    ("retained_history", toJson "initial state only; all instruction PCs and accesses checked"),
     ("trace", toJson snapshot.trace), ("operation", toJson snapshot.operation),
     ("entry_preempt", toJson frame.entryPreempt), ("runs", toJson outcomes)]
 

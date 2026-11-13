@@ -85,22 +85,77 @@ def completed_operations(path, trace):
     return completed
 
 
+def finish_workload(remote, process, boot, trace, timeout):
+    """Finish this boot after preserving the selected entry/return snapshots.
+
+    The containing operation emits its hidden records only after returning.
+    Finishing it supplies those records for source-cut diagnostics; it does
+    not capture or validate the intervening caller instructions.
+    """
+    if remote.command('D') != b'OK':
+        raise ValueError('debugger refused detach after mutator capture')
+    remote.socket.close()
+    returncode = process.wait(timeout=timeout)
+    if returncode != 0:
+        raise ValueError(f'captured workload exited with status {returncode}')
+    completed = completed_operations(boot, trace['id'])
+    if completed != list(range(len(trace['ops']))):
+        raise ValueError('captured workload did not finish every operation')
+    lines = boot.read_text().splitlines()
+    batches = [line for line in lines if line.startswith('LEANUX_BATCH_DONE ')]
+    exits = [line for line in lines if line.startswith('LEANUX_GUEST_EXIT=')]
+    if batches != ['LEANUX_BATCH_DONE traces=1 failures=0'] or exits != ['LEANUX_GUEST_EXIT=0']:
+        raise ValueError('captured workload lacks one successful batch and guest exit')
+    return dict(completedOperations=completed, qemuReturncode=returncode)
+
+
+def select_invocation(anchor, requested, ordinal, remote, regs, offsets):
+    """Replacement/insertion selection depends only on call order.
+
+    Removal retains its older linked-entry diagnostic. In particular, never
+    inspect replacement's linkage to decide whether to count/select a call.
+    """
+    if anchor in ('replace', 'insert'):
+        return ordinal == requested
+    if anchor == 'remove':
+        return remote.word(regs['rsi'] + offsets['hash'] + offsets['pprev']) != 0
+    raise ValueError('unknown invocation selector')
+
+
+def recording_position(remote, task, layout):
+    """Read the native input-record frontier while the CPU is stopped."""
+    sequence_address = layout['sequenceAddress']
+    dropped_address = task + layout['taskDropped']
+    sequence = remote.read(sequence_address, 8)
+    dropped = remote.read(dropped_address, 4)
+    if len(sequence) != 8 or len(dropped) != 4:
+        raise ValueError('short recording-position read')
+    if int.from_bytes(dropped, 'little'):
+        raise ValueError('native entry has dropped input records')
+    return dict(sequenceAddress=sequence_address, sequence=int.from_bytes(sequence, 'little'),
+                droppedAddress=dropped_address, dropped=0), [
+                    dict(address=sequence_address, bytes=list(sequence)),
+                    dict(address=dropped_address, bytes=list(dropped))]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--anchor', choices=['remove', 'replace', 'insert'], required=True)
     parser.add_argument('--call-index', type=int, default=0,
-                        help='zero-based selected call within the operation (insert only)')
+                        help='zero-based all-call ordinal within the operation (replace/insert)')
     parser.add_argument('--input', type=Path, required=True)
     parser.add_argument('--check', type=Path, required=True)
     parser.add_argument('--operation', type=int, required=True)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--timeout', type=float, default=240)
     parser.add_argument('--instruction-budget', type=int, default=10000)
+    parser.add_argument('--finish-workload', action='store_true',
+                        help='after preserving the function return, finish this boot to collect its remaining records')
     args = parser.parse_args()
     if not 0 < args.instruction_budget <= 1000000:
         raise ValueError('invalid instruction budget')
-    if args.call_index < 0 or (args.anchor != 'insert' and args.call_index):
-        raise ValueError('call-index is nonnegative and only supported for insertion')
+    if args.call_index < 0 or (args.anchor == 'remove' and args.call_index):
+        raise ValueError('call-index is nonnegative and supported for replacement/insertion')
     probe = json.loads(args.input.read_text())
     check, out = args.check.resolve(), args.out.resolve()
     report = json.loads((check / 'report.json').read_text())
@@ -114,7 +169,8 @@ def main():
     verify_image()
     identity, kraken = verify_kernel(ORACLE.parent, expected=pins()[0]), verify_pin(ROOT)
     layout = layouts(ORACLE)
-    provider_layout = layout_values() if args.anchor == 'insert' else None
+    recording_layout = layout_values() if args.anchor in ('replace', 'insert') else None
+    provider_layout = recording_layout if args.anchor == 'insert' else None
     out.mkdir(parents=True, exist_ok=True)
     if (out / 'snapshot.json').exists() or (out / 'gdb.sock').exists():
         raise ValueError('capture output is already occupied')
@@ -146,12 +202,9 @@ def main():
                     raise ValueError('unexpected stop while selecting invocation')
                 completed = completed_operations(boot, probe['trace']['id'])
                 if len(completed) > args.operation:
-                    raise ValueError('selected operation passed without the requested linked mutator')
+                    raise ValueError('selected operation passed without the requested mutator')
                 if len(completed) == args.operation:
-                    previous = remote.word(regs['rsi']+probe['offsets']['hash']+probe['offsets']['pprev'])
-                    if args.anchor == 'insert' and selected == args.call_index:
-                        break
-                    if args.anchor != 'insert' and previous:
+                    if select_invocation(args.anchor, args.call_index, selected, remote, regs, probe['offsets']):
                         break
                     selected += 1
                 remote.breakpoint(entry, False)
@@ -163,6 +216,10 @@ def main():
             print(f'capturing {args.anchor} entry, occurrence {occurrence}, completed {completed}', flush=True)
             initial = capture(remote, regs, probe, layout, args.instruction_budget,
                               root_entries=roots, read_output=False, include_retired=True, full_coverage=True)
+            source_recording = None
+            if args.anchor == 'replace':
+                source_recording, recording_blocks = recording_position(remote, initial['task'], recording_layout)
+                initial['blocks'] += recording_blocks
             if provider_layout is not None:
                 private = random_private(remote, initial['task'], provider_layout)
                 initial['randomPrivate'] = dict(blocks=[(b['address'], len(b['bytes'])) for b in private['blocks']],
@@ -209,9 +266,16 @@ def main():
             result = dict(origin='actual stopped QEMU mutator; unmodified bytes and registers', anchor=args.anchor,
                           kernel=identity, image_sha256=hashlib.sha256(ORACLE.read_bytes()).hexdigest(), kraken=kraken,
                           trace=probe['trace']['id'], operation=args.operation, instructionBudget=args.instruction_budget,
-                          executionMode='sequential', executedPCs=executed, completedOperations=completed,
+                          executionMode='sequential', recordingMode='pc', executedPCs=executed, completedOperations=completed,
                           occurrence=occurrence, initial=initial, returned=dict(registers=returned, blocks=final_blocks),
+                          selection='linked entry' if args.anchor == 'remove' else 'operation ordinal',
+                          operationCallIndex=selected,
+                          sourceRecording=source_recording,
                           randomServices=random_services)
+            if args.finish_workload:
+                result['postCaptureCompletion'] = finish_workload(
+                    remote, process, boot, probe['trace'], args.timeout)
+                remote = None
         finally:
             if remote:
                 remote.socket.close()

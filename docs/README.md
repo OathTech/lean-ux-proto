@@ -129,6 +129,36 @@ the paired experiment's carry to the split mirror and pinned s5 image, its
 separate build/gate and runtime validation, and the open milestone-1 review
 obligations. Current setup commands are in [binary/README.md](../binary/README.md).
 
+The [execution-based binary assessment](2026-11-13-binary-assessment.md)
+tests the current foundation and archived extension against fresh captures,
+distinguishes admitted executions from conditional results, and proposes a
+scoped recovery process.
+
+The [binary remediation plan](2026-11-13-binary-remediation-plan.md)
+sets out staged repairs, their evidence and stop conditions, and the
+proposed independent review process.
+Its [review disposition](2026-11-13-binary-remediation-review-disposition.md)
+links the two independent reviews and addresses each finding.
+The [first implementation batch](2026-11-13-binary-remediation-first-batch.md)
+joins full-buffer lookup admission and replay, investigates the
+[replacement source cut](2026-11-13-replacement-source-cut.md), and tests
+the [clean C2 native frame](2026-11-13-c2-native-frame.md). The later
+[replacement observer](2026-11-13-replacement-observer.md) implements and
+tests the proposed interior source cut. Its
+[independent review](2026-11-13-review-replacement-observer.md) records the
+missing-return false pass, its correction, and the remaining admission limits.
+The [current admission inventory](proofs.md#current-admission-inventory-2026-11-13)
+separates these bounded execution results from unchanged conditional theorems
+and unresolved obligations. The C2 and source-cut tools retain diagnostic
+reproducers; no archived whole-driver claim or reusable proof-scaling method
+is adopted. Stage 1 remains incomplete; the pilot supplies bounded entry and
+replay evidence.
+The separate mirror proof tree is
+[lagging the observer change](proofs.md#current-register).
+The [landing review](2026-11-13-review-binary-landing.md) checks the bounded
+increment independently and records the high-severity inherited extent
+defects that remain unresolved in three other capture protocols.
+
 | Document | Contents |
 | --- | --- |
 | [2026-10-21-proof-probes.md](2026-10-21-proof-probes.md) | Three bounded probes after Campaign 3: outcomes, evidence limits, validation and reproduction |

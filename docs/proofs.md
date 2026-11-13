@@ -91,9 +91,14 @@ failure, before the Campaign 2 repair was included; the integration record
 supersedes that result. These are recorded checks, not a new proof-gate run
 by this documentation pass.
 
-All mirror-result rows are current over `218d3ffd` within their stated
-boundaries. The checkpoint does not discharge T4/T5's remaining premises or
-enlarge T2's scope. Historical counts and pins below are not newer claims.
+All mirror-result rows retain their historical checkpoint over `218d3ffd`
+within their stated boundaries. They are **lagging the operational mirror
+since `ffb3d8df`**: the optional replacement-entry observer changes
+the operational mirror, and the separate mirror proof tree has not been
+carried or checked over that change. The binary gate does not carry this
+tree. The historical checkpoint does not discharge T4/T5's remaining
+premises or enlarge T2's scope. Historical counts and pins below are not
+newer claims.
 
 Use [setup](../REPRODUCING.md#5-build-and-check-the-proofs) to run the proof gate
 and the separate counterexample recipes. Standing practices are in
@@ -1346,6 +1351,89 @@ authorizes `binary/` separately from the mirror proof tree. Its current
 [report](2026-10-15-binary-adequacy.md#milestone-1-function-theorem-and-review-handoff)
 quotes the trust base and distinguishes proof acceptance from kernel-entry
 realism and physical frame premises.
+
+### Current admission inventory (2026-11-13)
+
+This inventory supersedes the status language in the historical checkpoints
+below. It records applicability separately from kernel acceptance. The
+[assessment](2026-11-13-binary-assessment.md) contains the fresh baseline
+experiments and their commands; the
+[remediation plan](2026-11-13-binary-remediation-plan.md) gives the order of
+work. The inventory covers the current package, including diagnostics of
+failed or unadmitted obligations; it does not adopt the archived extensions.
+Inventory and prioritization [AGENT 2026-11-13].
+
+The eight-group baseline below refers to the operational mirror at
+`9ca4b0655d8a`. The [replacement observer](2026-11-13-replacement-observer.md)
+adds optional caller output at `ffb3d8df`, without changing the index
+mutators or the existing entry predicate; its row gives the new admission
+scope. The s5 image and nine-patch Kraken pin in
+[TrustBase](../binary/TrustBase.lean) are unchanged: image identity
+`b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767`, ELF SHA-256
+`06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e`, Kraken
+`43df9468febc173e6cf9363d87e8ad34e76d7434`. Layout constants are the generated
+[Layouts](../binary/Layouts.lean), checked against that ELF, rather than free
+parameters chosen to fit a capture. Current captures use one CPU and defer
+interrupts and timers during the selected call. The coverage allocation is
+4,194,304 eight-byte words, with mode 2; trie widths are 32 and 128. Local
+successful execution at two undefined-value seeds is finite evidence, not
+discharge of a universal environment hypothesis.
+
+The declaration lists and expanded definitions in
+[surface.py](../binary/surface.py) and
+[TrustSurface.expected.txt](../binary/TrustSurface.expected.txt) specify the
+71-headline proof surface. No new theorem is commissioned by this inventory.
+The supplied-answer models on the November archive are not part of this
+current s5 package.
+
+Proving a frame in the flat-memory model does not require materializing all
+Linux memory: the store and composition lemmas in
+[Memory](../binary/Memory.lean) preserve every byte outside the complete
+modeled write footprint. Native application of that frame also needs an
+explicit memory projection and alias treatment. The
+[clean C2 experiment](2026-11-13-c2-native-frame.md) demonstrates why a
+physical-RAM observation cannot silently stand for preservation of every
+native virtual byte. The s5 captured-byte comparisons below do not supply
+that general projection obligation either. The all-RAM C2 diagnostic is not
+a requirement to execute future specifications over all of Linux memory.
+The intended route is finite checks of the execution's accesses and writes,
+with a sound frame lemma and an explicit native-to-model relation; this
+package does not supply the missing relation or a new reusable checker for it.
+
+| Group and exact statement entry points | Runtime admission and conclusion checks | Current evidence and missing ingredient |
+| --- | --- | --- |
+| Lookup / peer-get: `LookupRelation.lookup_simulation`; `Pair.IndexLookup.{lookup_checked,lookup_simulation,lookup_first_return}` | [PairLookupCheck](../binary/PairLookupCheck.lean) defines `callBoundary`, whose success is `Pre`; [PairIndexChecked](../binary/PairIndexChecked.lean) runs it and checks exit reconstruction, ownership and coverage phases. [PairCapture](../binary/PairCapture.lean) compares captured PCs, registers and bytes. | Discovery and fresh repeat hit/miss captures pass the exact entry predicate and instruction/return checks on the same full allocation at both tested seeds; see the [first-batch report](2026-11-13-binary-remediation-first-batch.md). The runner invokes the original mirror through `SourceAdapter`. `Pre_lookup`, source acceptance, callback readiness and finite observed accesses are testable. `InvocationPermissions` / `FirstReturnCallPermissions` quantify over possible histories; no executable complete check or real caller theorem is supplied. `SerializedEnvironment` excludes ordinary asynchronous execution. Original callback contracts remain explicit in the original headline. Full native memory outside captured blocks and transport premises are not checked. |
+| Removal / replacement: `Pair.Remove.{remove_checked,remove_simulation,remove_first_return}` and `Pair.Replace.{replace_checked,replace_simulation,replace_first_return}` | [PairMutatorCapture](../binary/PairMutatorCapture.lean) calls each `callBoundary`, the instruction runner and endpoint comparison; `Remove.callBoundary` / `Replace.callBoundary` and `Remove.assertAt` in [PairRemove](../binary/PairRemove.lean) / [PairReplace](../binary/PairReplace.lean) supply the entry and reconstruction checks. | Baseline local state-input captures pass, with their source projection reconstructed from native memory. The [source-entry observer](2026-11-13-replacement-observer.md) now reaches the original replacement caller independently and checks exact same-boot record/dispatch alignment before the existing entry predicate and complete return replay. Discovery and a fresh held-out boot both pass at two seeds; see the report for review and broader validation status. The pilot covers one successful replacement in an uninterrupted receive-worker section. The full `Replace.Post` conjunction (`MemoryReady`, `EqualOutside`, `KindFrame`), internal invariants, universal service/permission assumptions, removal caller alignment and broader replacement contexts remain unadmitted. |
+| Five image callbacks: `Callback.{pc_contract,cmp4_contract,const_cmp4_contract,const_cmp1_contract,bh_contract}` | [CallbackCheck](../binary/CallbackCheck.lean) and [CallbackRun](../binary/CallbackRun.lean) execute readiness and bounded image-body checks; captured clients execute these instructions. | Existing generated cases and real client replay provide concrete instances. Decoder agreement is checked by image generation, while Kraken ISA fidelity is trusted. The BH contract is for its stated fast path; arbitrary interrupts and slow paths remain outside its readiness domain. A constructed case is not a captured standalone callback admission. |
+| Trie lookup: `Pair.Trie.{findNode_checked,lookup_checked}` and extended `Pair.Allowedips.lookup_checked` | [PairAllowedipsCapture](../binary/PairAllowedipsCapture.lean) uses `Trie.callBoundary`, checks internal headers, reconstruction, complete coverage allocation and native return. `PairAllowedipsLookupCheck` defines the extended heap check. | Baseline IPv4 and IPv6 captures pass, invoking the original source lookup. Dying-peer retry may be refused by this source experiment. A selected accepted invocation does not establish all caller entries or a concurrent environment; the extended mutation heap's additional conjuncts must not be inferred merely from the older trie runner. |
+| Index insertion: `Pair.Insert.{insert_checked,insert_simulation,insert_from_image,insert_simulation_from_image}` and `RandomService.return_recorded` | [PairInsertCapture](../binary/PairInsertCapture.lean) and `PairInsertChecked` execute entry/provider checks, actual decoded random service bodies, recorded draw checks and return checks. | Baseline collision/retry capture passes: 1,338 instructions and two random services at each tested seed. Starting-world reconstruction still needs independent caller alignment. `RandomReturnContract`, `RandomInputCoupling` and `inputAt` are universal interface obligations, not established by those draws. No executable universal check is supplied; specific service-instance admission and a sound source-input interpretation must precede stronger claims. |
+| Retained sequences: `Pair.Sequence.sequence_checked`, `Pair.Sequence.First.sequence_checked`, `Pair.InsertSequence.{sequence_checked,sequence_from_image}` | [PairSequenceCheck](../binary/PairSequenceCheck.lean), [PairSequenceRunner](../binary/PairSequenceRunner.lean), and their `PairInsertSequence` counterparts run `initialCheck`, per-call admissibility, retained-heap reconstruction and installed caller ABI. | Generated retained-heap sequences pass historically. The caller installation, allocation interpretation and selected input stream are constructed. There is no captured complete joined Linux sequence proving the real intervening caller establishes the next entry. The finite checker does not discharge universal execution/service premises. Stage 5 requires captured hand-overs before a new composition proof. |
+| Partial trie mutation: `Pair.Allowedips.{Placement.loop_checked,Exact.assignment_checked,Root.initialization_checked}` and initialization/publication/return components listed in `surface.HEADLINES` | [PairAllowedipsInsertCapture](../binary/PairAllowedipsInsertCapture.lean) and component boundary checks test the selected segments, supplied native allocation transitions and restricted captured frames. | Useful segment evidence; zero completed insertion functions. Allocation, failed allocations, rollback, intermediate/covering nodes and complete source/caller composition are missing. Supplied allocator transitions are not instruction-level service executions or a universal allocator theorem. No complete-function predicate or acceptance claim exists to register. |
+| Replay/lifetime transport: `LookupRelation.lookup_snapshot_transport`, `LookupSourceFrame.lookup_receivingSnapshot` | [LookupSnapshotTransport](../binary/LookupSnapshotTransport.lean) requires `ReceivingSnapshotFields`, `ReceivingSnapshotReads` separation from every applicable `LookupWrites`, original lookup premises and the chosen mirror-history property. | The full conjunction has no captured admission. Current lookup snapshots omit the global keypair counter and refuse keypair identity setup. A checker for the full source-live representation, global separation and selected property is missing; no runtime exception is silently accepted. This row remains conditional and does not establish a receive-window or allocator-lifetime result. |
+
+An open inherited checker defect affects the trie-lookup, index-insertion
+(including random-service returns), and partial-trie-mutation rows:
+`PairAllowedipsCapture`, `PairInsertCapture` and
+`PairAllowedipsInsertCapture` do not independently enforce their required
+capture extents. Their comparisons iterate supplied blocks. Code inspection
+therefore identifies omissions that can erase comparison obligations;
+native reproduction of those paths remains outstanding. This package repairs
+extent enforcement only for index lookup and the removal/replacement runner.
+The other protocols need their own checks and positive/negative executions
+before stronger admission claims. This does not retroactively make intact
+historical captures incomplete.
+
+Unrunnable universal predicates above are unresolved applicability obligations,
+not approved exceptions to the run-before-proof practice. Finite instance
+checks are retained as evidence with that limitation. The existing checked
+proofs are not relabelled false, nor promoted to real-caller results. New
+proof work or composition on an affected claim waits for its stated
+admission milestone. This inventory does not carry the mirror proof tree;
+its lag is stated in the [current register](#current-register). Historical
+external gates below apply only to their exact commits and closures; local
+replay does not renew them.
+
+### Historical proof checkpoints
 
 | Function | Headline theorem / transport | Decoded regions | Named service contracts | Mirror pin | Status |
 | --- | --- | --- | --- | --- | --- |
