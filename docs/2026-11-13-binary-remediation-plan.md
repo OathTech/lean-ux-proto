@@ -1,6 +1,8 @@
 # Binary verification remediation plan
 
-Status: proposal for review, not authorization to implement or merge.
+Status: revised proposal following independent review; not authorization
+to implement or merge. Findings and their disposition are linked in
+[the review disposition](2026-11-13-binary-remediation-review-disposition.md).
 Proposed sequencing and technical choices [AGENT 2026-11-13]. The basis is
 the [execution-based assessment](2026-11-13-binary-assessment.md), at current
 main `9ca4b0655d8a` and the archive revisions it identifies. Its conclusions
@@ -56,6 +58,15 @@ Stage 4's interface investigation can proceed beside stage 3 after the
 image is fixed. This is a dependency graph, not a promise that later
 stages will be feasible at a particular cost.
 
+For stages with proofs, distinguish **admission-ready** (the complete
+chosen statement has passed real captures, permitting proof work) from
+**proved-and-accepted** (the theorem and its exact closure pass all the
+applicable local and external acceptance checks). A locally checked proof
+awaiting external acceptance is reported as such. A stopped investigation
+or a conditional local result retains that explicit status and scope.
+Neither adoption of this plan nor a successful admission run completes a
+proof stage. Integration approval is separate from all these statuses.
+
 ## 0. Fix the claim inventory
 
 Use the existing binary section of `docs/proofs.md`, `binary/README.md`
@@ -108,10 +119,17 @@ Specific work:
   required by the predicate. Any changed memory representation must have
   its semantic correspondence checked; truncating or fabricating a buffer
   is not remediation.
-* For removal, replacement and insertion, add the independently replayed
-  source-prefix comparison alongside the existing entry reconstruction.
-  A difference is a finding against the relation, environment or caller
-  coverage, not an instruction to overwrite the expected state.
+* For removal, replacement and insertion, first align the source execution
+  with the **same function-entry cut** as the binary snapshot. The existing
+  `replayRecordedPrefix` stops before the containing syscall; caller work
+  inside that syscall can legitimately change the state. Execute the
+  original source through that work, consuming the current operation's
+  hidden records only up to the matching cut and retaining the remainder.
+  Use a justified observation of that execution, not captured heap values
+  or a proof-shaped rewrite of the mirror. Only then compare the states.
+  If the matching cut cannot yet be observed, report caller alignment as
+  unresolved and keep the local state-input result separate. Making the
+  old pre-syscall comparison fail is not a repair.
 * Test lookup transport's **joint** representation/separation premises on
   the invocation whose fields are transported. Expose original lookup
   service/permission hypotheses and insertion's random coupling/return
@@ -134,6 +152,12 @@ This does not require solving every outstanding group before unrelated
 work can proceed. It does prohibit advertising the entire current package
 as remediated while those groups remain unresolved.
 
+A local theorem may deliberately start from a source state represented by
+the captured entry heap. That is a valid stated input relation; it does
+not establish how the kernel and mirror reached that state. The stronger
+caller/whole-run claim requires the aligned independent replay above.
+Neither claim may reconstruct its expected exit from the observed exit.
+
 ## 2. Recover a small archive toolkit
 
 Recover from `archive/whole-driver-pilot-2026-11-12` by dependency, not by
@@ -155,14 +179,37 @@ captured invocations, admitted invocations, failed clauses and scope exits
 separately. A legitimate error-return case can pass its specified failure
 contract; an exit from the claim cannot pass a requested success path.
 
+For a joined claim, select an explicit start/end interval and require
+continuous observation of every relevant entry, service, dispatch and
+lifetime site throughout it. Justify that site set against the fixed
+decoded scope; an unlisted reached target leaves the claim. Keep these
+observers active until the interval ends. Expected invocation totals come
+from those always-active observers and workload start/end markers, not
+from counting the retained predicate events. Reconcile the totals with
+paired entries/returns, record sequence information and capture coverage.
+If exact totals or continuous coverage are unavailable, the interval is
+incomplete and cannot validate a join.
+
+The archived collector can disarm sites after a quota and mark counts
+inexact; its event conversion drops the final site summaries. Preserve
+and validate that information before evaluating predicates. A quota,
+sampling gap, lost record or missing boundary makes the selected interval
+incomplete, even if every retained event passes. Diagnostic sampled
+captures remain useful for individual invocations at their declared
+scope. Do not try to reconstruct missing calls from matching endpoints.
+
 Exercise a few targeted negative controls: omitted clause, changed return
-byte, wrong identity, missing capture span and unexpected scope exit. Fix
+byte, wrong identity, missing capture span and unexpected scope exit. Add
+one whole-invocation omission or quota-exhaustion control: validation must
+reject completeness rather than reduce its denominator. Fix
 the C1 comment-sensitive runner guard without adding a second token
 scanner. No need to enumerate an adversarial matrix for every checker.
 
 **Exit:** selected instruments identify the known C2 and socket-contract
 failures as failures, and distinguish them from capture loss or image
-mismatch. Recovering these instruments accepts no old whole-driver claim.
+mismatch. Complete-interval checking and its omission control pass before
+these instruments are used to validate joins. Recovering them accepts no
+old whole-driver claim.
 
 ## 3. Repair the receive-window claim (C2)
 
@@ -177,6 +224,12 @@ Capture the entry and exit window, relevant registers, preempt count,
 ownership/lifetime identity and the memory required by the proposed frame.
 Measure intervening environment writes where ordinary scheduling requires
 them. Missing frame coverage is unknown, not preservation.
+
+The first experiment must specify the observation domain and an executable
+frame check. The old sparse snapshot of window, nonce and preempt word
+cannot establish the native `EqualOutside` frame. Return a concrete method
+that covers the proposed claim, or an unresolved feasibility finding;
+running the sparse-state checker again cannot complete this stage.
 
 The proposed structure is a local sequential instruction result plus an
 explicit environment-transition relation for applying it to ordinary
@@ -199,9 +252,11 @@ retirement/reallocation boundary; a recycled address is a new identity.
 **Exit:** the selected statement's complete conjunction passes captured
 states; the required cases were actually reached; an independent reviewer
 accepts its scope and its connection to the checker. Only then repair or
-port the proof. Run the existing binary proof checks and applicable kernel
-replay. A natural-scheduling result stays pending if only the sequential
-claim has passed. Stage 5 cannot upgrade it by changing labels.
+port the proof: this is **admission-ready**. **Proved-and-accepted** also
+requires the resulting theorem, its disclosed assumptions, the updated
+trust surface and the applicable external acceptance of its exact closure.
+A natural-scheduling result stays pending if only the sequential claim has
+passed. Stage 5 cannot upgrade it by changing labels.
 
 ## 4. Repair service and source interfaces
 
@@ -245,9 +300,13 @@ source state from the post-state being tested.
 
 **Exit:** the next path has executable, admitted service instances and
 an explicit list of remaining universal assumptions; its source relation
-uses the intended mirror. Recover C1 algorithmic lemmas only under that
-reviewed statement. A stub allocator returning NULL cannot meet a success
-path's exit condition.
+uses the intended mirror. This is **admission-ready**, subject to resolving
+any non-executable-premise exceptions from stage 0; simply labeling a
+premise conditional does not resolve that rule. Recover C1 algorithmic
+lemmas only under that reviewed statement. A bridge or recovered theorem
+is **proved-and-accepted** only after its own closure passes the checks
+below. A stub allocator returning NULL cannot meet a success path's exit
+condition.
 
 ## 5. Verify a real joined sequence
 
@@ -263,7 +322,19 @@ each entry, internal invariant, exit frame and next-entry predicate on
 those states. Do not reinstall a convenient caller ABI, regenerate ghost
 state from the next snapshot, reset the heap or silently insert a plan
 transition. Record genuine caller transitions as part of the environment
-and test them at their kernel source.
+where they are external to the binary scope, and test them at their kernel
+source. In-scope WireGuard caller instructions remain in the binary scope.
+
+For every edge, name the prior postcondition and invariant, the actual
+caller/external transition, and the next entry condition to establish.
+The obligation is that the prior result plus the permitted transition
+**entails the next entry**, rather than assuming the next `Starts` afresh.
+If the claim also promises that the next call occurs, prove the caller's
+progress to it under the stated success conditions, including its genuine
+error exits. Classify each edge as instruction-proved or assumed under a
+named external contract; sampled contracts remain assumptions. A theorem
+like archived `WDCompose.Covered`, which takes each next `Starts` as an
+input, does not discharge this caller obligation.
 
 Before composing two theorem statements, run their predicates together
 on the entire chosen sequence. On held-out executions vary peers, prefix
@@ -274,10 +345,13 @@ admitted prefixes substitutes for completion of the declared path.
 
 **Exit:** the whole selected sequence passes without reconstruction of its
 expected outcomes, and the exact hand-over obligations have real witnesses.
-Only then prove the invariant and composition; use the existing proof
-checks and review the resulting claim with all universal assumptions and
-environment scope visible. Retain local partial results if this fails;
-report the failed join rather than widening premises until it disappears.
+Its observation interval is complete under stage 2. This is
+**admission-ready**. Only then prove the invariant, the classified edge
+obligations and the composition. **Proved-and-accepted** requires those
+theorems and the applicable acceptance of their exact closure, with all
+caller/service assumptions and environment scope visible. Retain local
+partial results if this fails; report the failed join rather than widening
+premises until it disappears.
 
 ## 6. Expand through a driver lifecycle
 
@@ -289,15 +363,22 @@ Include `wg_set_device`, real successful allocations, peer teardown and
 the crypto/environment services needed by the path. The old no-peer or
 immediate-failure witness does not cover this workload.
 
+Name the WireGuard caller instructions covered by each stage-5 edge
+separately from external kernel services. Moving an in-scope caller into
+an assumed environment contract reduces the advertised binary claim;
+it cannot preserve the same lifecycle-verification claim by relabeling.
+
 Add one missing entry or service boundary at a time, following stages 3–5:
 executable statement, captured admission, independent review, then proof.
 Test the same joint invariant at every reachable entry and hand-over, not
 only global compatibility of independently inhabited predicates. Preserve
 the distinction between actual supplied observations and predicted values.
 
-**Exit:** the declared lifecycle completes within the claim, every required
-predicate has been evaluated and passed, and the reviewed composition
-states exactly the remaining external services and ISA assumptions.
+**Exit:** **admission-ready** requires the declared lifecycle to complete
+within a fully observed interval and every required predicate to pass.
+**Proved-and-accepted** additionally requires the reviewed composition and
+its exact closure to pass applicable acceptance, with the remaining caller,
+external service and ISA assumptions stated.
 Publish broader corpus coverage and its scope-exit denominator separately.
 This slice does not become a whole-driver result merely by giving its
 theorem that name. Expansion beyond it requires another concrete path.
@@ -324,7 +405,15 @@ retry is allowed at most once and is reported separately.
 During edits run the touched build and unit tests; run relevant differential
 and capture suites when their implementation changes. At proof claim points
 run `scripts/binary-proof-gate`, the selected image generators and the
-kernel acceptance procedure in `binary/README.md`. On this box the user
+kernel acceptance procedure in `binary/README.md`. For each recovered or
+new proof unit, extend the **existing** `binary/surface.py` headline,
+import and meaning-defining-predicate lists, review the printed statement
+diff, and name the export/replay roots containing the actual claim. Include
+bridges and proof sources in subdirectories in that closure and the
+applicable source checks. The old nine export roots and old terminal list
+do not automatically cover C2, C1 or a new composition. Report acceptance
+for the exact source revision and closure; no new audit framework is needed.
+On this box the user
 must run the sandboxed external acceptance step outside nono; an internal
 diagnostic is not that acceptance. At mirror/integration claim points run
 the existing full differential/controls/sentinel requirements at their
@@ -354,8 +443,9 @@ earlier revision does not approve the changed claim.
 1. Update the existing claim register and select the first complete current
    lookup claim, with its missing service/transport obligations explicit.
 2. Make its full-buffer admission and return checks work on one unchanged
-   capture within a measured resource budget; investigate the source-prefix
-   mismatch in one mutator as a separate finding.
+   capture within a measured resource budget; investigate how to reach the
+   matching source cut in one mutator as a separate task. Do not equate a
+   pre-syscall/inside-syscall difference with a mirror defect.
 3. Recover the smallest clean-image C2 capture/checker subset and make its
    exact count/frame failures visible. Test the two scheduling scopes and
    return with a concrete environment/frame proposal.

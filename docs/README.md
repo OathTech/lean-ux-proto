@@ -137,6 +137,8 @@ scoped recovery process.
 The [binary remediation plan](2026-11-13-binary-remediation-plan.md)
 sets out staged repairs, their evidence and stop conditions, and the
 proposed independent review process.
+Its [review disposition](2026-11-13-binary-remediation-review-disposition.md)
+links the two independent reviews and addresses each finding.
 
 | Document | Contents |
 | --- | --- |
