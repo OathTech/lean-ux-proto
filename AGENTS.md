@@ -25,6 +25,17 @@ simple correspondence of data and control flow**:
   recorded at their kernel source and consumed by the mirror in order, so the
   mirror is a deterministic function of the trace and those records.
 
+Every predicate a claim assumes or asserts (entry conditions, invariants,
+contract clauses, hand-over conditions) is checkable at run time and is run
+on captured states of real runs, at the image's fixed parameters; the
+captures must be admitted. A predicate that cannot be run is an exception,
+made only in an extreme case and listed with its reason. What proof adds is
+that the predicates are inductive [USER 2026-11-12]. Order of work: no
+proof is commissioned on a statement, and no two statements are composed,
+until their predicates have been run on captured states at the fixed
+parameters and the captures are admitted; a statement over free parameters
+is instantiated at the real ones first.
+
 Matching only syscall results is insufficient. The design rules are in section
 3 of [the way-forward plan](docs/2026-09-29-way-forward.md) and in
 [the choice-stream strategy](docs/2026-10-03-choice-stream-strategy.md).

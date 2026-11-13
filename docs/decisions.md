@@ -972,3 +972,12 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   does not describe the C. No initialized T1 limit counterexample was claimed.
   The counterexamples remain, and the mirror is unchanged. See the campaign-3
   report for the per-result claims and limitations.
+- **2026-11-12 [USER]** Standing rule: every predicate in a claim (entry
+  conditions, invariants, contract clauses, hand-over conditions) is checkable
+  at run time and is run on captured states of real runs, which must be
+  admitted; an exception is made only in an extreme case, named with its
+  reason. A claim whose assumptions are unsatisfiable when combined is an
+  avoidable failure, since the captures are witnesses of the states the
+  predicates are meant to hold of; what a proof is for is whether the
+  predicates are inductive. [AGENT] the order-of-work consequence in
+  AGENTS.md: predicates are run on captures before any proof or composition.
