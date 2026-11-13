@@ -33,6 +33,23 @@ or an executable test does not complete the larger function theorem.
 The detailed [binary register](../docs/proofs.md#binary-adequacy-standalone-charter-target)
 and reports below name statements, premises and historical validation commits.
 
+The [current admission inventory](../docs/proofs.md#current-admission-inventory-2026-11-13)
+separates all eight result groups from their historical checkpoints. It names
+the actual entry/return checkers, remaining universal hypotheses and missing
+caller or representation checks. The
+[remediation plan](../docs/2026-11-13-binary-remediation-plan.md) is being
+implemented on a feature branch. No archived whole-driver result is adopted.
+
+`capture_lookup.py` now captures the complete coverage allocation by default;
+its `--partial-coverage` option is diagnostic only. The checked lookup replay
+refuses a partial allocation and invokes `IndexLookup.callBoundary` before
+executing the call. It keeps the initial interpreter state, instruction PCs
+and access records without retaining every intermediate memory map. Native
+return bytes are compared directly, avoiding a second comparison-only memory
+map. These changes preserve the image's capacity and predicate. They do not
+discharge universal permissions, establish the transport representation, or
+check a native frame over uncaptured bytes.
+
 ## Build from a clone
 
 Use a non-main worktree as described in [setup](../REPRODUCING.md). The

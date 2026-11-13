@@ -99,6 +99,9 @@ def suite (input : ProbeInput) : Except String Json := do
     (boundary {initial with data := {initial.data with regs := {initial.data.regs with rcx := .ofNat a}}}))
   controls := controls.push (← expectReject "output-unmapped" "output-mapping"
     (boundary {initial with data := {initial.data with regs := {initial.data.regs with rcx := 0x123456}}}))
+  controls := controls.push (← expectReject "last-coverage-byte-unmapped" "coverage-phases"
+    (boundary {initial with data := {initial.data with
+      dmem := m.erase (.ofNat 64 (coverageAddr + coverageBytes - 1))}}))
   let atHeader ← advance input 0 {state := initial} #[header]
   let paired := {base with binary := atHeader}
   assertHeader input paired query [.handshake] [e]

@@ -1,7 +1,8 @@
 # Binary verification remediation plan
 
-Status: revised proposal following independent review; not authorization
-to implement or merge. Findings and their disposition are linked in
+Status: implementation authorized on a feature branch [USER 2026-11-13],
+following independent review. This does not authorize integration to main
+or publication. Findings and their disposition are linked in
 [the review disposition](2026-11-13-binary-remediation-review-disposition.md).
 Proposed sequencing and technical choices [AGENT 2026-11-13]. The basis is
 the [execution-based assessment](2026-11-13-binary-assessment.md), at current
