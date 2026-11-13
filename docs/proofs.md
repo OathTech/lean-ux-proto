@@ -91,9 +91,9 @@ failure, before the Campaign 2 repair was included; the integration record
 supersedes that result. These are recorded checks, not a new proof-gate run
 by this documentation pass.
 
-All mirror-result rows retain their checkpoint over `218d3ffd` within their
-stated boundaries. On `feature/binary-remediation-20261113`, they are
-**lagging since `ffb3d8df`**: the optional replacement-entry observer changes
+All mirror-result rows retain their historical checkpoint over `218d3ffd`
+within their stated boundaries. They are **lagging the operational mirror
+since `ffb3d8df`**: the optional replacement-entry observer changes
 the operational mirror, and the separate mirror proof tree has not been
 carried or checked over that change. The binary gate does not carry this
 tree. The historical checkpoint does not discharge T4/T5's remaining
@@ -1359,8 +1359,8 @@ below. It records applicability separately from kernel acceptance. The
 [assessment](2026-11-13-binary-assessment.md) contains the fresh baseline
 experiments and their commands; the
 [remediation plan](2026-11-13-binary-remediation-plan.md) gives the order of
-work. Owner: the coordinator of `feature/binary-remediation-20261113`, with
-the replacement-cut and clean C2 experiments delegated on task branches.
+work. The inventory covers the current package, including diagnostics of
+failed or unadmitted obligations; it does not adopt the archived extensions.
 Inventory and prioritization [AGENT 2026-11-13].
 
 The eight-group baseline below refers to the operational mirror at
@@ -1386,12 +1386,19 @@ The declaration lists and expanded definitions in
 The supplied-answer models on the November archive are not part of this
 current s5 package.
 
-Native application of a flat-memory frame also needs an explicit memory
-projection and alias treatment. The
+Proving a frame in the flat-memory model does not require materializing all
+Linux memory: the store and composition lemmas in
+[Memory](../binary/Memory.lean) preserve every byte outside the complete
+modeled write footprint. Native application of that frame also needs an
+explicit memory projection and alias treatment. The
 [clean C2 experiment](2026-11-13-c2-native-frame.md) demonstrates why a
 physical-RAM observation cannot silently stand for preservation of every
 native virtual byte. The s5 captured-byte comparisons below do not supply
-that general projection obligation either.
+that general projection obligation either. The all-RAM C2 diagnostic is not
+a requirement to execute future specifications over all of Linux memory.
+The intended route is finite checks of the execution's accesses and writes,
+with a sound frame lemma and an explicit native-to-model relation; this
+package does not supply the missing relation or a new reusable checker for it.
 
 | Group and exact statement entry points | Runtime admission and conclusion checks | Current evidence and missing ingredient |
 | --- | --- | --- |
@@ -1409,9 +1416,10 @@ not approved exceptions to the run-before-proof practice. Finite instance
 checks are retained as evidence with that limitation. The existing checked
 proofs are not relabelled false, nor promoted to real-caller results. New
 proof work or composition on an affected claim waits for its stated
-admission milestone. The mirror proof campaign's previously registered lag
-is unchanged. Historical external gates below apply only to their exact
-commits and closures; local replay on this branch does not renew them.
+admission milestone. This inventory does not carry the mirror proof tree;
+its lag is stated in the [current register](#current-register). Historical
+external gates below apply only to their exact commits and closures; local
+replay does not renew them.
 
 ### Historical proof checkpoints
 

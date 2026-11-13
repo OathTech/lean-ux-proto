@@ -37,8 +37,30 @@ The [current admission inventory](../docs/proofs.md#current-admission-inventory-
 separates all eight result groups from their historical checkpoints. It names
 the actual entry/return checkers, remaining universal hypotheses and missing
 caller or representation checks. The
-[remediation plan](../docs/2026-11-13-binary-remediation-plan.md) is being
-implemented on a feature branch. No archived whole-driver result is adopted.
+[remediation plan](../docs/2026-11-13-binary-remediation-plan.md) describes
+the remaining stages; the current package contains the assessment,
+capture/checker repairs and the bounded source-entry pilot below. The existing
+71 headline theorems and their premises are unchanged. Their trust checks
+check proof acceptance; they do not renew admission of all those premises on
+real executions.
+
+The retained C2 and source-cut experiments are reproducible diagnostics,
+including failures of proposed obligations. They are not additional adequacy
+results. The following work remains outside this package:
+
+- `archive/restart-2026-11` at `6248d601a289`: the November C1 insertion and
+  C2 receive-window results.
+- `archive/whole-driver-pilot-2026-11-12` at `8b498e7ec207`: the whole-driver
+  composition, its service contracts, and `WDAdapter`'s parameterized mirror
+  at `Models.ofAnswers` / `Models.fed`. `ParamCopyEq` at `Models.mirror`
+  does not justify those supplied-service instances.
+- `archive/foundation-packet-2026-11-12` at `fb903d5c9d04`: the unaccepted
+  whole-driver foundation proposal.
+
+A reusable toolkit and new service/composition proofs remain proposed
+follow-ons; the bounded diagnostics here do not implement that scaling work.
+The [mirror proof register](../docs/proofs.md#current-register) records that the
+separate mirror proof tree has not been carried over the observer change.
 
 The [replacement observer pilot](../docs/2026-11-13-replacement-observer.md)
 executes the original caller to the selected entry and matches its exact
@@ -46,6 +68,8 @@ same-boot record frontier before checking `Replace.callBoundary` and the
 native instruction/return capture. Discovery and held-out executions pass.
 This is a bounded entry-admission result; the full `Replace.Post` clauses,
 broader caller contexts and universal environment premises remain unadmitted.
+Stage 1 remains incomplete; this pilot does not supply the admission needed
+for the plan's later proof and composition stages.
 
 `capture_lookup.py` now captures the complete coverage allocation by default;
 its `--partial-coverage` option is diagnostic only. The checked lookup replay

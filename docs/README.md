@@ -147,7 +147,14 @@ the [clean C2 native frame](2026-11-13-c2-native-frame.md). The later
 tests the proposed interior source cut. Its
 [independent review](2026-11-13-review-replacement-observer.md) records the
 missing-return false pass, its correction, and the remaining admission limits.
-C2 remains unresolved; no archived whole-driver claim is adopted.
+The [current admission inventory](proofs.md#current-admission-inventory-2026-11-13)
+separates these bounded execution results from unchanged conditional theorems
+and unresolved obligations. The C2 and source-cut tools retain diagnostic
+reproducers; no archived whole-driver claim or reusable proof-scaling method
+is adopted. Stage 1 remains incomplete; the pilot supplies bounded entry and
+replay evidence.
+The separate mirror proof tree is
+[lagging the observer change](proofs.md#current-register).
 
 | Document | Contents |
 | --- | --- |
