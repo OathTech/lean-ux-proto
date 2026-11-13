@@ -86,7 +86,19 @@ def entryControls (input : ProbeInput) (snapshot : Snapshot) (layout : Json)
   let ownership ← rejected "linked owner with NULL pprev" (Remove.assertAt n input.offsets unlinked world)
   return #[identity,ownership]
 
+/-- The collector reads the same address ranges at entry and return. Require
+that complete extent before streaming bytes; an omitted return range must
+not turn the native post-state check into a vacuous comparison. -/
+def checkReturnExtent (initial returned : Array Capture.Block) : Except String Unit := do
+  unless !initial.isEmpty && initial.all (fun b => !b.bytes.isEmpty) &&
+      initial.map (fun b => (b.address, b.bytes.size)) ==
+        returned.map (fun b => (b.address, b.bytes.size)) do
+    throw "capture.return-extent"
+
 def returnControls (snapshot : Snapshot) (actual : Run) : Except String (Array Json) := do
+  let missing ← rejected "missing return blocks" (checkReturnExtent snapshot.initial.blocks #[])
+  let truncated := snapshot.returned.blocks.modify 0 fun b => {b with bytes := b.bytes.pop}
+  let truncatedCheck ← rejected "truncated return block" (checkReturnExtent snapshot.initial.blocks truncated)
   let history ← rejected "missing executed PCs"
     (Capture.compareReturn {snapshot.toSnapshot with executedPCs := #[]} actual)
   -- A one-byte endpoint keeps the negative control cheap while exercising
@@ -97,12 +109,13 @@ def returnControls (snapshot : Snapshot) (actual : Run) : Except String (Array J
     registers := snapshot.returned.registers
     blocks := #[⟨address,#[(value+1)%256]⟩] }
   let memory ← rejected "changed captured return byte" (Capture.compareEndpoint endpoint actual.state)
-  return #[history,memory]
+  return #[missing,truncatedCheck,history,memory]
 
 /-- Shared predicate and instruction/return replay. The caller must state
 how the independently supplied source world was obtained. -/
 def replayAt (input : ProbeInput) (snapshot : Snapshot) (layout : Json)
     (initial : MachineState) (n : Names) (world : World) : Except String Json := do
+  checkReturnExtent snapshot.initial.blocks snapshot.returned.blocks
   Remove.assertAt n input.offsets initial.data.dmem world
   let op ← call snapshot n initial
   let frame ← Capture.callFrame input snapshot.toSnapshot layout initial
