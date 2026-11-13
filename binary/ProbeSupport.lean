@@ -43,9 +43,31 @@ structure ProbeInput where
 def liftE {α} (x : Except String α) : IO α :=
   match x with | .ok a => pure a | .error e => throw (IO.userError e)
 
-/-- Replay complete recorded operations with executeTrace's entry settings.
-    Each concrete probe separately validates its selected corpus case. -/
-def replayRecordedPrefix (j : Json) (count : Nat) : Except String Leanux.World := do
+/-- Executable comparison projection for the optional source observer.
+    Function-valued environment fields are not claimed extensionally equal. -/
+structure PrefixCheckpoint where
+  result : Int
+  device : Option Leanux.WG.Device
+  peerCounter : Nat
+  keypairCounter : Nat
+  steps : Array Leanux.Step
+  hidden : Option (List Leanux.HiddenRecord)
+  envCalls : List (Leanux.EnvSite × Nat)
+  extraOut : List (String × Json)
+  userOut : Option ByteArray
+  userFds : Option (Nat × Nat)
+  deriving BEq
+
+structure RecordedPrefix where
+  world : Leanux.World
+  checkpoints : Array PrefixCheckpoint
+  entries : Array (Nat × Leanux.ReplacementEntryObservation)
+
+/-- Replay the original syscalls with executeTrace's entry settings. The
+    optional observer is enabled only in the named operation; its pure
+    output survives in the result, never as input to a later operation. -/
+def replayRecordedPrefixRun (j : Json) (count : Nat) (observeOperation : Option Nat := none) :
+    Except String RecordedPrefix := do
   let t ← Leanux.Runner.parseTrace j
   unless t.ops.size > count && t.hidden.isSome do
     throw "probe requires a recorded prefix and a following operation"
@@ -70,10 +92,14 @@ def replayRecordedPrefix (j : Json) (count : Nat) : Except String Leanux.World :
     w := {next with ambient := {next.ambient with steps := #[], envCalls := []}}
   let mut results := #[]
   let mut ends := #[]
+  let mut checkpoints := #[]
+  let mut entries := #[]
   for i in [:count] do
     w := {w with
       wg := {w.wg with netRxRaised := false},
-      ambient := {w.ambient with hidden := t.hidden.map (·[i]!)},
+      ambient := {w.ambient with
+        hidden := t.hidden.map (·[i]!)
+        replacementEntries := if observeOperation == some i then some #[] else none},
       fixture := {w.fixture with hiddenAhead := t.hidden.map fun h => (h.drop (i + 1)).toList}}
     let some op := t.ops[i]? | throw "prefix operation missing"
     let (ret, next) ← (Leanux.syscall (Leanux.Runner.toSyscall results ends i op)).run w
@@ -81,10 +107,23 @@ def replayRecordedPrefix (j : Json) (count : Nat) : Except String Leanux.World :
     let (_, next) ← (Leanux.skipAmbient : Leanux.M Unit).run next |>.mapError Leanux.Stop.message
     unless next.hidden == some [] do throw s!"unconsumed prefix records at {i}"
     unless next.suspended.isEmpty && next.pendingWork.isEmpty && !next.netRxRaised do throw "incomplete prefix dispatch"
+    if let some observed := next.ambient.replacementEntries then
+      entries := entries ++ observed.map (i, ·)
+    checkpoints := checkpoints.push {
+      result := ret, device := next.wg.dev, peerCounter := next.wg.peerCounter,
+      keypairCounter := next.wg.keypairCounter, steps := next.ambient.steps,
+      hidden := next.ambient.hidden, envCalls := next.ambient.envCalls,
+      extraOut := next.ambient.extraOut, userOut := next.fs.userOut, userFds := next.fs.userFds }
     w := next
     results := results.push ret
     ends := ends.push (if ret == 0 then w.userFds else none)
-  return {w with ambient := {w.ambient with steps := #[], hidden := some []}}
+  return {world := w, checkpoints, entries}
+
+/-- Existing callers keep the original completed-prefix result and no
+    observation output. -/
+def replayRecordedPrefix (j : Json) (count : Nat) : Except String Leanux.World := do
+  let result ← replayRecordedPrefixRun j count
+  return {result.world with ambient := {result.world.ambient with steps := #[], hidden := some []}}
 
 def replayPrefix (j : Json) (count : Nat) : Except String Leanux.World := do
   unless count == 3 do throw "index probe requires the recorded three-operation prefix"

@@ -1,6 +1,7 @@
 import Leanux.WG.Send
 import Leanux.WG.Socket
 import Leanux.WG.NoiseCrypto
+import Leanux.Observation
 
 /-!
 # drivers/net/wireguard/noise.c — handshake messages, and the send worker
@@ -293,6 +294,7 @@ def beginSession (pid : PeerId) : M Bool := do
     -- when the handshake entry was unhashed meanwhile (a concurrent clear),
     -- outside the domain
     _ ← IndexOwner.peerDeref (.handshake pid)
+    Observation.replacementEntry pid kp
     if !(← indexReplaceHandshake pid kp) then unsupported "begin_session: the handshake entry was unhashed"
     return true
   unsupported "a dead peer finishing a session"

@@ -99,19 +99,11 @@ def returnControls (snapshot : Snapshot) (actual : Run) : Except String (Array J
   let memory ← rejected "changed captured return byte" (Capture.compareEndpoint endpoint actual.state)
   return #[history,memory]
 
-def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except String Json := do
-  unless snapshot.executionMode=="sequential" &&
-      snapshot.completedOperations.toList==List.range snapshot.operation &&
-      (← input.trace.getObjValAs? String "id")==snapshot.trace do throw "capture.workload-or-mode"
-  let template ← replayRecordedPrefix input.trace input.operation
-  let some d := template.wg.dev | throw "capture.identity-prefix-device"
-  let initial ← snapshot.initial.registers.state (← Capture.loadMemory snapshot.initial.blocks)
-  let n ← names input snapshot layout initial d
-  let view ← (reconstruct n input.offsets initial.data.dmem).mapError DecodeError.message
-  let prefixMatch := match compareState view (target d) with | .ok _ => "equal" | .error e => e
-  let world ← sourceWorld template view
+/-- Shared predicate and instruction/return replay. The caller must state
+how the independently supplied source world was obtained. -/
+def replayAt (input : ProbeInput) (snapshot : Snapshot) (layout : Json)
+    (initial : MachineState) (n : Names) (world : World) : Except String Json := do
   Remove.assertAt n input.offsets initial.data.dmem world
-  let controls ← entryControls input snapshot layout initial n d world
   let op ← call snapshot n initial
   let frame ← Capture.callFrame input snapshot.toSnapshot layout initial
   let c ← Index.readContext initial.data.dmem
@@ -133,7 +125,8 @@ def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except Stri
         | some writes => .ok (!writes.isEmpty))
     Sequence.resultCheck n initial actual.state answer
     Remove.assertAt n input.offsets actual.state.data.dmem finalWorld
-    Remove.assertAt n input.offsets (← Capture.loadMemory snapshot.returned.blocks) finalWorld
+    -- compareReturn below checks every captured return byte against this
+    -- checked state, without constructing a second full KCOV memory map.
     unless Trie.coverageCheck c actual.state.data.dmem &&
         Trie.coverageDataCheck ⟨c.coverage,c.preempt+512⟩ actual.state.data.dmem do throw "capture.return-readiness"
     let checked ← Capture.compareReturn snapshot.toSnapshot actual
@@ -141,12 +134,30 @@ def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except Stri
     outcomes := outcomes.push (Json.mkObj [("seed",toJson seed.toNat),("instructions",toJson actual.pcs.size),
       ("compared_bytes",toJson checked),("coverage_added",toJson (actual.coverage.size-coverage.size)),
       ("return_controls",toJson returnChecks)])
+  return Json.mkObj [("call", toJson (reprStr op)), ("answer", toJson (reprStr answer)),
+    ("entry_preempt", toJson frame.entryPreempt), ("runs", toJson outcomes)]
+
+def run (input : ProbeInput) (snapshot : Snapshot) (layout : Json) : Except String Json := do
+  unless snapshot.executionMode=="sequential" &&
+      snapshot.completedOperations.toList==List.range snapshot.operation &&
+      (← input.trace.getObjValAs? String "id")==snapshot.trace do throw "capture.workload-or-mode"
+  let template ← replayRecordedPrefix input.trace input.operation
+  let some d := template.wg.dev | throw "capture.identity-prefix-device"
+  let initial ← snapshot.initial.registers.state (← Capture.loadMemory snapshot.initial.blocks)
+  let n ← names input snapshot layout initial d
+  let view ← (reconstruct n input.offsets initial.data.dmem).mapError DecodeError.message
+  let prefixMatch := match compareState view (target d) with | .ok _ => "equal" | .error e => e
+  let world ← sourceWorld template view
+  let controls ← entryControls input snapshot layout initial n d world
+  let replay ← replayAt input snapshot layout initial n world
   return Json.mkObj [("status",toJson "pass"),("anchor",toJson snapshot.anchor),
     ("origin",toJson "actual kernel entry and return bytes; no relocation or heap materialization"),
     ("source_input",toJson "index projection reconstructed from captured entry; identities and unobserved fields supplied by recorded prefix"),
     ("identity_prefix_operation",toJson input.operation),("captured_operation",toJson snapshot.operation),
-    ("prefix_projection_comparison",toJson prefixMatch),("call",toJson (reprStr op)),
-    ("answer",toJson (reprStr answer)),("entry_preempt",toJson frame.entryPreempt),
-    ("capacity",toJson snapshot.initial.capacity),("entry_controls",toJson controls),("runs",toJson outcomes)]
+    ("prefix_projection_comparison",toJson prefixMatch),
+    ("call",← replay.getObjVal? "call"),("answer",← replay.getObjVal? "answer"),
+    ("entry_preempt",← replay.getObjVal? "entry_preempt"),
+    ("capacity",toJson snapshot.initial.capacity),("entry_controls",toJson controls),
+    ("runs",← replay.getObjVal? "runs")]
 
 end Binary.Pair.MutatorCapture
