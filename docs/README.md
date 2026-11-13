@@ -139,6 +139,11 @@ sets out staged repairs, their evidence and stop conditions, and the
 proposed independent review process.
 Its [review disposition](2026-11-13-binary-remediation-review-disposition.md)
 links the two independent reviews and addresses each finding.
+The [first implementation batch](2026-11-13-binary-remediation-first-batch.md)
+joins full-buffer lookup admission and replay, investigates the
+[replacement source cut](2026-11-13-replacement-source-cut.md), and tests
+the [clean C2 native frame](2026-11-13-c2-native-frame.md). The latter two
+remain explicitly unresolved; no archived whole-driver claim is adopted.
 
 | Document | Contents |
 | --- | --- |
