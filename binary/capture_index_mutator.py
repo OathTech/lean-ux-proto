@@ -122,6 +122,22 @@ def select_invocation(anchor, requested, ordinal, remote, regs, offsets):
     raise ValueError('unknown invocation selector')
 
 
+def recording_position(remote, task, layout):
+    """Read the native input-record frontier while the CPU is stopped."""
+    sequence_address = layout['sequenceAddress']
+    dropped_address = task + layout['taskDropped']
+    sequence = remote.read(sequence_address, 8)
+    dropped = remote.read(dropped_address, 4)
+    if len(sequence) != 8 or len(dropped) != 4:
+        raise ValueError('short recording-position read')
+    if int.from_bytes(dropped, 'little'):
+        raise ValueError('native entry has dropped input records')
+    return dict(sequenceAddress=sequence_address, sequence=int.from_bytes(sequence, 'little'),
+                droppedAddress=dropped_address, dropped=0), [
+                    dict(address=sequence_address, bytes=list(sequence)),
+                    dict(address=dropped_address, bytes=list(dropped))]
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--anchor', choices=['remove', 'replace', 'insert'], required=True)
@@ -153,7 +169,8 @@ def main():
     verify_image()
     identity, kraken = verify_kernel(ORACLE.parent, expected=pins()[0]), verify_pin(ROOT)
     layout = layouts(ORACLE)
-    provider_layout = layout_values() if args.anchor == 'insert' else None
+    recording_layout = layout_values() if args.anchor in ('replace', 'insert') else None
+    provider_layout = recording_layout if args.anchor == 'insert' else None
     out.mkdir(parents=True, exist_ok=True)
     if (out / 'snapshot.json').exists() or (out / 'gdb.sock').exists():
         raise ValueError('capture output is already occupied')
@@ -199,6 +216,10 @@ def main():
             print(f'capturing {args.anchor} entry, occurrence {occurrence}, completed {completed}', flush=True)
             initial = capture(remote, regs, probe, layout, args.instruction_budget,
                               root_entries=roots, read_output=False, include_retired=True, full_coverage=True)
+            source_recording = None
+            if args.anchor == 'replace':
+                source_recording, recording_blocks = recording_position(remote, initial['task'], recording_layout)
+                initial['blocks'] += recording_blocks
             if provider_layout is not None:
                 private = random_private(remote, initial['task'], provider_layout)
                 initial['randomPrivate'] = dict(blocks=[(b['address'], len(b['bytes'])) for b in private['blocks']],
@@ -249,6 +270,7 @@ def main():
                           occurrence=occurrence, initial=initial, returned=dict(registers=returned, blocks=final_blocks),
                           selection='linked entry' if args.anchor == 'remove' else 'operation ordinal',
                           operationCallIndex=selected,
+                          sourceRecording=source_recording,
                           randomServices=random_services)
             if args.finish_workload:
                 result['postCaptureCompletion'] = finish_workload(
