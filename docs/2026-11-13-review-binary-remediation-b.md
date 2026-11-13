@@ -118,7 +118,8 @@ remediation, main update or external publication was performed.
 Reproduce the focused check from a task worktree:
 
 ```sh
-capped -m 1G -- python3 -B -c '
+cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
+CAPPED_MEM_MAX=1G cap python3 -B -c '
 import json, pathlib, subprocess, tempfile
 source = subprocess.check_output(["git", "show",
     "8b498e7ec207a042540148dda5881787731b5ac0:binary/contracts/wd_trace.py"], text=True)
@@ -136,3 +137,37 @@ with tempfile.TemporaryDirectory(prefix="binary-review-b-", dir=root) as tempora
     print("Confirmed: final inexact-site coverage metadata is discarded")
 '
 ```
+
+## Follow-up on the revised proposal
+
+Reviewed revision: `a616d1fe63c46e1554cbba29f7ca2ccae75cde24`.
+Follow-up judgment [AGENT 2026-11-13]: **B1 and B2 are addressed at the
+plan level. No remaining or newly introduced material finding was identified
+in this follow-up.** This does not certify an implementation or authorize
+implementation, integration or publication.
+
+* **B1:** revised plan lines 182–211 require an explicit complete interval,
+  continuous observation of a justified site set, invocation totals obtained
+  independently of retained predicate events, preservation and checking of
+  coverage metadata, and an omission/quota control. Lines 346–354 and 377–381
+  make completeness part of the joined and lifecycle exits. These additions
+  directly cover the archive's disarming and dropped-metadata failure mode.
+* **B2:** revised plan lines 405–415 require updates to the existing terminal,
+  import and predicate lists, specify the actual export/replay roots, include
+  bridges and proof subdirectories, and bind acceptance to a source revision
+  and closure. Lines 61–68 and the individual stage exits distinguish capture
+  admission from an accepted proof. The old roots can no longer satisfy the
+  proposed acceptance procedure merely by being rerun unchanged.
+
+I read the full revised plan and its diff, checked the dispositions of B1 and
+B2, and inspected `binary/ProbeSupport.lean:46–87` and archived
+`binary/WDCompose.lean:27–38` to assess the newly explicit source-cut and
+caller-edge requirements independently. The implementation risks remain:
+obtaining a faithful source cut, observing the native frame, and collecting a
+complete useful interval. The plan now gives those risks explicit admission
+or stopping consequences rather than claiming they are solved.
+
+This follow-up was source/document inspection only; no build, kernel capture
+or repetition of the metadata experiment was necessary because no implementation
+changed. The reproduction recipe above now uses the project's optional
+`cap()` wrapper so it also works on machines without the box's `capped` tool.
