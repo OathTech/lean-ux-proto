@@ -33,14 +33,17 @@ package using its documented private dependency setup. Capture with
 `capture_index_mutator.py --anchor replace --operation 2 --call-index 0
 --finish-workload` and the existing capture arguments, then run from the task
 worktree (substitute the input and capture paths):
+Select the host Python providing pyelftools before entering the bundle,
+as in `binary/REPRODUCING.md`.
 
 ```sh
 cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
-CAPPED_MEM_MAX=8G cap scripts/in-bundle python3 -B \
+binary_python=$(command -v python3)
+CAPPED_MEM_MAX=16G cap scripts/in-bundle "$binary_python" -B \
   binary/remediation/replacement_source_capture.py \
   --input .tmp/probe/input.json --capture .tmp/capture \
   --operation 2 --call-index 0
-cap scripts/in-bundle python3 -B -m unittest discover -s binary -p 'test_*.py'
+cap scripts/in-bundle "$binary_python" -B -m unittest discover -s binary -p 'test_*.py'
 ```
 
 Failure in provenance, source execution or admission exits nonzero. Captures,

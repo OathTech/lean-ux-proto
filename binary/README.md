@@ -40,6 +40,13 @@ caller or representation checks. The
 [remediation plan](../docs/2026-11-13-binary-remediation-plan.md) is being
 implemented on a feature branch. No archived whole-driver result is adopted.
 
+The [replacement observer pilot](../docs/2026-11-13-replacement-observer.md)
+executes the original caller to the selected entry and matches its exact
+same-boot record frontier before checking `Replace.callBoundary` and the
+native instruction/return capture. Discovery and held-out executions pass.
+This is a bounded entry-admission result; the full `Replace.Post` clauses,
+broader caller contexts and universal environment premises remain unadmitted.
+
 `capture_lookup.py` now captures the complete coverage allocation by default;
 its `--partial-coverage` option is diagnostic only. The checked lookup replay
 refuses a partial allocation and invokes `IndexLookup.callBoundary` before

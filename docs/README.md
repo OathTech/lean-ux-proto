@@ -142,8 +142,10 @@ links the two independent reviews and addresses each finding.
 The [first implementation batch](2026-11-13-binary-remediation-first-batch.md)
 joins full-buffer lookup admission and replay, investigates the
 [replacement source cut](2026-11-13-replacement-source-cut.md), and tests
-the [clean C2 native frame](2026-11-13-c2-native-frame.md). The latter two
-remain explicitly unresolved; no archived whole-driver claim is adopted.
+the [clean C2 native frame](2026-11-13-c2-native-frame.md). The later
+[replacement observer](2026-11-13-replacement-observer.md) implements and
+tests the proposed interior source cut. C2 remains unresolved; no archived
+whole-driver claim is adopted.
 
 | Document | Contents |
 | --- | --- |

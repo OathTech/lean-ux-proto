@@ -91,9 +91,14 @@ failure, before the Campaign 2 repair was included; the integration record
 supersedes that result. These are recorded checks, not a new proof-gate run
 by this documentation pass.
 
-All mirror-result rows are current over `218d3ffd` within their stated
-boundaries. The checkpoint does not discharge T4/T5's remaining premises or
-enlarge T2's scope. Historical counts and pins below are not newer claims.
+All mirror-result rows retain their checkpoint over `218d3ffd` within their
+stated boundaries. On `feature/binary-remediation-20261113`, they are
+**lagging since `ffb3d8df`**: the optional replacement-entry observer changes
+the operational mirror, and the separate mirror proof tree has not been
+carried or checked over that change. The binary gate does not carry this
+tree. The historical checkpoint does not discharge T4/T5's remaining
+premises or enlarge T2's scope. Historical counts and pins below are not
+newer claims.
 
 Use [setup](../REPRODUCING.md#5-build-and-check-the-proofs) to run the proof gate
 and the separate counterexample recipes. Standing practices are in
@@ -1358,9 +1363,12 @@ work. Owner: the coordinator of `feature/binary-remediation-20261113`, with
 the replacement-cut and clean C2 experiments delegated on task branches.
 Inventory and prioritization [AGENT 2026-11-13].
 
-All eight current groups below refer to the operational mirror at
-`9ca4b0655d8a`, unchanged on the remediation branch, and the s5 image and
-nine-patch Kraken pin in [TrustBase](../binary/TrustBase.lean): image identity
+The eight-group baseline below refers to the operational mirror at
+`9ca4b0655d8a`. The [replacement observer](2026-11-13-replacement-observer.md)
+adds optional caller output at `ffb3d8df`, without changing the index
+mutators or the existing entry predicate; its row gives the new admission
+scope. The s5 image and nine-patch Kraken pin in
+[TrustBase](../binary/TrustBase.lean) are unchanged: image identity
 `b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767`, ELF SHA-256
 `06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e`, Kraken
 `43df9468febc173e6cf9363d87e8ad34e76d7434`. Layout constants are the generated
@@ -1388,7 +1396,7 @@ that general projection obligation either.
 | Group and exact statement entry points | Runtime admission and conclusion checks | Current evidence and missing ingredient |
 | --- | --- | --- |
 | Lookup / peer-get: `LookupRelation.lookup_simulation`; `Pair.IndexLookup.{lookup_checked,lookup_simulation,lookup_first_return}` | [PairLookupCheck](../binary/PairLookupCheck.lean) defines `callBoundary`, whose success is `Pre`; [PairIndexChecked](../binary/PairIndexChecked.lean) runs it and checks exit reconstruction, ownership and coverage phases. [PairCapture](../binary/PairCapture.lean) compares captured PCs, registers and bytes. | Discovery and fresh repeat hit/miss captures pass the exact entry predicate and instruction/return checks on the same full allocation at both tested seeds; see the [first-batch report](2026-11-13-binary-remediation-first-batch.md). The runner invokes the original mirror through `SourceAdapter`. `Pre_lookup`, source acceptance, callback readiness and finite observed accesses are testable. `InvocationPermissions` / `FirstReturnCallPermissions` quantify over possible histories; no executable complete check or real caller theorem is supplied. `SerializedEnvironment` excludes ordinary asynchronous execution. Original callback contracts remain explicit in the original headline. Full native memory outside captured blocks and transport premises are not checked. |
-| Removal / replacement: `Pair.Remove.{remove_checked,remove_simulation,remove_first_return}` and `Pair.Replace.{replace_checked,replace_simulation,replace_first_return}` | [PairMutatorCapture](../binary/PairMutatorCapture.lean) calls each `callBoundary`, the instruction runner and endpoint comparison; `PairRemoveCheck` / `PairReplaceCheck` define entry and exit reconstruction checks. | Baseline actual captured calls pass. The starting source state is reconstructed from native memory; that does not independently establish the original caller's state at this cut. The [replacement experiment](2026-11-13-replacement-source-cut.md) runs the original source on same-boot records; both neighboring completed-operation states differ from native entry, while the later index projection matches return. A faithful interior source observer is missing. General caller alignment and universal permissions remain unresolved. |
+| Removal / replacement: `Pair.Remove.{remove_checked,remove_simulation,remove_first_return}` and `Pair.Replace.{replace_checked,replace_simulation,replace_first_return}` | [PairMutatorCapture](../binary/PairMutatorCapture.lean) calls each `callBoundary`, the instruction runner and endpoint comparison; `Remove.callBoundary` / `Replace.callBoundary` and `Remove.assertAt` in [PairRemove](../binary/PairRemove.lean) / [PairReplace](../binary/PairReplace.lean) supply the entry and reconstruction checks. | Baseline local state-input captures pass, with their source projection reconstructed from native memory. The [source-entry observer](2026-11-13-replacement-observer.md) now reaches the original replacement caller independently and checks exact same-boot record/dispatch alignment before the existing entry predicate and complete return replay. Discovery and a fresh held-out boot both pass at two seeds; see the report for review and broader validation status. The pilot covers one successful replacement in an uninterrupted receive-worker section. The full `Replace.Post` conjunction (`MemoryReady`, `EqualOutside`, `KindFrame`), internal invariants, universal service/permission assumptions, removal caller alignment and broader replacement contexts remain unadmitted. |
 | Five image callbacks: `Callback.{pc_contract,cmp4_contract,const_cmp4_contract,const_cmp1_contract,bh_contract}` | [CallbackCheck](../binary/CallbackCheck.lean) and [CallbackRun](../binary/CallbackRun.lean) execute readiness and bounded image-body checks; captured clients execute these instructions. | Existing generated cases and real client replay provide concrete instances. Decoder agreement is checked by image generation, while Kraken ISA fidelity is trusted. The BH contract is for its stated fast path; arbitrary interrupts and slow paths remain outside its readiness domain. A constructed case is not a captured standalone callback admission. |
 | Trie lookup: `Pair.Trie.{findNode_checked,lookup_checked}` and extended `Pair.Allowedips.lookup_checked` | [PairAllowedipsCapture](../binary/PairAllowedipsCapture.lean) uses `Trie.callBoundary`, checks internal headers, reconstruction, complete coverage allocation and native return. `PairAllowedipsLookupCheck` defines the extended heap check. | Baseline IPv4 and IPv6 captures pass, invoking the original source lookup. Dying-peer retry may be refused by this source experiment. A selected accepted invocation does not establish all caller entries or a concurrent environment; the extended mutation heap's additional conjuncts must not be inferred merely from the older trie runner. |
 | Index insertion: `Pair.Insert.{insert_checked,insert_simulation,insert_from_image,insert_simulation_from_image}` and `RandomService.return_recorded` | [PairInsertCapture](../binary/PairInsertCapture.lean) and `PairInsertChecked` execute entry/provider checks, actual decoded random service bodies, recorded draw checks and return checks. | Baseline collision/retry capture passes: 1,338 instructions and two random services at each tested seed. Starting-world reconstruction still needs independent caller alignment. `RandomReturnContract`, `RandomInputCoupling` and `inputAt` are universal interface obligations, not established by those draws. No executable universal check is supplied; specific service-instance admission and a sound source-input interpretation must precede stronger claims. |

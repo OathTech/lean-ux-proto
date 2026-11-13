@@ -1,5 +1,9 @@
 # Replacement: the source cut is still unobserved
 
+Historical first-batch diagnosis. The later
+[source-entry observer](2026-11-13-replacement-observer.md) implements the
+interface proposed below and reports its separate validation and limits.
+
 Conclusion and proposed next interface [AGENT 2026-11-13]. This is the
 source-alignment investigation from the first batch of the
 [remediation plan](2026-11-13-binary-remediation-plan.md), over mirror
