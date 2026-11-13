@@ -155,6 +155,9 @@ is adopted. Stage 1 remains incomplete; the pilot supplies bounded entry and
 replay evidence.
 The separate mirror proof tree is
 [lagging the observer change](proofs.md#current-register).
+The [landing review](2026-11-13-review-binary-landing.md) checks the bounded
+increment independently and records the high-severity inherited extent
+defects that remain unresolved in three other capture protocols.
 
 | Document | Contents |
 | --- | --- |

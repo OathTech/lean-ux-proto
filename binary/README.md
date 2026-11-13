@@ -74,8 +74,13 @@ for the plan's later proof and composition stages.
 `capture_lookup.py` now captures the complete coverage allocation by default;
 its `--partial-coverage` option is diagnostic only. The checked lookup replay
 refuses a partial allocation and invokes `IndexLookup.callBoundary` before
-executing the call. It keeps the initial interpreter state, instruction PCs
-and access records without retaining every intermediate memory map. Native
+executing the call. Lookup and removal/replacement also require return ranges
+to match their entry ranges in address and length before replay; omitting or
+truncating a returned range cannot reduce the required comparison. The
+[landing review](../docs/2026-11-13-review-binary-landing.md) includes an
+independent native hit replay and omitted-range rejection. Lookup keeps the
+initial interpreter state, instruction PCs and access records without retaining
+every intermediate memory map. Native
 return bytes are compared directly, avoiding a second comparison-only memory
 map. These changes preserve the image's capacity and predicate. They do not
 discharge universal permissions, establish the transport representation, or
@@ -253,6 +258,7 @@ as acceptance of the current source.
 | [Callback proofs](../docs/2026-10-19-paired-callbacks.md) | Bounded image callbacks and first-return permissions |
 | [s5 landing assessment](../docs/2026-10-19-binary-landing-assessment.md) | Port to the split mirror, relocation, repairs and acceptance |
 | [Allowed-IPs scaling](../docs/2026-10-20-binary-allowedips.md) | Partial mutation result, open composition and reproduction commands |
+| [Remediation landing review](../docs/2026-11-13-review-binary-landing.md) | Independent runtime and native-capture checks, resolved helper defect and inherited extent defects still open |
 
 A typed heap view over the machine semantics is follow-on work on a separate
 branch. It is not part of the results above; the design is preserved at
