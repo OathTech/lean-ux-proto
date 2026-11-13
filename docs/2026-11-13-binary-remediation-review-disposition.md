@@ -9,8 +9,9 @@ and [review B](2026-11-13-review-binary-remediation-b.md).
 
 All five findings are accepted. The changes below repair the
 [plan](2026-11-13-binary-remediation-plan.md); they do not claim to repair
-the implementation. The revised plan is being returned for follow-up
-review. This record preserves the original findings and their individual
+the implementation. Both reviewers have rechecked revised plan `a616d1fe`
+and found their findings addressed at the plan level. This record preserves
+the original findings and their individual
 disposition rather than replacing them with a combined verdict.
 
 | Finding | Disposition in the plan | What implementation must demonstrate |
@@ -33,6 +34,19 @@ required native frame under ordinary scheduling, realizing the required
 workload cases on the selected clean image, and resolving non-executable
 universal assumptions. These have stop conditions rather than presumed
 solutions or invented completion dates.
+
+## Follow-up outcome
+
+Both review documents include their follow-up on `a616d1fe`, with exact
+references. Review A reports no remaining material objection to the bounded
+first investigation batch; review B reports no remaining or newly introduced
+material finding in the revised proposal. Neither claims the implementation
+obligations are solved. The plan's substantive text is unchanged after that
+reviewed revision; later commits collect the reviews and this disposition.
+
+The proposed next action is the three-item first batch at the end of the
+plan, with admission and feasibility findings as its output. Implementation
+has not begun as part of this planning/review task.
 
 ## Evidence and limits of this review cycle
 
