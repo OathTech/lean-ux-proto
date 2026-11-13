@@ -81,6 +81,17 @@ map. These changes preserve the image's capacity and predicate. They do not
 discharge universal permissions, establish the transport representation, or
 check a native frame over uncaptured bytes.
 
+An inherited checker defect remains in `PairAllowedipsCapture`,
+`PairInsertCapture` (including random-service returns), and
+`PairAllowedipsInsertCapture`: comparisons consume the supplied ranges
+without independently enforcing their complete capture extents. Code
+inspection identifies omitted-range false-pass paths; these paths have not
+been reproduced on native captures in this landing review. The index
+lookup/mutator repair does not repair those different protocols. Intact
+historical captures retain their bounded evidence, but these runners do not
+yet reliably reject incomplete evidence. Their extent validation remains
+open Stage 1 work.
+
 ## Build from a clone
 
 Use a non-main worktree as described in [setup](../REPRODUCING.md). The

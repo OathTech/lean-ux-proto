@@ -81,9 +81,11 @@ be mapped. A missing byte in a partial snapshot is missing evidence, not
 evidence that Linux left it unmapped. Reducing the captured capacity word
 would test a different state.
 
-The assessment's `binary/assessment/capture_lookup_full.py` enables the
-existing capture helper's full-allocation option. It captures both hit and
-miss with the original capacity of 4,194,304 words (32 MiB).
+The assessment used a temporary wrapper to enable the existing capture
+helper's full-allocation option. It captured both hit and miss with the
+original capacity of 4,194,304 words (32 MiB). The current
+`binary/capture_lookup.py` defaults to full allocation, so the redundant
+wrapper is excluded from the landing package.
 `binary/assessment/LookupEntry.lean` then invokes the existing
 `callBoundary`, checks source acceptance, and verifies that a wrong entry
 PC is rejected. It does not redefine the predicate or manufacture memory.
@@ -398,8 +400,8 @@ recipes. The assessment used `d1_second_response`,
 `c_remove_after_handshake` and `s2_index_collision`, under their respective
 index, allowedips, index-remove, index-replace, index-insert and
 allowedips-insert profiles. Use fresh output directories. For the direct
-lookup check, replace the usual capture command by
-`binary/assessment/capture_lookup_full.py`. Prepare the source prefix from
+lookup check, use the current `binary/capture_lookup.py` command without
+`--partial-coverage`. Prepare the source prefix from
 that boot without running the full instruction replay (the latter failed
 to complete here):
 

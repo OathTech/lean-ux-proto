@@ -1411,6 +1411,18 @@ package does not supply the missing relation or a new reusable checker for it.
 | Partial trie mutation: `Pair.Allowedips.{Placement.loop_checked,Exact.assignment_checked,Root.initialization_checked}` and initialization/publication/return components listed in `surface.HEADLINES` | [PairAllowedipsInsertCapture](../binary/PairAllowedipsInsertCapture.lean) and component boundary checks test the selected segments, supplied native allocation transitions and restricted captured frames. | Useful segment evidence; zero completed insertion functions. Allocation, failed allocations, rollback, intermediate/covering nodes and complete source/caller composition are missing. Supplied allocator transitions are not instruction-level service executions or a universal allocator theorem. No complete-function predicate or acceptance claim exists to register. |
 | Replay/lifetime transport: `LookupRelation.lookup_snapshot_transport`, `LookupSourceFrame.lookup_receivingSnapshot` | [LookupSnapshotTransport](../binary/LookupSnapshotTransport.lean) requires `ReceivingSnapshotFields`, `ReceivingSnapshotReads` separation from every applicable `LookupWrites`, original lookup premises and the chosen mirror-history property. | The full conjunction has no captured admission. Current lookup snapshots omit the global keypair counter and refuse keypair identity setup. A checker for the full source-live representation, global separation and selected property is missing; no runtime exception is silently accepted. This row remains conditional and does not establish a receive-window or allocator-lifetime result. |
 
+An open inherited checker defect affects the trie-lookup, index-insertion
+(including random-service returns), and partial-trie-mutation rows:
+`PairAllowedipsCapture`, `PairInsertCapture` and
+`PairAllowedipsInsertCapture` do not independently enforce their required
+capture extents. Their comparisons iterate supplied blocks. Code inspection
+therefore identifies omissions that can erase comparison obligations;
+native reproduction of those paths remains outstanding. This package repairs
+extent enforcement only for index lookup and the removal/replacement runner.
+The other protocols need their own checks and positive/negative executions
+before stronger admission claims. This does not retroactively make intact
+historical captures incomplete.
+
 Unrunnable universal predicates above are unresolved applicability obligations,
 not approved exceptions to the run-before-proof practice. Finite instance
 checks are retained as evidence with that limitation. The existing checked
