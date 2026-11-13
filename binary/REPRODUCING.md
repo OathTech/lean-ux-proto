@@ -14,6 +14,7 @@ image and identity for this shell only:
 ```sh
 cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
 : "${LEANUX_BINARY_KERNEL_DIR:?Set this to the saved s5 build directory}"
+export LEANUX_BINARY_KERNEL_DIR
 binary_identity=$("$binary_python" -c 'import sys; sys.path.insert(0, "binary"); from target import pins, verify_image; verify_image(); print(pins()[0])') || exit 1
 export LEANUX_KERNEL_DIR="$LEANUX_BINARY_KERNEL_DIR"
 export LEANUX_KERNEL_IDENTITY="$binary_identity"
