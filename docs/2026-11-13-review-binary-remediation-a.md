@@ -124,3 +124,58 @@ not independently reproduced. No build, guest capture, proof checker or
 heavy experiment was run; the findings concern statement and plan
 obligations, and none depends on a fresh kernel behavior claim. The review
 document was checked with `git diff --check`. No implementation was changed.
+
+## Follow-up on the revised proposal
+
+Reviewed revision: `a616d1fe63c46e1554cbba29f7ca2ccae75cde24`.
+Judgment [AGENT 2026-11-13]: the three findings above are addressed at the
+plan level. I found no remaining material objection to adopting this
+proposal and commissioning its bounded first investigation batch. This is
+not acceptance of an implementation or permission to begin the later proof
+phases before their admission conditions are met.
+
+* **F1 addressed:** revised lines 328–337 require each prior result and
+  permitted transition to establish the next entry, distinguish this from
+  caller progress, and classify assumed edges. Lines 324–326 and 366–369
+  keep in-scope WireGuard callers within the binary claim; putting them
+  behind assumed contracts reduces that claim. Stage 5 now requires the
+  classified edge obligations themselves to be proved (346–354). These
+  requirements exclude the insufficient `Covered`-only outcome identified
+  in the original review.
+* **F2 addressed:** lines 122–132 require replay through the current syscall
+  to the matching function cut, retaining the remaining input stream.
+  Lines 155–159 preserve the legitimate local state-input claim without
+  confusing it with independent caller admission. The first batch at
+  445–448 investigates that missing observation capability rather than
+  classifying an unaligned comparison as a mirror failure.
+* **F3 addressed:** lines 61–68 define the distinct admission and proof
+  outcomes, and stages 3–6 apply them. Pending external acceptance cannot
+  be reported as a completed proof stage. Lines 408–415 additionally tie
+  acceptance to the actual headline, meaning-defining predicates and
+  export closure of each recovered result.
+
+I also inspected the added complete-interval requirements at 182–211.
+They are proportionate to a joined claim and preserve sampled captures as
+diagnostics. The source supports the identified risk: archived
+`binary/contracts/capture.py:494–508` can disarm sites and later emit
+coverage summaries; `wd_trace.py:65–76` omits those summaries when producing
+events. The revised plan requires checking this information before a join
+is admitted. The proof-closure change likewise addresses the current
+explicit lists in `binary/surface.py:10–89`, the top-directory source scan
+in `scripts/binary-proof-gate:158–164`, and the nine documented export roots
+in `binary/README.md:99–102`.
+
+The important remaining uncertainties are feasibility questions that the
+revised plan now reports honestly: observing a matching source cut,
+admitting a native frame beyond sparse snapshots, recording a complete
+ordinary-scheduling interval, and resolving any non-executable universal
+premise. Lines 228–243 make the frame investigation's unresolved outcome
+explicit. None of these capabilities was demonstrated by this document
+revision; the bounded investigation must establish them or stop with the
+declared narrower result.
+
+Follow-up validation: read the revised plan, its diff and dispositions;
+rechecked the relevant existing collector, event conversion, proof-surface,
+gate and export definitions. No other review was used as settled evidence.
+No build, capture, proof checker or heavy experiment was run. The appended
+review passed staged `git diff --check`; no implementation files changed.
