@@ -85,6 +85,30 @@ def completed_operations(path, trace):
     return completed
 
 
+def finish_workload(remote, process, boot, trace, timeout):
+    """Finish this boot after preserving the selected entry/return snapshots.
+
+    The containing operation emits its hidden records only after returning.
+    Finishing it supplies those records for source-cut diagnostics; it does
+    not capture or validate the intervening caller instructions.
+    """
+    if remote.command('D') != b'OK':
+        raise ValueError('debugger refused detach after mutator capture')
+    remote.socket.close()
+    returncode = process.wait(timeout=timeout)
+    if returncode != 0:
+        raise ValueError(f'captured workload exited with status {returncode}')
+    completed = completed_operations(boot, trace['id'])
+    if completed != list(range(len(trace['ops']))):
+        raise ValueError('captured workload did not finish every operation')
+    lines = boot.read_text().splitlines()
+    batches = [line for line in lines if line.startswith('LEANUX_BATCH_DONE ')]
+    exits = [line for line in lines if line.startswith('LEANUX_GUEST_EXIT=')]
+    if batches != ['LEANUX_BATCH_DONE traces=1 failures=0'] or exits != ['LEANUX_GUEST_EXIT=0']:
+        raise ValueError('captured workload lacks one successful batch and guest exit')
+    return dict(completedOperations=completed, qemuReturncode=returncode)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--anchor', choices=['remove', 'replace', 'insert'], required=True)
@@ -96,6 +120,8 @@ def main():
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--timeout', type=float, default=240)
     parser.add_argument('--instruction-budget', type=int, default=10000)
+    parser.add_argument('--finish-workload', action='store_true',
+                        help='after preserving the function return, finish this boot to collect its remaining records')
     args = parser.parse_args()
     if not 0 < args.instruction_budget <= 1000000:
         raise ValueError('invalid instruction budget')
@@ -209,9 +235,13 @@ def main():
             result = dict(origin='actual stopped QEMU mutator; unmodified bytes and registers', anchor=args.anchor,
                           kernel=identity, image_sha256=hashlib.sha256(ORACLE.read_bytes()).hexdigest(), kraken=kraken,
                           trace=probe['trace']['id'], operation=args.operation, instructionBudget=args.instruction_budget,
-                          executionMode='sequential', executedPCs=executed, completedOperations=completed,
+                          executionMode='sequential', recordingMode='pc', executedPCs=executed, completedOperations=completed,
                           occurrence=occurrence, initial=initial, returned=dict(registers=returned, blocks=final_blocks),
                           randomServices=random_services)
+            if args.finish_workload:
+                result['postCaptureCompletion'] = finish_workload(
+                    remote, process, boot, probe['trace'], args.timeout)
+                remote = None
         finally:
             if remote:
                 remote.socket.close()
