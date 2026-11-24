@@ -14,7 +14,6 @@ structure Service where
 
 structure Snapshot where
   kernel : Json
-  image_sha256 : String
   kraken : String
   executionMode : String
   family : Nat
@@ -121,7 +120,7 @@ def run (input : Input) (snapshot : Snapshot) (memory : DataMem) : Except String
   unless (← snapshot.kernel.getObjValAs? Bool "checked") &&
       (← snapshot.kernel.getObjValAs? String "expected") == TrustBase.kernelIdentity &&
       (← snapshot.kernel.getObjValAs? String "actual") == TrustBase.kernelIdentity &&
-      snapshot.image_sha256 == TrustBase.elfSha256 && snapshot.kraken == TrustBase.krakenCommit do
+      snapshot.kraken == TrustBase.krakenCommit do
     throw "capture.image-or-semantics-identity"
   unless snapshot.executionMode == "sequential" && snapshot.family == 4 do throw "capture.mode-or-family"
   let initial ← snapshot.initial.registers.state memory

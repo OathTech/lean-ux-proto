@@ -1369,10 +1369,10 @@ adds optional caller output at `ffb3d8df`, without changing the index
 mutators or the existing entry predicate; its row gives the new admission
 scope. The s5 image and nine-patch Kraken pin in
 [TrustBase](../binary/TrustBase.lean) are unchanged: image identity
-`b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767`, ELF SHA-256
-`06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e`, Kraken
+`b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767` (path-independent;
+the file hash of one build is not pinned), Kraken
 `43df9468febc173e6cf9363d87e8ad34e76d7434`. Layout constants are the generated
-[Layouts](../binary/Layouts.lean), checked against that ELF, rather than free
+[Layouts](../binary/Layouts.lean), checked against that image, rather than free
 parameters chosen to fit a capture. Current captures use one CPU and defer
 interrupts and timers during the selected call. The coverage allocation is
 4,194,304 eight-byte words, with mode 2; trie widths are 32 and 128. Local

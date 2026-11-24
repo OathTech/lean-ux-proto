@@ -141,7 +141,7 @@ def main():
             if any(returned[name] != regs[name] for name in ['rbx','rbp','r12','r13','r14','r15']):
                 raise ValueError('callee-save register mismatch')
             result = dict(origin='actual stopped QEMU first insertion; generic allocator boundary recorded',
-                          kernel=identity,image_sha256=pins()[1],kraken=pin,executionMode='sequential',
+                          kernel=identity,kraken=pin,executionMode='sequential',
                           trace=trace['id'],operation=0,completedOperations=[],instructionBudget=args.instruction_budget,
                           family=4,key=int(query['addr'],16),cidr=query['cidr'],publicKey=first_peer['public_key'],
                           allocationRecord=allocation_record,

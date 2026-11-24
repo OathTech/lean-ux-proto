@@ -3979,7 +3979,7 @@ import PairInsertInput
 
     External interpretation: binutils 2.42 supplied the literal AST and DWARF
     layouts from the ELF below. Lean checks execution of those terms, not the
-    binutils decoder, DWARF producer, SHA computation or correspondence of
+    binutils decoder, DWARF producer, identity computation or correspondence of
     Kraken's model with x86 hardware. The loader checks identity and branch
     encodings. Mutable runtime globals are NOT assumed equal to ELF initial
     bytes at a function entry; their current values belong in Pre_lookup.
@@ -3994,7 +3994,6 @@ namespace Binary.TrustBase
 
 def krakenCommit : String := "43df9468febc173e6cf9363d87e8ad34e76d7434"
 def kernelIdentity : String := "b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767"
-def elfSha256 : String := "06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e"
 def decoderVersion : String := "GNU objdump (GNU Binutils for Ubuntu) 2.42"
 
 local instance : Labels := Image.linkedLabels

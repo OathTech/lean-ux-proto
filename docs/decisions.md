@@ -981,3 +981,19 @@ these decisions are in [AGENTS.md](../AGENTS.md), without this history.
   predicates are meant to hold of; what a proof is for is whether the
   predicates are inductive. [AGENT] the order-of-work consequence in
   AGENTS.md: predicates are run on captures before any proof or composition.
+- **2026-11-24 [USER]** Standing rule: the repository is to be shareable
+  beyond the people with access to one machine, and eventually public. A
+  dependency is pinned only by what anyone can reproduce from a public
+  source, never by the hash of a file that one machine produced, and tools
+  are installed the standard way (Lean through elan, not from a packed
+  toolchain archive). [AGENT 2026-11-24] the consequences drawn on
+  `task/box-setup`: the binary package identifies its image by the
+  path-independent kernel identity and no longer by one build's ELF SHA-256
+  (`TrustBase.elfSha256` and the captures' `image_sha256` field are removed);
+  the generators' `--check` against a rebuilt kernel is what shows the
+  committed image and layout files belong to that image; the toolchain lock
+  pins Lean by version and commit, and the snapshot scripts
+  (`cache-toolchains.py`, `restore-toolchains.py`), the staged-Lean route of
+  `scripts/in-bundle` and the staged Lean MCP helper are removed;
+  `scripts/verify-dependencies.py` checks the publicly pinned inputs and
+  lists reference pages as optional. The rule is in AGENTS.md.

@@ -257,7 +257,8 @@ def main():
     snapshot = json.loads(snapshot_path.read_text())
     probe = json.loads(args.input.read_text())
     validate_capture(snapshot, probe, args.operation, args.call_index, capture / 'boot.log')
-    if snapshot['image_sha256'] != verify_image() or snapshot['kraken'] != verify_pin(ROOT):
+    verify_image()
+    if snapshot['kraken'] != verify_pin(ROOT):
         raise ValueError('capture image or semantics pin differs')
     if snapshot['kernel'].get('checked') is not True or any(snapshot['kernel'][key] != pins()[0] for key in ('expected', 'actual')):
         raise ValueError('capture kernel identity differs')

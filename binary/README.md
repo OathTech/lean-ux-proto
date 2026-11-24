@@ -6,11 +6,14 @@ to the executable Lean mirror under Kraken's x86-64 semantics. The
 explicit memory, environment and service contracts; they do not establish
 whole-WireGuard correctness or behavior in a concurrent Linux kernel.
 
-The target is the saved **s5** Linux image, pinned independently of the
+The target is the **s5** Linux image, pinned independently of the
 mirror's test oracle. The two identity files currently name the same image,
 but future changes need not keep them aligned. Proofs use committed decoded
-image terms. Running the image tests additionally needs the exact saved ELF; there is no
-recipe here that promises to regenerate it from a fresh clone.
+image terms. Running the image tests additionally needs the image itself: any build of the
+`net-choice` profile by `scripts/build-kernel` whose path-independent identity
+(`scripts/kernel-identity.py`) is the pinned one. The file's own SHA-256 depends on the
+build directory and is not pinned. The generators' `--check` mode shows that such a build
+reproduces every committed image and layout file.
 
 ## Results and limits
 
@@ -188,7 +191,7 @@ records local validation and pending external acceptance.
 `AllowedipsInsertionSurface` is a partial-proof export root, not a completed
 insertion theorem.
 
-## Run image tests with the saved ELF
+## Run image tests with the kernel image
 
 First install the pinned [Python requirements](requirements.txt) in a local
 virtual environment using the [optional image-dependency setup](../REPRODUCING.md#6-optional-binary-image-dependencies).
@@ -202,18 +205,19 @@ scripts/in-bundle "$binary_python" -c 'import elftools; print(elftools.__version
 The bundle's staged Python does not include pyelftools. Keep `binary_python`
 set for the image generators, paired executions and capture recipes below.
 
-Set `LEANUX_BINARY_KERNEL_DIR` to the directory containing the s5 `vmlinux`.
-[`target.py`](target.py) checks its exact SHA-256 against
+Set `LEANUX_BINARY_KERNEL_DIR` to the directory containing the s5 `vmlinux`,
+built as in [setup section 3](../REPRODUCING.md#3-build-the-linux-test-kernel).
+[`target.py`](target.py) checks the build's path-independent identity against
 [`kernel-identity-s5.txt`](kernel-identity-s5.txt) and selects that identity
 for guest captures. It does not follow changes to the mirror's oracle.
-The default artifact location is `.artifacts/kernel-net-choice-s5` in the
-common checkout; its presence is not guaranteed by setup.
+The default location is `.artifacts/kernel-net-choice-s5` in the
+common checkout.
 
 With that artifact and the build prerequisites in place, run from the worktree
 root (return there with `cd ..` if following the export example):
 
 ```sh
-# Check committed image/layout data against the saved ELF
+# Check that the image regenerates the committed image/layout data
 cap scripts/in-bundle "$binary_python" -B binary/generate.py --check
 cap scripts/in-bundle "$binary_python" -B binary/generate_allowedips.py --check
 cap scripts/in-bundle "$binary_python" -B binary/generate_index_mutators.py --check

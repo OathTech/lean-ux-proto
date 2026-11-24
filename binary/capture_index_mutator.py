@@ -7,7 +7,6 @@ The complete actual KCOV allocation is captured for the proved readiness
 assertion. Run under capped with the project bundle environment.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -264,7 +263,7 @@ def main():
                     raise ValueError(f'callee-saved register changed: {name}')
             final_blocks = read_blocks()
             result = dict(origin='actual stopped QEMU mutator; unmodified bytes and registers', anchor=args.anchor,
-                          kernel=identity, image_sha256=hashlib.sha256(ORACLE.read_bytes()).hexdigest(), kraken=kraken,
+                          kernel=identity, kraken=kraken,
                           trace=probe['trace']['id'], operation=args.operation, instructionBudget=args.instruction_budget,
                           executionMode='sequential', recordingMode='pc', executedPCs=executed, completedOperations=completed,
                           occurrence=occurrence, initial=initial, returned=dict(registers=returned, blocks=final_blocks),

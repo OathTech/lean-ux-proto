@@ -1,45 +1,10 @@
 [
   {
     "name": "lean",
-    "version": "4.33.1",
-    "origin": "/home/dev/.elan/toolchains/leanprover--lean4---v4.33.1",
-    "provenance": "independent local copy; no shared hardlinks",
-    "archive": ".deps/downloads/lean-4.33.1-local-snapshot.tar.zst",
-    "sha256": "8e96283e2b09b5330677a3d06f95347dce67614d4516caa9db1d02cc8a03e35a",
-    "size_bytes": 749437964,
-    "destination": ".tools/lean",
-    "upstream_url": "https://github.com/leanprover/lean4/releases/download/v4.33.1/lean-4.33.1-linux.tar.zst",
-    "upstream_sha256": "890afd185370f85666025b883914ab4f4b339136f8c96167b69cfb62aecaf235",
-    "upstream_equivalence": "release contents identical to the snapshot, file by file (17,493 files), checked 2026-09-30"
-  },
-  {
-    "name": "lean",
+    "toolchain": "leanprover/lean4:v4.35.0",
     "version": "4.35.0",
-    "origin": "/home/dev/.elan/toolchains/leanprover--lean4---v4.35.0",
-    "provenance": "independent local copy; no shared hardlinks",
-    "archive": ".deps/downloads/lean-4.35.0-local-snapshot.tar.zst",
-    "sha256": "ef2b2ef9af56af9dbe0131613e0cf57c198fe5107f3d232e1860bb34c00a5b53",
-    "size_bytes": 774990000,
-    "destination": ".tools/lean-4.35.0"
-  },
-  {
-    "name": "go",
-    "version": "1.26.5",
-    "origin": "/usr/local/go",
-    "provenance": "independent local copy; no shared hardlinks",
-    "archive": ".deps/downloads/go-1.26.5-local-snapshot.tar.zst",
-    "sha256": "7fefdddfa6ba72911ad2d5562ada9146ee5cc82fb355c8d4034be5a56370244e",
-    "size_bytes": 63785285,
-    "destination": ".tools/go"
-  },
-  {
-    "name": "lean-lsp",
-    "version": "0.29.0",
-    "origin": "/home/dev/.local/share/uv/tools/lean-lsp-mcp",
-    "provenance": "independent local copy; no shared hardlinks",
-    "archive": ".deps/downloads/lean-lsp-0.29.0-local-snapshot.tar.zst",
-    "sha256": "06aeac884e1038273e53f2856eb36403729ca32c7930d91060d31e1febd65ad8",
-    "size_bytes": 13190506,
-    "destination": ".tools/lean-lsp"
+    "commit": "eb6cafb7290e8bd5f2937522d8d804f58f02bafc",
+    "install": "elan toolchain install leanprover/lean4:v4.35.0",
+    "check": "`lean --version` reports this version and commit (scripts/in-bundle, at every launch)"
   }
 ]

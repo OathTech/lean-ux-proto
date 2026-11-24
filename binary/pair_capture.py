@@ -5,7 +5,6 @@ The source prefix consumes records from this capture's boot, resolved by the
 existing campaign code. It never supplies bytes to the captured machine state.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -14,6 +13,7 @@ import time
 
 from census import ROOT, ORACLE
 from pin import verify_pin
+from target import pins, verify_image
 from run import prepare, compare
 
 sys.path.insert(0, str(ROOT))
@@ -77,7 +77,10 @@ def main():
     snapshot_path = capture/'snapshot.json'
     snapshot = json.loads(snapshot_path.read_text())
     kraken = verify_pin(ROOT)
-    if snapshot['kraken'] != kraken or snapshot['image_sha256'] != hashlib.sha256(ORACLE.read_bytes()).hexdigest():
+    verify_image()
+    kernel = snapshot.get('kernel')
+    if snapshot['kraken'] != kraken or not isinstance(kernel, dict) or kernel.get('checked') is not True or any(
+            kernel.get(field) != pins()[0] for field in ('expected', 'actual')):
         raise ValueError('capture image/dependency pin differs from replay')
     subprocess.run(['lake', 'build', 'binary-probe', 'binary-pair-capture'], cwd=ROOT/'binary', check=True)
     out = capture/'probe'

@@ -7,5 +7,4 @@
 # Path-independent identity from
 # scripts/kernel-identity.py:
 2594fdff78c2e078c276dd2a53abc3b4081660513a2b9c56cf247cf6d02e1286
-# vmlinux sha256 of the build the evidence used (path-dependent):
-70a134be44e9856374c70522970810c2cb7184cf44fb54a50be21a8c4b95c62a
+# The SHA-256 of a vmlinux file depends on its build directory and is not recorded.

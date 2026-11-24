@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Generate the provider readiness layout from the pinned ELF's KCOV CU."""
 import argparse
-import hashlib
 from elftools.elf.elffile import ELFFile
 from census import ORACLE, ROOT
+from target import verify_image
 
 FIELDS = {
     'kcov': {'remote': 'objectRemote', 'steer': 'objectSteer'},
@@ -22,9 +22,7 @@ SYMBOLS = {'crng_is_ready': 'readyAddress', 'crng_init': 'initAddress',
 
 
 def layout_values():
-    expected = '06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e'
-    if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
-        raise ValueError('wrong oracle image')
+    verify_image()
     values = {}
     def add(name, value):
         if name in values and values[name] != value:

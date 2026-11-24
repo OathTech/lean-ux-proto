@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Emit/check literal index mutator instructions from the pinned read-only ELF."""
 import argparse
-import hashlib
 import re
 
 from census import ORACLE, ROOT, extract
+from target import verify_image
 
 
 def generate_group(functions, stem, anchors, max_region_instructions=None):
@@ -58,9 +58,7 @@ def generate_group(functions, stem, anchors, max_region_instructions=None):
 
 
 def generated():
-    expected = '06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e'
-    if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
-        raise ValueError('wrong oracle image')
+    verify_image()
     functions = extract(ORACLE)
     return generate_group(functions, 'IndexMutator', [
         ('wg_index_hashtable_remove', 'Remove', 25),

@@ -82,7 +82,8 @@ lookup theorem and sequential paired-execution results. The allowed-IPs
 mutation experiment ended with component proofs and tests, with no newly
 completed function. There is no whole-subsystem or concurrent-kernel refinement.
 Proofs build from committed image terms; replaying kernel-image tests also
-requires a saved ELF that cannot currently be reproduced from the clone alone.
+needs the kernel image, which `scripts/build-kernel` rebuilds from the locked
+source and tools and which is accepted by its path-independent identity.
 
 **[Kernel report drafts](docs/upstream-tray/INDEX.md)** collect observations and
 questions for possible upstream discussion. Some have kernel trace evidence;

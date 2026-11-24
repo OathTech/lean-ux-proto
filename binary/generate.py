@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Emit this image's region terms and DWARF record predicates, not a checker."""
-import hashlib
 import argparse
 import json
 import re
@@ -9,6 +8,7 @@ from elftools.elf.elffile import ELFFile
 from elftools.dwarf.dwarf_expr import DWARFExprParser
 
 from census import ORACLE, ROOT, extract
+from target import verify_image
 from layouts import layouts, type_bytes
 from peer_layouts import generate_peer_scalars
 from device_layouts import generate_device_scalars
@@ -26,9 +26,7 @@ def main():
             print(f'{path.name}: checked')
         else:
             path.write_text(text)
-    expected = '06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e'
-    if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
-        raise ValueError('wrong ELF')
+    verify_image()
     names = {'wg_index_hashtable_lookup': 'Lookup', 'wg_peer_get_maybe_zero': 'PeerGet'}
     text = ['import Kraken.X64.Parser', 'import Kraken.Layout', 'import Kraken.X64.Semantics',
             'import Execution',

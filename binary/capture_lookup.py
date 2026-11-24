@@ -10,7 +10,6 @@ QEMU: https://www.qemu.org/docs/master/system/gdb.html#using-unix-sockets
 import argparse
 from contextlib import contextmanager
 import fcntl
-import hashlib
 import json
 import os
 from pathlib import Path
@@ -385,7 +384,7 @@ def main():
             final_blocks = [dict(address=b['address'], bytes=list(remote.read(b['address'], len(b['bytes']))))
                             for b in initial['blocks']]
             result = dict(origin='QEMU stopped invocation; unmodified guest bytes and registers',
-                          kernel=identity, image_sha256=hashlib.sha256(ORACLE.read_bytes()).hexdigest(),
+                          kernel=identity,
                           kraken=kraken, trace=probe['trace']['id'], operation=probe['operation'],
                           instructionBudget=args.instruction_budget,
                           executionMode=args.execution_mode, executedPCs=executed,

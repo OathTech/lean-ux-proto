@@ -140,5 +140,4 @@
 # 630b602a200d66eea6cfee7ba33bc9924d50bf517984ee32be8a1a1dd96ae51b. The identity and vmlinux lines below are
 # that build's [AGENT 2026-10-15, B3 step 1]; the s4 lines it replaces were 6b2018b9... and 16c34620...
 b44d958f09743feddc5fdbc3410cb5de89cead4bffdd62b06582b0c560454767
-# vmlinux sha256 of the build the evidence used (path-dependent):
-06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e
+# The SHA-256 of a vmlinux file depends on its build directory and is not recorded.

@@ -10,5 +10,4 @@
 # lines, and kernel/kcov.c and include/linux/kcov.h are not anchored.
 # Path-independent identity from scripts/kernel-identity.py:
 2189e45a6399df22ca5173b5bcbd0e39b55758dc16edb11e6e9e124686e0742a
-# vmlinux sha256 of the build the evidence used (path-dependent):
-fce9ecc4234f6ae8b9e229eb98a0a34fd5ac39d1e9e3dd49e499750588008092
+# The SHA-256 of a vmlinux file depends on its build directory and is not recorded.

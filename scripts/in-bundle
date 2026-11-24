@@ -39,65 +39,65 @@ sysroot = shared / '.tools/sysroot'
 if not (sysroot / 'usr/bin/gcc-13').is_file():
     raise SystemExit('Missing staged sysroot. Run scripts/stage-resources.py packages first.')
 
-# The Lean toolchain is the one this checkout's `lean-toolchain` names. Two
-# routes provide it, each checked by running the candidate's `lean --version`
-# and matching the declared version; an unversioned `lean` on PATH is never
-# used, and a missing or mismatched toolchain fails closed here:
-# 1. the snapshot staged under the shared `.tools` as `lean-<version>`
-#    (`.tools/lean` is the legacy name of the 4.33.1 stage): the devboxes'
-#    offline mechanism (docs/offline-usage.md), tried first;
-# 2. the toolchain elan manages for that exact name, located through elan
-#    itself: `elan toolchain list` must list the name (an installed
-#    toolchain, read offline), then `elan run <name> lean --print-prefix`
-#    gives its prefix. The launcher never asks elan to install or download:
-#    the route for a clone on an ordinary machine (REPRODUCING.md).
-# LEANUX_LEAN_SOURCE selects: `auto` (default: staged, then elan), `staged`
-# or `elan`.
+# The Lean toolchain is the one this checkout's `lean-toolchain` names,
+# installed the standard way, through elan (REPRODUCING.md). The launcher
+# locates it through elan itself: `elan toolchain list` must list the name
+# (an installed toolchain, read offline), then `elan run <name> lean
+# --print-prefix` gives its prefix. It never asks elan to install or
+# download. The candidate's own `lean --version` must report the version and
+# the commit that dependencies/toolchains.lock.json pins for that name: an
+# identity anyone can reproduce, whatever machine installed it. An
+# unversioned `lean` on PATH is never used, and a missing, unpinned or
+# mismatched toolchain fails closed here.
 toolchain_file = root / 'lean-toolchain'
 declared = toolchain_file.read_text().strip() if toolchain_file.is_file() else ''
 match = re.fullmatch(r'leanprover/lean4:v(\d+\.\d+\.\d+(?:-rc\d+)?)', declared)
 if not match:
     raise SystemExit(f'Unrecognised lean-toolchain in {root}: {declared!r}')
 lean_version = match.group(1)
-lean_source = option('LEANUX_LEAN_SOURCE', 'auto')
-if lean_source not in ('auto', 'staged', 'elan'):
-    raise SystemExit(f'LEANUX_LEAN_SOURCE must be auto, staged or elan, not {lean_source!r}')
+lean_pins = [row for row in json.loads((root / 'dependencies/toolchains.lock.json').read_text())
+             if row.get('name') == 'lean' and row.get('toolchain') == declared]
+if len(lean_pins) != 1 or lean_pins[0].get('version') != lean_version or not re.fullmatch(
+        r'[0-9a-f]{40}', str(lean_pins[0].get('commit'))):
+    raise SystemExit(f'dependencies/toolchains.lock.json in {root} needs exactly one lean row for {declared}, '
+                     f'with its version and the 40-digit commit that `lean --version` reports.')
+lean_commit = lean_pins[0]['commit']
 
 def lean_matches(lean_bin):
     if not lean_bin.is_file():
         return False
     probe = subprocess.run([str(lean_bin), '--version'], capture_output=True, text=True)
-    return probe.returncode == 0 and f'version {lean_version},' in probe.stdout
+    return (probe.returncode == 0 and f'version {lean_version},' in probe.stdout
+            and f'commit {lean_commit},' in probe.stdout)
 
 lean_root = None
-if lean_source in ('auto', 'staged'):
-    for candidate in (shared / '.tools' / f'lean-{lean_version}', shared / '.tools/lean'):
+# A command already running under the launcher has no elan (see below). It
+# passes on the prefix its own launcher located; that prefix is a candidate
+# like any other and is accepted only by the same version and commit check.
+inherited = os.environ.get('LEANUX_LEAN_ROOT')
+if inherited and lean_matches(Path(inherited) / 'bin/lean'):
+    lean_root = Path(inherited)
+# The caller's elan, with the caller's elan home (the launcher gives the
+# command it runs a private, empty ELAN_HOME below, so nothing in the
+# bundle can install or switch toolchains).
+elan_home = Path(os.environ.get('ELAN_HOME') or Path.home() / '.elan')
+elan = shutil.which('elan') or str(elan_home / 'bin/elan')
+if lean_root is None and Path(elan).is_file():
+    elan_env = {**os.environ, 'ELAN_HOME': str(elan_home)}
+    listed = subprocess.run([elan, 'toolchain', 'list'], capture_output=True, text=True, env=elan_env)
+    installed = {line.split()[0] for line in listed.stdout.splitlines() if line.strip()}
+    located = (subprocess.run([elan, 'run', declared, 'lean', '--print-prefix'],
+                              capture_output=True, text=True, env=elan_env)
+               if listed.returncode == 0 and declared in installed else None)
+    if located is not None and located.returncode == 0:
+        candidate = Path(located.stdout.strip())
         if lean_matches(candidate / 'bin/lean'):
             lean_root = candidate
-            break
-if lean_root is None and lean_source in ('auto', 'elan'):
-    # The caller's elan, with the caller's elan home (the launcher gives the
-    # command it runs a private, empty ELAN_HOME below, so nothing in the
-    # bundle can install or switch toolchains).
-    elan_home = Path(os.environ.get('ELAN_HOME') or Path.home() / '.elan')
-    elan = shutil.which('elan') or str(elan_home / 'bin/elan')
-    if Path(elan).is_file():
-        elan_env = {**os.environ, 'ELAN_HOME': str(elan_home)}
-        listed = subprocess.run([elan, 'toolchain', 'list'], capture_output=True, text=True, env=elan_env)
-        installed = {line.split()[0] for line in listed.stdout.splitlines() if line.strip()}
-        located = (subprocess.run([elan, 'run', declared, 'lean', '--print-prefix'],
-                                  capture_output=True, text=True, env=elan_env)
-                   if listed.returncode == 0 and declared in installed else None)
-        if located is not None and located.returncode == 0:
-            candidate = Path(located.stdout.strip())
-            if lean_matches(candidate / 'bin/lean'):
-                lean_root = candidate
 if lean_root is None:
     raise SystemExit(
-        f'No Lean {lean_version} for {root} (lean-toolchain names {declared}). Either stage the '
-        f'snapshot under {shared / ".tools"} (the devboxes: scripts/restore-toolchains.py --only lean, '
-        f'docs/offline-usage.md) or install it with elan (an ordinary machine: '
-        f'elan toolchain install {declared}, REPRODUCING.md). An unversioned lean on PATH is never used.')
+        f'No Lean {lean_version} at commit {lean_commit} for {root} (lean-toolchain names {declared}). '
+        f'Install it with elan: elan toolchain install {declared} (REPRODUCING.md). '
+        f'An unversioned lean on PATH is never used.')
 
 for name in ('tmp', 'lake', 'elan', 'go-build', 'go', 'bundle-bin', 'bundle-libs'):
     (cache / name).mkdir(parents=True, exist_ok=True)
@@ -148,7 +148,7 @@ for name in ('LD_PRELOAD', 'LD_AUDIT', 'CPATH', 'C_INCLUDE_PATH',
 env.update({
     'LEANUX_ROOT': str(root), 'LEANUX_SHARED_ROOT': str(shared),
     'LEANUX_CACHE_ROOT': str(cache), 'LEANUX_ARTIFACTS': str(artifacts),
-    'LEANUX_SYSROOT': str(sysroot),
+    'LEANUX_SYSROOT': str(sysroot), 'LEANUX_LEAN_ROOT': str(lean_root),
     'PATH': ':'.join(str(p) for p in (cache / 'bundle-bin', lean_root / 'bin',
                                    shared / '.tools/go/bin', sysroot / 'usr/bin', sysroot / 'bin')),
     'LD_LIBRARY_PATH': str(cache / 'bundle-libs'),

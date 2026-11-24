@@ -2,25 +2,26 @@
 
 This is the detailed companion to [the binary overview](README.md), which
 states the claims, prerequisites and trust checks. These commands require
-the saved s5 ELF, a bootstrapped binary package, Python with pyelftools and
-the mirror's staged tool bundle. They cannot be reproduced from the Git
-clone alone. No successful rerun is asserted by listing a command here.
+the s5 kernel image (built by `scripts/build-kernel`, accepted by its
+path-independent identity), a bootstrapped binary package, Python with
+pyelftools and the mirror's staged tool bundle. No successful rerun is
+asserted by listing a command here.
 
 Run from a task worktree's root. Keep `binary_python` set to the interpreter
-selected in the overview, and set `LEANUX_BINARY_KERNEL_DIR` to the saved s5
+selected in the overview, and set `LEANUX_BINARY_KERNEL_DIR` to the s5
 build directory. Define the `cap` helper, then select the binary package's
 image and identity for this shell only:
 
 ```sh
 cap() { if command -v capped >/dev/null 2>&1; then capped "$@"; else "$@"; fi; }
-: "${LEANUX_BINARY_KERNEL_DIR:?Set this to the saved s5 build directory}"
+: "${LEANUX_BINARY_KERNEL_DIR:?Set this to the s5 build directory}"
 export LEANUX_BINARY_KERNEL_DIR
 binary_identity=$("$binary_python" -c 'import sys; sys.path.insert(0, "binary"); from target import pins, verify_image; verify_image(); print(pins()[0])') || exit 1
 export LEANUX_KERNEL_DIR="$LEANUX_BINARY_KERNEL_DIR"
 export LEANUX_KERNEL_IDENTITY="$binary_identity"
 ```
 
-The identity command refuses a different ELF. These settings are for the binary experiment. Use a fresh shell, or unset
+The identity command refuses a build with a different identity. These settings are for the binary experiment. Use a fresh shell, or unset
 `LEANUX_KERNEL_IDENTITY` and restore the current `LEANUX_KERNEL_DIR`, before
 returning to normal mirror comparisons.
 
