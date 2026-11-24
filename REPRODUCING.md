@@ -40,11 +40,10 @@ elan toolchain install "$(cat lean-toolchain)"
 ```
 
 `scripts/in-bundle` locates that toolchain through elan and checks that its
-`lean --version` reports the pinned version; it never builds with an
-unversioned `lean` from `PATH`, and a checkout on another pin needs that
-toolchain installed the same way. (The project's shared devboxes keep a staged
-snapshot under `.tools/`, which the launcher uses first; see
-[offline usage](docs/offline-usage.md).)
+`lean --version` reports the version and commit pinned in
+`dependencies/toolchains.lock.json`; it never builds with an unversioned
+`lean` from `PATH`, and a checkout on another pin needs that toolchain
+installed the same way and its row added to the lock.
 
 Stage the locked tools and Linux source in the original clone:
 
@@ -55,15 +54,15 @@ python3 scripts/stage-resources.py sources --sources linux
 
 These download from the Ubuntu snapshot service and kernel.org, verify the
 locked SHA-256 hashes, and extract into `.tools/` and `.deps/`. They do not
-install system packages. Go, syzkaller, Firecracker and the Lean MCP helper
-are optional and not needed here.
+install system packages. `python3 scripts/verify-dependencies.py` rechecks the
+staged inputs and the Lean toolchain at any time, without network access.
 
 The [binary refinement package](binary/README.md) is optional and has a
 separate setup. Its image generators and pairing/capture scripts need the
 [optional Python dependencies](#6-optional-binary-image-dependencies), and
-its image-execution tests need a specific saved kernel ELF. Bootstrap,
-proof builds and the binary proof gate need no pyelftools. The mirror setup
-below does not provide the saved ELF.
+its image-execution tests need the kernel image that
+[section 3](#3-build-the-linux-test-kernel) builds. Bootstrap,
+proof builds and the binary proof gate need no pyelftools.
 
 Create a worktree for builds and experiments:
 
@@ -180,7 +179,7 @@ machine. Heavy contention can exhaust timing budgets.
 
 Negative controls and sentinel mutants are separate developer checks described
 in [AGENTS.md](AGENTS.md). They are not part of this first-run sequence.
-For an existing offline bundle, see [offline usage](docs/offline-usage.md).
+For working without network access after setup, see [offline usage](docs/offline-usage.md).
 
 ## 5. Build and check the proofs
 
@@ -222,7 +221,7 @@ binary_python="$PWD/.tmp/binary-python/bin/python"
 ```
 
 Keep this interpreter selected when following the
-[binary image-test instructions](binary/README.md#run-image-tests-with-the-saved-elf).
-These Python dependencies supply no kernel artifact; the exact saved s5 ELF
-is a separate requirement. The virtual environment can be deleted and
+[binary image-test instructions](binary/README.md#run-image-tests-with-the-kernel-image).
+These Python dependencies supply no kernel artifact; build the image as in
+[section 3](#3-build-the-linux-test-kernel). The virtual environment can be deleted and
 recreated from the requirements file.

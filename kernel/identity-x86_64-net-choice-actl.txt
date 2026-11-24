@@ -60,5 +60,4 @@
 # ab3a39ef58e3522af6a77c5bbfb5dfd840a2884074cf74260955648b61ca4a92 [AGENT 2026-10-15, B3 step 1]; the s4
 # lines it replaces were cdd39a36... and 5e0ea845...
 aa192fdc560e260d13f469f8cea4fc99a44a9bfaa2eb522c864c3014fa198120
-# vmlinux sha256 of the build the evidence used (path-dependent):
-14302f57b6841db6a3787e270efd9ca6ecfa39e14faaeb455a0c87ca2a7e38f1
+# The SHA-256 of a vmlinux file depends on its build directory and is not recorded.

@@ -164,6 +164,16 @@ intermediate work, built to catch honest drift and not adversarial attack:
   one per verdict channel and record instrument, each on the smallest corpus
   subset that rejects it, about half an hour in all.
 
+Every input a build or a check consumes is pinned by something anyone can
+reproduce from a public source: an archive by its URL and SHA-256, a git
+dependency by its commit, a toolchain by the version and commit it reports,
+a built kernel by its path-independent identity. No check depends on a file,
+a hash or a path that exists on one machine only, such as the SHA-256 of one
+build of an ELF or an archive packed from a local installation; tools are
+installed the standard way (Lean through elan) [USER 2026-11-24].
+`scripts/verify-dependencies.py` reports the pinned inputs; the table is in
+[offline usage](docs/offline-usage.md).
+
 A new check rule is added when it is cheap and catches a real class of
 mistake. A new instrument on the trust surface (a record kind, a comparison
 class, a section rule) gets a one-off mutant, run once and reported in its

@@ -7,7 +7,6 @@ No kernel, guest memory or register is written. 'sequential' single-steps
 the range with IRQs/timers deferred; 'ordinary' resumes to the first exit.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import re
@@ -22,7 +21,6 @@ from harness.linux import verify_kernel
 from c2_memory import ADDRESS, DIRECT_MAP, IMAGE_BASE, Writer, translate
 
 IDENTITY = '558b24bf9be22fc6292fccd5de29fd461628e63ac51acc9ead420b74b8fc401a'
-ELF_SHA256 = 'b87b16f8f9ed8c9aa9e67b7625d2be650a52ed1bc8bb689c6c0e0c57127fe9e3'
 ENTRY, DONE, REJECT = 0xffffffff8123f9e1, 0xffffffff8123fa8d, 0xffffffff8123fcff
 PREEMPT, WINDOW_OFFSET, WINDOW_BYTES = 0xffffffff818c8588, 136, 1032
 RAM_BYTES = 256 * 2**20
@@ -65,9 +63,6 @@ class ObservingRemote(Remote):
 
 
 def image_description(kernel):
-    with kernel.open('rb') as source:
-        if hashlib.file_digest(source, 'sha256').hexdigest() != ELF_SHA256:
-            raise ValueError('the command does not use the pinned net-clean-2 ELF')
     verify_kernel(kernel.parent, expected=IDENTITY)
     symbols = {}
     result = subprocess.run(['nm', str(kernel)], text=True, capture_output=True, check=True)
@@ -87,7 +82,7 @@ def image_description(kernel):
         code = section.data()[start:start + DONE - ENTRY]
     if len(code) != DONE - ENTRY:
         raise ValueError('C2 range missing from .text')
-    return dict(identity=IDENTITY, elf_sha256=ELF_SHA256, symbols=symbols,
+    return dict(identity=IDENTITY, symbols=symbols,
                 page_table_root=symbols['init_top_pgt'] - IMAGE_BASE, code=code.hex())
 
 

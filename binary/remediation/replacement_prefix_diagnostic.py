@@ -112,7 +112,8 @@ def main():
     completion = snapshot.get('postCaptureCompletion')
     if completion != dict(completedOperations=list(range(len(probe['trace']['ops']))), qemuReturncode=0):
         raise ValueError('capture must finish its workload after preserving the selected return')
-    if snapshot['image_sha256'] != verify_image() or snapshot['kraken'] != verify_pin(ROOT):
+    verify_image()
+    if snapshot['kraken'] != verify_pin(ROOT):
         raise ValueError('capture image or semantics pin differs')
     if snapshot['kernel'].get('checked') is not True or any(
             snapshot['kernel'][field] != pins()[0] for field in ('expected', 'actual')):

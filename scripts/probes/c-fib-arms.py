@@ -2,9 +2,9 @@
 """For each conditional jump of the listed fib_trie.c functions: its source line and, per arm,
 the first KCOV point reached (its line, checker convention) and whether every block on the
 way has a single predecessor (an exclusive witness) or is a join."""
-import re, subprocess, sys, json
+import os, re, subprocess, sys, json
 from collections import defaultdict
-vm = '/home/dev/projects/lean-ux-proto/.artifacts/kernel-net-choice-s4/vmlinux'
+vm = os.path.join(os.environ['LEANUX_KERNEL_DIR'], 'vmlinux')  # the build to inspect; no default
 fns = sys.argv[1:]
 symbols = set(subprocess.run(['nm', vm], capture_output=True, text=True).stdout.split())
 

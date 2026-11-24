@@ -11,7 +11,7 @@ import argparse
 import json
 from pathlib import Path
 
-from c2_capture import ENTRY, DONE, REJECT, PREEMPT, WINDOW_OFFSET, WINDOW_BYTES, ELF_SHA256, IDENTITY
+from c2_capture import ENTRY, DONE, REJECT, PREEMPT, WINDOW_OFFSET, WINDOW_BYTES, IDENTITY
 from c2_memory import DIRECT_MAP, IMAGE_BASE, changed_runs, images, read, translate
 
 
@@ -107,7 +107,7 @@ def check(capture):
     if metadata['schema'] != 'c2-native-frame-v2' or metadata['forced']:
         raise ValueError('unsupported or forced capture')
     image = metadata['image']
-    if image['elf_sha256'] != ELF_SHA256 or image['identity'] != IDENTITY:
+    if image['identity'] != IDENTITY:
         raise ValueError('capture uses a different image')
     rows = [json.loads(line) for line in (capture / 'visits.jsonl').read_text().splitlines()]
     if not rows or len(rows) != summary['visits'] or summary['snapshots'] != 2 * len(rows):

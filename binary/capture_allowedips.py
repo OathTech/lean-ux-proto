@@ -6,7 +6,6 @@ readiness assertion requires it. Headers/return capture only a bounded prefix.
 All output is ephemeral. Run through capped.
 """
 import argparse
-import hashlib
 import json
 from pathlib import Path
 import subprocess
@@ -199,7 +198,7 @@ def main():
             if remote.word(initial['coverage']) >= min(initial['capacity'], initial['coverageUsed']+1+args.instruction_budget):
                 raise ValueError('returned coverage exceeds captured extent')
             result = dict(origin='QEMU stopped invocation; unmodified bytes and registers',
-                          kernel=identity, image_sha256=hashlib.sha256(ORACLE.read_bytes()).hexdigest(), kraken=kraken,
+                          kernel=identity, kraken=kraken,
                           trace=probe['trace']['id'], operation=probe['operation'], occurrence=occurrence,
                           instructionBudget=args.instruction_budget, executionMode='sequential',
                           executedPCs=executed, completedOperations=completed, initial=initial,

@@ -6,11 +6,11 @@ callees and unsupported instructions remain failing fetches. Cached and
 initialized refill paths are included; this is not a total kernel decoder.
 """
 import argparse
-import hashlib
 import json
 import re
 
 from census import ORACLE, ROOT, extract
+from target import verify_image
 
 
 FUNCTIONS = {
@@ -24,9 +24,7 @@ FUNCTIONS = {
 
 
 def generated():
-    expected = '06513d05fc37506b6cea546e8f11b9fe328e482265341ca41c242157bfa5e88e'
-    if hashlib.sha256(ORACLE.read_bytes()).hexdigest() != expected:
-        raise ValueError('wrong oracle image')
+    verify_image()
     functions = [f for f in extract(ORACLE, FUNCTIONS) if f['name'] in FUNCTIONS]
     if {f['name'] for f in functions} != FUNCTIONS:
         raise ValueError('a requested random-service range is missing')
